@@ -1,0 +1,284 @@
+from decimal import Decimal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
+from fastapi.responses import PlainTextResponse, Response
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies.auth import AuthContext, require_permissions
+from app.core.permissions import Permission
+from app.db.session import get_db
+from app.services.catalog import (
+    create_catalog_product,
+    delete_catalog_product,
+    export_catalog_csv,
+    export_catalog_xlsx,
+    get_catalog_product,
+    import_catalog_file,
+    list_catalog_products,
+    preview_catalog_reply,
+    search_catalog_products,
+    update_catalog_product,
+)
+from app.services.catalog_commerce import list_catalog_categories, prepare_catalog_commerce_ids
+from app.services.knowledge_base import suggest_smart_reply
+
+router = APIRouter()
+
+XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+class CatalogProductCreate(BaseModel):
+    organization_id: UUID | None = None
+    name: str = Field(min_length=1, max_length=200)
+    sku: str | None = None
+    product_type: str = Field(default="product", pattern=r"^(product|service)$")
+    description: str | None = None
+    price: Decimal | None = None
+    currency: str = "KWD"
+    price_type: str = Field(default="fixed", pattern=r"^(fixed|from|quote)$")
+    specs_json: dict = Field(default_factory=dict)
+    keywords: str | None = None
+    image_url: str | None = None
+    category: str | None = None
+    meta_retailer_id: str | None = None
+    external_source: str | None = None
+    external_id: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class CatalogProductUpdate(BaseModel):
+    organization_id: UUID | None = None
+    name: str | None = None
+    sku: str | None = None
+    product_type: str | None = None
+    description: str | None = None
+    price: Decimal | None = None
+    currency: str | None = None
+    price_type: str | None = None
+    specs_json: dict | None = None
+    keywords: str | None = None
+    image_url: str | None = None
+    category: str | None = None
+    meta_retailer_id: str | None = None
+    external_source: str | None = None
+    external_id: str | None = None
+    is_active: bool | None = None
+    sort_order: int | None = None
+
+
+class CatalogSuggestRequest(BaseModel):
+    query: str = Field(min_length=1)
+    contact_name: str = ""
+    mode: str = Field(default="catalog_first", pattern=r"^(catalog_first|kb_first|local)$")
+
+
+class CatalogPreviewRequest(BaseModel):
+    query: str = ""
+    contact_name: str = ""
+    product_ids: list[UUID] = Field(default_factory=list)
+
+
+@router.get("")
+async def get_catalog(
+    include_inactive: bool = Query(False),
+    organization_id: UUID | None = Query(None),
+    category: str | None = Query(None),
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_catalog_products(
+        db,
+        context.account_id,
+        active_only=not include_inactive,
+        organization_id=organization_id,
+        category=category,
+    )
+
+
+@router.get("/search")
+async def search_catalog(
+    q: str = Query(min_length=1),
+    include_inactive: bool = Query(False),
+    organization_id: UUID | None = Query(None),
+    category: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await search_catalog_products(
+        db,
+        context.account_id,
+        q,
+        limit=limit,
+        active_only=not include_inactive,
+        organization_id=organization_id,
+        category=category,
+    )
+
+
+@router.get("/categories")
+async def get_catalog_categories(
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_catalog_categories(db, context.account_id)
+
+
+@router.post("/prepare-commerce")
+async def post_prepare_catalog_commerce(
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await prepare_catalog_commerce_ids(db, account_id=context.account_id)
+
+
+@router.get("/export")
+async def export_catalog(
+    format: str = Query("xlsx", pattern=r"^(xlsx|csv)$"),
+    include_inactive: bool = Query(False),
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    active_only = not include_inactive
+    filename = "catalog-export"
+    try:
+        if format == "csv":
+            content = await export_catalog_csv(
+                db,
+                account_id=context.account_id,
+                active_only=active_only,
+            )
+            return PlainTextResponse(
+                content,
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
+            )
+        content = await export_catalog_xlsx(
+            db,
+            account_id=context.account_id,
+            active_only=active_only,
+        )
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Spreadsheet export is unavailable. Rebuild the API image after dependency updates.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unable to export catalog") from exc
+    return Response(
+        content=content,
+        media_type=XLSX_MEDIA,
+        headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"},
+    )
+
+
+@router.post("/preview-reply")
+async def post_catalog_preview(
+    payload: CatalogPreviewRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    if not payload.query.strip() and not payload.product_ids:
+        raise HTTPException(status_code=400, detail="Provide query or product_ids")
+    return await preview_catalog_reply(
+        db,
+        account_id=context.account_id,
+        query=payload.query,
+        contact_name=payload.contact_name,
+        product_ids=payload.product_ids,
+    )
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def post_catalog_product(
+    payload: CatalogProductCreate,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await create_catalog_product(db, account_id=context.account_id, **payload.model_dump())
+
+
+@router.get("/{product_id}")
+async def get_product(
+    product_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await get_catalog_product(db, account_id=context.account_id, product_id=product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/{product_id}")
+async def patch_product(
+    product_id: UUID,
+    payload: CatalogProductUpdate,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await update_catalog_product(
+            db,
+            account_id=context.account_id,
+            product_id=product_id,
+            **payload.model_dump(exclude_unset=True),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/{product_id}", status_code=204)
+async def remove_product(
+    product_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await delete_catalog_product(db, account_id=context.account_id, product_id=product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/import")
+async def import_catalog(
+    file: UploadFile = File(...),
+    organization_id: UUID | None = Form(None),
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    content = await file.read()
+    filename = file.filename or "catalog.xlsx"
+    try:
+        return await import_catalog_file(
+            db,
+            account_id=context.account_id,
+            organization_id=organization_id,
+            content=content,
+            filename=filename,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        messages = {
+            "UNSUPPORTED_FILE_FORMAT": "Unsupported file format. Use .xlsx or .csv",
+            "FILE_TOO_LARGE": "File is too large (max 10 MB)",
+        }
+        raise HTTPException(status_code=400, detail=messages.get(code, code)) from exc
+
+
+@router.post("/suggest-reply")
+async def catalog_suggest(
+    payload: CatalogSuggestRequest,
+    context: AuthContext = Depends(require_permissions(Permission.MESSAGES_SEND)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await suggest_smart_reply(
+        db,
+        account_id=context.account_id,
+        query=payload.query,
+        contact_name=payload.contact_name,
+        mode=payload.mode,
+    )

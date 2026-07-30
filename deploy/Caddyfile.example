@@ -1,0 +1,14 @@
+# Copy to /etc/caddy/Caddyfile on the server.
+# Replace YOUR_DOMAIN with your real domain (e.g. watesly.com).
+
+app.YOUR_DOMAIN {
+	reverse_proxy 127.0.0.1:8080
+}
+
+api.YOUR_DOMAIN {
+	reverse_proxy 127.0.0.1:8000
+}
+
+files.YOUR_DOMAIN {
+	reverse_proxy 127.0.0.1:9000
+}

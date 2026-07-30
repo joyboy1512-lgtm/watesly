@@ -1,0 +1,51 @@
+[project]
+name = "watesly-backend"
+version = "0.28.0"
+description = "Watesly multi-tenant SaaS backend"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi==0.116.1",
+  "uvicorn[standard]==0.35.0",
+  "sqlalchemy[asyncio]==2.0.41",
+  "asyncpg==0.30.0",
+  "alembic==1.16.2",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "email-validator==2.2.0",
+  "PyJWT==2.10.1",
+  "pwdlib[argon2]==0.2.1",
+  "python-multipart==0.0.20",
+  "httpx==0.28.1",
+  "cryptography==45.0.5",
+  "redis==6.2.0",
+  "celery==5.5.3",
+  "boto3==1.43.28",
+  "openpyxl==3.1.5"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.1",
+  "pytest-asyncio==1.0.0",
+  "httpx==0.28.1",
+  "ruff==0.12.2",
+  "mypy==1.16.1"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+watesly-create-super-admin = "app.cli.create_super_admin:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

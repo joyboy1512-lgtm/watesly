@@ -1,0 +1,67 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Backups and local data
+backend/backups/
+backend/celerybeat-schedule
+*.dump
+*.tar.gz
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies and builds
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# Backups and archives
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*backup*
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+# Executable tools
+*.exe

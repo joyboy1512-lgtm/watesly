@@ -1,0 +1,42 @@
+export type Conversation = {
+  id: string;
+  organization_id: string;
+  channel_id: string;
+  contact_id: string;
+  assigned_membership_id: string | null;
+  status: "open" | "pending" | "closed" | "spam";
+  priority: "low" | "normal" | "high" | "urgent";
+  last_message_at: string | null;
+  first_response_at: string | null;
+  closed_at: string | null;
+  is_starred?: boolean;
+  snoozed_until?: string | null;
+  archived_at?: string | null;
+  contact_name: string | null;
+  contact_address: string;
+  last_message_text: string | null;
+  last_message_status: string | null;
+  unread_count?: number;
+  last_inbound_at?: string | null;
+  service_window_open?: boolean;
+  service_window_expires_at?: string | null;
+  requires_template?: boolean;
+  last_message_direction?: "inbound" | "outbound" | null;
+  needs_reply?: boolean;
+  waiting_minutes?: number | null;
+};
+
+export type Message = {
+  id: string;
+  conversation_id: string | null;
+  direction: "inbound" | "outbound";
+  type: string;
+  from_address: string;
+  to_address: string;
+  text_body: string | null;
+  status: string;
+  created_at: string;
+  media_url?: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
+};

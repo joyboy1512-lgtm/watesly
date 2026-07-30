@@ -1,0 +1,86 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies.auth import AuthContext, require_permissions
+from app.db.session import get_db
+from app.core.permissions import Permission
+from app.schemas.template import TemplateCreateRequest, TemplateResponse, TemplateUpdateRequest
+from app.services.templates import (
+    create_template,
+    delete_template,
+    list_templates,
+    sync_templates_from_meta,
+    update_template,
+)
+
+router = APIRouter()
+
+
+@router.get("", response_model=list[TemplateResponse])
+async def get_templates(
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_templates(db, context.account_id)
+
+
+@router.post("", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
+async def post_template(
+    payload: TemplateCreateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await create_template(db, account_id=context.account_id, payload=payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid WhatsApp account") from exc
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Template already exists") from exc
+
+
+@router.post("/sync/{whatsapp_account_id}")
+async def sync_templates(
+    whatsapp_account_id,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        created, updated = await sync_templates_from_meta(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="WhatsApp account not found") from exc
+    return {"created": created, "updated": updated}
+
+
+@router.patch("/{template_id}", response_model=TemplateResponse)
+async def patch_template(
+    template_id: UUID,
+    payload: TemplateUpdateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await update_template(
+            db, account_id=context.account_id, template_id=template_id, payload=payload
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Template not found") from exc
+
+
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_template(
+    template_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await delete_template(db, account_id=context.account_id, template_id=template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Template not found") from exc

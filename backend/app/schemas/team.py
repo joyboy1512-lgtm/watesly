@@ -1,0 +1,45 @@
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.models.membership import MembershipRole, MembershipStatus
+
+
+class InviteEmployeeRequest(BaseModel):
+    email: EmailStr
+    role: MembershipRole
+    organization_ids: list[UUID] = Field(min_length=1)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
+
+
+class InvitationResponse(BaseModel):
+    invitation_id: UUID
+    invitation_token: str
+    expires_in_hours: int
+
+
+class AcceptInvitationRequest(BaseModel):
+    token: str
+    full_name: str = Field(min_length=2, max_length=160)
+    password: str = Field(min_length=10, max_length=128)
+    preferred_language: str = Field(default="ar", pattern=r"^(ar|en)$")
+
+
+class EmployeeUpdateRequest(BaseModel):
+    role: MembershipRole | None = None
+    status: MembershipStatus | None = None
+    organization_ids: list[UUID] | None = None
+
+
+class EmployeeResponse(BaseModel):
+    user_id: UUID
+    membership_id: UUID
+    email: EmailStr
+    full_name: str
+    role: MembershipRole
+    status: MembershipStatus
+    organization_ids: list[UUID]
