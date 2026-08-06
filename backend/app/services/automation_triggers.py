@@ -61,6 +61,11 @@ def _matches_trigger_config(automation: Automation, payload: dict) -> bool:
         if not any(str(keyword).lower() in text for keyword in keywords if str(keyword).strip()):
             return False
 
+    button_id = payload.get("button_id")
+    config_button_id = config.get("button_id")
+    if config_button_id and str(config_button_id) != str(button_id or ""):
+        return False
+
     return True
 
 

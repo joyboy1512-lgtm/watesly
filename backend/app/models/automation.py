@@ -20,6 +20,7 @@ class AutomationTriggerType(StrEnum):
     CONVERSATION_CREATED = "conversation_created"
     CONVERSATION_ASSIGNED = "conversation_assigned"
     TAG_ADDED = "tag_added"
+    BUTTON_CLICKED = "button_clicked"
     WEBHOOK = "webhook"
     MANUAL = "manual"
 

@@ -41,6 +41,8 @@ class ConversationResponse(BaseModel):
     last_message_direction: str | None = None
     needs_reply: bool = False
     waiting_minutes: int | None = None
+    sla_deadline_at: datetime | None = None
+    sla_breached_at: datetime | None = None
 
 
 class ConversationSendTextRequest(BaseModel):

@@ -30,7 +30,7 @@ def _evaluate_condition(config, context):
             field = f"trigger.{field}"
         elif field in {
             "text", "from", "conversation_id", "contact_id", "whatsapp_account_id",
-            "channel_id", "organization_id", "tag_id",
+            "channel_id", "organization_id", "tag_id", "button_id", "button_title",
         }:
             field = f"trigger.{field}"
     actual = context
@@ -285,6 +285,36 @@ async def _action(db, run, node_type, data, context):
             )
             response.raise_for_status()
         return {"status_code": response.status_code}
+
+    if node_type == "http_request":
+        from app.services.feature_flags import get_feature_flags
+
+        flags = await get_feature_flags(db, account_id=run.account_id)
+        if not flags.get("http_automation_requests", True):
+            raise ValueError("HTTP automation requests are disabled for this account")
+        method = str(data.get("method") or "POST").upper()
+        url = str(data.get("url") or "")
+        if not url.startswith("https://"):
+            raise ValueError("HTTP request URL must use HTTPS")
+        headers = data.get("headers") if isinstance(data.get("headers"), dict) else {}
+        body = data.get("body") if isinstance(data.get("body"), dict) else {"run_id": str(run.id), "context": context}
+        async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
+            response = await client.request(method, url, json=body, headers=headers)
+            response.raise_for_status()
+        return {"status_code": response.status_code, "method": method}
+
+    if node_type == "set_lifecycle":
+        from app.models.contact import Contact
+
+        contact_id = _uuid(data, context, "contact_id")
+        stage = str(data.get("lifecycle_stage") or data.get("stage") or "lead").strip()[:30]
+        if not contact_id:
+            raise ValueError("set_lifecycle requires contact_id")
+        contact = await db.get(Contact, contact_id)
+        if contact is None or contact.account_id != run.account_id or contact.deleted_at is not None:
+            raise ValueError("Contact not available")
+        contact.lifecycle_stage = stage or "lead"
+        return {"lifecycle_stage": contact.lifecycle_stage}
 
     if node_type == "send_template":
         template_id = _uuid(data, context, "template_id")

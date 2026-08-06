@@ -35,6 +35,7 @@ const TRIGGER_OPTIONS = [
   { value: "conversation_created", label: "عند محادثة جديدة" },
   { value: "conversation_assigned", label: "عند تحويل محادثة" },
   { value: "tag_added", label: "عند إضافة وسم" },
+  { value: "button_clicked", label: "عند ضغط زر تفاعلي" },
   { value: "manual", label: "تشغيل يدوي (تجربة)" }
 ] as const;
 
@@ -76,8 +77,10 @@ const nodePalette = [
   ["add_tag", "إضافة وسم", "TAG"],
   ["assign_team", "تحويل لفريق", "TEAM"],
   ["set_status", "تغيير الحالة", "STS"],
+  ["set_lifecycle", "مرحلة العميل", "CRM"],
   ["delay", "انتظار", "WAIT"],
   ["webhook", "Webhook", "HTTP"],
+  ["http_request", "HTTP Request", "API"],
   ["stop", "إيقاف", "STOP"]
 ] as const;
 
@@ -113,6 +116,10 @@ function defaultNodeData(type: string, label: string): Record<string, unknown> {
       return { label, mode: "catalog_first", auto_send: true };
     case "create_deal":
       return { label, title: "فرصة من WhatsApp", stage: "lead", amount: "0" };
+    case "set_lifecycle":
+      return { label, lifecycle_stage: "customer" };
+    case "http_request":
+      return { label, method: "POST", url: "", body: {} };
     default:
       return { label };
   }

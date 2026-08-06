@@ -20,6 +20,9 @@ export type AgentSettings = {
   auto_kb_on_inbound: boolean;
   llm_system_prompt: string | null;
   llm_available: boolean;
+  auto_reply_outside_hours?: boolean;
+  business_hours_json?: Record<string, unknown>;
+  outside_hours_message?: string | null;
 };
 
 export type SmartReplyResult = {

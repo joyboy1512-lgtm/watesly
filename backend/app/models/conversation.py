@@ -59,3 +59,5 @@ class Conversation(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_starred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    sla_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sla_breached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

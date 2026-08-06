@@ -24,7 +24,7 @@ from app.realtime.event_bus import publish_event
 from app.schemas.whatsapp import SendTextMessageRequest, WhatsAppAccountCreateRequest
 from app.schemas.whatsapp_media import SendMediaMessageRequest, SendTemplateMessageRequest
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
-from app.services.outbox import add_outbox_event
+from app.services.whatsapp_window import compute_service_window
 from app.models.automation import AutomationTriggerType
 from app.services.automation_triggers import queue_automation_runs
 
@@ -431,6 +431,12 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                         sender=sender,
                         display_name=contact_name,
                     )
+
+                    from app.services.ctwa_attribution import apply_referral_to_contact, extract_referral_fields
+                    from app.services.inbound_interactive import extract_interactive_reply
+
+                    apply_referral_to_contact(contact, extract_referral_fields(item))
+                    interactive_reply = extract_interactive_reply(item)
                     message_type_value = item.get("type", "unknown")
                     try:
                         message_type = MessageType(message_type_value)
@@ -447,7 +453,11 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                     )
 
                     text_body = extract_inbound_text_and_caption(item, message_type)
+                    if interactive_reply and interactive_reply.get("text") and not text_body:
+                        text_body = str(interactive_reply["text"])
                     provider_payload = dict(item)
+                    if interactive_reply:
+                        provider_payload["interactive_reply"] = interactive_reply
                     if message_type in MEDIA_MESSAGE_TYPES:
                         media_fields = await store_inbound_whatsapp_media(
                             whatsapp_account=whatsapp_account,
@@ -478,6 +488,13 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                     )
                     await db.flush()
                     conversation.last_message_at = datetime.now(UTC)
+
+                    from app.services.feature_flags import get_feature_flags
+                    from app.services.sla_monitor import set_sla_deadline_on_inbound
+
+                    power_flags = await get_feature_flags(db, account_id=whatsapp_account.account_id)
+                    if power_flags.get("sla_monitoring", True):
+                        await set_sla_deadline_on_inbound(db, conversation=conversation)
 
                     from app.services.link_tracking import apply_inbound_attribution, parse_csat_score
                     from app.services.csat import submit_conversation_rating
@@ -551,6 +568,15 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                         "text": text_body,
                         "message_type": message_type.value,
                     }
+                    if interactive_reply:
+                        trigger_payload.update(
+                            {
+                                "button_id": interactive_reply.get("button_id"),
+                                "button_title": interactive_reply.get("button_title"),
+                                "list_id": interactive_reply.get("list_id"),
+                                "interactive_type": interactive_reply.get("interactive_type"),
+                            }
+                        )
                     automation_run_ids.extend(
                         str(run_id)
                         for run_id in await queue_automation_runs(
@@ -560,6 +586,16 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                             trigger_payload=trigger_payload,
                         )
                     )
+                    if interactive_reply and interactive_reply.get("button_id"):
+                        automation_run_ids.extend(
+                            str(run_id)
+                            for run_id in await queue_automation_runs(
+                                db,
+                                account_id=whatsapp_account.account_id,
+                                trigger_type=AutomationTriggerType.BUTTON_CLICKED,
+                                trigger_payload=trigger_payload,
+                            )
+                        )
                     if created_conversation:
                         automation_run_ids.extend(
                             str(run_id)
@@ -617,6 +653,32 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                                 "source": ai_result.get("source"),
                             },
                         )
+
+                        from app.services.business_hours import is_within_business_hours
+
+                        if (
+                            power_flags.get("ai_agent_auto_reply", True)
+                            and agent_settings.auto_reply_outside_hours
+                            and not is_within_business_hours(agent_settings.business_hours_json)
+                            and not conversation.first_response_at
+                        ):
+                            outside_text = (agent_settings.outside_hours_message or "").strip()
+                            if not outside_text:
+                                outside_text = str(ai_result.get("suggestion") or "").strip()
+                            if not outside_text:
+                                outside_text = "شكراً لتواصلك. نحن خارج ساعات العمل حالياً وسنرد عليك في أقرب وقت."
+                            window = compute_service_window(conversation.last_message_at)
+                            if window.get("service_window_open"):
+                                try:
+                                    await send_text_message(
+                                        db,
+                                        account_id=whatsapp_account.account_id,
+                                        whatsapp_account_id=whatsapp_account.id,
+                                        payload=SendTextMessageRequest(to=sender, text=outside_text),
+                                    )
+                                    conversation.first_response_at = datetime.now(UTC)
+                                except ValueError:
+                                    pass
 
                     processed_count += 1
 

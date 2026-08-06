@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -38,3 +38,7 @@ class Contact(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     source_tracked_link_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("tracked_links.id", ondelete="SET NULL"), index=True
     )
+    lifecycle_stage: Mapped[str] = mapped_column(String(30), nullable=False, default="lead", server_default="lead")
+    referral_json: Mapped[dict | None] = mapped_column(JSONB)
+    utm_source: Mapped[str | None] = mapped_column(String(120))
+    utm_campaign: Mapped[str | None] = mapped_column(String(160))

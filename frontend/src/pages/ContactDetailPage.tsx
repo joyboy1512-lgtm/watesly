@@ -9,6 +9,8 @@ import {
   formatContactDate,
   formatGenderLabel,
   formatGenderSalutation,
+  formatLifecycleStage,
+  LIFECYCLE_LABELS,
   openContactConversation,
   refreshContactsAfterMutation,
   tagChipColor,
@@ -224,6 +226,16 @@ export default function ContactDetailPage() {
               <div><dt>اللغة</dt><dd>{item.language || "—"}</dd></div>
               <div><dt>رمز الدولة</dt><dd>{item.country_code || "—"}</dd></div>
               <div>
+                <dt>مرحلة العميل</dt>
+                <dd>{formatLifecycleStage(item.lifecycle_stage)}</dd>
+              </div>
+              {(item.utm_source || item.utm_campaign) && (
+                <div>
+                  <dt>مصدر CTWA</dt>
+                  <dd>{item.utm_source}{item.utm_campaign ? ` · ${item.utm_campaign}` : ""}</dd>
+                </div>
+              )}
+              <div>
                 <dt>موافقة التسويق</dt>
                 <dd>{item.marketing_opt_in === false ? "غير موافق" : "موافق"}</dd>
               </div>
@@ -377,6 +389,7 @@ function ContactEditModal({
   const [language, setLanguage] = useState(contact.language ?? "");
   const [countryCode, setCountryCode] = useState(contact.country_code ?? "");
   const [marketingOptIn, setMarketingOptIn] = useState(contact.marketing_opt_in !== false);
+  const [lifecycleStage, setLifecycleStage] = useState(contact.lifecycle_stage ?? "lead");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -385,7 +398,8 @@ function ContactEditModal({
       email: email.trim() || null,
       language: language.trim() || null,
       country_code: countryCode.trim() ? countryCode.trim().toUpperCase() : null,
-      marketing_opt_in: marketingOptIn
+      marketing_opt_in: marketingOptIn,
+      lifecycle_stage: lifecycleStage
     });
   }
 
@@ -412,6 +426,14 @@ function ContactEditModal({
           <label className="field-label">
             <span>رمز الدولة</span>
             <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} maxLength={2} dir="ltr" />
+          </label>
+          <label className="field-label">
+            <span>مرحلة العميل</span>
+            <select value={lifecycleStage} onChange={(e) => setLifecycleStage(e.target.value)}>
+              {Object.entries(LIFECYCLE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
           </label>
           <label className="field-label contacts-checkbox-label">
             <input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)} />

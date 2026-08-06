@@ -79,6 +79,7 @@ from app.services.developer import (
     serialize_webhook,
     toggle_webhook_subscription,
 )
+from app.services.feature_flags import get_feature_flags, update_feature_flags
 from app.services.inbox_extended import mark_conversation_read, mark_conversation_unread
 from app.services.search import global_search
 from app.services.team_extended import create_department, list_departments, list_presence, set_presence, workload_summary
@@ -833,25 +834,88 @@ async def patch_webhook(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+class FeatureFlagsUpdate(BaseModel):
+    flags: dict = Field(default_factory=dict)
+
+
+@router.get("/feature-flags")
+async def get_account_feature_flags(
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_feature_flags(db, account_id=context.account_id)
+
+
+@router.patch("/feature-flags")
+async def patch_account_feature_flags(
+    payload: FeatureFlagsUpdate,
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await update_feature_flags(
+            db,
+            account_id=context.account_id,
+            updates=payload.flags,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/marketplace")
 async def get_marketplace(
     context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_marketplace(db)
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    if not flags.get("marketplace_installs", True):
+        return []
+    items = await list_marketplace(db)
+    templates = [
+        {
+            "slug": "woocommerce-order-updates",
+            "name": "WooCommerce — تحديثات الطلب",
+            "category": "ecommerce",
+            "description": "Webhook → إرسال قالب WhatsApp عند تغيير حالة الطلب",
+            "setup": ["POST /developer/webhooks", "Automation: webhook → send_template"],
+        },
+        {
+            "slug": "lead-capture-ctwa",
+            "name": "CTWA — التقاط العملاء",
+            "category": "growth",
+            "description": "رسالة إعلان → lifecycle lead → إنشاء صفقة CRM",
+            "setup": ["Trigger: conversation_created", "Action: set_lifecycle + create_deal"],
+        },
+    ]
+    return {"integrations": items, "templates": templates}
 
 
 @router.get("/integrations/channels")
 async def channel_integrations(
     context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
 ):
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    from app.services.channel_adapters import ADAPTERS
+
+    instagram_status = "beta" if flags.get("instagram_channel") else "planned"
+    messenger_status = "beta" if flags.get("messenger_channel") else "planned"
     return {
-        "whatsapp": {"status": "active", "note": "Fully integrated"},
-        "instagram": {"status": "planned", "note": "Connect Meta app (Phase 10 — external link deferred)"},
-        "messenger": {"status": "planned", "note": "Connect Meta app (Phase 10 — external link deferred)"},
-        "telegram": {"status": "planned", "note": "Bot token required (Phase 10 — external link deferred)"},
-        "email": {"status": "planned", "note": "SMTP/IMAP provider required (Phase 10 — external link deferred)"},
-        "web_chat": {"status": "planned", "note": "Widget embed (Phase 10 — external link deferred)"},
-        "sms": {"status": "planned", "note": "Twilio/other provider (Phase 10 — external link deferred)"},
-        "voice": {"status": "planned", "note": "Twilio Voice (Phase 10 — external link deferred)"},
+        "adapters": sorted(ADAPTERS.keys()),
+        "whatsapp": {"status": "active", "note": "WhatsApp Business API — مدمج بالكامل"},
+        "instagram": {
+            "status": instagram_status,
+            "note": "Meta Instagram Messaging — جاهز عبر Channel Adapters",
+            "enabled": flags.get("instagram_channel", False),
+        },
+        "messenger": {
+            "status": messenger_status,
+            "note": "Meta Messenger — جاهز عبر Channel Adapters",
+            "enabled": flags.get("messenger_channel", False),
+        },
+        "telegram": {"status": "planned", "note": "Bot token — قريباً"},
+        "email": {"status": "planned", "note": "SMTP/IMAP — قريباً"},
+        "web_chat": {"status": "planned", "note": "Widget embed — قريباً"},
+        "sms": {"status": "planned", "note": "Twilio/other — قريباً"},
+        "voice": {"status": "planned", "note": "Twilio Voice — قريباً"},
     }

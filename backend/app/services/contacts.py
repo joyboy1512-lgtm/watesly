@@ -24,6 +24,7 @@ async def list_contacts(
     organization_id: UUID | None = None,
     tag_id: UUID | None = None,
     segment_id: UUID | None = None,
+    lifecycle_stage: str | None = None,
     q: str | None = None,
 ) -> list[Contact]:
     query = (
@@ -60,6 +61,8 @@ async def list_contacts(
                     ContactTag.tag_id == tag_id,
                 )
             )
+        if lifecycle_stage and lifecycle_stage.strip():
+            query = query.where(Contact.lifecycle_stage == lifecycle_stage.strip())
         if q and q.strip():
             term = f"%{q.strip()}%"
             query = query.where(

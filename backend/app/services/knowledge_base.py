@@ -45,7 +45,7 @@ async def get_agent_settings(db: AsyncSession, account_id: UUID) -> AiAgentSetti
 async def update_agent_settings(db: AsyncSession, account_id: UUID, **fields) -> AiAgentSettings:
     item = await get_agent_settings(db, account_id)
     for key, value in fields.items():
-        if value is not None and hasattr(item, key):
+        if hasattr(item, key):
             setattr(item, key, value)
     await db.commit()
     await db.refresh(item)

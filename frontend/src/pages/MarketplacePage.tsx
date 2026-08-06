@@ -2,9 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
 type Integration = { id: string; slug: string; name: string; category: string; description: string | null; status: string };
+type MarketplacePayload = Integration[] | { integrations: Integration[]; templates?: unknown[] };
+
+function normalizeIntegrations(data: MarketplacePayload | undefined): Integration[] {
+  if (!data) return [];
+  return Array.isArray(data) ? data : data.integrations ?? [];
+}
 
 export default function MarketplacePage() {
-  const items = useQuery({ queryKey: ["marketplace"], queryFn: async () => (await api.get<Integration[]>("/platform/marketplace")).data });
+  const items = useQuery({
+    queryKey: ["marketplace"],
+    queryFn: async () => normalizeIntegrations((await api.get<MarketplacePayload>("/platform/marketplace")).data)
+  });
 
   return (
     <main className="page">

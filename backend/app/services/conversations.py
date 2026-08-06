@@ -71,6 +71,8 @@ def build_conversation_response(
         last_message_direction=last_message_direction,
         needs_reply=needs_reply,
         waiting_minutes=waiting_minutes,
+        sla_deadline_at=conversation.sla_deadline_at,
+        sla_breached_at=conversation.sla_breached_at,
     )
 
 

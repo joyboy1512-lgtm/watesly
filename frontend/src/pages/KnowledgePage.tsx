@@ -467,6 +467,26 @@ export default function KnowledgePage() {
               />
               <span>اقتراح تلقائي عند رسالة واردة</span>
             </label>
+            <label className="field-label checkbox-row">
+              <input
+                type="checkbox"
+                checked={settings.auto_reply_outside_hours ?? false}
+                onChange={(e) => void saveAgentSettings({ auto_reply_outside_hours: e.target.checked })}
+              />
+              <span>رد تلقائي خارج ساعات العمل (أول رسالة)</span>
+            </label>
+            <label className="field-label knowledge-field-full">
+              <span>رسالة خارج الدوام</span>
+              <textarea
+                value={settings.outside_hours_message ?? ""}
+                onBlur={(e) => void saveAgentSettings({ outside_hours_message: e.target.value || null })}
+                rows={2}
+                placeholder="شكراً لتواصلك. نحن خارج ساعات العمل…"
+              />
+            </label>
+            <p className="hint-text knowledge-field-full">
+              ساعات العمل الافتراضية: الأحد–الخميس 09:00–18:00 (Asia/Kuwait). يمكن تخصيصها عبر API.
+            </p>
             <label className="field-label knowledge-field-full">
               <span>تعليمات النظام (LLM)</span>
               <textarea

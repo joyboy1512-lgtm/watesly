@@ -16,6 +16,10 @@ export type Contact = {
   country_code: string | null;
   gender: ContactGender;
   marketing_opt_in?: boolean;
+  lifecycle_stage?: string;
+  utm_source?: string | null;
+  utm_campaign?: string | null;
+  referral_json?: Record<string, unknown> | null;
   created_at: string;
   updated_at?: string;
 };
@@ -56,7 +60,17 @@ export type ContactCustomFieldValue = {
 
 export type SegmentWithCount = { id: string; name: string; count?: number };
 
-export const CONTACTS_PAGE_SIZE = 25;
+export const LIFECYCLE_LABELS: Record<string, string> = {
+  lead: "عميل محتمل",
+  prospect: "مهتم",
+  customer: "عميل",
+  churned: "متوقف"
+};
+
+export function formatLifecycleStage(stage: string | undefined | null): string {
+  if (!stage) return LIFECYCLE_LABELS.lead;
+  return LIFECYCLE_LABELS[stage] ?? stage;
+}
 /** Must match backend GET /contacts limit validation (le=500). */
 export const CONTACTS_LIST_LIMIT = 500;
 
