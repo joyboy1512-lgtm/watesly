@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Watesly — deploy power phases + migration 0031 on production
-# Run ON THE SERVER: bash /opt/watesly/deploy/upgrade-0031-power-phases.sh
+# Watesly — production upgrade (main branch + migration + rebuild)
+# Run ON THE SERVER: bash /opt/watesly/deploy/upgrade-production.sh
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/watesly}"
 COMPOSE="docker compose -f compose.prod.yaml"
 
-echo "=== Watesly upgrade: migration 0031 + power phases ==="
+echo "=== Watesly production upgrade ==="
 cd "$APP_DIR"
 
 echo ">> Pull latest main..."
@@ -22,10 +22,10 @@ $COMPOSE build api worker beat frontend
 echo ">> Ensure data services..."
 $COMPOSE up -d db redis minio
 
-echo ">> Run alembic upgrade head (0031)..."
+echo ">> Run migrations..."
 $COMPOSE run --rm migrate
 
-echo ">> Restart services..."
+echo ">> Restart application services..."
 $COMPOSE up -d api worker beat frontend
 
 echo ">> Waiting for API health..."
@@ -37,13 +37,12 @@ for i in $(seq 1 40); do
   sleep 3
 done
 
-echo ">> Current migration:"
+echo ">> Migration:"
 $COMPOSE exec -T api alembic current
 
-echo ">> Service status:"
+echo ">> Services:"
 $COMPOSE ps
 
 echo ""
 echo "=== Done ==="
-echo "Verify: curl -s https://api.watesly.com/api/v1/health/ready"
-echo "App:    https://www.watesly.com"
+echo "Public: curl -s https://api.watesly.com/api/v1/health/ready"

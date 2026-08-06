@@ -1,0 +1,60 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "deploy/**"
+      - ".github/workflows/deploy-production.yml"
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'joyboy1512-lgtm/watesly'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deploy secrets
+        id: secrets
+        run: |
+          if [ -z "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "DEPLOY_SSH_PRIVATE_KEY secret is not configured — skip remote deploy."
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH
+        if: steps.secrets.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST || '64.226.69.159' }}
+          username: ${{ secrets.DEPLOY_USER || 'root' }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            APP_DIR="${{ secrets.DEPLOY_APP_DIR || '/opt/watesly' }}"
+            cd "$APP_DIR"
+            git fetch origin main
+            git checkout main
+            git pull origin main
+            bash deploy/upgrade-production.sh
+
+      - name: Verify public health
+        if: steps.secrets.outputs.configured == 'true'
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf https://api.watesly.com/api/v1/health/ready; then
+              echo ""
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "Health check failed after deploy"
+          exit 1

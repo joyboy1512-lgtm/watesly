@@ -10,10 +10,12 @@ from app.models.contact import Contact
 from app.models.whatsapp_account import WhatsAppAccount
 from app.models.whatsapp_template import WhatsAppTemplate
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
+from app.services.phone_normalize import normalize_whatsapp_phone
 from app.services.template_media import resolve_send_components
 from app.workers.celery_app import celery_app
 
-STALE_SENDING_MINUTES=10
+STALE_SENDING_MINUTES = 10
+COUNTRY_DIAL = {"KW": "965", "SA": "966", "AE": "971", "QA": "974", "BH": "973", "OM": "968"}
 async def _run_campaign(campaign_id:UUID,execution_token:UUID)->dict:
  async with AsyncSessionFactory() as db:
   campaign=(await db.execute(select(Campaign).where(Campaign.id==campaign_id).with_for_update())).scalar_one_or_none()
@@ -39,8 +41,15 @@ async def _run_campaign(campaign_id:UUID,execution_token:UUID)->dict:
     now=datetime.now(UTC); recipient.status=CampaignRecipientStatus.SENDING; recipient.sending_started_at=now; recipient.last_attempt_at=now; recipient.delivery_key=recipient.delivery_key or f"campaign:{campaign.id}:recipient:{recipient.id}"; campaign.last_heartbeat_at=now; await db.commit()
     try:
      components=resolve_send_components(template.components, recipient.template_parameters)
-     response=await client.send_template(to=contact.external_address,template_name=template.name,language_code=template.language,components=components)
-     messages=response.get("messages",[]); recipient.external_message_id=messages[0].get("id") if messages else None; recipient.status=CampaignRecipientStatus.SENT; recipient.error_message=None; sent+=1
+     dial=COUNTRY_DIAL.get((contact.country_code or "KW").upper(), "965")
+     to=normalize_whatsapp_phone(contact.external_address, country_code=dial)
+     if not to:
+      recipient.status=CampaignRecipientStatus.FAILED
+      recipient.error_message="Invalid phone number"
+      failed+=1
+     else:
+      response=await client.send_template(to=to,template_name=template.name,language_code=template.language,components=components)
+      messages=response.get("messages",[]); recipient.external_message_id=messages[0].get("id") if messages else None; recipient.status=CampaignRecipientStatus.SENT; recipient.error_message=None; sent+=1
     except MetaAPIError as exc: recipient.status=CampaignRecipientStatus.FAILED; recipient.error_message=str(exc)[:2000]; failed+=1
     finally: recipient.sending_started_at=None
     await db.commit(); await asyncio.sleep(.25+random.random()*.35)
