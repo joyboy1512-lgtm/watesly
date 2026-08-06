@@ -688,32 +688,43 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
             elif whatsapp_account and event_type == "message_status":
                 for status_item in value.get("statuses", []):
                     external_id = status_item.get("id")
+                    if not external_id:
+                        continue
+                    status_value = status_item.get("status")
                     result = await db.execute(
                         select(Message).where(Message.external_message_id == external_id)
                     )
                     message = result.scalar_one_or_none()
                     if message:
-                        status_value = status_item.get("status")
                         try:
                             message.status = MessageStatus(status_value)
                         except ValueError:
                             pass
                         message.provider_payload = status_item
-                        recipient_result = await db.execute(
-                            select(CampaignRecipient).where(
-                                CampaignRecipient.external_message_id == external_id
-                            )
-                        )
-                        recipient = recipient_result.scalar_one_or_none()
-                        if recipient is not None:
-                            try:
-                                recipient.status = CampaignRecipientStatus(status_value)
-                            except ValueError:
-                                if status_value == "failed":
-                                    recipient.status = CampaignRecipientStatus.FAILED
                         conversation = await db.get(Conversation, message.conversation_id)
                         if conversation is not None:
                             conversation.last_message_at = datetime.now(UTC)
+
+                    recipient_result = await db.execute(
+                        select(CampaignRecipient).where(
+                            CampaignRecipient.external_message_id == external_id
+                        )
+                    )
+                    recipient = recipient_result.scalar_one_or_none()
+                    if recipient is not None and status_value:
+                        try:
+                            recipient.status = CampaignRecipientStatus(status_value)
+                        except ValueError:
+                            if status_value == "failed":
+                                recipient.status = CampaignRecipientStatus.FAILED
+                        if status_value == "failed":
+                            errors = status_item.get("errors") or []
+                            if isinstance(errors, list) and errors:
+                                first = errors[0] if isinstance(errors[0], dict) else {}
+                                detail = first.get("title") or first.get("message") or first.get("code")
+                                if detail:
+                                    recipient.error_message = str(detail)[:2000]
+                    if message is not None or recipient is not None:
                         processed_count += 1
 
                 event.status = WebhookEventStatus.PROCESSED
