@@ -47,6 +47,36 @@ const SUCCESS_STATUSES = new Set(["sent", "delivered", "read"]);
 const PENDING_STATUSES = new Set(["pending", "queued", "sending"]);
 const ACTIVE_CAMPAIGN_STATUSES = new Set(["scheduled", "running"]);
 
+export function isActiveCampaignStatus(status: string) {
+  return ACTIVE_CAMPAIGN_STATUSES.has(status);
+}
+
+function campaignSentCount(report: Pick<CampaignReport, "sent" | "delivered" | "read">) {
+  return (report.sent ?? 0) + (report.delivered ?? 0) + (report.read ?? 0);
+}
+
+/** Keep polling until Meta/worker counts are reflected in the list report. */
+export function campaignReportNeedsRefresh(item: {
+  status: string;
+  completed_at?: string | null;
+  total: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+}) {
+  if (isActiveCampaignStatus(item.status)) return true;
+  const sentCount = campaignSentCount(item);
+  if (item.total === 0) return false;
+  if (sentCount > 0 || item.failed > 0) return false;
+  if (!["completed", "completed_with_errors"].includes(item.status)) return false;
+  if (item.completed_at) {
+    const ageMs = Date.now() - new Date(item.completed_at).getTime();
+    return ageMs < 120_000;
+  }
+  return true;
+}
+
 export function getCampaignResultLabel(status: string, report?: Pick<CampaignReport, "total" | "sent" | "delivered" | "read" | "failed" | "pending">) {
   const sentCount = (report?.sent ?? 0) + (report?.delivered ?? 0) + (report?.read ?? 0);
   const total = report?.total ?? 0;
@@ -57,9 +87,9 @@ export function getCampaignResultLabel(status: string, report?: Pick<CampaignRep
     case "completed":
       if (total > 0 && sentCount === 0 && failed === 0) {
         return {
-          label: "لم يُرسل",
-          tone: "warning" as const,
-          detail: pending ? `${pending} بانتظار الإرسال` : "لا مستلمين جدد — أنشئ حملة جديدة"
+          label: "جاري التحديث",
+          tone: "progress" as const,
+          detail: "انتظر ثوانٍ حتى تظهر نتيجة الإرسال"
         };
       }
       return { label: "تمت بنجاح", tone: "success" as const, detail: `${sentCount}/${total} تم الإرسال` };
@@ -231,17 +261,18 @@ export function CampaignReportRow({
   autoRefresh?: boolean;
 }) {
   const summaryReport = buildSummaryReport(item);
-  const isActive = ACTIVE_CAMPAIGN_STATUSES.has(item.status);
+  const isActive = isActiveCampaignStatus(item.status);
+  const needsRefresh = campaignReportNeedsRefresh(item);
 
   const report = useQuery({
     queryKey: ["campaign-report", item.id],
     queryFn: async () => (await api.get<CampaignReport>(`/campaigns/${item.id}/report`)).data,
-    enabled: expanded || autoRefresh || isActive,
-    refetchInterval: isActive ? 5000 : false
+    enabled: expanded || autoRefresh || isActive || needsRefresh,
+    refetchInterval: isActive || needsRefresh ? 3000 : false
   });
 
   const liveReport = report.data ?? summaryReport;
-  const showDetails = expanded || isActive || ["completed", "completed_with_errors", "failed"].includes(item.status);
+  const showDetails = expanded || isActive || needsRefresh || ["completed", "completed_with_errors", "failed"].includes(item.status);
 
   return (
     <>
@@ -329,8 +360,4 @@ export function CampaignResultsTable({
       </table>
     </div>
   );
-}
-
-export function isActiveCampaignStatus(status: string) {
-  return ACTIVE_CAMPAIGN_STATUSES.has(status);
 }

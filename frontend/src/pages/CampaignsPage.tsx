@@ -15,6 +15,7 @@ import { toastStore } from "../stores/toast";
 import {
   CampaignResultsTable,
   CampaignResultBadge,
+  campaignReportNeedsRefresh,
   isActiveCampaignStatus,
   type CampaignReport,
   type CampaignSummaryRow
@@ -86,6 +87,27 @@ function toSummaryRow(campaign: CampaignListItem): CampaignSummaryRow {
   };
 }
 
+async function waitForCampaignReport(
+  client: ReturnType<typeof useQueryClient>,
+  campaignId: string
+) {
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    await client.refetchQueries({ queryKey: ["campaigns"] });
+    await client.refetchQueries({ queryKey: ["campaign-report", campaignId] });
+    const rows = client.getQueryData<CampaignListItem[]>(["campaigns"]);
+    const item = rows?.find((row) => row.id === campaignId);
+    if (item) {
+      const sent = item.report.sent + item.report.delivered + item.report.read;
+      if (sent > 0 || item.report.failed > 0) return;
+      if (isActiveCampaignStatus(item.status)) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        continue;
+      }
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+  }
+}
+
 export default function CampaignsPage() {
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -123,7 +145,17 @@ export default function CampaignsPage() {
     queryFn: async () => (await api.get<CampaignListItem[]>("/campaigns")).data,
     refetchInterval: (query) => {
       const rows = query.state.data ?? [];
-      return rows.some((item) => isActiveCampaignStatus(item.status)) ? 5000 : false;
+      if (rows.some((item) => isActiveCampaignStatus(item.status))) return 3000;
+      if (rows.some((item) => campaignReportNeedsRefresh({
+        status: item.status,
+        completed_at: item.completed_at,
+        total: item.report.total,
+        sent: item.report.sent,
+        delivered: item.report.delivered,
+        read: item.report.read,
+        failed: item.report.failed
+      }))) return 3000;
+      return false;
     }
   });
   const trackedLinks = useQuery({
@@ -303,7 +335,7 @@ export default function CampaignsPage() {
       setCampaignMediaOverride(null);
       setExpandedCampaignId(campaignId);
       setHighlightCampaignId(campaignId);
-      await client.invalidateQueries({ queryKey: ["campaigns"] });
+      await waitForCampaignReport(client, campaignId);
       listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول أدناه.", "success");
     } catch {
