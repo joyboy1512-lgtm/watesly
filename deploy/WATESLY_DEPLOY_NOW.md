@@ -29,13 +29,23 @@ scp -r D:\MYWATT root@64.226.69.159:/opt/watesly
 
 ---
 
-## 3) SSH + تشغيل
+## 3) SSH + تشغيل (تحديث 2026)
 
 ```bash
 ssh root@64.226.69.159
-chmod +x /opt/watesly/deploy/deploy.sh
-/opt/watesly/deploy/deploy.sh
+bash /opt/watesly/deploy/upgrade-production.sh
 ```
+
+أو من جهازك (PowerShell) بعد `git pull` على السيرفر:
+
+```powershell
+$env:DEPLOY_SSH_KEY_FILE = "C:\Users\DELL PC\.ssh\watesly_do"
+bash deploy/push-and-deploy.sh
+```
+
+**GitHub Actions (نشر تلقائي):** أضف Secret `DEPLOY_SSH_PRIVATE_KEY` (محتوى مفتاح SSH) في repo → Actions → Deploy Production.
+
+---
 
 عدّل `.env` عند أول تشغيل:
 ```bash
