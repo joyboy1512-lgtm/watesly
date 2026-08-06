@@ -27,6 +27,7 @@ from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 from app.services.whatsapp_window import compute_service_window
 from app.models.automation import AutomationTriggerType
 from app.services.automation_triggers import queue_automation_runs
+from app.services.outbox import add_outbox_event
 
 
 

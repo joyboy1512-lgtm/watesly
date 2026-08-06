@@ -59,9 +59,7 @@ class ObjectStorage:
         expires_seconds: int = 604_800,
     ) -> str:
         public_url = self.build_public_url(key)
-        if public_url and (not for_meta or _is_externally_accessible(public_url)):
-            return public_url
-        if for_meta and public_url:
+        if public_url and _is_externally_accessible(public_url):
             return public_url
         return self.create_presigned_download_url(key, expires_seconds=expires_seconds)
 
