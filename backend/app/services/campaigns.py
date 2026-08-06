@@ -165,7 +165,10 @@ async def cancel_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UU
 async def get_campaign_report(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> dict:
     await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
     result = await db.execute(select(CampaignRecipient.status, func.count(CampaignRecipient.id)).where(CampaignRecipient.campaign_id == campaign_id).group_by(CampaignRecipient.status))
-    counts = {status: count for status, count in result.all()}
+    counts: dict[CampaignRecipientStatus, int] = {}
+    for status, count in result.all():
+        key = status if isinstance(status, CampaignRecipientStatus) else CampaignRecipientStatus(str(status))
+        counts[key] = counts.get(key, 0) + int(count)
     total = sum(counts.values()); delivered = counts.get(CampaignRecipientStatus.DELIVERED, 0); read = counts.get(CampaignRecipientStatus.READ, 0); sent = counts.get(CampaignRecipientStatus.SENT, 0)
     return {"total": total, "pending": counts.get(CampaignRecipientStatus.PENDING, 0), "queued": counts.get(CampaignRecipientStatus.QUEUED, 0), "sent": sent, "delivered": delivered, "read": read, "failed": counts.get(CampaignRecipientStatus.FAILED, 0), "skipped": counts.get(CampaignRecipientStatus.SKIPPED, 0), "delivery_rate": round(((delivered + read) / max(sent + delivered + read, 1)) * 100, 2), "read_rate": round((read / max(delivered + read, 1)) * 100, 2)}
 
