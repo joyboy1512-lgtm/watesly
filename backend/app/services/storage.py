@@ -37,6 +37,27 @@ class ObjectStorage:
     def ensure_bucket(self) -> None:
         if not self.bucket_exists():
             self.client.create_bucket(Bucket=self.bucket)
+        self._ensure_public_read_policy()
+
+    def _ensure_public_read_policy(self) -> None:
+        """Meta must fetch template media URLs without auth."""
+        import json
+
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{self.bucket}/*"],
+                }
+            ],
+        }
+        try:
+            self.client.put_bucket_policy(Bucket=self.bucket, Policy=json.dumps(policy))
+        except Exception:
+            pass
 
     def build_public_url(self, key: str) -> str:
         base = settings.s3_public_base_url.strip().rstrip("/")
