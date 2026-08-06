@@ -11,6 +11,8 @@ import {
   downloadContactsImportTemplate,
   formatContactDate,
   formatGenderLabel,
+  formatLifecycleStage,
+  LIFECYCLE_LABELS,
   openContactConversation,
   tagChipColor,
   type Channel,
@@ -38,6 +40,7 @@ export default function ContactsPage() {
   const [organizationFilter, setOrganizationFilter] = useState(searchParams.get("organization_id") ?? "");
   const [tagFilter, setTagFilter] = useState(searchParams.get("tag_id") ?? "");
   const [segmentFilter, setSegmentFilter] = useState(searchParams.get("segment_id") ?? "");
+  const [lifecycleFilter, setLifecycleFilter] = useState(searchParams.get("lifecycle_stage") ?? "");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState("");
@@ -76,7 +79,7 @@ export default function ContactsPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [debouncedSearch, channelFilter, organizationFilter, tagFilter, segmentFilter]);
+  }, [debouncedSearch, channelFilter, organizationFilter, tagFilter, segmentFilter, lifecycleFilter]);
 
   function updateFilterParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -118,7 +121,7 @@ export default function ContactsPage() {
     queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data
   });
   const contacts = useQuery({
-    queryKey: ["contacts", debouncedSearch, channelFilter, organizationFilter, tagFilter, segmentFilter],
+    queryKey: ["contacts", debouncedSearch, channelFilter, organizationFilter, tagFilter, segmentFilter, lifecycleFilter],
     queryFn: async () => {
       const params: Record<string, string | number> = { limit: CONTACTS_LIST_LIMIT };
       if (debouncedSearch) params.q = debouncedSearch;
@@ -126,6 +129,7 @@ export default function ContactsPage() {
       if (organizationFilter) params.organization_id = organizationFilter;
       if (tagFilter) params.tag_id = tagFilter;
       if (segmentFilter) params.segment_id = segmentFilter;
+      if (lifecycleFilter) params.lifecycle_stage = lifecycleFilter;
       return (await api.get<Contact[]>("/contacts", { params })).data;
     },
     refetchOnMount: "always"
@@ -396,6 +400,20 @@ export default function ContactsPage() {
               ))}
             </select>
             <select
+              value={lifecycleFilter}
+              onChange={(e) => {
+                setLifecycleFilter(e.target.value);
+                setPage(1);
+              }}
+              className="contacts-erp-channel-filter"
+              aria-label="تصفية حسب مرحلة العميل"
+            >
+              <option value="">كل المراحل</option>
+              {Object.entries(LIFECYCLE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <select
               value={channelFilter}
               onChange={(e) => onChannelFilterChange(e.target.value)}
               className="contacts-erp-channel-filter"
@@ -470,6 +488,7 @@ export default function ContactsPage() {
                     />
                   </th>
                   <th>الاسم</th>
+                  <th>المرحلة</th>
                   <th>الجنس</th>
                   <th>الهاتف</th>
                   <th>البريد</th>
@@ -626,6 +645,7 @@ function ContactRow({
           {isDuplicate && <span className="contacts-duplicate-badge" title="رقم مكرر">مكرر</span>}
         </div>
       </td>
+      <td>{formatLifecycleStage(contact.lifecycle_stage)}</td>
       <td>{formatGenderLabel(contact.gender)}</td>
       <td dir="ltr" className="contacts-phone-cell">{contact.external_address}</td>
       <td dir="ltr">{contact.email || "—"}</td>

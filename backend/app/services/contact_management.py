@@ -77,6 +77,7 @@ async def update_contact(
     language: str | None = None,
     country_code: str | None = None,
     marketing_opt_in: bool | None = None,
+    lifecycle_stage: str | None = None,
 ) -> Contact:
     contact = await get_contact_or_raise(db, account_id=account_id, contact_id=contact_id)
     if display_name is not None:
@@ -90,6 +91,8 @@ async def update_contact(
         contact.country_code = country_code
     if marketing_opt_in is not None:
         contact.marketing_opt_in = marketing_opt_in
+    if lifecycle_stage is not None:
+        contact.lifecycle_stage = lifecycle_stage.strip()[:30] or "lead"
     contact.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(contact)
@@ -234,6 +237,8 @@ def _apply_segment_filters(query, filters: dict):
         query = query.join(ContactTag, ContactTag.contact_id == Contact.id).where(
             ContactTag.tag_id == UUID(str(tag_id))
         )
+    if lifecycle_stage := filters.get("lifecycle_stage"):
+        query = query.where(Contact.lifecycle_stage == str(lifecycle_stage))
     return query
 
 

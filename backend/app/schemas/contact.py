@@ -52,6 +52,10 @@ class ContactResponse(BaseModel):
     country_code: str | None
     gender: ContactGender = "unknown"
     marketing_opt_in: bool = True
+    lifecycle_stage: str = "lead"
+    utm_source: str | None = None
+    utm_campaign: str | None = None
+    referral_json: dict | None = None
     created_at: datetime
     updated_at: datetime
 

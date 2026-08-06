@@ -32,8 +32,43 @@ from app.services.conversations import (
     update_conversation,
     get_conversation_for_send,
 )
+from app.services.feature_flags import get_feature_flags
+from app.services.privacy_mask import can_view_full_contact, mask_phone
+from app.core.permissions import Permission as Perm, role_has_permission
 
 router = APIRouter()
+
+
+def _contact_permissions(context: AuthContext) -> set[str]:
+    role = context.membership.role
+    return {perm.value for perm in Perm if role_has_permission(role, perm)}
+
+
+async def _maybe_mask_conversation_response(
+    db: AsyncSession,
+    context: AuthContext,
+    response: ConversationResponse,
+) -> ConversationResponse:
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    if not flags.get("privacy_mask_agents", True):
+        return response
+    role = context.membership.role.value if hasattr(context.membership.role, "value") else str(context.membership.role)
+    if can_view_full_contact(role=role, permissions=_contact_permissions(context)):
+        return response
+    masked = response.model_copy()
+    masked.contact_address = mask_phone(masked.contact_address) or masked.contact_address
+    return masked
+
+
+async def _mask_conversation_list(
+    db: AsyncSession,
+    context: AuthContext,
+    items: list[ConversationResponse],
+) -> list[ConversationResponse]:
+    results = []
+    for item in items:
+        results.append(await _maybe_mask_conversation_response(db, context, item))
+    return results
 
 
 @router.get("", response_model=list[ConversationResponse])
@@ -55,7 +90,7 @@ async def get_conversations(
     )
     conversation_ids = [row[0].id for row in rows]
     last_inbound_map = await get_last_inbound_by_conversation(db, conversation_ids)
-    return [
+    items = [
         build_conversation_response(
             conversation=conversation,
             contact=contact,
@@ -65,6 +100,7 @@ async def get_conversations(
         )
         for conversation, contact, message, unread in rows
     ]
+    return await _mask_conversation_list(db, context, items)
 
 
 @router.get("/{conversation_id}/messages", response_model=list[MessageResponse])

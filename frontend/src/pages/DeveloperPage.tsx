@@ -33,7 +33,14 @@ type DeliveryRow = {
   created_at: string | null;
 };
 
-type DevTab = "keys" | "webhooks" | "deliveries" | "docs" | "marketplace";
+type DevTab = "keys" | "webhooks" | "deliveries" | "docs" | "marketplace" | "power";
+
+type MarketplacePayload = {
+  integrations?: Array<{ id: string; name: string; category: string; description: string | null; status: string }>;
+  templates?: Array<{ slug: string; name: string; category: string; description: string; setup: string[] }>;
+};
+
+type FeatureFlags = Record<string, boolean>;
 
 const SCOPE_OPTIONS = [
   "contacts:read",
@@ -51,7 +58,8 @@ export default function DeveloperPage() {
     { id: "webhooks", label: t("developer.tabWebhooks") },
     { id: "deliveries", label: t("developer.tabDeliveries") },
     { id: "docs", label: t("developer.tabDocs") },
-    { id: "marketplace", label: t("developer.tabMarketplace") }
+    { id: "marketplace", label: t("developer.tabMarketplace") },
+    { id: "power", label: "ميزات Watesly" }
   ];
   const client = useQueryClient();
   const [tab, setTab] = useState<DevTab>("keys");
@@ -90,9 +98,19 @@ export default function DeveloperPage() {
   });
   const marketplace = useQuery({
     queryKey: ["marketplace"],
-    queryFn: async () => (await api.get("/platform/marketplace")).data,
+    queryFn: async () => (await api.get<MarketplacePayload | MarketplacePayload["integrations"]>("/platform/marketplace")).data,
     enabled: tab === "marketplace"
   });
+  const featureFlags = useQuery({
+    queryKey: ["feature-flags"],
+    queryFn: async () => (await api.get<FeatureFlags>("/platform/feature-flags")).data,
+    enabled: tab === "power"
+  });
+
+  const marketplaceIntegrations = Array.isArray(marketplace.data)
+    ? marketplace.data
+    : marketplace.data?.integrations ?? [];
+  const marketplaceTemplates = Array.isArray(marketplace.data) ? [] : marketplace.data?.templates ?? [];
 
   const eventOptions = events.data?.events ?? ["message.received", "deal.won"];
 
@@ -304,14 +322,60 @@ export default function DeveloperPage() {
       )}
 
       {tab === "marketplace" && (
-        <section className="card marketplace-grid">
-          {(marketplace.data ?? []).map((item: { id: string; name: string; category: string; description: string | null; status: string }) => (
-            <article key={item.id} className="marketplace-card card">
-              <h3>{item.name}</h3>
-              <span className="hint-text">{item.category}</span>
-              <p>{item.description}</p>
-              <span className="developer-badge">{item.status}</span>
-            </article>
+        <>
+          <section className="card marketplace-grid">
+            {marketplaceIntegrations.map((item) => (
+              <article key={item.id} className="marketplace-card card">
+                <h3>{item.name}</h3>
+                <span className="hint-text">{item.category}</span>
+                <p>{item.description}</p>
+                <span className="developer-badge">{item.status}</span>
+              </article>
+            ))}
+          </section>
+          {marketplaceTemplates.length > 0 && (
+            <section className="card" style={{ marginTop: 16 }}>
+              <h2>قوالب تكامل جاهزة</h2>
+              <div className="marketplace-grid">
+                {marketplaceTemplates.map((item) => (
+                  <article key={item.slug} className="marketplace-card card">
+                    <h3>{item.name}</h3>
+                    <span className="hint-text">{item.category}</span>
+                    <p>{item.description}</p>
+                    <ul className="hint-text">
+                      {item.setup.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {tab === "power" && (
+        <section className="card stack-form">
+          <h2>ميزات Watesly المتقدمة</h2>
+          <p className="hint-text">تفعيل/إيقاف الميزات بأمان دون كسر WhatsApp الحالي.</p>
+          {(featureFlags.data ? Object.entries(featureFlags.data) : []).map(([key, enabled]) => (
+            <label key={key} className="field-label checkbox-row">
+              <input
+                type="checkbox"
+                checked={Boolean(enabled)}
+                onChange={async (e) => {
+                  try {
+                    await api.patch("/platform/feature-flags", { flags: { [key]: e.target.checked } });
+                    await client.invalidateQueries({ queryKey: ["feature-flags"] });
+                    toastStore.getState().show("تم تحديث الإعداد.", "success");
+                  } catch {
+                    toastStore.getState().show("تعذر التحديث.", "error");
+                  }
+                }}
+              />
+              <span dir="ltr">{key}</span>
+            </label>
           ))}
         </section>
       )}

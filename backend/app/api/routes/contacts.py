@@ -33,12 +33,16 @@ from app.services.contact_management import (
     update_contact,
 )
 from app.services.contacts import create_contact, list_contacts
+from app.services.contact_serialization import contact_to_response
+from app.services.feature_flags import get_feature_flags
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+LIFECYCLE_STAGES = ("lead", "prospect", "customer", "churned")
 
 
 class ContactUpdateBody(BaseModel):
@@ -47,6 +51,34 @@ class ContactUpdateBody(BaseModel):
     language: str | None = None
     country_code: str | None = None
     marketing_opt_in: bool | None = None
+    lifecycle_stage: str | None = Field(default=None, max_length=30)
+
+
+def _contact_permissions(context: AuthContext) -> set[str]:
+    from app.core.permissions import Permission, role_has_permission
+
+    role = context.membership.role
+    return {perm.value for perm in Permission if role_has_permission(role, perm)}
+
+
+async def _serialize_contacts(context: AuthContext, db: AsyncSession, contacts: list) -> list[ContactResponse]:
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    perms = _contact_permissions(context)
+    mask = flags.get("privacy_mask_agents", True)
+    return [
+        contact_to_response(item, role=context.membership.role, permissions=perms, privacy_mask_enabled=mask)
+        for item in contacts
+    ]
+
+
+async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) -> ContactResponse:
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    return contact_to_response(
+        contact,
+        role=context.membership.role,
+        permissions=_contact_permissions(context),
+        privacy_mask_enabled=flags.get("privacy_mask_agents", True),
+    )
 
 
 @router.get("", response_model=list[ContactResponse])
@@ -57,10 +89,11 @@ async def get_contacts(
     organization_id: UUID | None = None,
     tag_id: UUID | None = None,
     segment_id: UUID | None = None,
+    lifecycle_stage: str | None = None,
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_contacts(
+    contacts = await list_contacts(
         db,
         context.account_id,
         limit=limit,
@@ -68,8 +101,10 @@ async def get_contacts(
         organization_id=organization_id,
         tag_id=tag_id,
         segment_id=segment_id,
+        lifecycle_stage=lifecycle_stage,
         q=q,
     )
+    return await _serialize_contacts(context, db, contacts)
 
 
 @router.get("/stats", response_model=ContactStatsResponse)
@@ -195,7 +230,8 @@ async def get_contact(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await get_contact_or_raise(db, account_id=context.account_id, contact_id=contact_id)
+        contact = await get_contact_or_raise(db, account_id=context.account_id, contact_id=contact_id)
+        return await _serialize_contact(context, db, contact)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -208,7 +244,7 @@ async def patch_contact(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await update_contact(
+        contact = await update_contact(
             db,
             account_id=context.account_id,
             contact_id=contact_id,
@@ -217,7 +253,9 @@ async def patch_contact(
             language=payload.language,
             country_code=payload.country_code,
             marketing_opt_in=payload.marketing_opt_in,
+            lifecycle_stage=payload.lifecycle_stage,
         )
+        return await _serialize_contact(context, db, contact)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -24,6 +24,8 @@ export type Conversation = {
   last_message_direction?: "inbound" | "outbound" | null;
   needs_reply?: boolean;
   waiting_minutes?: number | null;
+  sla_deadline_at?: string | null;
+  sla_breached_at?: string | null;
 };
 
 export type Message = {

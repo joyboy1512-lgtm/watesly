@@ -2,6 +2,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -31,6 +32,7 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=AccountStatus.TRIAL,
         nullable=False,
     )
+    feature_flags: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
 
     organizations: Mapped[list["Organization"]] = relationship(
         back_populates="account",

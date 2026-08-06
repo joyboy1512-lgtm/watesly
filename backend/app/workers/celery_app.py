@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.workers.heartbeat_tasks",
         "app.workers.webhook_tasks",
         "app.workers.whatsapp_health_tasks",
+        "app.workers.sla_tasks",
     ],
 )
 
@@ -42,5 +43,9 @@ celery_app.conf.beat_schedule = {
     "sync-whatsapp-health-hourly": {
         "task": "watesly.whatsapp.sync_health",
         "schedule": 3600.0,
+    },
+    "check-sla-breaches-every-2-minutes": {
+        "task": "watesly.sla.check_breaches",
+        "schedule": 120.0,
     },
 }

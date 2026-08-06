@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -23,3 +23,6 @@ class AiAgentSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     llm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     auto_kb_on_inbound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     llm_system_prompt: Mapped[str | None] = mapped_column(Text)
+    auto_reply_outside_hours: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    business_hours_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    outside_hours_message: Mapped[str | None] = mapped_column(Text)

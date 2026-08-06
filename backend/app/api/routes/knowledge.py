@@ -40,6 +40,24 @@ class AgentSettingsUpdate(BaseModel):
     llm_enabled: bool | None = None
     auto_kb_on_inbound: bool | None = None
     llm_system_prompt: str | None = None
+    auto_reply_outside_hours: bool | None = None
+    business_hours_json: dict | None = None
+    outside_hours_message: str | None = None
+
+
+def _agent_settings_payload(item) -> dict:
+    return {
+        "default_mode": item.default_mode,
+        "tone": item.tone,
+        "language": item.language,
+        "llm_enabled": item.llm_enabled,
+        "auto_kb_on_inbound": item.auto_kb_on_inbound,
+        "llm_system_prompt": item.llm_system_prompt,
+        "auto_reply_outside_hours": item.auto_reply_outside_hours,
+        "business_hours_json": item.business_hours_json or {},
+        "outside_hours_message": item.outside_hours_message,
+        "llm_available": llm_available(),
+    }
 
 
 class GenerateFromConversationRequest(BaseModel):
@@ -135,15 +153,7 @@ async def get_settings(
     db: AsyncSession = Depends(get_db),
 ):
     item = await get_agent_settings(db, context.account_id)
-    return {
-        "default_mode": item.default_mode,
-        "tone": item.tone,
-        "language": item.language,
-        "llm_enabled": item.llm_enabled,
-        "auto_kb_on_inbound": item.auto_kb_on_inbound,
-        "llm_system_prompt": item.llm_system_prompt,
-        "llm_available": llm_available(),
-    }
+    return _agent_settings_payload(item)
 
 
 @router.patch("/agent-settings")
@@ -155,15 +165,7 @@ async def patch_settings(
     item = await update_agent_settings(
         db, context.account_id, **payload.model_dump(exclude_unset=True)
     )
-    return {
-        "default_mode": item.default_mode,
-        "tone": item.tone,
-        "language": item.language,
-        "llm_enabled": item.llm_enabled,
-        "auto_kb_on_inbound": item.auto_kb_on_inbound,
-        "llm_system_prompt": item.llm_system_prompt,
-        "llm_available": llm_available(),
-    }
+    return _agent_settings_payload(item)
 
 
 @router.post("", response_model=KnowledgeArticleResponse, status_code=status.HTTP_201_CREATED)

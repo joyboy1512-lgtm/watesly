@@ -1,0 +1,19 @@
+{
+  "name": "Watesly",
+  "short_name": "Watesly",
+  "description": "WhatsApp Business CRM — Inbox, Catalog, Knowledge Base",
+  "start_url": "/inbox",
+  "display": "standalone",
+  "background_color": "#0b141a",
+  "theme_color": "#25d366",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/brand/watesly-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

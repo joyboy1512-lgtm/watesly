@@ -639,6 +639,7 @@ export default function InboxPage() {
                 {item.needs_reply && item.waiting_minutes != null && (
                   <small className="waiting-badge">{formatWaitingMinutes(item.waiting_minutes)}</small>
                 )}
+                {item.sla_breached_at && <small className="waiting-badge" style={{ background: "#ea4335" }}>SLA</small>}
                 {item.requires_template && <small className="window-badge closed">قالب</small>}
                 {(item.priority === "urgent" || item.priority === "high") && (
                   <small className={`priority-pill priority-${item.priority}`}>{priorityLabels[item.priority]}</small>
