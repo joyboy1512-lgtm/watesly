@@ -55,6 +55,13 @@ export function getCampaignResultLabel(status: string, report?: Pick<CampaignRep
 
   switch (status) {
     case "completed":
+      if (total > 0 && sentCount === 0 && failed === 0) {
+        return {
+          label: "لم يُرسل",
+          tone: "warning" as const,
+          detail: pending ? `${pending} بانتظار الإرسال` : "لا مستلمين جدد — أنشئ حملة جديدة"
+        };
+      }
       return { label: "تمت بنجاح", tone: "success" as const, detail: `${sentCount}/${total} تم الإرسال` };
     case "completed_with_errors":
       return { label: "تمت بأخطاء", tone: "warning" as const, detail: `${failed} فشل · ${sentCount}/${total} مرسل` };
@@ -248,7 +255,7 @@ export function CampaignReportRow({
           <td>{item.scheduled_at ? new Date(item.scheduled_at).toLocaleString("ar") : "فوري"}</td>
         )}
         <td>{liveReport.total}</td>
-        <td>{liveReport.sent}</td>
+        <td>{liveReport.sent + liveReport.delivered + liveReport.read}</td>
         <td>{liveReport.delivered}</td>
         <td>{liveReport.read}</td>
         <td>{liveReport.failed}</td>
