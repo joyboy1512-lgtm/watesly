@@ -3,6 +3,7 @@ from app.services.template_media import (
     build_stored_components,
     content_type_to_header_format,
     get_template_header_info,
+    meta_safe_media_url,
     resolve_send_components,
 )
 
@@ -34,6 +35,15 @@ def test_resolve_send_components_prefers_recipient_params() -> None:
     custom = [{"type": "header", "parameters": [{"type": "image", "image": {"link": "https://x/y.jpg"}}]}]
     resolved = resolve_send_components([], custom)
     assert resolved == custom
+
+
+def test_meta_safe_media_url_encodes_spaces() -> None:
+    raw = "https://files.example.com/bucket/file name with spaces.mp4"
+    assert meta_safe_media_url(raw) == "https://files.example.com/bucket/file%20name%20with%20spaces.mp4"
+    send = build_send_components(
+        [{"type": "HEADER", "format": "VIDEO", "media_url": raw}],
+    )
+    assert "%20" in send[0]["parameters"][0]["video"]["link"]
 
 
 def test_content_type_mapping() -> None:

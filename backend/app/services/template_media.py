@@ -2,7 +2,44 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote, urlparse, urlunparse
+
 HEADER_FORMATS = {"IMAGE", "VIDEO", "DOCUMENT"}
+
+
+def meta_safe_media_url(url: str) -> str:
+    """Percent-encode path segments so Meta can fetch URLs with spaces/special chars."""
+    parsed = urlparse(str(url).strip())
+    if not parsed.scheme or not parsed.netloc:
+        return str(url).strip()
+    safe_path = quote(parsed.path, safe="/")
+    return urlunparse((parsed.scheme, parsed.netloc, safe_path, parsed.params, parsed.query, parsed.fragment))
+
+
+def _encode_component_media_links(components: list | None) -> list[dict]:
+    if not components:
+        return []
+    encoded: list[dict] = []
+    for component in components:
+        item = dict(component)
+        params = item.get("parameters")
+        if isinstance(params, list):
+            next_params: list[dict] = []
+            for param in params:
+                if not isinstance(param, dict):
+                    next_params.append(param)
+                    continue
+                p = dict(param)
+                for media_key in ("image", "video", "document"):
+                    media = p.get(media_key)
+                    if isinstance(media, dict) and media.get("link"):
+                        media = dict(media)
+                        media["link"] = meta_safe_media_url(str(media["link"]))
+                        p[media_key] = media
+                next_params.append(p)
+            item["parameters"] = next_params
+        encoded.append(item)
+    return encoded
 
 
 def content_type_to_header_format(content_type: str | None) -> str | None:
@@ -83,15 +120,16 @@ def build_send_components(
         return []
 
     fmt = str(fmt).upper()
+    safe_url = meta_safe_media_url(str(url))
     if fmt == "DOCUMENT":
         parameter = {
             "type": "document",
-            "document": {"link": url, "filename": doc_name},
+            "document": {"link": safe_url, "filename": doc_name},
         }
     elif fmt == "VIDEO":
-        parameter = {"type": "video", "video": {"link": url}}
+        parameter = {"type": "video", "video": {"link": safe_url}}
     else:
-        parameter = {"type": "image", "image": {"link": url}}
+        parameter = {"type": "image", "image": {"link": safe_url}}
 
     return [{"type": "header", "parameters": [parameter]}]
 
@@ -104,5 +142,5 @@ def resolve_send_components(
     filename: str | None = None,
 ) -> list[dict]:
     if recipient_parameters:
-        return recipient_parameters
+        return _encode_component_media_links(recipient_parameters)
     return build_send_components(stored_components, media_url=media_url, filename=filename)
