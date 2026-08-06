@@ -16,8 +16,8 @@ git pull origin main
 
 cd "$APP_DIR/backend"
 
-echo ">> Build api, worker, beat, frontend..."
-$COMPOSE build api worker beat frontend
+echo ">> Build api, worker, beat, migrate, frontend..."
+$COMPOSE build api worker beat migrate frontend
 
 echo ">> Ensure data services..."
 $COMPOSE up -d db redis minio
