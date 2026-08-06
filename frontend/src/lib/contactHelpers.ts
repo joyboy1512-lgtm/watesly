@@ -73,6 +73,8 @@ export function formatLifecycleStage(stage: string | undefined | null): string {
 }
 /** Must match backend GET /contacts limit validation (le=500). */
 export const CONTACTS_LIST_LIMIT = 500;
+/** Client-side table page size on ContactsPage. */
+export const CONTACTS_PAGE_SIZE = 25;
 
 export function mergeContactIntoList(contacts: Contact[], contact: Contact): Contact[] {
   const index = contacts.findIndex((item) => item.id === contact.id);
