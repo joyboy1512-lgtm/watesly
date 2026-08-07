@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,7 +79,7 @@ from app.services.developer import (
     serialize_webhook,
     toggle_webhook_subscription,
 )
-from app.services.feature_flags import get_feature_flags, update_feature_flags
+from app.services.feature_flags import get_feature_flags, feature_flags_metadata, update_feature_flags
 from app.services.inbox_extended import mark_conversation_read, mark_conversation_unread
 from app.services.search import global_search
 from app.services.team_extended import create_department, list_departments, list_presence, set_presence, workload_summary
@@ -919,3 +919,145 @@ async def channel_integrations(
         "sms": {"status": "planned", "note": "Twilio/other — قريباً"},
         "voice": {"status": "planned", "note": "Twilio Voice — قريباً"},
     }
+
+
+@router.get("/feature-flags/metadata")
+async def get_feature_flags_metadata(
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_VIEW)),
+):
+    return feature_flags_metadata()
+
+
+@router.get("/growth/ctwa-dashboard")
+async def growth_ctwa_dashboard(
+    days: int = Query(30, ge=1, le=365),
+    context: AuthContext = Depends(require_permissions(Permission.REPORTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    if not flags.get("ctwa_dashboard", True):
+        raise HTTPException(status_code=403, detail="CTWA_DASHBOARD_DISABLED")
+    from app.services.ctwa_dashboard import get_ctwa_dashboard
+
+    return await get_ctwa_dashboard(db, account_id=context.account_id, days=days)
+
+
+class EcommerceConnectionCreate(BaseModel):
+    provider: str = Field(pattern=r"^(shopify|woocommerce)$")
+    shop_label: str = Field(min_length=2, max_length=120)
+    shop_url: str = Field(min_length=4, max_length=500)
+    access_token: str | None = None
+    settings: dict = Field(default_factory=dict)
+
+
+@router.get("/growth/ecommerce-connections")
+async def list_ecommerce_connections_route(
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ecommerce_integrations import list_ecommerce_connections
+
+    return await list_ecommerce_connections(db, account_id=context.account_id)
+
+
+@router.post("/growth/ecommerce-connections", status_code=status.HTTP_201_CREATED)
+async def create_ecommerce_connection_route(
+    payload: EcommerceConnectionCreate,
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ecommerce_integrations import create_ecommerce_connection
+
+    try:
+        row = await create_ecommerce_connection(
+            db,
+            account_id=context.account_id,
+            provider=payload.provider,
+            shop_label=payload.shop_label,
+            shop_url=payload.shop_url,
+            access_token=payload.access_token,
+            settings=payload.settings,
+        )
+        return {"id": str(row.id), "provider": row.provider, "shop_label": row.shop_label}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class OrderTemplateUpsert(BaseModel):
+    event_type: str = Field(min_length=3, max_length=40)
+    template_id: UUID
+    whatsapp_account_id: UUID
+    ecommerce_connection_id: UUID | None = None
+    variable_mapping: dict = Field(default_factory=dict)
+    is_active: bool = True
+
+
+@router.get("/growth/order-templates")
+async def list_order_templates_route(
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ecommerce_integrations import list_order_templates
+
+    return await list_order_templates(db, account_id=context.account_id)
+
+
+@router.post("/growth/order-templates")
+async def upsert_order_template_route(
+    payload: OrderTemplateUpsert,
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ecommerce_integrations import upsert_order_template
+
+    try:
+        row = await upsert_order_template(
+            db,
+            account_id=context.account_id,
+            event_type=payload.event_type,
+            template_id=payload.template_id,
+            whatsapp_account_id=payload.whatsapp_account_id,
+            ecommerce_connection_id=payload.ecommerce_connection_id,
+            variable_mapping=payload.variable_mapping,
+            is_active=payload.is_active,
+        )
+        return {"id": str(row.id), "event_type": row.event_type}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class GrowthAiTextRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    contact_name: str = ""
+
+
+@router.post("/growth/ai/lead-agent")
+async def growth_ai_lead_agent(
+    payload: GrowthAiTextRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.growth_ai import run_lead_agent
+
+    return await run_lead_agent(
+        db,
+        account_id=context.account_id,
+        message=payload.message,
+        contact_name=payload.contact_name,
+    )
+
+
+@router.post("/growth/ai/support-agent")
+async def growth_ai_support_agent(
+    payload: GrowthAiTextRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.growth_ai import run_support_agent
+
+    return await run_support_agent(
+        db,
+        account_id=context.account_id,
+        message=payload.message,
+        contact_name=payload.contact_name,
+    )

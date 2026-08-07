@@ -182,7 +182,8 @@ const resources = {
         tabTeam: "الفريق",
         tabCustomers: "العملاء والحملات",
         tabRevenue: "الإيرادات",
-        tabInsights: "رؤى ذكية"
+        tabInsights: "رؤى ذكية",
+        tabGrowth: "CTWA / نمو"
       },
       inbox: {
         selectConversation: "اختر محادثة",
@@ -377,7 +378,8 @@ const resources = {
         tabTeam: "Team",
         tabCustomers: "Customers & Campaigns",
         tabRevenue: "Revenue",
-        tabInsights: "Smart Insights"
+        tabInsights: "Smart Insights",
+        tabGrowth: "CTWA / Growth"
       },
       inbox: {
         selectConversation: "Select a conversation",
