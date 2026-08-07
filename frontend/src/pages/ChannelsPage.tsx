@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, formatApiError } from "../lib/api";
+import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
 type Channel = {
@@ -13,6 +15,7 @@ type Channel = {
 };
 
 export default function ChannelsPage() {
+  const navigate = useNavigate();
   const client = useQueryClient();
   const [organizationId, setOrganizationId] = useState("");
   const [type, setType] = useState("whatsapp");
@@ -30,34 +33,34 @@ export default function ChannelsPage() {
   async function create(event: FormEvent) {
     event.preventDefault();
     try {
-      const response = await api.post<Channel>(/channels, {
+      const response = await api.post<Channel>("/channels", {
         organization_id: organizationId,
         type,
         name,
         external_id: null
       });
-      setName(");
-      await client.invalidateQueries({ queryKey: [channels] });
-      await client.invalidateQueries({ queryKey: [channel-stats] });
-      toastStore.getState().show(تمت إضافة القناة بنجاح, success);
-      if (type === whatsapp) {
+      setName("");
+      await client.invalidateQueries({ queryKey: ["channels"] });
+      await client.invalidateQueries({ queryKey: ["channel-stats"] });
+      toastStore.getState().show("تمت إضافة القناة بنجاح", "success");
+      if (type === "whatsapp") {
         navigate(`/whatsapp-connect?channel=${response.data.id}`);
       }
     } catch (error) {
       const detail = formatApiError(error);
       const msg =
-        detail.includes(Channel limit) || detail === CHANNEL_LIMIT_REACHED
-          ? وصلت للحد الأقصى من القنوات في خطتك. ترقِّ خطتك لإضافة المزيد.
-          : detail.includes(subscription) || detail === NO_ACTIVE_SUBSCRIPTION
-            ? يلزم اشتراك نشط لإضافة قناة.
-            : detail.includes(Organization) || detail === INVALID_ORGANIZATION
-              ? الفرع المحدد غير صالح.
-              : detail === MISSING_PERMISSION
-                ? ليس لديك صلاحية إضافة قنوات.
+        detail.includes("CHANNEL_LIMIT") || detail.includes("Channel limit")
+          ? "وصلت للحد الأقصى من القنوات في خطتك. ترقِّ خطتك لإضافة المزيد."
+          : detail.includes("NO_ACTIVE_SUBSCRIPTION") || detail.includes("subscription")
+            ? "يلزم اشتراك نشط لإضافة قناة."
+            : detail.includes("INVALID_ORGANIZATION") || detail.includes("Organization")
+              ? "الفرع المحدد غير صالح."
+              : detail.includes("MISSING_PERMISSION")
+                ? "ليس لديك صلاحية إضافة قنوات."
                 : detail;
-      toastStore.getState().show(msg, error);
+      toastStore.getState().show(msg, "error");
     }
-  }  }
+  }
 
   return (
     <main className="page">
