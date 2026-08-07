@@ -146,6 +146,7 @@ async def post_campaign_preflight(
         contact_ids=payload.contact_ids,
         template_category=category,
         whatsapp_account_id=payload.whatsapp_account_id,
+        template_components=template.components,
     )
 
 
@@ -188,3 +189,30 @@ async def pause(campaign_id: UUID, context: AuthContext = Depends(require_permis
 async def cancel(campaign_id: UUID, payload: CancelCampaignRequest, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_APPROVE, write=True)), db: AsyncSession = Depends(get_db)):
     try: return await cancel_campaign(db, account_id=context.account_id, campaign_id=campaign_id, reason=payload.reason)
     except ValueError as exc: raise _error(exc) from exc
+
+
+class FollowUpCampaignRequest(BaseModel):
+    follow_up_type: str = Field(pattern=r"^(not_delivered|not_read|failed)$")
+
+
+@router.post("/{campaign_id}/follow-up", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
+async def create_follow_up(
+    campaign_id: UUID,
+    payload: FollowUpCampaignRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.campaign_follow_up import create_follow_up_campaign
+
+    try:
+        return await create_follow_up_campaign(
+            db,
+            account_id=context.account_id,
+            user_id=context.user.id,
+            campaign_id=campaign_id,
+            follow_up_type=payload.follow_up_type,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        status_code = 404 if code == "CAMPAIGN_NOT_FOUND" else 400
+        raise HTTPException(status_code=status_code, detail=code) from exc

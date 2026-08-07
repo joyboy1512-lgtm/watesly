@@ -32,8 +32,11 @@ SUPPORTED_NODE_TYPES = {
     "assign_team",
     "assign_user",
     "set_status",
+    "set_lifecycle",
+    "collect_input",
     "delay",
     "webhook",
+    "http_request",
     "stop",
 }
 

@@ -377,6 +377,7 @@ def _extract_event_type(value: dict) -> str:
 async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str, int | list[str]]:
     processed_count = 0
     automation_run_ids: list[str] = []
+    capi_leads: list[tuple[str, str, str | None]] = []
     entries = payload.get("entry", [])
     for entry in entries:
         for change in entry.get("changes", []):
@@ -436,7 +437,16 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                     from app.services.ctwa_attribution import apply_referral_to_contact, extract_referral_fields
                     from app.services.inbound_interactive import extract_interactive_reply
 
-                    apply_referral_to_contact(contact, extract_referral_fields(item))
+                    referral_fields = extract_referral_fields(item)
+                    apply_referral_to_contact(contact, referral_fields)
+                    if referral_fields and whatsapp_account:
+                        capi_leads.append(
+                            (
+                                str(whatsapp_account.account_id),
+                                sender,
+                                referral_fields.get("utm_campaign"),
+                            )
+                        )
                     interactive_reply = extract_interactive_reply(item)
                     message_type_value = item.get("type", "unknown")
                     try:
@@ -735,6 +745,11 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                 await add_outbox_event(db, account_id=whatsapp_account.account_id, event_type=f"whatsapp.{event_type}", aggregate_type="webhook_event", aggregate_id=str(event.id), payload={"webhook_event_id": str(event.id), "processed_count": processed_count})
 
     await db.commit()
+    if capi_leads:
+        from app.workers.growth_tasks import send_meta_capi_lead
+
+        for account_id, phone, utm_campaign in capi_leads:
+            send_meta_capi_lead.delay(account_id, phone, utm_campaign)
     for entry in entries:
         for change in entry.get("changes", []):
             value = change.get("value", {})
