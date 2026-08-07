@@ -423,6 +423,9 @@ export default function AutomationsPage() {
 
         <div className="automation-templates-block">
           <h3>قوالب جاهزة</h3>
+          <p className="hint-text automation-no-code-hint">
+            No-code: اختر قالباً → عدّل النص → أضف «سؤال / Form» أو «رد ذكي» → انشر.
+          </p>
           {AUTOMATION_TEMPLATES.map((item) => (
             <button key={item.id} type="button" className="automation-template-btn" onClick={() => newAutomation(item.id)}>
               <strong>{item.name}</strong>
