@@ -10,12 +10,14 @@ celery_app = Celery(
     include=[
         "app.workers.automation_tasks",
         "app.workers.campaign_tasks",
+        "app.workers.growth_tasks",
         "app.workers.scheduler_tasks",
         "app.workers.outbox_tasks",
         "app.workers.heartbeat_tasks",
         "app.workers.webhook_tasks",
         "app.workers.whatsapp_health_tasks",
         "app.workers.sla_tasks",
+        "app.workers.template_sync_tasks",
     ],
 )
 
@@ -56,5 +58,9 @@ celery_app.conf.beat_schedule = {
     "check-sla-breaches-every-2-minutes": {
         "task": "watesly.sla.check_breaches",
         "schedule": 120.0,
+    },
+    "sync-pending-templates-every-5-minutes": {
+        "task": "watesly.templates.sync_pending",
+        "schedule": 300.0,
     },
 }

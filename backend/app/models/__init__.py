@@ -16,7 +16,10 @@ from app.models.conversation_tag import ConversationTag
 from app.models.integration_secret import IntegrationSecret
 from app.models.idempotency_record import IdempotencyRecord
 from app.models.invitation import Invitation
+from app.models.invitation_channel_access import InvitationChannelAccess
 from app.models.invitation_organization import InvitationOrganization
+from app.models.membership_channel_access import MembershipChannelAccess
+from app.models.monthly_active_contact import MonthlyActiveContact
 from app.models.membership import Membership
 from app.models.module_health import ModuleHealth
 from app.models.message import Message
@@ -61,7 +64,9 @@ from app.models.conversation_rating import ConversationRating
 
 __all__ = [
     "Account", "Organization", "User", "Membership", "OrganizationMembership",
-    "Invitation", "InvitationOrganization", "RefreshSession", "Plan", "Subscription",
+    "Invitation", "InvitationOrganization", "InvitationChannelAccess",
+    "MembershipChannelAccess", "MonthlyActiveContact",
+    "RefreshSession", "Plan", "Subscription",
     "Channel", "WhatsAppAccount", "WebhookEvent", "Message", "Contact", "Conversation",
     "ConversationEvent", "Tag", "ConversationTag", "ConversationNote", "QuickReply",
     "WhatsAppTemplate", "Campaign", "CampaignRecipient", "UploadedFile", "Notification",
