@@ -30,15 +30,13 @@ import {
   downloadAnalyticsExport,
   formatChange
 } from "../lib/analyticsHelpers";
-import { type CtwaDashboard } from "../lib/growthFeatures";
 
 const tabs: { id: AnalyticsTab; labelKey: string }[] = [
   { id: "live", labelKey: "analytics.tabLive" },
   { id: "team", labelKey: "analytics.tabTeam" },
   { id: "customers", labelKey: "analytics.tabCustomers" },
   { id: "revenue", labelKey: "analytics.tabRevenue" },
-  { id: "insights", labelKey: "analytics.tabInsights" },
-  { id: "growth", labelKey: "analytics.tabGrowth" }
+  { id: "insights", labelKey: "analytics.tabInsights" }
 ];
 
 function PeriodSelect({ days, onChange }: { days: number; onChange: (value: number) => void }) {
@@ -158,11 +156,6 @@ export default function AnalyticsPage() {
     queryKey: ["analytics-insights", days],
     queryFn: async () => (await api.get<{ insights: AnalyticsInsight[] }>("/platform/analytics/insights", { params: { days } })).data,
     enabled: tab === "insights"
-  });
-  const ctwaDashboard = useQuery({
-    queryKey: ["ctwa-dashboard", days],
-    queryFn: async () => (await api.get<CtwaDashboard>("/platform/growth/ctwa-dashboard", { params: { days } })).data,
-    enabled: tab === "growth"
   });
 
   const chartData = useMemo(
@@ -394,33 +387,6 @@ export default function AnalyticsPage() {
             </article>
           ))}
         </section>
-      )}
-
-      {tab === "growth" && (
-        <>
-          <section className="analytics-kpi-grid">
-            <KpiCard label="Leads CTWA" value={ctwaDashboard.data?.ctwa_leads ?? "…"} href="/contacts" />
-            <KpiCard label="نقرات الروابط" value={ctwaDashboard.data?.tracked_link_clicks ?? "…"} href="/campaigns" />
-            <KpiCard label="صفقات من CTWA" value={ctwaDashboard.data?.deals_from_ctwa ?? "…"} href="/crm" />
-          </section>
-          <section className="card">
-            <h2 className="section-title-sm">مصادر الإعلانات (UTM)</h2>
-            {(ctwaDashboard.data?.sources ?? []).length === 0 && <p className="hint-text">لا بيانات بعد.</p>}
-            <ul>
-              {(ctwaDashboard.data?.sources ?? []).map((row) => (
-                <li key={row.source}>{row.source}: {row.count}</li>
-              ))}
-            </ul>
-          </section>
-          <section className="card" style={{ marginTop: 16 }}>
-            <h2 className="section-title-sm">روابط التتبع</h2>
-            <ul>
-              {(ctwaDashboard.data?.tracked_links ?? []).map((link) => (
-                <li key={link.slug}>{link.name} — {link.clicks} نقرة</li>
-              ))}
-            </ul>
-          </section>
-        </>
       )}
     </main>
   );

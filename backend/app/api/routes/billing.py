@@ -2,14 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import AuthContext, require_permissions
-from app.api.routes.mac import router as mac_router
 from app.core.permissions import Permission
 from app.db.session import get_db
 from app.schemas.billing import SubscriptionResponse
 from app.services.billing import get_active_subscription
 
 router = APIRouter()
-router.include_router(mac_router)
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)

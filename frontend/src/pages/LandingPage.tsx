@@ -66,13 +66,12 @@ export default function LandingPage() {
         <nav className="landing-nav-links">
           <a href="#features">{txt("features", "landing.features")}</a>
           <a href="#how">{txt("howItWorks", "landing.howItWorks")}</a>
-          <a href="/pricing">{txt("pricingNav", "landing.pricingNav")}</a>
           {(display?.show_api ?? true) && <a href="#api">{txt("api", "landing.api")}</a>}
         </nav>
         <div className="landing-nav-actions">
           <LanguageSwitcher className="landing-lang-switch" />
           <Link to="/login" className="landing-btn-ghost">{txt("signIn", "landing.signIn")}</Link>
-          <Link to="/register" className="landing-btn-primary">{txt("getStarted", "landing.getStarted")}</Link>
+          <Link to="/login" className="landing-btn-primary">{txt("getStarted", "landing.getStarted")}</Link>
         </div>
       </header>
 
@@ -85,7 +84,7 @@ export default function LandingPage() {
           </h1>
           <p className="landing-lead">{txt("heroLead", "landing.heroLead")}</p>
           <div className="landing-hero-actions">
-            <Link to="/register" className="landing-btn-primary landing-btn-lg">{txt("tryPlatform", "landing.tryPlatform")}</Link>
+            <Link to="/login" className="landing-btn-primary landing-btn-lg">{txt("tryPlatform", "landing.tryPlatform")}</Link>
             <a href="#features" className="landing-btn-ghost landing-btn-lg">{txt("exploreFeatures", "landing.exploreFeatures")}</a>
           </div>
           {(display?.show_stats ?? true) && (
@@ -181,7 +180,7 @@ export default function LandingPage() {
                   <li key={line}>{line}</li>
                 ))}
               </ul>
-              <Link to="/register" className="landing-btn-primary">{txt("apiDemo", "landing.apiDemo")}</Link>
+              <Link to="/login" className="landing-btn-primary">{txt("apiDemo", "landing.apiDemo")}</Link>
             </div>
             <pre className="landing-code" dir="ltr">{apiSection?.code_sample ?? `curl -H "Authorization: Bearer mw_..." \\
   https://api.watesly.com/v1/external/contacts`}</pre>
@@ -193,7 +192,7 @@ export default function LandingPage() {
         <section className="landing-cta">
           <h2>{txt("ctaTitle", "landing.ctaTitle")}</h2>
           <p>{txt("ctaBody", "landing.ctaBody")}</p>
-          <Link to="/register" className="landing-btn-primary landing-btn-lg landing-btn-light">{txt("enterPlatform", "landing.enterPlatform")}</Link>
+          <Link to="/login" className="landing-btn-primary landing-btn-lg landing-btn-light">{txt("enterPlatform", "landing.enterPlatform")}</Link>
         </section>
       )}
 
@@ -202,12 +201,6 @@ export default function LandingPage() {
           <BrandLogo tone="light" size="md" src={branding?.logo_light_url} alt={branding?.app_name} />
         </div>
         <p>{txt("footerTagline", "landing.footerTagline")}</p>
-        <nav className="landing-footer-links">
-          <Link to="/pricing">{txt("pricingNav", "landing.pricingNav")}</Link>
-          <Link to="/privacy">{txt("privacyLink", "landing.privacyLink")}</Link>
-          <Link to="/terms">{txt("termsLink", "landing.termsLink")}</Link>
-          <Link to="/register">{txt("getStarted", "landing.getStarted")}</Link>
-        </nav>
         <small>
           {(txt("footerRights", "landing.footerRights")).replace("{{year}}", String(new Date().getFullYear()))}
         </small>

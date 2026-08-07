@@ -3,9 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
-  type PreflightCheck
-} from "../lib/growthFeatures";
-import {
   buildSendComponents,
   getTemplateHeaderInfo,
   HEADER_FORMAT_LABELS,
@@ -45,7 +42,6 @@ type CampaignPreflight = {
   messaging_tier_hint: string;
   quality_rating?: string | null;
   messaging_limit?: number | null;
-  checks?: PreflightCheck[];
 };
 type CampaignListItem = {
   id: string;
@@ -277,17 +273,6 @@ export default function CampaignsPage() {
     }
   }
 
-  async function createFollowUp(campaignId: string, followUpType: "not_delivered" | "not_read" | "failed") {
-    try {
-      const response = await api.post(`/campaigns/${campaignId}/follow-up`, { follow_up_type: followUpType });
-      toastStore.getState().show("تم إنشاء حملة متابعة (مسودة).", "success");
-      setExpandedCampaignId(response.data.id as string);
-      await client.invalidateQueries({ queryKey: ["campaigns"] });
-    } catch {
-      toastStore.getState().show("فعّل «حملات متابعة» من Developer → ميزات Watesly.", "error");
-    }
-  }
-
   async function loadSegmentAudience() {
     if (!selectedSegmentId) return;
     try {
@@ -404,22 +389,6 @@ export default function CampaignsPage() {
           <div className="campaign-latest-result-body">
             <strong>{latestFinishedCampaign.name}</strong>
             <CampaignResultBadge status={latestFinishedCampaign.status} report={latestFinishedCampaign} />
-          </div>
-          <div className="inline-actions" style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void createFollowUp(latestFinishedCampaign.id, "not_delivered")}
-            >
-              متابعة — لم يُسلّم
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void createFollowUp(latestFinishedCampaign.id, "not_read")}
-            >
-              متابعة — لم يُقرأ
-            </button>
           </div>
         </section>
       )}
@@ -683,20 +652,6 @@ export default function CampaignsPage() {
                 </div>
                 {preflight.warnings.map((warning) => (
                   <p key={warning} className="campaign-warning">⚠ {warning}</p>
-                ))}
-                {(preflight.checks ?? []).map((check) => (
-                  <p
-                    key={check.code}
-                    className={
-                      check.level === "error"
-                        ? "campaign-warning"
-                        : check.level === "warning"
-                          ? "campaign-warning"
-                          : "hint-text"
-                    }
-                  >
-                    {check.level === "info" ? "ℹ" : "⚠"} {check.message}
-                  </p>
                 ))}
                 {preflight.quality_rating && (
                   <p className="hint-text">جودة الحساب: {preflight.quality_rating}</p>

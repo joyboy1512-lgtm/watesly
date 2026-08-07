@@ -3722,24 +3722,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   text-align: center; padding: 40px 24px 48px; background: #111b21; color: #aebac1;
 }
 .landing-footer p { margin: 0 0 8px; }
-.landing-footer-links { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-bottom: 12px; }
-.landing-footer-links a { color: #aebac1; text-decoration: none; font-size: 14px; }
-.landing-footer-links a:hover { color: #fff; }
-.legal-page { max-width: 820px; margin: 0 auto; padding: 24px; }
-.legal-page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.legal-card h1 { margin-top: 12px; }
-.legal-section { margin-top: 24px; }
-.legal-section h2 { font-size: 18px; margin-bottom: 8px; }
-.pricing-page { min-height: 100vh; background: var(--bg); }
-.pricing-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; flex-wrap: wrap; gap: 12px; }
-.pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 900px; margin: 0 auto; }
-.pricing-card { background: #fff; border-radius: 16px; padding: 24px; border: 1px solid var(--border); }
-.pricing-card-highlight { border-color: var(--brand); box-shadow: 0 8px 32px rgba(18,140,126,.12); }
-.pricing-price { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
-.pricing-price strong { font-size: 36px; }
-.pricing-card ul { padding-right: 20px; margin: 0 0 20px; }
-.pricing-note { text-align: center; margin-top: 24px; max-width: 640px; margin-inline: auto; }
-.register-card form { max-height: 70vh; overflow-y: auto; padding-left: 4px; }
 .landing-back-link { display: inline-block; margin-bottom: 12px; color: #128c7e; text-decoration: none; font-size: 13px; font-weight: 600; }
 @media (max-width: 960px) {
   .landing-hero { grid-template-columns: 1fr; }
