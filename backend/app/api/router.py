@@ -30,7 +30,6 @@ from app.api.routes.trust import router as trust_router
 from app.api.routes.templates import router as templates_router
 from app.api.routes.uploads import router as uploads_router
 from app.api.routes.whatsapp import router as whatsapp_router
-from app.api.routes.growth_webhooks import router as growth_webhooks_router
 
 api_router = APIRouter()
 api_router.include_router(health_router, prefix="/health", tags=["health"])
@@ -63,4 +62,3 @@ api_router.include_router(assignments_router, prefix="/assignments", tags=["assi
 api_router.include_router(admin_router, prefix="/admin", tags=["super-admin"])
 api_router.include_router(site_content_router, prefix="/admin", tags=["site-content"])
 api_router.include_router(public_site_router, prefix="/public", tags=["public"])
-api_router.include_router(growth_webhooks_router, prefix="/growth/ecommerce", tags=["growth-ecommerce"])

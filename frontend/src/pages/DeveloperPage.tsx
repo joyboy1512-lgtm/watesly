@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { GROWTH_FLAG_LABELS } from "../lib/growthFeatures";
 import { toastStore } from "../stores/toast";
 
 type ApiKeyRow = {
@@ -34,7 +33,7 @@ type DeliveryRow = {
   created_at: string | null;
 };
 
-type DevTab = "keys" | "webhooks" | "deliveries" | "docs" | "marketplace" | "power" | "growth";
+type DevTab = "keys" | "webhooks" | "deliveries" | "docs" | "marketplace" | "power";
 
 type MarketplacePayload = {
   integrations?: Array<{ id: string; name: string; category: string; description: string | null; status: string }>;
@@ -60,8 +59,7 @@ export default function DeveloperPage() {
     { id: "deliveries", label: t("developer.tabDeliveries") },
     { id: "docs", label: t("developer.tabDocs") },
     { id: "marketplace", label: t("developer.tabMarketplace") },
-    { id: "power", label: "ميزات Watesly" },
-    { id: "growth", label: "E-Commerce" }
+    { id: "power", label: "ميزات Watesly" }
   ];
   const client = useQueryClient();
   const [tab, setTab] = useState<DevTab>("keys");
@@ -376,91 +374,11 @@ export default function DeveloperPage() {
                   }
                 }}
               />
-              <span>{GROWTH_FLAG_LABELS[key] ?? key}</span>
-              <small className="hint-text" dir="ltr">{key}</small>
+              <span dir="ltr">{key}</span>
             </label>
           ))}
         </section>
       )}
-
-      {tab === "growth" && (
-        <GrowthEcommercePanel />
-      )}
     </main>
-  );
-}
-
-function GrowthEcommercePanel() {
-  const client = useQueryClient();
-  const [provider, setProvider] = useState<"shopify" | "woocommerce">("shopify");
-  const [shopLabel, setShopLabel] = useState("");
-  const [shopUrl, setShopUrl] = useState("");
-  const connections = useQuery({
-    queryKey: ["ecommerce-connections"],
-    queryFn: async () =>
-      (await api.get<Array<{ id: string; provider: string; shop_label: string; shop_url: string; is_active: boolean }>>(
-        "/platform/growth/ecommerce-connections"
-      )).data
-  });
-  const orderTemplates = useQuery({
-    queryKey: ["order-templates"],
-    queryFn: async () => (await api.get("/platform/growth/order-templates")).data
-  });
-
-  async function connectStore(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await api.post("/platform/growth/ecommerce-connections", {
-        provider,
-        shop_label: shopLabel,
-        shop_url: shopUrl
-      });
-      setShopLabel("");
-      setShopUrl("");
-      await client.invalidateQueries({ queryKey: ["ecommerce-connections"] });
-      toastStore.getState().show("تم حفظ الربط.", "success");
-    } catch {
-      toastStore.getState().show("فعّل ميزة Shopify/WooCommerce من تبويب «ميزات Watesly».", "error");
-    }
-  }
-
-  return (
-    <>
-      <section className="card stack-form">
-        <h2>ربط متجر (المرحلة C)</h2>
-        <p className="hint-text">فعّل Shopify أو WooCommerce من «ميزات Watesly» ثم أضف المتجر.</p>
-        <form onSubmit={(e) => void connectStore(e)} className="stack-form">
-          <label className="field-label">
-            <span>المنصة</span>
-            <select value={provider} onChange={(e) => setProvider(e.target.value as "shopify" | "woocommerce")}>
-              <option value="shopify">Shopify</option>
-              <option value="woocommerce">WooCommerce</option>
-            </select>
-          </label>
-          <label className="field-label">
-            <span>اسم المتجر</span>
-            <input value={shopLabel} onChange={(e) => setShopLabel(e.target.value)} required />
-          </label>
-          <label className="field-label">
-            <span>رابط المتجر</span>
-            <input value={shopUrl} onChange={(e) => setShopUrl(e.target.value)} placeholder="https://shop.example.com" required />
-          </label>
-          <button type="submit" className="secondary-button">حفظ الربط</button>
-        </form>
-      </section>
-      <section className="card" style={{ marginTop: 16 }}>
-        <h2>متاجر مربوطة</h2>
-        {(connections.data ?? []).length === 0 && <p className="hint-text">لا توجد متاجر بعد.</p>}
-        <ul>
-          {(connections.data ?? []).map((item) => (
-            <li key={item.id}>
-              {item.shop_label} — {item.provider} — {item.shop_url}
-            </li>
-          ))}
-        </ul>
-        <h3 className="section-title-sm">قوالب الطلبات</h3>
-        <p className="hint-text">{(orderTemplates.data as unknown[] | undefined)?.length ?? 0} قالب مُعد</p>
-      </section>
-    </>
   );
 }

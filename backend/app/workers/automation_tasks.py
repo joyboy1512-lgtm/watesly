@@ -316,26 +316,6 @@ async def _action(db, run, node_type, data, context):
         contact.lifecycle_stage = stage or "lead"
         return {"lifecycle_stage": contact.lifecycle_stage}
 
-    if node_type == "collect_input":
-        from app.services.feature_flags import get_feature_flags
-
-        flags = await get_feature_flags(db, account_id=run.account_id)
-        if not flags.get("collect_input_forms"):
-            raise ValueError("collect_input requires collect_input_forms feature flag")
-        prompt = str(data.get("prompt_text") or data.get("text") or "").strip()
-        field_key = str(data.get("field_key") or "input").strip()[:60]
-        if not prompt:
-            raise ValueError("collect_input requires prompt_text")
-        sent = await _maybe_send_text(db, run, data, context, prompt)
-        if not sent:
-            raise ValueError("collect_input requires whatsapp_account_id and recipient phone")
-        return {
-            **sent,
-            "field_key": field_key,
-            "awaiting_reply": True,
-            "hint": "Use message_received automation with condition on trigger.text",
-        }
-
     if node_type == "send_template":
         template_id = _uuid(data, context, "template_id")
         wa_id = _uuid(data, context, "whatsapp_account_id")

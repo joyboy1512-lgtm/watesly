@@ -1,7 +1,7 @@
 import i18n from "../i18n";
 import { api } from "./api";
 
-export type AnalyticsTab = "live" | "team" | "customers" | "revenue" | "insights" | "growth";
+export type AnalyticsTab = "live" | "team" | "customers" | "revenue" | "insights";
 
 export type AnalyticsOverview = {
   period_days: number;

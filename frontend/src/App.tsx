@@ -32,9 +32,6 @@ import AutomationsPage from "./pages/AutomationsPage";
 import TrustCenterPage from "./pages/TrustCenterPage";
 import CoreHealthPage from "./pages/CoreHealthPage";
 import LandingPage from "./pages/LandingPage";
-import RegisterPage from "./pages/RegisterPage";
-import LegalPage from "./pages/LegalPage";
-import PricingPage from "./pages/PricingPage";
 import { useAuth } from "./hooks/useAuth";
 
 function FallbackRedirect() {
@@ -47,10 +44,6 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/privacy" element={<LegalPage kind="privacy" />} />
-      <Route path="/terms" element={<LegalPage kind="terms" />} />
       <Route
         element={
           <ProtectedRoute>
