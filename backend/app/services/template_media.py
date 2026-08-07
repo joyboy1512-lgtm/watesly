@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import quote, urlparse, urlunparse
 
-HEADER_FORMATS = {"IMAGE", "VIDEO", "DOCUMENT"}
+HEADER_FORMATS = {"IMAGE", "VIDEO", "DOCUMENT", "CAROUSEL"}
 
 
 def meta_safe_media_url(url: str) -> str:
@@ -63,6 +63,13 @@ def get_template_header_info(components: list | None) -> dict | None:
         header_format = str(component.get("format", "")).upper()
         if header_format not in HEADER_FORMATS:
             continue
+        if header_format == "CAROUSEL":
+            cards = component.get("cards") or []
+            return {
+                "format": "CAROUSEL",
+                "card_count": len(cards) if isinstance(cards, list) else 0,
+                "media_url": None,
+            }
         media_url = component.get("media_url") or component.get("url")
         if not media_url and component.get("example"):
             example = component["example"]
@@ -114,6 +121,10 @@ def build_send_components(
         return []
 
     fmt = (header or {}).get("format", "IMAGE")
+    if str(fmt).upper() == "CAROUSEL":
+        # Carousel cards are defined in the approved Meta template; body params only at send time.
+        return []
+
     url = media_url or (header or {}).get("media_url")
     doc_name = filename or (header or {}).get("filename") or "file.pdf"
     if not url:

@@ -98,7 +98,10 @@ export default function LoginPage() {
               {loading ? t("login.loading") : t("login.submit")}
             </button>
           </form>
-          <small className="hint-text">{t("login.footnote")}</small>
+          <small className="hint-text">
+            {t("login.footnote")}{" "}
+            <Link to="/register">{t("login.createAccount")}</Link>
+          </small>
         </div>
       </section>
     </main>

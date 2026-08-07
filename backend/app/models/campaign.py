@@ -58,3 +58,10 @@ class Campaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     execution_token: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), unique=True, index=True)
     active_task_id: Mapped[str | None] = mapped_column(String(255), index=True)
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    parent_campaign_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    follow_up_type: Mapped[str | None] = mapped_column(String(40), nullable=True)

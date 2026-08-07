@@ -91,6 +91,7 @@ async def campaign_audience_preflight(
     contact_ids: list[UUID],
     template_category: str | None = None,
     whatsapp_account_id: UUID | None = None,
+    template_components: list | None = None,
 ) -> dict:
     from app.models.whatsapp_account import WhatsAppAccount
     from app.services.whatsapp_health import format_tier_hint
@@ -145,7 +146,87 @@ async def campaign_audience_preflight(
         "window_closed": window_closed,
         "template_required_all": True,
         "warnings": warnings,
+        "checks": _build_preflight_checks(
+            contact_ids=contact_ids,
+            never_messaged=never_messaged,
+            window_open=window_open,
+            window_closed=window_closed,
+            category=category,
+            quality_rating=quality_rating,
+            messaging_limit=messaging_limit,
+            template_components=template_components,
+        ),
         "messaging_tier_hint": tier_hint,
         "quality_rating": quality_rating,
         "messaging_limit": messaging_limit,
     }
+
+
+def _build_preflight_checks(
+    *,
+    contact_ids: list,
+    never_messaged: int,
+    window_open: int,
+    window_closed: int,
+    category: str,
+    quality_rating: str | None,
+    messaging_limit: int | None,
+    template_components: list | None = None,
+) -> list[dict]:
+    checks: list[dict] = []
+    total = len(contact_ids)
+    if total == 0:
+        checks.append({"level": "error", "code": "empty_audience", "message": "لا يوجد مستلمون."})
+    if never_messaged and category == "marketing":
+        checks.append(
+            {
+                "level": "warning",
+                "code": "cold_audience",
+                "message": f"{never_messaged} عميل بدون محادثة سابقة — تأكد من opt-in.",
+            }
+        )
+    if quality_rating == "RED":
+        checks.append(
+            {
+                "level": "error",
+                "code": "quality_red",
+                "message": "جودة الحساب RED — يُفضّل تأجيل الحملة.",
+            }
+        )
+    elif quality_rating == "YELLOW":
+        checks.append(
+            {
+                "level": "warning",
+                "code": "quality_yellow",
+                "message": "جودة الحساب YELLOW — راقب معدل الحظر.",
+            }
+        )
+    if messaging_limit and total > messaging_limit:
+        checks.append(
+            {
+                "level": "error",
+                "code": "tier_limit",
+                "message": f"المستلمون ({total}) يتجاوزون حد Tier ({messaging_limit:,}/24س).",
+            }
+        )
+    if template_components:
+        from app.services.template_media import get_template_header_info
+
+        header = get_template_header_info(template_components)
+        if header and header.get("format") == "CAROUSEL":
+            checks.append(
+                {
+                    "level": "info",
+                    "code": "carousel_template",
+                    "message": "قالب Carousel — البطاقات معرّفة في Meta؛ أرسل body variables فقط.",
+                }
+            )
+    if window_open == total and category == "marketing":
+        checks.append(
+            {
+                "level": "info",
+                "code": "warm_audience",
+                "message": "كل المستلمين داخل نافذة 24 ساعة — Utility قد يكون أرخص.",
+            }
+        )
+    return checks

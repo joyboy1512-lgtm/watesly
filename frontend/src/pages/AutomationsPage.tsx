@@ -78,6 +78,7 @@ const nodePalette = [
   ["assign_team", "تحويل لفريق", "TEAM"],
   ["set_status", "تغيير الحالة", "STS"],
   ["set_lifecycle", "مرحلة العميل", "CRM"],
+  ["collect_input", "سؤال / Form", "FORM"],
   ["delay", "انتظار", "WAIT"],
   ["webhook", "Webhook", "HTTP"],
   ["http_request", "HTTP Request", "API"],
@@ -118,6 +119,8 @@ function defaultNodeData(type: string, label: string): Record<string, unknown> {
       return { label, title: "فرصة من WhatsApp", stage: "lead", amount: "0" };
     case "set_lifecycle":
       return { label, lifecycle_stage: "customer" };
+    case "collect_input":
+      return { label, prompt_text: "ما اسمك؟", field_key: "name" };
     case "http_request":
       return { label, method: "POST", url: "", body: {} };
     default:
@@ -420,6 +423,9 @@ export default function AutomationsPage() {
 
         <div className="automation-templates-block">
           <h3>قوالب جاهزة</h3>
+          <p className="hint-text automation-no-code-hint">
+            No-code: اختر قالباً → عدّل النص → أضف «سؤال / Form» أو «رد ذكي» → انشر.
+          </p>
           {AUTOMATION_TEMPLATES.map((item) => (
             <button key={item.id} type="button" className="automation-template-btn" onClick={() => newAutomation(item.id)}>
               <strong>{item.name}</strong>
