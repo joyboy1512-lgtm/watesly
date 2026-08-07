@@ -29,15 +29,35 @@ export default function ChannelsPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    await api.post("/channels", {
-      organization_id: organizationId,
-      type,
-      name,
-      external_id: null
-    });
-    setName("");
-    client.invalidateQueries({ queryKey: ["channels"] });
-  }
+    try {
+      const response = await api.post<Channel>(/channels, {
+        organization_id: organizationId,
+        type,
+        name,
+        external_id: null
+      });
+      setName(");
+      await client.invalidateQueries({ queryKey: [channels] });
+      await client.invalidateQueries({ queryKey: [channel-stats] });
+      toastStore.getState().show(تمت إضافة القناة بنجاح, success);
+      if (type === whatsapp) {
+        navigate(`/whatsapp-connect?channel=${response.data.id}`);
+      }
+    } catch (error) {
+      const detail = formatApiError(error);
+      const msg =
+        detail.includes(Channel limit) || detail === CHANNEL_LIMIT_REACHED
+          ? وصلت للحد الأقصى من القنوات في خطتك. ترقِّ خطتك لإضافة المزيد.
+          : detail.includes(subscription) || detail === NO_ACTIVE_SUBSCRIPTION
+            ? يلزم اشتراك نشط لإضافة قناة.
+            : detail.includes(Organization) || detail === INVALID_ORGANIZATION
+              ? الفرع المحدد غير صالح.
+              : detail === MISSING_PERMISSION
+                ? ليس لديك صلاحية إضافة قنوات.
+                : detail;
+      toastStore.getState().show(msg, error);
+    }
+  }  }
 
   return (
     <main className="page">

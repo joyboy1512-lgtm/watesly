@@ -24,6 +24,7 @@ from app.services.analytics import (
     agent_performance,
     analytics_insights,
     analytics_overview,
+    dashboard_analytics,
     campaign_analytics,
     customer_funnel,
     live_dashboard,
@@ -585,6 +586,15 @@ async def analytics_overview_route(
     db: AsyncSession = Depends(get_db),
 ):
     return await analytics_overview(db, account_id=context.account_id, days=days)
+
+
+@router.get("/analytics/dashboard")
+async def analytics_dashboard_route(
+    days: int = Query(30, ge=1, le=90),
+    context: AuthContext = Depends(require_permissions(Permission.REPORTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await dashboard_analytics(db, account_id=context.account_id, days=days)
 
 
 @router.get("/analytics/time-series")

@@ -14,7 +14,7 @@ const resources = {
         contacts: "جهات الاتصال",
         quickReplies: "ردود سريعة",
         crm: "CRM",
-        analytics: "تحليلات",
+        analytics: "تحليل البيانات",
         reports: "التقارير",
         developer: "API",
         team: "الموظفون",
@@ -199,7 +199,7 @@ const resources = {
         crm: "الصفقات — Pipeline",
         developer: "API & Webhooks",
         reports: "التقارير",
-        analytics: "التحليلات",
+        analytics: "تحليل البيانات",
         contacts: "العملاء",
         campaigns: "حملات WhatsApp",
         templates: "قوالب WhatsApp",
@@ -244,7 +244,7 @@ const resources = {
         tabAudit: "سجل التدقيق"
       },
       analytics: {
-        tabLive: "لوحة حية",
+        tabDashboard: "لوحة تنفيذية",
         tabTeam: "الفريق",
         tabCustomers: "العملاء والحملات",
         tabRevenue: "الإيرادات",

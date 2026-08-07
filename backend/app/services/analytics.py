@@ -15,6 +15,8 @@ from app.models.conversation_rating import ConversationRating
 from app.models.deal import Deal
 from app.models.membership import Membership
 from app.models.message import Message, MessageDirection
+from app.models.monthly_active_contact import MonthlyActiveContact
+from app.models.channel import Channel
 
 SLA_FIRST_RESPONSE_MINUTES = 15
 SLA_RESOLUTION_MINUTES = 240
@@ -698,3 +700,171 @@ async def analytics_insights(db: AsyncSession, *, account_id: UUID, days: int = 
         })
 
     return {"period_days": days, "insights": insights}
+
+
+async def dashboard_analytics(db: AsyncSession, *, account_id: UUID, days: int = 30) -> dict:
+    """Account-wide executive dashboard aggregating overview, channels, MAC, and campaigns."""
+    from app.services.channels import get_channel_stats
+    from app.services.mac_tracking import current_cycle_month
+
+    overview = await analytics_overview(db, account_id=account_id, days=days)
+    time_series = await message_time_series(db, account_id=account_id, days=days)
+    campaigns = await campaign_analytics(db, account_id=account_id, days=days)
+    channel_stats = await get_channel_stats(db, account_id)
+
+    since, _, now = _period_bounds(days)
+    active_channels = sum(
+        1 for c in channel_stats
+        if str(c.get("channel_status", "")).lower() == "active"
+    )
+    total_mac = sum(int(c.get("mac_count") or 0) for c in channel_stats)
+    cycle = channel_stats[0].get("mac_cycle_month") if channel_stats else current_cycle_month()
+
+    total_contacts = int(
+        (await db.scalar(
+            select(func.count(Contact.id)).where(
+                Contact.account_id == account_id, Contact.deleted_at.is_(None)
+            )
+        ))
+        or 0
+    )
+
+    channel_ids = [c["channel_id"] for c in channel_stats]
+    channel_names = {str(c["channel_id"]): c["channel_name"] for c in channel_stats}
+    channel_orgs = {str(c["channel_id"]): c.get("organization_name") for c in channel_stats}
+
+    period_by_channel: dict[str, dict[str, int]] = {}
+    if channel_ids:
+        period_rows = list(
+            (
+                await db.execute(
+                    select(
+                        Message.channel_id,
+                        Message.direction,
+                        func.count(Message.id).label("count"),
+                    )
+                    .where(
+                        Message.account_id == account_id,
+                        Message.channel_id.in_(channel_ids),
+                        Message.created_at >= since,
+                    )
+                    .group_by(Message.channel_id, Message.direction)
+                )
+            ).all()
+        )
+        for row in period_rows:
+            cid = str(row.channel_id)
+            if cid not in period_by_channel:
+                period_by_channel[cid] = {"inbound": 0, "outbound": 0, "total": 0}
+            direction = row.direction.value if hasattr(row.direction, "value") else str(row.direction)
+            count = int(row.count)
+            if direction == MessageDirection.INBOUND.value:
+                period_by_channel[cid]["inbound"] = count
+            else:
+                period_by_channel[cid]["outbound"] = count
+            period_by_channel[cid]["total"] = period_by_channel[cid]["inbound"] + period_by_channel[cid]["outbound"]
+
+    channel_comparison = []
+    for cid, counts in period_by_channel.items():
+        stat = next((c for c in channel_stats if str(c["channel_id"]) == cid), None)
+        channel_comparison.append({
+            "channel_id": cid,
+            "channel_name": channel_names.get(cid, "—"),
+            "organization_name": channel_orgs.get(cid),
+            "inbound": counts["inbound"],
+            "outbound": counts["outbound"],
+            "total": counts["total"],
+            "mac_count": int(stat.get("mac_count") or 0) if stat else 0,
+            "quality_rating": stat.get("quality_rating") if stat else None,
+        })
+    channel_comparison.sort(key=lambda item: (-item["total"], item["channel_name"]))
+    top_channels = channel_comparison[:10]
+
+    mac_trend_rows = list(
+        (
+            await db.execute(
+                select(
+                    func.date_trunc("day", MonthlyActiveContact.first_activity_at).label("day"),
+                    func.count(MonthlyActiveContact.id).label("count"),
+                )
+                .where(
+                    MonthlyActiveContact.account_id == account_id,
+                    MonthlyActiveContact.cycle_month == cycle,
+                )
+                .group_by("day")
+                .order_by("day")
+            )
+        ).all()
+    )
+    mac_trend = [
+        {
+            "date": row.day.date().isoformat() if hasattr(row.day, "date") else str(row.day)[:10],
+            "count": int(row.count),
+        }
+        for row in mac_trend_rows
+    ]
+
+    campaign_chart = [
+        {"name": "مُسلّم", "value": campaigns["summary"].get("delivered") or 0},
+        {"name": "مقروء", "value": campaigns["summary"].get("read") or 0},
+        {"name": "فشل", "value": campaigns["summary"].get("failed") or 0},
+    ]
+
+    recent_rows = list(
+        (
+            await db.execute(
+                select(Conversation, Contact, Channel)
+                .join(Contact, Contact.id == Conversation.contact_id)
+                .join(Channel, Channel.id == Conversation.channel_id)
+                .where(
+                    Conversation.account_id == account_id,
+                    Conversation.deleted_at.is_(None),
+                )
+                .order_by(Conversation.last_message_at.desc().nullslast(), Conversation.updated_at.desc())
+                .limit(10)
+            )
+        ).all()
+    )
+    recent_activity = []
+    for conv, contact, channel in recent_rows:
+        recent_activity.append({
+            "conversation_id": str(conv.id),
+            "contact_name": contact.display_name or contact.phone or "—",
+            "channel_name": channel.name,
+            "status": conv.status.value if hasattr(conv.status, "value") else str(conv.status),
+            "last_message_at": conv.last_message_at.isoformat() if conv.last_message_at else None,
+        })
+
+    insights_data = await analytics_insights(db, account_id=account_id, days=days)
+
+    return {
+        "period_days": days,
+        "summary": {
+            "messages_inbound": overview["current"]["messages_inbound"],
+            "messages_outbound": overview["current"]["messages_outbound"],
+            "messages_total": overview["current"]["messages_inbound"] + overview["current"]["messages_outbound"],
+            "active_channels": active_channels,
+            "total_channels": len(channel_stats),
+            "mac_total": total_mac,
+            "mac_cycle_month": cycle,
+            "campaigns_sent": campaigns["summary"].get("sent") or 0,
+            "campaigns_count": campaigns["summary"].get("campaigns") or 0,
+            "total_contacts": total_contacts,
+            "new_contacts": overview["current"]["new_contacts"],
+            "open_conversations": overview["live"]["open_conversations"],
+            "waiting_team_reply": overview["live"]["waiting_team_reply"],
+            "first_response_avg_minutes": overview["sla"].get("first_response_avg_minutes"),
+            "sla_compliance_pct": overview["sla"].get("sla_compliance_pct"),
+            "csat_average": overview["csat"].get("average_score"),
+        },
+        "changes_pct": overview["changes_pct"],
+        "message_series": time_series["series"],
+        "channel_comparison": channel_comparison[:8],
+        "mac_trend": mac_trend,
+        "campaign_summary": campaigns["summary"],
+        "campaign_chart": campaign_chart,
+        "top_channels": top_channels,
+        "recent_activity": recent_activity,
+        "insights_preview": (insights_data.get("insights") or [])[:3],
+    }
+

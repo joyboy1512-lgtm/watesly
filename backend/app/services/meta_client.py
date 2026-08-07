@@ -84,6 +84,52 @@ class MetaWhatsAppClient:
         return data if isinstance(data, dict) else {}
 
     @staticmethod
+    async def _parse_graph_response(response: httpx.Response, *, default_message: str) -> dict:
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"raw": response.text}
+        if response.is_error or not isinstance(data, dict):
+            error = data.get("error", {}) if isinstance(data, dict) else {}
+            raise MetaAPIError(
+                error.get("message", default_message) if isinstance(error, dict) else default_message,
+                status_code=response.status_code,
+                response_data=data,
+            )
+        return data
+
+    @staticmethod
+    def _app_access_token() -> str:
+        if not settings.meta_app_id:
+            raise MetaAPIError("Meta App ID is not configured", status_code=400)
+        return f"{settings.meta_app_id}|{settings.meta_app_secret.get_secret_value()}"
+
+    @staticmethod
+    async def exchange_for_long_lived_token(*, short_lived_token: str) -> str:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/oauth/access_token"
+        params = {
+            "grant_type": "fb_exchange_token",
+            "client_id": settings.meta_app_id,
+            "client_secret": settings.meta_app_secret.get_secret_value(),
+            "fb_exchange_token": short_lived_token,
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(url, params=params)
+        data = await MetaWhatsAppClient._parse_graph_response(
+            response, default_message="Unable to exchange for long-lived token"
+        )
+        token = data.get("access_token")
+        if not token:
+            raise MetaAPIError(
+                "Long-lived access token missing from Meta response",
+                status_code=502,
+                response_data=data,
+            )
+        return str(token)
+
+    @staticmethod
     async def exchange_oauth_code(*, code: str) -> str:
         if not settings.meta_app_id:
             raise MetaAPIError("Meta App ID is not configured", status_code=400)
@@ -101,14 +147,82 @@ class MetaWhatsAppClient:
             data = response.json()
         except ValueError:
             data = {"raw": response.text}
-        if response.is_error or not isinstance(data, dict) or not data.get("access_token"):
-            error = data.get("error", {}) if isinstance(data, dict) else {}
-            raise MetaAPIError(
-                error.get("message", "Unable to exchange OAuth code") if isinstance(error, dict) else "Unable to exchange OAuth code",
-                status_code=response.status_code,
-                response_data=data,
+        data = await MetaWhatsAppClient._parse_graph_response(
+            response, default_message="Unable to exchange OAuth code"
+        )
+        short_lived = str(data["access_token"])
+        try:
+            return await MetaWhatsAppClient.exchange_for_long_lived_token(short_lived_token=short_lived)
+        except MetaAPIError:
+            return short_lived
+
+    async def list_waba_phone_numbers(self, *, waba_id: str) -> list[dict]:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}/phone_numbers"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers)
+        data = await self._parse_graph_response(
+            response, default_message="Unable to list WABA phone numbers"
+        )
+        rows = data.get("data", [])
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def get_waba_webhook_subscriptions(self, *, waba_id: str) -> list[dict]:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}/subscribed_apps"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers)
+        data = await self._parse_graph_response(
+            response, default_message="Unable to fetch WABA webhook subscriptions"
+        )
+        rows = data.get("data", [])
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def subscribe_waba_webhooks(
+        self,
+        *,
+        waba_id: str,
+        callback_url: str,
+        verify_token: str,
+    ) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        client = self._get_client()
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        app_id = settings.meta_app_id
+        if app_id:
+            app_token = self._app_access_token()
+            sub_url = f"{base}/{version}/{app_id}/subscriptions"
+            sub_response = await client.post(
+                sub_url,
+                data={
+                    "object": "whatsapp_business_account",
+                    "callback_url": callback_url,
+                    "verify_token": verify_token,
+                    "fields": "messages,message_template_status_update",
+                    "include_values": "true",
+                    "access_token": app_token,
+                },
             )
-        return str(data["access_token"])
+            if sub_response.is_error:
+                try:
+                    sub_data = sub_response.json()
+                except ValueError:
+                    sub_data = {"raw": sub_response.text}
+                error = sub_data.get("error", {}) if isinstance(sub_data, dict) else {}
+                if not (isinstance(error, dict) and error.get("error_subcode") == 1929002):
+                    await self._parse_graph_response(
+                        sub_response, default_message="Unable to configure app webhook subscription"
+                    )
+        waba_url = f"{base}/{version}/{waba_id}/subscribed_apps"
+        response = await client.post(waba_url, headers=headers)
+        return await self._parse_graph_response(
+            response, default_message="Unable to subscribe WABA to app webhooks"
+        )
 
     async def _send_payload(self, payload: dict) -> dict:
         headers = {

@@ -31,6 +31,31 @@ from app.services.outbox import add_outbox_event
 
 
 
+
+async def _record_mac_for_contact(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    channel_id: UUID,
+    contact_id: UUID | None,
+    inbound: bool,
+) -> None:
+    """Record MAC once per contact per channel per month (see mac_tracking policy)."""
+    if contact_id is None:
+        return
+    from app.models.monthly_active_contact import MacTriggerSource
+    from app.services.mac_tracking import record_mac
+
+    await record_mac(
+        db,
+        account_id=account_id,
+        channel_id=channel_id,
+        contact_id=contact_id,
+        trigger_source=MacTriggerSource.INBOUND if inbound else MacTriggerSource.INBOX_OUTBOUND,
+    )
+
+
+
 async def _get_or_create_contact_and_conversation(
     db: AsyncSession,
     *,
@@ -155,6 +180,15 @@ async def create_whatsapp_account(
     await db.refresh(whatsapp_account)
     await sync_whatsapp_account_health_safe(db, whatsapp_account=whatsapp_account)
     await db.refresh(whatsapp_account)
+    try:
+        from app.services.meta_setup import ensure_waba_webhook_subscription
+
+        await ensure_waba_webhook_subscription(
+            access_token=payload.access_token,
+            waba_id=payload.waba_id,
+        )
+    except MetaAPIError:
+        pass
     return whatsapp_account
 
 
@@ -197,11 +231,18 @@ async def update_whatsapp_access_token(
     return whatsapp_account
 
 
-def _account_to_response(item: WhatsAppAccount) -> dict:
+def _account_to_response(
+    item: WhatsAppAccount,
+    *,
+    channel_name: str | None = None,
+    organization_name: str | None = None,
+) -> dict:
     return {
         "id": item.id,
         "channel_id": item.channel_id,
         "organization_id": item.organization_id,
+        "channel_name": channel_name,
+        "organization_name": organization_name,
         "waba_id": item.waba_id,
         "phone_number_id": item.phone_number_id,
         "display_phone_number": item.display_phone_number,
@@ -283,18 +324,32 @@ async def create_whatsapp_account_from_embedded(
     await db.refresh(whatsapp_account)
     await sync_whatsapp_account_health_safe(db, whatsapp_account=whatsapp_account)
     await db.refresh(whatsapp_account)
+    try:
+        from app.services.meta_setup import ensure_waba_webhook_subscription
+
+        await ensure_waba_webhook_subscription(
+            access_token=access_token,
+            waba_id=payload.waba_id,
+        )
+    except MetaAPIError:
+        pass
     return whatsapp_account
 
 
 async def list_whatsapp_accounts(
     db: AsyncSession, account_id: UUID
-) -> list[WhatsAppAccount]:
+) -> list[tuple[WhatsAppAccount, str | None, str | None]]:
+    from app.models.channel import Channel
+    from app.models.organization import Organization
+
     result = await db.execute(
-        select(WhatsAppAccount)
+        select(WhatsAppAccount, Channel.name, Organization.name)
+        .join(Channel, WhatsAppAccount.channel_id == Channel.id)
+        .join(Organization, WhatsAppAccount.organization_id == Organization.id)
         .where(WhatsAppAccount.account_id == account_id)
         .order_by(WhatsAppAccount.created_at.asc())
     )
-    return list(result.scalars().all())
+    return list(result.all())
 
 
 async def send_text_message(

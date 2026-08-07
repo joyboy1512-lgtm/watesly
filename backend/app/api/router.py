@@ -7,6 +7,7 @@ from app.api.routes.assignments import router as assignments_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.automations import router as automations_router
 from app.api.routes.billing import router as billing_router
+from app.api.routes.mac import router as mac_router
 from app.api.routes.channels import router as channels_router
 from app.api.routes.catalog import router as catalog_router
 from app.api.routes.campaigns import router as campaigns_router
@@ -43,6 +44,7 @@ api_router.include_router(operations_router, prefix="/operations", tags=["operat
 api_router.include_router(platform_router, prefix="/platform", tags=["platform"])
 api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(billing_router, prefix="/billing", tags=["billing"])
+api_router.include_router(mac_router, prefix="/billing", tags=["billing-mac"])
 api_router.include_router(channels_router, prefix="/channels", tags=["channels"])
 api_router.include_router(templates_router, prefix="/templates", tags=["templates"])
 api_router.include_router(campaigns_router, prefix="/campaigns", tags=["campaigns"])

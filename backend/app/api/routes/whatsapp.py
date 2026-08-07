@@ -110,7 +110,10 @@ async def get_whatsapp_accounts(
     db: AsyncSession = Depends(get_db),
 ):
     accounts = await list_whatsapp_accounts(db, context.account_id)
-    return [_response(item) for item in accounts]
+    return [
+        WhatsAppAccountResponse(**_account_to_response(item, channel_name=channel_name, organization_name=organization_name))
+        for item, channel_name, organization_name in accounts
+    ]
 
 
 @router.post(
@@ -227,6 +230,23 @@ async def post_sync_account_health(
         item = await sync_whatsapp_account_health(db, whatsapp_account=item)
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return _response(item)
+
+
+@router.post("/accounts/{whatsapp_account_id}/disconnect", response_model=WhatsAppAccountResponse)
+async def post_disconnect_whatsapp_account(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.whatsapp_account import WhatsAppAccount, WhatsAppAccountStatus
+
+    item = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if item is None or item.account_id != context.account_id:
+        raise HTTPException(status_code=404, detail="WhatsApp account not found")
+    item.status = WhatsAppAccountStatus.DISCONNECTED
+    await db.commit()
+    await db.refresh(item)
     return _response(item)
 
 

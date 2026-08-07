@@ -919,7 +919,27 @@ export default function InboxPage() {
             onSendImage={(product) => void sendProductImage(product)}
             onSendProductCard={(product) => void sendProductCard(product)}
           />
-          <label className="composer-icon-button" title="إرفاق ملف"><input type="file" accept="image/*,video/mp4,audio/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAttachment(file); event.currentTarget.value = ""; }} disabled={!selectedId || uploading} /><Icon name="paperclip" /></label><textarea placeholder={selectedId ? "اكتب رسالة… (/اختصار + Tab، Enter للإرسال)" : "اختر محادثة أولًا"} value={text} onChange={(e) => onComposerChange(e.target.value)} onKeyDown={composerKeyDown} disabled={!selectedId || sending} maxLength={4096} /><div className="composer-meta"><small>{text.length}/4096 · {"{{contact.name}}"} · <button type="button" className="link-button" onClick={() => void saveLastOutboundAsQuickReply()} disabled={!selectedId}>حفظ آخر رد</button></small><button className="send-button" type="submit" disabled={!selectedId || sending || !text.trim()}><Icon name="send" /></button></div></form>
+          <textarea
+            className="composer-textarea"
+            rows={5}
+            placeholder={selectedId ? "اكتب رسالة… (/اختصار + Tab، Enter للإرسال)" : "اختر محادثة أولًا"}
+            value={text}
+            onChange={(e) => onComposerChange(e.target.value)}
+            onKeyDown={composerKeyDown}
+            disabled={!selectedId || sending}
+            maxLength={4096}
+          />
+          <div className="composer-toolbar">
+            <label className="composer-icon-button" title="إرفاق ملف">
+              <input type="file" accept="image/*,video/mp4,audio/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAttachment(file); event.currentTarget.value = ""; }} disabled={!selectedId || uploading} />
+              <Icon name="paperclip" />
+            </label>
+            <div className="composer-meta">
+              <small>{text.length}/4096 · {"{{contact.name}}"} · <button type="button" className="link-button" onClick={() => void saveLastOutboundAsQuickReply()} disabled={!selectedId}>حفظ آخر رد</button></small>
+              <button className="send-button" type="submit" disabled={!selectedId || sending || !text.trim()}><Icon name="send" /></button>
+            </div>
+          </div>
+        </form>
         )}
       </section>
 

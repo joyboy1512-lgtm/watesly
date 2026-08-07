@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
@@ -30,6 +31,7 @@ type Account = {
 };
 
 export default function WhatsAppConnectPage() {
+  const [searchParams] = useSearchParams();
   const client = useQueryClient();
   const [channelId, setChannelId] = useState("");
   const [embeddedChannelId, setEmbeddedChannelId] = useState("");
@@ -63,6 +65,14 @@ export default function WhatsAppConnectPage() {
   });
 
   const whatsappChannels = (channels.data ?? []).filter((item) => item.type === "whatsapp");
+
+  useEffect(() => {
+    const channelFromQuery = searchParams.get("channel");
+    if (!channelFromQuery) return;
+    setEmbeddedChannelId(channelFromQuery);
+    setChannelId(channelFromQuery);
+  }, [searchParams]);
+
   const entryAccount = useMemo(
     () => (accounts.data ?? []).find((item) => item.id === entryAccountId) ?? (accounts.data ?? [])[0] ?? null,
     [accounts.data, entryAccountId]

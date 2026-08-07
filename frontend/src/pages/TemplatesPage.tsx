@@ -169,89 +169,6 @@ export default function TemplatesPage() {
         <p>إدارة قوالب الرسائل المعتمدة من Meta — للحملات والأتمتة.</p>
       </header>
 
-      <section className="card templates-list-card">
-        <div className="templates-toolbar">
-          <label className="field-label templates-search">
-            <span>بحث</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم أو نص القالب…" />
-          </label>
-          <label className="field-label templates-filter">
-            <span>الحالة</span>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">الكل</option>
-              {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </label>
-          <p className="hint-text">{filtered.length} قالب</p>
-        </div>
-
-        <form className="templates-sync-row" onSubmit={sync}>
-          <label className="field-label">
-            <span>مزامنة من Meta</span>
-            <select value={syncAccountId} onChange={(e) => setSyncAccountId(e.target.value)}>
-              <option value="">اختر حساب WhatsApp</option>
-              {(accounts.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.verified_name || item.display_phone_number}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="secondary-button">مزامنة القوالب</button>
-        </form>
-
-        <div className="table-card">
-          <table>
-            <thead>
-              <tr>
-                <th>الاسم</th>
-                <th>اللغة</th>
-                <th>الفئة</th>
-                <th>الحالة</th>
-                <th>الرأس (وسائط)</th>
-                <th>نص القالب</th>
-                <th>معاينة</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item) => {
-                const header = getTemplateHeaderInfo(item.components);
-                return (
-                <tr key={item.id}>
-                  <td dir="ltr"><strong>{item.name}</strong></td>
-                  <td>{item.language}</td>
-                  <td>{CATEGORY_LABELS[item.category] ?? item.category}</td>
-                  <td><span className="tag-chip">{STATUS_LABELS[item.status] ?? item.status}</span></td>
-                  <td>{header ? HEADER_FORMAT_LABELS[header.format] : "—"}</td>
-                  <td className="template-body-cell">{item.body_text || "—"}</td>
-                  <td>
-                    <div className="templates-table-actions">
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        onClick={() => setPreviewTemplate(item)}
-                      >
-                        معاينة
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        onClick={() => void deleteTemplate(item.id)}
-                      >
-                        حذف
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );})}
-            </tbody>
-          </table>
-          {!filtered.length && <p className="hint-text">لا توجد قوالب.</p>}
-        </div>
-      </section>
-
       <section className="card templates-manage-card">
         <h2 className="section-title">إضافة قالب</h2>
         <p className="hint-text">للاختبار المحلي. القوالب الحقيقية تُعتمد من Meta ثم تُزامَن.</p>
@@ -361,6 +278,90 @@ export default function TemplatesPage() {
             templateName={name || undefined}
           />
         </div>
+        </div>
+      </section>
+
+
+      <section className="card templates-list-card">
+        <div className="templates-toolbar">
+          <label className="field-label templates-search">
+            <span>بحث</span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم أو نص القالب…" />
+          </label>
+          <label className="field-label templates-filter">
+            <span>الحالة</span>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">الكل</option>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <p className="hint-text">{filtered.length} قالب</p>
+        </div>
+
+        <form className="templates-sync-row" onSubmit={sync}>
+          <label className="field-label">
+            <span>مزامنة من Meta</span>
+            <select value={syncAccountId} onChange={(e) => setSyncAccountId(e.target.value)}>
+              <option value="">اختر حساب WhatsApp</option>
+              {(accounts.data ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.verified_name || item.display_phone_number}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="secondary-button">مزامنة القوالب</button>
+        </form>
+
+        <div className="table-card">
+          <table className="templates-erp-table erp-table-compact">
+            <thead>
+              <tr>
+                <th>الاسم</th>
+                <th>اللغة</th>
+                <th>الفئة</th>
+                <th>الحالة</th>
+                <th>الرأس (وسائط)</th>
+                <th>نص القالب</th>
+                <th>معاينة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item) => {
+                const header = getTemplateHeaderInfo(item.components);
+                return (
+                <tr key={item.id}>
+                  <td dir="ltr"><strong>{item.name}</strong></td>
+                  <td>{item.language}</td>
+                  <td>{CATEGORY_LABELS[item.category] ?? item.category}</td>
+                  <td><span className="tag-chip">{STATUS_LABELS[item.status] ?? item.status}</span></td>
+                  <td>{header ? HEADER_FORMAT_LABELS[header.format] : "—"}</td>
+                  <td className="template-body-cell">{item.body_text || "—"}</td>
+                  <td>
+                    <div className="templates-table-actions erp-table-actions">
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        onClick={() => setPreviewTemplate(item)}
+                      >
+                        معاينة
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        onClick={() => void deleteTemplate(item.id)}
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );})}
+            </tbody>
+          </table>
+          {!filtered.length && <p className="hint-text">لا توجد قوالب.</p>}
         </div>
       </section>
 

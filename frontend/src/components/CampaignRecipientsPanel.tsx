@@ -291,7 +291,7 @@ export function CampaignReportRow({
         <td>{liveReport.read}</td>
         <td>{liveReport.failed}</td>
         <td>
-          <button type="button" className="secondary-button" onClick={onToggle}>
+          <button type="button" className="secondary-button compact" onClick={onToggle}>
             {expanded ? "إخفاء التقرير" : "عرض التقرير"}
           </button>
         </td>
@@ -329,8 +329,8 @@ export function CampaignResultsTable({
   if (!items.length) return <p className="hint-text">{emptyLabel}</p>;
 
   return (
-    <div className="table-card">
-      <table>
+    <div className="campaigns-table-wrap">
+      <table className="campaigns-erp-table erp-table-compact">
         <thead>
           <tr>
             <th>الحملة</th>
