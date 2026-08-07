@@ -165,8 +165,9 @@ async def handle_ecommerce_webhook(
     provider: str,
     event_type: str,
     payload: dict,
+    send_message: bool = True,
 ) -> dict:
-    """Resolve order template and queue send — stub that validates config only."""
+    """Resolve order template and optionally send WhatsApp template message."""
     flags = await get_feature_flags(db, account_id=account_id)
     if not flags.get(_provider_flag(provider)) or not flags.get("order_templates"):
         return {"status": "skipped", "reason": "feature_disabled"}
@@ -187,10 +188,57 @@ async def handle_ecommerce_webhook(
     if not phone:
         return {"status": "skipped", "reason": "missing_phone"}
 
-    return {
-        "status": "ready",
-        "event_type": event_type,
-        "template_id": str(template_row.template_id),
-        "phone": phone,
-        "note": "Wire automation webhook or enable send worker in production",
-    }
+    if not send_message:
+        return {
+            "status": "ready",
+            "event_type": event_type,
+            "template_id": str(template_row.template_id),
+            "phone": phone,
+        }
+
+    from app.models.whatsapp_template import WhatsAppTemplate
+    from app.schemas.whatsapp_media import SendTemplateMessageRequest
+    from app.services.phone_normalize import normalize_whatsapp_phone
+    from app.services.template_media import resolve_send_components
+    from app.services.whatsapp import send_template_message
+
+    template = await db.get(WhatsAppTemplate, template_row.template_id)
+    if template is None or template.account_id != account_id:
+        return {"status": "failed", "reason": "invalid_template"}
+
+    mapping = template_row.variable_mapping or {}
+    body_parameters: list[dict] = []
+    if mapping:
+        params = []
+        for slot, field_key in sorted(mapping.items(), key=lambda item: str(item[0])):
+            value = str(payload.get(str(field_key), "") or "")[:200]
+            params.append({"type": "text", "text": value})
+        if params:
+            body_parameters = [{"type": "body", "parameters": params}]
+
+    components = resolve_send_components(template.components, body_parameters or None)
+    normalized = normalize_whatsapp_phone(phone)
+    if not normalized:
+        return {"status": "failed", "reason": "invalid_phone"}
+
+    try:
+        message = await send_template_message(
+            db,
+            account_id=account_id,
+            whatsapp_account_id=template_row.whatsapp_account_id,
+            payload=SendTemplateMessageRequest(
+                to=normalized,
+                template_name=template.name,
+                language_code=template.language,
+                components=components,
+            ),
+        )
+        await db.commit()
+        return {
+            "status": "sent",
+            "event_type": event_type,
+            "message_id": str(message.id),
+            "phone": normalized,
+        }
+    except ValueError as exc:
+        return {"status": "failed", "reason": str(exc)[:200]}
