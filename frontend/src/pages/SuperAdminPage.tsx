@@ -20,6 +20,8 @@ type Plan = {
   max_users: number;
   max_organizations: number;
   max_channels: number;
+  included_mac: number;
+  over_mac_price_per_100: number;
   status: string;
 };
 
@@ -47,6 +49,8 @@ export default function SuperAdminPage() {
       max_users: 5,
       max_organizations: 1,
       max_channels: 1,
+      included_mac: 1000,
+      over_mac_price_per_100: 12,
       trial_days: 14,
       allow_multi_organization: false,
       status: "active"
@@ -106,7 +110,7 @@ export default function SuperAdminPage() {
       <section className="card table-card">
         <h2>الباقات</h2>
         <table>
-          <thead><tr><th>الاسم</th><th>الكود</th><th>المستخدمون</th><th>الفروع</th><th>القنوات</th></tr></thead>
+          <thead><tr><th>الاسم</th><th>الكود</th><th>المستخدمون</th><th>الفروع</th><th>القنوات</th><th>MAC</th><th>Over MAC</th></tr></thead>
           <tbody>
             {(plans.data ?? []).map((item) => (
               <tr key={item.id}>
@@ -115,6 +119,8 @@ export default function SuperAdminPage() {
                 <td>{item.max_users}</td>
                 <td>{item.max_organizations}</td>
                 <td>{item.max_channels}</td>
+                <td>{item.included_mac?.toLocaleString("ar") ?? "-"}</td>
+                <td>${item.over_mac_price_per_100 ?? 0}/100</td>
               </tr>
             ))}
           </tbody>

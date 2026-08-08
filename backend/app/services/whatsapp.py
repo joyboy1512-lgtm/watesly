@@ -359,6 +359,7 @@ async def send_text_message(
     account_id: UUID,
     whatsapp_account_id: UUID,
     payload: SendTextMessageRequest,
+    record_mac: bool = False,
 ) -> Message:
     whatsapp_account = await db.get(WhatsAppAccount, whatsapp_account_id)
     if (
@@ -417,6 +418,14 @@ async def send_text_message(
     message.status = MessageStatus.SENT
     await db.commit()
     await db.refresh(message)
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=whatsapp_account.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
     return message
 
 
@@ -618,6 +627,7 @@ async def send_media_message(
     whatsapp_account_id: UUID,
     media_type: MessageType,
     payload: SendMediaMessageRequest,
+    record_mac: bool = False,
 ) -> Message:
     wa = await db.get(WhatsAppAccount, whatsapp_account_id)
     if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
@@ -669,6 +679,14 @@ async def send_media_message(
     conversation.last_message_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(message)
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
     return message
 
 
@@ -678,6 +696,7 @@ async def send_template_message(
     account_id: UUID,
     whatsapp_account_id: UUID,
     payload: SendTemplateMessageRequest,
+    record_mac: bool = False,
 ) -> Message:
     wa = await db.get(WhatsAppAccount, whatsapp_account_id)
     if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
@@ -731,6 +750,14 @@ async def send_template_message(
     conversation.last_message_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(message)
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
     return message
 
 
@@ -745,6 +772,7 @@ async def send_product_message(
     body: str,
     footer: str | None = None,
     product_id: UUID | None = None,
+    record_mac: bool = False,
 ) -> Message:
     wa = await db.get(WhatsAppAccount, whatsapp_account_id)
     if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
@@ -812,6 +840,14 @@ async def send_product_message(
         if product is not None and product.account_id == account_id:
             await increment_product_usage(db, product=product)
 
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
     return message
 
 
@@ -826,6 +862,7 @@ async def send_product_list_message(
     body: str,
     header: str | None = None,
     footer: str | None = None,
+    record_mac: bool = False,
 ) -> Message:
     wa = await db.get(WhatsAppAccount, whatsapp_account_id)
     if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
@@ -884,4 +921,12 @@ async def send_product_list_message(
     conversation.last_message_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(message)
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
     return message

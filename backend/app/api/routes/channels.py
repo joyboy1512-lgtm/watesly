@@ -5,7 +5,8 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.db.session import get_db
 from app.core.permissions import Permission
 from app.schemas.channel import ChannelCreateRequest, ChannelResponse
-from app.services.channels import create_channel, list_channels
+from app.schemas.mac import ChannelUsageBoardResponse
+from app.services.channels import create_channel, get_channel_usage_board, list_channels
 
 router = APIRouter()
 
@@ -16,6 +17,14 @@ async def get_channels(
     db: AsyncSession = Depends(get_db),
 ):
     return await list_channels(db, context.account_id)
+
+
+@router.get("/usage-board", response_model=ChannelUsageBoardResponse)
+async def get_channels_usage_board(
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_channel_usage_board(db, account_id=context.account_id)
 
 
 @router.post("", response_model=ChannelResponse, status_code=status.HTTP_201_CREATED)

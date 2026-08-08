@@ -197,6 +197,17 @@ async def persist_inbound_message(
                 await db.flush()
                 conversation.last_message_at = datetime.now(UTC)
 
+                from app.models.monthly_active_contact import MacTriggerSource
+                from app.services.mac_tracking import record_mac
+
+                await record_mac(
+                    db,
+                    account_id=whatsapp_account.account_id,
+                    channel_id=whatsapp_account.channel_id,
+                    contact_id=contact.id,
+                    trigger_source=MacTriggerSource.INBOUND,
+                )
+
                 return InboundMessageContext(
                     contact=contact,
                     conversation=conversation,

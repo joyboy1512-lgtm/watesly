@@ -25,6 +25,55 @@ def current_cycle_month(when: datetime | None = None) -> str:
     return dt.strftime("%Y-%m")
 
 
+def compute_mac_balance(*, mac_count: int, included_mac: int) -> dict[str, int | bool]:
+    remaining = max(0, included_mac - mac_count)
+    over_count = max(0, mac_count - included_mac)
+    return {
+        "mac_remaining": remaining,
+        "is_over_mac": mac_count > included_mac,
+        "over_mac_count": over_count,
+        "over_mac_blocks": (over_count + 99) // 100,
+    }
+
+
+def estimate_over_mac_charge(*, over_mac_count: int, price_per_100: float) -> float:
+    blocks = (over_mac_count + 99) // 100
+    return round(blocks * price_per_100, 3)
+
+
+async def get_account_mac_summary(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    cycle_month: str | None = None,
+) -> dict:
+    from app.services.billing import get_active_subscription
+
+    cycle = cycle_month or current_cycle_month()
+    included_mac = 1000
+    over_mac_price_per_100 = 12.0
+    subscription_data = await get_active_subscription(db, account_id)
+    if subscription_data is not None:
+        _, plan = subscription_data
+        included_mac = plan.included_mac
+        over_mac_price_per_100 = float(plan.over_mac_price_per_100)
+
+    mac_count = await count_mac_for_account(db, account_id=account_id, cycle_month=cycle)
+    balance = compute_mac_balance(mac_count=mac_count, included_mac=included_mac)
+    over_mac_count = int(balance["over_mac_count"])
+    return {
+        "cycle_month": cycle,
+        "mac_count": mac_count,
+        "included_mac": included_mac,
+        "over_mac_price_per_100": over_mac_price_per_100,
+        **balance,
+        "estimated_over_mac_charge": estimate_over_mac_charge(
+            over_mac_count=over_mac_count,
+            price_per_100=over_mac_price_per_100,
+        ),
+    }
+
+
 async def record_mac(
     db: AsyncSession,
     *,

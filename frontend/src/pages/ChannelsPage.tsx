@@ -8,9 +8,13 @@ import {
   channelStatusClass,
   channelTypeClass,
   formatChannelStatus,
-  formatChannelType
+  formatChannelType,
+  formatMacBalance,
+  formatMacCycleMonth,
+  macBalanceClass,
+  macUsagePercent
 } from "../lib/channelHelpers";
-import { formatWhatsAppStatus, whatsappStatusBadgeClass, workspaceDisplayName } from "../lib/teamHelpers";
+import { formatWhatsAppStatus, whatsappStatusBadgeClass } from "../lib/teamHelpers";
 
 type Organization = { id: string; name: string };
 type Channel = {
@@ -21,12 +25,31 @@ type Channel = {
   external_id: string | null;
   status: string;
 };
-type WhatsAppAccount = {
-  id: string;
+type ChannelUsageBoardItem = {
   channel_id: string;
-  display_phone_number: string;
-  verified_name: string | null;
-  status: string;
+  channel_name: string;
+  organization_id: string;
+  channel_type: string;
+  channel_status: string;
+  external_id: string | null;
+  cycle_month: string;
+  mac_count: number;
+  campaign_messages_sent: number;
+  whatsapp_status: string | null;
+  whatsapp_phone: string | null;
+  whatsapp_verified_name: string | null;
+};
+type ChannelUsageBoard = {
+  cycle_month: string;
+  mac_count: number;
+  included_mac: number;
+  mac_remaining: number;
+  is_over_mac: boolean;
+  over_mac_count: number;
+  over_mac_blocks: number;
+  over_mac_price_per_100: number;
+  estimated_over_mac_charge: number;
+  channels: ChannelUsageBoardItem[];
 };
 type AssignmentRule = {
   id: string;
@@ -49,13 +72,9 @@ export default function ChannelsPage() {
     queryKey: ["organizations"],
     queryFn: async () => (await api.get<Organization[]>("/organizations")).data
   });
-  const channels = useQuery({
-    queryKey: ["channels"],
-    queryFn: async () => (await api.get<Channel[]>("/channels")).data
-  });
-  const whatsappAccounts = useQuery({
-    queryKey: ["whatsapp-accounts"],
-    queryFn: async () => (await api.get<WhatsAppAccount[]>("/whatsapp/accounts")).data
+  const usageBoard = useQuery({
+    queryKey: ["channels-usage-board"],
+    queryFn: async () => (await api.get<ChannelUsageBoard>("/channels/usage-board")).data
   });
   const rulesQuery = useQuery({
     queryKey: ["assignment-rules"],
@@ -66,14 +85,6 @@ export default function ChannelsPage() {
     () => new Map((organizations.data ?? []).map((item) => [item.id, item.name])),
     [organizations.data]
   );
-
-  const waByChannel = useMemo(() => {
-    const map = new Map<string, WhatsAppAccount>();
-    for (const account of whatsappAccounts.data ?? []) {
-      map.set(account.channel_id, account);
-    }
-    return map;
-  }, [whatsappAccounts.data]);
 
   const rulesByChannel = useMemo(() => {
     const map = new Map<string, number>();
@@ -86,25 +97,26 @@ export default function ChannelsPage() {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return (channels.data ?? []).filter((item) => {
-      if (typeFilter && item.type !== typeFilter) return false;
-      if (statusFilter && item.status !== statusFilter) return false;
+    return (usageBoard.data?.channels ?? []).filter((item) => {
+      if (typeFilter && item.channel_type !== typeFilter) return false;
+      if (statusFilter && item.channel_status !== statusFilter) return false;
       if (!term) return true;
-      const wa = waByChannel.get(item.id);
-      const haystack = `${item.name} ${item.type} ${item.external_id ?? ""} ${orgMap.get(item.organization_id) ?? ""} ${wa?.display_phone_number ?? ""}`.toLowerCase();
+      const haystack = `${item.channel_name} ${item.channel_type} ${item.external_id ?? ""} ${orgMap.get(item.organization_id) ?? ""} ${item.whatsapp_phone ?? ""}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [channels.data, search, typeFilter, statusFilter, orgMap, waByChannel]);
+  }, [usageBoard.data?.channels, search, typeFilter, statusFilter, orgMap]);
 
   const stats = useMemo(() => {
-    const rows = channels.data ?? [];
+    const rows = usageBoard.data?.channels ?? [];
     return {
       total: rows.length,
-      whatsapp: rows.filter((item) => item.type === "whatsapp").length,
-      active: rows.filter((item) => item.status === "active").length,
-      connected: (whatsappAccounts.data ?? []).filter((item) => item.status === "active").length
+      whatsapp: rows.filter((item) => item.channel_type === "whatsapp").length,
+      active: rows.filter((item) => item.channel_status === "active").length,
+      connected: rows.filter((item) => item.whatsapp_status === "active").length
     };
-  }, [channels.data, whatsappAccounts.data]);
+  }, [usageBoard.data?.channels]);
+
+  const board = usageBoard.data;
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -116,7 +128,10 @@ export default function ChannelsPage() {
         external_id: null
       });
       setName("");
-      await client.invalidateQueries({ queryKey: ["channels"] });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["channels"] }),
+        client.invalidateQueries({ queryKey: ["channels-usage-board"] })
+      ]);
       toastStore.getState().show("تمت إضافة القناة بنجاح", "success");
       if (type === "whatsapp") {
         navigate(`/whatsapp-connect?channel=${response.data.id}`);
@@ -137,30 +152,58 @@ export default function ChannelsPage() {
     }
   }
 
-  function renderWhatsAppCell(channel: Channel) {
-    if (channel.type !== "whatsapp") return <span className="admin-chip admin-chip-muted">—</span>;
-    const account = waByChannel.get(channel.id);
-    if (!account) {
+  function renderWhatsAppCell(channel: ChannelUsageBoardItem) {
+    if (channel.channel_type !== "whatsapp") return <span className="admin-chip admin-chip-muted">—</span>;
+    if (!channel.whatsapp_phone) {
       return (
-        <Link to={`/whatsapp-connect?channel=${channel.id}`} className="admin-table-link">
+        <Link to={`/whatsapp-connect?channel=${channel.channel_id}`} className="admin-table-link">
           ربط WhatsApp
         </Link>
       );
     }
+    const label = channel.whatsapp_verified_name || channel.whatsapp_phone;
     return (
       <div className="admin-cell-stack">
-        <strong dir="ltr">{workspaceDisplayName(account)}</strong>
-        <span className={whatsappStatusBadgeClass(account.status)}>{formatWhatsAppStatus(account.status)}</span>
+        <strong dir="ltr">{label}</strong>
+        <small dir="ltr">{channel.whatsapp_phone}</small>
+        {channel.whatsapp_status && (
+          <span className={whatsappStatusBadgeClass(channel.whatsapp_status)}>
+            {formatWhatsAppStatus(channel.whatsapp_status)}
+          </span>
+        )}
       </div>
     );
   }
 
-  function renderTasksCell(channel: Channel) {
-    const rulesCount = rulesByChannel.get(channel.id) ?? 0;
+  function renderTasksCell(channel: ChannelUsageBoardItem) {
+    const rulesCount = rulesByChannel.get(channel.channel_id) ?? 0;
     return (
       <div className="admin-cell-stack">
-        <span>{channelPurpose(channel.type)}</span>
+        <span>{channelPurpose(channel.channel_type)}</span>
         <small>{rulesCount > 0 ? `${rulesCount} قاعدة توجيه نشطة` : "بدون قواعد توجيه"}</small>
+        {channel.campaign_messages_sent > 0 && (
+          <small>{channel.campaign_messages_sent.toLocaleString("ar")} رسالة حملة هذا الشهر</small>
+        )}
+      </div>
+    );
+  }
+
+  function renderMacCell(channel: ChannelUsageBoardItem) {
+    const included = board?.included_mac ?? 0;
+    const accountUsed = board?.mac_count ?? 0;
+    const percent = macUsagePercent(channel.mac_count, included);
+    return (
+      <div className="admin-cell-stack channel-mac-cell">
+        <strong>{channel.mac_count.toLocaleString("ar")} MAC</strong>
+        <small>مساهمة القناة · إجمالي الحساب {formatMacBalance(accountUsed, included)}</small>
+        <div className="progress-track progress-track-compact">
+          <div style={{ width: `${percent}%` }} />
+        </div>
+        <span className={macBalanceClass(Boolean(board?.is_over_mac), accountUsed, included)}>
+          {board?.is_over_mac
+            ? `Over MAC +${board.over_mac_count.toLocaleString("ar")}`
+            : `${board?.mac_remaining.toLocaleString("ar") ?? 0} متبقٍ`}
+        </span>
       </div>
     );
   }
@@ -169,8 +212,33 @@ export default function ChannelsPage() {
     <main className="page">
       <header className="page-header">
         <h1>القنوات</h1>
-        <p>جدول منظم يوضح مهام كل قناة وفرعها وحالة ربط WhatsApp Business.</p>
+        <p>حالة كل قناة، ربط WhatsApp Business، ورصيد MAC (Monthly Active Contacts) للدورة الحالية.</p>
       </header>
+
+      {board && (
+        <section className="admin-stats-row">
+          <article className="admin-stat-card">
+            <span>دورة MAC</span>
+            <strong>{formatMacCycleMonth(board.cycle_month)}</strong>
+          </article>
+          <article className="admin-stat-card">
+            <span>MAC المستخدم</span>
+            <strong>{formatMacBalance(board.mac_count, board.included_mac)}</strong>
+          </article>
+          <article className="admin-stat-card">
+            <span>الرصيد المتبقي</span>
+            <strong>{board.is_over_mac ? "تجاوز الحد" : board.mac_remaining.toLocaleString("ar")}</strong>
+          </article>
+          <article className="admin-stat-card">
+            <span>{board.is_over_mac ? "رسوم Over MAC التقديرية" : "حالة الرصيد"}</span>
+            <strong>
+              {board.is_over_mac
+                ? `$${board.estimated_over_mac_charge.toFixed(0)}`
+                : "ضمن الخطة"}
+            </strong>
+          </article>
+        </section>
+      )}
 
       <section className="admin-stats-row">
         <article className="admin-stat-card"><span>إجمالي القنوات</span><strong>{stats.total}</strong></article>
@@ -178,6 +246,18 @@ export default function ChannelsPage() {
         <article className="admin-stat-card"><span>قنوات نشطة</span><strong>{stats.active}</strong></article>
         <article className="admin-stat-card"><span>WhatsApp متصل</span><strong>{stats.connected}</strong></article>
       </section>
+
+      {board?.is_over_mac && (
+        <section className="card admin-note-card">
+          <p>
+            تجاوزت حد MAC المشمول في خطتك ({board.included_mac.toLocaleString("ar")} عميل نشط شهريًا).
+            {" "}الزيادة: {board.over_mac_count.toLocaleString("ar")} MAC
+            {" "}({board.over_mac_blocks} × 100) ·
+            {" "}${board.over_mac_price_per_100.toFixed(0)} لكل 100 MAC إضافية ·
+            {" "}تقدير: ${board.estimated_over_mac_charge.toFixed(2)}
+          </p>
+        </section>
+      )}
 
       <section className="card form-card admin-form-card">
         <h2>إضافة قناة</h2>
@@ -202,7 +282,7 @@ export default function ChannelsPage() {
         <div className="admin-table-header">
           <div>
             <h2>جدول القنوات</h2>
-            <small>{filtered.length} قناة · صف لكل قناة</small>
+            <small>{filtered.length} قناة · MAC + حالة + رصيد</small>
           </div>
           <Link to="/assignments" className="admin-table-link">قواعد التوجيه ←</Link>
         </div>
@@ -233,41 +313,43 @@ export default function ChannelsPage() {
                 <th>القناة</th>
                 <th>الفرع</th>
                 <th>النوع</th>
-                <th>المهام والاستخدام</th>
+                <th>MAC / الرصيد</th>
+                <th>المهام</th>
                 <th>WhatsApp Business</th>
                 <th>حالة القناة</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
             <tbody>
-              {channels.isLoading && (
-                <tr><td colSpan={7} className="admin-table-empty">جاري التحميل…</td></tr>
+              {usageBoard.isLoading && (
+                <tr><td colSpan={8} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
-              {!channels.isLoading && filtered.length === 0 && (
-                <tr><td colSpan={7} className="admin-table-empty">لا توجد قنوات.</td></tr>
+              {!usageBoard.isLoading && filtered.length === 0 && (
+                <tr><td colSpan={8} className="admin-table-empty">لا توجد قنوات.</td></tr>
               )}
               {filtered.map((item) => (
-                <tr key={item.id}>
+                <tr key={item.channel_id}>
                   <td>
                     <div className="admin-cell-main">
-                      <strong>{item.name}</strong>
+                      <strong>{item.channel_name}</strong>
                       <small dir="ltr">{item.external_id ?? "—"}</small>
                     </div>
                   </td>
                   <td>{orgMap.get(item.organization_id) ?? "—"}</td>
                   <td>
-                    <span className={channelTypeClass(item.type)}>{formatChannelType(item.type)}</span>
+                    <span className={channelTypeClass(item.channel_type)}>{formatChannelType(item.channel_type)}</span>
                   </td>
+                  <td>{renderMacCell(item)}</td>
                   <td>{renderTasksCell(item)}</td>
                   <td>{renderWhatsAppCell(item)}</td>
                   <td>
-                    <span className={channelStatusClass(item.status)}>{formatChannelStatus(item.status)}</span>
+                    <span className={channelStatusClass(item.channel_status)}>{formatChannelStatus(item.channel_status)}</span>
                   </td>
                   <td>
                     <div className="admin-actions">
-                      {item.type === "whatsapp" && (
-                        <Link to={`/whatsapp-connect?channel=${item.id}`} className="secondary-button">
-                          {waByChannel.has(item.id) ? "إدارة الربط" : "ربط"}
+                      {item.channel_type === "whatsapp" && (
+                        <Link to={`/whatsapp-connect?channel=${item.channel_id}`} className="secondary-button">
+                          {item.whatsapp_phone ? "إدارة الربط" : "ربط"}
                         </Link>
                       )}
                     </div>

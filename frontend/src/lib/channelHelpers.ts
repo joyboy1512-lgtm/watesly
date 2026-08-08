@@ -58,3 +58,26 @@ export function channelTypeClass(type: string): string {
       return "admin-type";
   }
 }
+
+export function formatMacCycleMonth(cycleMonth: string): string {
+  const [year, month] = cycleMonth.split("-").map(Number);
+  if (!year || !month) return cycleMonth;
+  return new Intl.DateTimeFormat("ar", { month: "long", year: "numeric" }).format(
+    new Date(year, month - 1, 1)
+  );
+}
+
+export function macUsagePercent(used: number, included: number): number {
+  if (included <= 0) return used > 0 ? 100 : 0;
+  return Math.min(100, Math.round((used / included) * 100));
+}
+
+export function macBalanceClass(isOver: boolean, used: number, included: number): string {
+  if (isOver) return "admin-status admin-status-danger";
+  if (included > 0 && used / included >= 0.85) return "admin-status admin-status-pending";
+  return "admin-status admin-status-active";
+}
+
+export function formatMacBalance(used: number, included: number): string {
+  return `${used.toLocaleString("ar")} / ${included.toLocaleString("ar")} MAC`;
+}

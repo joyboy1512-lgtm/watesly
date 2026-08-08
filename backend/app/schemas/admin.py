@@ -29,6 +29,8 @@ class AdminPlanCreateRequest(BaseModel):
     max_users: int = Field(ge=1)
     max_organizations: int = Field(ge=1)
     max_channels: int = Field(ge=1)
+    included_mac: int = Field(ge=0, default=1000)
+    over_mac_price_per_100: float = Field(ge=0, default=12)
     trial_days: int = Field(ge=0, le=365)
     allow_multi_organization: bool = False
     status: PlanStatus = PlanStatus.ACTIVE
@@ -41,6 +43,8 @@ class AdminPlanUpdateRequest(BaseModel):
     max_users: int | None = Field(default=None, ge=1)
     max_organizations: int | None = Field(default=None, ge=1)
     max_channels: int | None = Field(default=None, ge=1)
+    included_mac: int | None = Field(default=None, ge=0)
+    over_mac_price_per_100: float | None = Field(default=None, ge=0)
     trial_days: int | None = Field(default=None, ge=0, le=365)
     allow_multi_organization: bool | None = None
     status: PlanStatus | None = None
@@ -57,6 +61,8 @@ class AdminPlanResponse(BaseModel):
     max_users: int
     max_organizations: int
     max_channels: int
+    included_mac: int
+    over_mac_price_per_100: float
     trial_days: int
     allow_multi_organization: bool
     status: PlanStatus
