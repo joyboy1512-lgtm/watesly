@@ -451,6 +451,7 @@ async def process_inbound_side_effects(
                 },
             )
 
+            from app.models.monthly_active_contact import MacTriggerSource
             from app.services.business_hours import is_within_business_hours
             from app.services.whatsapp import send_text_message
 
@@ -473,6 +474,8 @@ async def process_inbound_side_effects(
                             account_id=whatsapp_account.account_id,
                             whatsapp_account_id=whatsapp_account.id,
                             payload=SendTextMessageRequest(to=sender, text=outside_text),
+                            record_mac=True,
+                            mac_trigger_source=MacTriggerSource.AI_OUTBOUND,
                         )
                         conversation.first_response_at = datetime.now(UTC)
                     except ValueError:

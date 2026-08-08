@@ -40,19 +40,23 @@ async def _record_mac_for_contact(
     channel_id: UUID,
     contact_id: UUID | None,
     inbound: bool,
+    trigger_source: "MacTriggerSource | None" = None,
 ) -> None:
-    """Record MAC once per contact per channel per month (see mac_tracking policy)."""
+    """Record MAC once per contact per account per month (see mac_tracking policy)."""
     if contact_id is None:
         return
     from app.models.monthly_active_contact import MacTriggerSource
     from app.services.mac_tracking import record_mac
 
+    source = trigger_source or (
+        MacTriggerSource.INBOUND if inbound else MacTriggerSource.INBOX_OUTBOUND
+    )
     await record_mac(
         db,
         account_id=account_id,
         channel_id=channel_id,
         contact_id=contact_id,
-        trigger_source=MacTriggerSource.INBOUND if inbound else MacTriggerSource.INBOX_OUTBOUND,
+        trigger_source=source,
     )
 
 
@@ -360,6 +364,7 @@ async def send_text_message(
     whatsapp_account_id: UUID,
     payload: SendTextMessageRequest,
     record_mac: bool = False,
+    mac_trigger_source: "MacTriggerSource | None" = None,
 ) -> Message:
     whatsapp_account = await db.get(WhatsAppAccount, whatsapp_account_id)
     if (
@@ -425,6 +430,7 @@ async def send_text_message(
             channel_id=whatsapp_account.channel_id,
             contact_id=contact.id,
             inbound=False,
+            trigger_source=mac_trigger_source,
         )
     return message
 

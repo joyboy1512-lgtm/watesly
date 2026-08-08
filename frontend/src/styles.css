@@ -4449,6 +4449,36 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .admin-stats-row-brand {
   margin-bottom: 4px;
 }
+.mac-workspace-summary-card {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+.mac-workspace-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+.mac-policy-card {
+  padding: 16px;
+}
+.mac-policy-list {
+  margin: 0;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.mac-policy-list strong {
+  color: var(--text);
+}
+.billing-page {
+  display: grid;
+  gap: 18px;
+}
 .admin-stat-card-brand small {
   color: rgba(255, 255, 255, 0.72);
   font-size: 11px;
