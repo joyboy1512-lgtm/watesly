@@ -143,22 +143,22 @@ export default function BillingPage() {
         <Link to="/channels" className="secondary-button">عرض القنوات ←</Link>
       </header>
 
-      <section className="admin-stats-row">
-        <article className="admin-stat-card">
+      <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand">
           <span>MAC المستخدم</span>
           <strong>{formatMacBalance(sub.mac_count, sub.included_mac)}</strong>
         </article>
-        <article className="admin-stat-card">
+        <article className="admin-stat-card admin-stat-card-brand">
           <span>المتبقي</span>
           <strong>{sub.is_over_mac ? "0" : sub.mac_remaining.toLocaleString("ar")}</strong>
         </article>
-        <article className="admin-stat-card">
+        <article className="admin-stat-card admin-stat-card-brand">
           <span>حالة الرصيد</span>
           <strong className={macBalanceClass(sub.is_over_mac, sub.mac_count, sub.included_mac)}>
             {sub.is_over_mac ? `Over MAC +${sub.over_mac_count}` : "ضمن الخطة"}
           </strong>
         </article>
-        <article className="admin-stat-card">
+        <article className="admin-stat-card admin-stat-card-brand">
           <span>{sub.is_over_mac ? "تقدير Over MAC" : "سعر Over MAC"}</span>
           <strong>
             {sub.is_over_mac

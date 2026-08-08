@@ -219,20 +219,20 @@ export default function ChannelsPage() {
       </header>
 
       {board && (
-        <section className="admin-stats-row">
-          <article className="admin-stat-card">
+        <section className="admin-stats-row admin-stats-row-brand">
+          <article className="admin-stat-card admin-stat-card-brand">
             <span>دورة MAC</span>
             <strong>{formatMacCycleMonth(board.cycle_month)}</strong>
           </article>
-          <article className="admin-stat-card">
+          <article className="admin-stat-card admin-stat-card-brand">
             <span>MAC المستخدم</span>
             <strong>{formatMacBalance(board.mac_count, board.included_mac)}</strong>
           </article>
-          <article className="admin-stat-card">
+          <article className="admin-stat-card admin-stat-card-brand">
             <span>الرصيد المتبقي</span>
             <strong>{board.is_over_mac ? "تجاوز الحد" : board.mac_remaining.toLocaleString("ar")}</strong>
           </article>
-          <article className="admin-stat-card">
+          <article className="admin-stat-card admin-stat-card-brand">
             <span>{board.is_over_mac ? "رسوم Over MAC التقديرية" : "حالة الرصيد"}</span>
             <strong>
               {board.is_over_mac
@@ -243,11 +243,11 @@ export default function ChannelsPage() {
         </section>
       )}
 
-      <section className="admin-stats-row">
-        <article className="admin-stat-card"><span>إجمالي القنوات</span><strong>{stats.total}</strong></article>
-        <article className="admin-stat-card"><span>WhatsApp</span><strong>{stats.whatsapp}</strong></article>
-        <article className="admin-stat-card"><span>قنوات نشطة</span><strong>{stats.active}</strong></article>
-        <article className="admin-stat-card"><span>WhatsApp متصل</span><strong>{stats.connected}</strong></article>
+      <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي القنوات</span><strong>{stats.total}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>WhatsApp</span><strong>{stats.whatsapp}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>قنوات نشطة</span><strong>{stats.active}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>WhatsApp متصل</span><strong>{stats.connected}</strong></article>
       </section>
 
       {board?.is_over_mac && (

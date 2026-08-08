@@ -84,10 +84,10 @@ export default function OrganizationsPage() {
         <p>جدول منظم لكل فرع مع بياناته التشغيلية وعدد القنوات المرتبطة.</p>
       </header>
 
-      <section className="admin-stats-row">
-        <article className="admin-stat-card"><span>إجمالي الفروع</span><strong>{stats.total}</strong></article>
-        <article className="admin-stat-card"><span>فروع نشطة</span><strong>{stats.active}</strong></article>
-        <article className="admin-stat-card"><span>قنوات مرتبطة</span><strong>{stats.channels}</strong></article>
+      <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الفروع</span><strong>{stats.total}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>فروع نشطة</span><strong>{stats.active}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>قنوات مرتبطة</span><strong>{stats.channels}</strong></article>
       </section>
 
       <section className="card form-card admin-form-card">

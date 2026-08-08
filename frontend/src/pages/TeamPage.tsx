@@ -123,12 +123,12 @@ export default function TeamPage() {
         <p>جدول شامل لبيانات الموظفين وصلاحياتهم وأفرعهم وحسابات WhatsApp Business.</p>
       </header>
 
-      <section className="admin-stats-row">
-        <article className="admin-stat-card"><span>إجمالي الموظفين</span><strong>{stats.total}</strong></article>
-        <article className="admin-stat-card"><span>نشط</span><strong>{stats.active}</strong></article>
-        <article className="admin-stat-card"><span>موقوف</span><strong>{stats.suspended}</strong></article>
-        <article className="admin-stat-card"><span>مدراء</span><strong>{stats.admins}</strong></article>
-        <article className="admin-stat-card"><span>موظفو محادثات</span><strong>{stats.agents}</strong></article>
+      <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الموظفين</span><strong>{stats.total}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>نشط</span><strong>{stats.active}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>موقوف</span><strong>{stats.suspended}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>مدراء</span><strong>{stats.admins}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>موظفو محادثات</span><strong>{stats.agents}</strong></article>
       </section>
 
       <section className="card form-card admin-form-card">
