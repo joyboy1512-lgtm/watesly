@@ -25,3 +25,17 @@ class SubscriptionResponse(BaseModel):
     over_mac_count: int = 0
     over_mac_blocks: int = 0
     estimated_over_mac_charge: float = 0
+
+
+class PublicPlanResponse(BaseModel):
+    code: str
+    name: str
+    monthly_price: float
+    yearly_price: float
+    max_users: int
+    max_organizations: int
+    max_channels: int
+    included_mac: int
+    over_mac_price_per_100: float
+    trial_days: int
+    allow_multi_organization: bool

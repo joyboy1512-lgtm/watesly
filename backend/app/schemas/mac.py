@@ -9,6 +9,7 @@ from app.models.channel import ChannelStatus, ChannelType
 class MacContactItem(BaseModel):
     id: UUID
     channel_id: UUID
+    channel_name: str | None = None
     contact_id: UUID
     contact_display_name: str | None = None
     contact_phone: str | None = None
