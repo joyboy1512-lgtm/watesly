@@ -1,4 +1,5 @@
 import asyncio
+from app.workers.async_runner import run_async
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -514,4 +515,4 @@ async def _execute_run(run_id):
 
 @celery_app.task(name="watesly.automations.execute")
 def execute_automation_run(run_id: str) -> dict:
-    return asyncio.run(_execute_run(UUID(run_id)))
+    return run_async(_execute_run(UUID(run_id)))
