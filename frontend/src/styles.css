@@ -20,7 +20,7 @@
   --bubble-in: #ffffff;
   --bubble-out: #d9fdd3;
   --chat-wallpaper: #efeae2;
-  --chat-footer-bg: #e8f5e9;
+  --chat-footer-bg: linear-gradient(180deg, #128c7e 0%, #075e54 100%);
   --chat-input-bg: #ffffff;
 }
 
@@ -37,8 +37,8 @@
   --bubble-in: #202c33;
   --bubble-out: #005c4b;
   --chat-wallpaper: #0b141a;
-  --chat-footer-bg: #0b2e26;
-  --chat-input-bg: #2a3942;
+  --chat-footer-bg: linear-gradient(180deg, #128c7e 0%, #075e54 100%);
+  --chat-input-bg: #ffffff;
   --shadow: 0 18px 50px rgba(0, 0, 0, .35);
 }
 
@@ -956,11 +956,45 @@ select, input, textarea {
 }
 
 .chat-composer-shell {
-  border-top: 1px solid rgba(7, 94, 84, 0.12);
+  border-top: none;
   background: var(--chat-footer-bg);
   padding: 8px 12px 10px;
   display: grid;
   gap: 8px;
+}
+
+.chat-composer-shell .field-label-title,
+.chat-composer-shell .composer-meta-compact small,
+.chat-composer-shell .inbox-slash-hint {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.chat-composer-shell .quick-reply-chip {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.chat-composer-shell .quick-reply-chip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.chat-composer-shell .quick-reply-chip.top-used small,
+.chat-composer-shell .quick-reply-chip.suggested {
+  color: #fff;
+}
+
+.chat-composer-shell .inbox-slash-hint code {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.chat-composer-shell .composer-meta .link-button {
+  color: #d9fdd3;
+}
+
+.chat-composer-shell .composer-variable-row {
+  padding-inline: 0;
 }
 
 .chat-composer-extras {
@@ -974,16 +1008,17 @@ select, input, textarea {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  background: var(--chat-input-bg);
+  background: #ffffff;
   border: 1px solid rgba(17, 27, 33, 0.08);
   border-radius: 24px;
   padding: 6px 10px;
   min-height: 52px;
-  box-shadow: 0 1px 2px rgba(11, 20, 26, 0.08);
+  box-shadow: 0 1px 3px rgba(11, 20, 26, 0.12);
 }
 
 :root[data-theme="dark"] .chat-composer-bar {
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border-color: rgba(17, 27, 33, 0.08);
 }
 
 .chat-composer-bar .composer-textarea {
