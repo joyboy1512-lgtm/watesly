@@ -138,7 +138,7 @@ export default function InboxPage() {
     queryKey: ["conversation-messages", selectedId],
     enabled: Boolean(selectedId),
     queryFn: async () => (await api.get<Message[]>(`/conversations/${selectedId}/messages`)).data,
-    refetchInterval: selectedId ? 3_000 : false,
+    refetchInterval: selectedId ? 2_000 : false,
   });
   const contextQuery = useQuery({
     queryKey: ["conversation-context", selectedId],
@@ -289,11 +289,20 @@ export default function InboxPage() {
             setMatchedProducts(payload.matched_products ?? []);
             setMatchedArticles(payload.matched_articles ?? []);
           }
+          const refreshMessages =
+            payload.type === "message.received" ||
+            payload.type === "whatsapp.updated" ||
+            !payload.type;
+          if (refreshMessages) {
+            void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            const targetConversation = payload.conversation_id ?? selectedId;
+            if (targetConversation) {
+              void queryClient.invalidateQueries({ queryKey: ["conversation-messages", targetConversation] });
+            }
+          }
         } catch {
           /* ignore non-json frames */
         }
-        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-        if (selectedId) void queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] });
       };
       ws.onclose = () => {
         if (closed) return;
