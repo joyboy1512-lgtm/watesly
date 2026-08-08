@@ -4253,3 +4253,167 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .da-charts-grid, .da-tables-grid { grid-template-columns: 1fr; }
   .da-campaign-chart { grid-template-columns: 1fr; }
 }
+
+/* Admin ERP tables — team, branches, channels */
+.admin-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.admin-stat-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+}
+.admin-stat-card span { font-size: 12px; color: var(--muted); }
+.admin-stat-card strong { font-size: 22px; color: var(--primary-darker); }
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.admin-toolbar input,
+.admin-toolbar select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--panel);
+  min-width: 180px;
+}
+.admin-table-card {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+.admin-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 94, 84, 0.04);
+}
+.admin-table-header h2 { margin: 0; font-size: 15px; }
+.admin-table-header small { color: var(--muted); }
+.admin-table-wrap { overflow-x: auto; }
+.admin-erp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.admin-erp-table thead th {
+  background: rgba(7, 94, 84, 0.07);
+  color: var(--muted);
+  font-weight: 600;
+  padding: 11px 14px;
+  text-align: start;
+  border-bottom: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+  white-space: nowrap;
+}
+.admin-erp-table thead th:last-child { border-inline-end: none; }
+.admin-erp-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+  vertical-align: top;
+}
+.admin-erp-table tbody td:last-child { border-inline-end: none; }
+.admin-erp-table tbody tr:last-child td { border-bottom: none; }
+.admin-erp-table tbody tr:nth-child(even) { background: rgba(7, 94, 84, 0.02); }
+.admin-erp-table tbody tr:hover { background: rgba(7, 94, 84, 0.05); }
+.admin-table-empty { text-align: center; color: var(--muted); padding: 28px !important; }
+.admin-table-link { color: var(--accent-teal); text-decoration: none; font-size: 13px; font-weight: 600; }
+.admin-table-link:hover { text-decoration: underline; }
+.admin-cell-main { display: grid; gap: 2px; min-width: 0; }
+.admin-cell-main strong { font-size: 14px; }
+.admin-cell-main small { color: var(--muted); font-size: 12px; word-break: break-all; }
+.admin-cell-stack { display: grid; gap: 6px; }
+.admin-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+  white-space: nowrap;
+}
+.admin-chip-muted { color: var(--muted); background: var(--panel-soft); }
+.admin-chip-whatsapp { background: rgba(37, 211, 102, 0.12); border-color: rgba(37, 211, 102, 0.28); color: #128c7e; }
+.admin-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: #fff;
+  flex-shrink: 0;
+}
+.admin-employee-cell { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.admin-status {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.admin-status-active { background: rgba(18, 183, 106, 0.14); color: #027a48; }
+.admin-status-pending { background: rgba(247, 144, 9, 0.14); color: #b54708; }
+.admin-status-offline { background: rgba(152, 162, 179, 0.18); color: #475467; }
+.admin-status-danger { background: rgba(240, 68, 56, 0.12); color: #b42318; }
+.team-role-badge,
+.team-status-badge,
+.team-wa-status {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.team-role-owner { background: #ecfdf3; color: #027a48; }
+.team-role-admin { background: #eff8ff; color: #175cd3; }
+.team-role-manager { background: #fffaeb; color: #b54708; }
+.team-role-agent { background: #f4f3ff; color: #5925dc; }
+.team-role-viewer { background: #f2f4f7; color: #475467; }
+.team-status-active { background: rgba(18, 183, 106, 0.14); color: #027a48; }
+.team-status-suspended { background: rgba(240, 68, 56, 0.12); color: #b42318; }
+.team-wa-status-active { background: rgba(37, 211, 102, 0.14); color: #128c7e; }
+.team-wa-status-pending { background: rgba(247, 144, 9, 0.14); color: #b54708; }
+.team-wa-status-offline { background: rgba(152, 162, 179, 0.18); color: #475467; }
+.admin-type {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+.admin-type-whatsapp { background: rgba(37, 211, 102, 0.12); border-color: rgba(37, 211, 102, 0.28); color: #128c7e; }
+.admin-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-form-card .inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.admin-form-card .inline-form input,
+.admin-form-card .inline-form select { min-width: 160px; }
+@media (max-width: 960px) {
+  .admin-toolbar input,
+  .admin-toolbar select { min-width: 140px; flex: 1; }
+}
