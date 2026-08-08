@@ -412,3 +412,16 @@ export function filterEmployees(
     );
   });
 }
+
+export type InvitationResult = {
+  invitation_id: string;
+  invitation_token: string;
+  invitation_accept_url: string;
+  expires_in_hours: number;
+  email_sent: boolean;
+};
+
+export function buildInvitationAcceptUrl(token: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/invite?token=${encodeURIComponent(token)}`;
+}

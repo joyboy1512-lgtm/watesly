@@ -19,7 +19,9 @@ class InviteEmployeeRequest(BaseModel):
 class InvitationResponse(BaseModel):
     invitation_id: UUID
     invitation_token: str
+    invitation_accept_url: str
     expires_in_hours: int
+    email_sent: bool = False
 
 
 class AcceptInvitationRequest(BaseModel):

@@ -17,10 +17,13 @@ import {
   roleBadgeClass,
   statusBadgeClass,
   workspaceDisplayName,
+  buildInvitationAcceptUrl,
   type Employee,
+  type InvitationResult,
   type MembershipRole,
   type Organization
 } from "../lib/teamHelpers";
+import { toastStore } from "../stores/toast";
 
 export default function TeamPage() {
   const queryClient = useQueryClient();
@@ -31,6 +34,8 @@ export default function TeamPage() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [workspaceFilter, setWorkspaceFilter] = useState("");
+  const [pendingInvite, setPendingInvite] = useState<{ email: string; url: string; expiresInHours: number; emailSent: boolean } | null>(null);
+  const [inviting, setInviting] = useState(false);
 
   const employeesQuery = useQuery({
     queryKey: ["employees"],
@@ -70,13 +75,41 @@ export default function TeamPage() {
 
   async function invite(event: FormEvent) {
     event.preventDefault();
-    await api.post("/team/invitations", {
-      email,
-      role,
-      organization_ids: [organizationId]
+    setInviting(true);
+    try {
+      const response = await api.post<InvitationResult>("/team/invitations", {
+        email: email.trim().toLowerCase(),
+        role,
+        organization_ids: [organizationId]
+      });
+      const inviteUrl = response.data.invitation_accept_url || buildInvitationAcceptUrl(response.data.invitation_token);
+      const emailSent = response.data.email_sent;
+      setPendingInvite({
+        email: email.trim().toLowerCase(),
+        url: inviteUrl,
+        expiresInHours: response.data.expires_in_hours,
+        emailSent
+      });
+      setEmail("");
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      toastStore.getState().show(
+        emailSent
+          ? `تم إرسال الدعوة إلى ${email.trim().toLowerCase()}.`
+          : "تم إنشاء الدعوة. انسخ الرابط — لم يُرسل بريد (SMTP غير مفعّل أو فشل الإرسال).",
+        "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذر إنشاء الدعوة. تحقق من البريد والفرع وحد المستخدمين.", "error");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  function copyInviteLink() {
+    if (!pendingInvite) return;
+    void navigator.clipboard.writeText(pendingInvite.url).then(() => {
+      toastStore.getState().show("تم نسخ رابط الدعوة.", "success");
     });
-    setEmail("");
-    await queryClient.invalidateQueries({ queryKey: ["employees"] });
   }
 
   async function toggleStatus(item: Employee) {
@@ -133,6 +166,9 @@ export default function TeamPage() {
 
       <section className="card form-card admin-form-card">
         <h2>دعوة موظف</h2>
+        <p className="hint-text" style={{ marginBottom: 12 }}>
+          يُرسل رابط الدعوة تلقائياً إلى البريد عند تفعيل SMTP على الخادم. إذا لم يصل البريد، انسخ الرابط الاحتياطي أدناه.
+        </p>
         <form className="inline-form" onSubmit={invite}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" required type="email" />
           <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
@@ -146,8 +182,26 @@ export default function TeamPage() {
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
-          <button type="submit">إرسال الدعوة</button>
+          <button type="submit" disabled={inviting}>{inviting ? "جاري الإرسال…" : "إرسال الدعوة"}</button>
         </form>
+
+        {pendingInvite && (
+          <div className="admin-invite-link-box" style={{ marginTop: 16 }}>
+            <strong>
+              {pendingInvite.emailSent ? `تم إرسال الدعوة إلى ${pendingInvite.email}` : `رابط احتياطي — ${pendingInvite.email}`}
+            </strong>
+            <small>
+              {pendingInvite.emailSent
+                ? `صالح لمدة ${pendingInvite.expiresInHours} ساعة. إذا لم يصل البريد، انسخ الرابط أدناه.`
+                : `SMTP غير مفعّل أو فشل الإرسال — انسخ الرابط وأرسله يدوياً (صالح ${pendingInvite.expiresInHours} ساعة).`}
+            </small>
+            <input value={pendingInvite.url} readOnly dir="ltr" />
+            <div className="admin-actions">
+              <button type="button" className="secondary-button" onClick={copyInviteLink}>نسخ الرابط</button>
+              <a className="secondary-button" href={pendingInvite.url} target="_blank" rel="noreferrer">معاينة</a>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="card admin-table-card">
