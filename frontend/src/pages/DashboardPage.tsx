@@ -307,6 +307,7 @@ export default function DashboardPage() {
               <h2>الاشتراك</h2>
               <p>استخدام الخطة الحالية</p>
             </div>
+            <Link to="/billing" className="secondary-button">الفوترة</Link>
           </div>
           <div className="plan-card">
             <span className="plan-badge">{subscription.data?.plan_name ?? "Trial"}</span>

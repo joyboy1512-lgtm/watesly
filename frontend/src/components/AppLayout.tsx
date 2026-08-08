@@ -44,6 +44,7 @@ export default function AppLayout() {
     ["/assignments", t("nav.assignments"), "channel"],
     ["/organizations", t("nav.organizations"), "organization"],
     ["/channels", t("nav.channels"), "channel"],
+    ["/billing", t("nav.billing"), "dashboard"],
     ["/whatsapp-connect", t("nav.whatsapp"), "whatsapp"],
     ["/templates", t("nav.templates"), "template"],
     ["/campaigns", t("nav.campaigns"), "campaign"],

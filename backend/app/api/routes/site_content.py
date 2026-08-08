@@ -9,6 +9,7 @@ from app.api.dependencies.auth import AuthContext
 from app.core.config import settings
 from app.core.file_security import sanitize_filename, validate_file_content
 from app.db.session import get_db
+from app.schemas.billing import PublicPlanResponse
 from app.schemas.site_content import (
     AdminSiteContentResponse,
     PublicSiteContentResponse,
@@ -21,6 +22,7 @@ from app.services.site_content import (
     get_or_create_site_config,
     update_site_config,
 )
+from app.services.billing import list_public_plans
 from app.services.storage import storage
 
 router = APIRouter()
@@ -62,6 +64,27 @@ async def get_public_site_content(
         )
     payload = build_public_site_content(item, locale=locale)
     return PublicSiteContentResponse(**payload)
+
+
+@public_router.get("/plans", response_model=list[PublicPlanResponse])
+async def get_public_plans(db: AsyncSession = Depends(get_db)) -> list[PublicPlanResponse]:
+    plans = await list_public_plans(db)
+    return [
+        PublicPlanResponse(
+            code=plan.code,
+            name=plan.name,
+            monthly_price=float(plan.monthly_price),
+            yearly_price=float(plan.yearly_price),
+            max_users=plan.max_users,
+            max_organizations=plan.max_organizations,
+            max_channels=plan.max_channels,
+            included_mac=plan.included_mac,
+            over_mac_price_per_100=float(plan.over_mac_price_per_100),
+            trial_days=plan.trial_days,
+            allow_multi_organization=plan.allow_multi_organization,
+        )
+        for plan in plans
+    ]
 
 
 @router.get("/site-content", response_model=AdminSiteContentResponse)

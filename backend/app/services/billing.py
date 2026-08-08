@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.plan import Plan
+from app.models.plan import Plan, PlanStatus
 from app.models.subscription import BillingCycle, Subscription, SubscriptionStatus
 
 
@@ -61,3 +61,12 @@ async def get_active_subscription(db: AsyncSession, account_id: UUID) -> tuple[S
     if subscription.ends_at <= datetime.now(UTC):
         return None
     return subscription, plan
+
+
+async def list_public_plans(db: AsyncSession) -> list[Plan]:
+    result = await db.execute(
+        select(Plan)
+        .where(Plan.status == PlanStatus.ACTIVE, Plan.code != "trial")
+        .order_by(Plan.monthly_price.asc(), Plan.name.asc())
+    )
+    return list(result.scalars().all())

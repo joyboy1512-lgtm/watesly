@@ -211,8 +211,11 @@ export default function ChannelsPage() {
   return (
     <main className="page">
       <header className="page-header">
-        <h1>القنوات</h1>
-        <p>حالة كل قناة، ربط WhatsApp Business، ورصيد MAC (Monthly Active Contacts) للدورة الحالية.</p>
+        <div>
+          <h1>القنوات</h1>
+          <p>حالة كل قناة، ربط WhatsApp Business، ورصيد MAC (Monthly Active Contacts) للدورة الحالية.</p>
+        </div>
+        <Link to="/billing" className="secondary-button">الفوترة و MAC</Link>
       </header>
 
       {board && (

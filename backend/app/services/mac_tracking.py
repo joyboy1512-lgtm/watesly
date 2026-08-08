@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.campaign import Campaign
 from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
+from app.models.channel import Channel
 from app.models.contact import Contact
 from app.models.monthly_active_contact import MacTriggerSource, MonthlyActiveContact
 from app.models.whatsapp_account import WhatsAppAccount
@@ -160,8 +161,9 @@ async def list_mac_contacts(
 ) -> list[dict]:
     cycle = cycle_month or current_cycle_month()
     query = (
-        select(MonthlyActiveContact, Contact)
+        select(MonthlyActiveContact, Contact, Channel.name)
         .join(Contact, Contact.id == MonthlyActiveContact.contact_id)
+        .join(Channel, Channel.id == MonthlyActiveContact.channel_id)
         .where(
             MonthlyActiveContact.account_id == account_id,
             MonthlyActiveContact.cycle_month == cycle,
@@ -179,6 +181,7 @@ async def list_mac_contacts(
         {
             "id": mac.id,
             "channel_id": mac.channel_id,
+            "channel_name": channel_name,
             "contact_id": mac.contact_id,
             "contact_display_name": contact.display_name,
             "contact_phone": contact.external_address,
@@ -186,7 +189,7 @@ async def list_mac_contacts(
             "trigger_source": mac.trigger_source,
             "first_activity_at": mac.first_activity_at,
         }
-        for mac, contact in rows
+        for mac, contact, channel_name in rows
     ]
 
 

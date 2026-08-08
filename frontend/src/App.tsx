@@ -35,6 +35,7 @@ import LandingPage from "./pages/LandingPage";
 import RegisterPage from "./pages/RegisterPage";
 import LegalPage from "./pages/LegalPage";
 import PricingPage from "./pages/PricingPage";
+import BillingPage from "./pages/BillingPage";
 import { useAuth } from "./hooks/useAuth";
 
 function FallbackRedirect() {
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/assignments" element={<AssignmentsPage />} />
         <Route path="/organizations" element={<OrganizationsPage />} />
         <Route path="/channels" element={<ChannelsPage />} />
+        <Route path="/billing" element={<BillingPage />} />
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/campaigns" element={<CampaignsPage />} />
         <Route path="/automations" element={<AutomationsPage />} />
