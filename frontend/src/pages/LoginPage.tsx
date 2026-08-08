@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { authStore } from "../stores/auth";
@@ -12,6 +12,8 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const { data: site } = useSiteContent();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const invitedSuccess = searchParams.get("invited") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -73,6 +75,9 @@ export default function LoginPage() {
           <span className="eyebrow">{t("eyebrow.welcomeBack")}</span>
           <h2>{t("login.title")}</h2>
           <p>{t("login.subtitle")}</p>
+          {invitedSuccess && (
+            <p className="form-success">تم تفعيل حسابك. سجّل الدخول ببريدك وكلمة المرور الجديدة.</p>
+          )}
           <form onSubmit={handleSubmit}>
             <label className="field-label">
               <span>{t("login.email")}</span>
