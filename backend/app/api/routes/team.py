@@ -19,8 +19,29 @@ from app.services.team import (
     list_employees,
     update_employee,
 )
+from app.services.membership_channels import list_membership_channel_ids
 
 router = APIRouter()
+
+
+async def _employee_response(
+    db: AsyncSession,
+    *,
+    membership,
+    user,
+    organization_ids: list,
+) -> EmployeeResponse:
+    channel_ids = await list_membership_channel_ids(db, membership.id)
+    return EmployeeResponse(
+        user_id=user.id,
+        membership_id=membership.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=membership.role,
+        status=membership.status,
+        organization_ids=organization_ids,
+        channel_ids=channel_ids,
+    )
 
 
 @router.post("/invitations", response_model=InvitationResponse, status_code=status.HTTP_201_CREATED)
@@ -63,13 +84,10 @@ async def accept_employee_invitation(
     except (ValueError, jwt.InvalidTokenError) as exc:
         raise HTTPException(status_code=400, detail="Invalid or expired invitation") from exc
 
-    return EmployeeResponse(
-        user_id=user.id,
-        membership_id=membership.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=membership.role,
-        status=membership.status,
+    return await _employee_response(
+        db,
+        membership=membership,
+        user=user,
         organization_ids=organization_ids,
     )
 
@@ -81,13 +99,10 @@ async def get_employees(
 ) -> list[EmployeeResponse]:
     rows = await list_employees(db, context.account_id)
     return [
-        EmployeeResponse(
-            user_id=user.id,
-            membership_id=membership.id,
-            email=user.email,
-            full_name=user.full_name,
-            role=membership.role,
-            status=membership.status,
+        await _employee_response(
+            db,
+            membership=membership,
+            user=user,
             organization_ids=organization_ids,
         )
         for membership, user, organization_ids in rows
@@ -119,12 +134,9 @@ async def patch_employee(
         code, detail = messages.get(str(exc), (400, "Unable to update employee"))
         raise HTTPException(status_code=code, detail=detail) from exc
 
-    return EmployeeResponse(
-        user_id=user.id,
-        membership_id=membership.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=membership.role,
-        status=membership.status,
+    return await _employee_response(
+        db,
+        membership=membership,
+        user=user,
         organization_ids=organization_ids,
     )

@@ -43,3 +43,4 @@ class EmployeeResponse(BaseModel):
     role: MembershipRole
     status: MembershipStatus
     organization_ids: list[UUID]
+    channel_ids: list[UUID] = Field(default_factory=list)

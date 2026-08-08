@@ -343,6 +343,35 @@ export function getRolePermissions(role: MembershipRole): ReadonlySet<Permission
   return ROLE_PERMISSIONS[role] ?? new Set();
 }
 
+export function permissionSummary(role: MembershipRole): string {
+  const summaries: Record<MembershipRole, string> = {
+    owner: "صلاحيات كاملة · فوترة · إدارة الحساب",
+    admin: "صلاحيات كاملة · قنوات · حملات · فريق",
+    manager: "محادثات · حملات · تقارير · قوالب",
+    agent: "محادثات · عملاء · إرسال رسائل",
+    viewer: "عرض فقط · تقارير · بدون تعديل"
+  };
+  return summaries[role] ?? ROLE_DESCRIPTIONS[role];
+}
+
+export function mapWhatsAppAccount(account: {
+  id: string;
+  channel_id: string;
+  organization_id: string;
+  display_phone_number: string;
+  verified_name: string | null;
+  status: string;
+}): WhatsAppWorkspace {
+  return {
+    id: account.id,
+    channel_id: account.channel_id,
+    organization_id: account.organization_id,
+    display_phone_number: account.display_phone_number,
+    verified_name: account.verified_name,
+    status: account.status
+  };
+}
+
 export function computeTeamStats(employees: Employee[]): TeamStats {
   return {
     total: employees.length,
