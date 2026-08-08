@@ -1,5 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { Fragment } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import {
+  CAMPAIGN_STATUS_LABELS,
+  campaignReportNeedsRefresh,
+  campaignResultToneClass,
+  campaignSentCount,
+  campaignStatusBadgeClass,
+  formatCampaignCompleted,
+  formatCampaignSchedule,
+  formatCampaignStatus,
+  formatDeliveryRate,
+  formatReadRate,
+  getCampaignResultLabel,
+  isActiveCampaignStatus
+} from "../lib/campaignHelpers";
+import { toastStore } from "../stores/toast";
 
 export type CampaignReport = {
   total: number;
@@ -21,17 +37,6 @@ export type CampaignRecipient = {
   error_message: string | null;
 };
 
-export const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
-  scheduled: "مجدولة",
-  running: "قيد الإرسال",
-  completed: "مكتملة",
-  completed_with_errors: "مكتملة بأخطاء",
-  paused: "موقوفة",
-  cancelled: "ملغاة",
-  failed: "فشلت"
-};
-
 const RECIPIENT_STATUS_LABELS: Record<string, string> = {
   pending: "في الانتظار",
   queued: "بالطابور",
@@ -45,72 +50,8 @@ const RECIPIENT_STATUS_LABELS: Record<string, string> = {
 
 const SUCCESS_STATUSES = new Set(["sent", "delivered", "read"]);
 const PENDING_STATUSES = new Set(["pending", "queued", "sending"]);
-const ACTIVE_CAMPAIGN_STATUSES = new Set(["scheduled", "running"]);
 
-export function isActiveCampaignStatus(status: string) {
-  return ACTIVE_CAMPAIGN_STATUSES.has(status);
-}
-
-function campaignSentCount(report: Pick<CampaignReport, "sent" | "delivered" | "read">) {
-  return (report.sent ?? 0) + (report.delivered ?? 0) + (report.read ?? 0);
-}
-
-/** Keep polling until Meta/worker counts are reflected in the list report. */
-export function campaignReportNeedsRefresh(item: {
-  status: string;
-  completed_at?: string | null;
-  total: number;
-  sent: number;
-  delivered: number;
-  read: number;
-  failed: number;
-}) {
-  if (isActiveCampaignStatus(item.status)) return true;
-  const sentCount = campaignSentCount(item);
-  if (item.total === 0) return false;
-  if (sentCount > 0 || item.failed > 0) return false;
-  if (!["completed", "completed_with_errors"].includes(item.status)) return false;
-  if (item.completed_at) {
-    const ageMs = Date.now() - new Date(item.completed_at).getTime();
-    return ageMs < 120_000;
-  }
-  return true;
-}
-
-export function getCampaignResultLabel(status: string, report?: Pick<CampaignReport, "total" | "sent" | "delivered" | "read" | "failed" | "pending">) {
-  const sentCount = (report?.sent ?? 0) + (report?.delivered ?? 0) + (report?.read ?? 0);
-  const total = report?.total ?? 0;
-  const failed = report?.failed ?? 0;
-  const pending = report?.pending ?? Math.max(total - sentCount - failed, 0);
-
-  switch (status) {
-    case "completed":
-      if (total > 0 && sentCount === 0 && failed === 0) {
-        return {
-          label: "جاري التحديث",
-          tone: "progress" as const,
-          detail: "انتظر ثوانٍ حتى تظهر نتيجة الإرسال"
-        };
-      }
-      return { label: "تمت بنجاح", tone: "success" as const, detail: `${sentCount}/${total} تم الإرسال` };
-    case "completed_with_errors":
-      return { label: "تمت بأخطاء", tone: "warning" as const, detail: `${failed} فشل · ${sentCount}/${total} مرسل` };
-    case "failed":
-      return { label: "فشلت", tone: "danger" as const, detail: "تعذّر إكمال الحملة" };
-    case "running":
-      return { label: "جاري الإرسال", tone: "progress" as const, detail: `${sentCount}/${total} مرسل` };
-    case "scheduled":
-      return { label: "بانتظار الإرسال", tone: "progress" as const, detail: total ? `${total} مستلم` : "في الطابور" };
-    case "paused":
-      return { label: "موقوفة", tone: "warning" as const, detail: `${sentCount}/${total} مرسل` };
-    case "cancelled":
-      return { label: "ملغاة", tone: "muted" as const, detail: "—" };
-    case "draft":
-      return { label: "مسودة", tone: "muted" as const, detail: total ? `${total} مستلم` : "—" };
-    default:
-      return { label: CAMPAIGN_STATUS_LABELS[status] ?? status, tone: "muted" as const, detail: pending ? `${pending} متبقي` : "—" };
-  }
-}
+export { isActiveCampaignStatus, campaignReportNeedsRefresh, CAMPAIGN_STATUS_LABELS };
 
 export function CampaignResultBadge({
   status,
@@ -121,7 +62,7 @@ export function CampaignResultBadge({
 }) {
   const result = getCampaignResultLabel(status, report);
   return (
-    <div className={`campaign-result-badge campaign-result-${result.tone}`}>
+    <div className={`campaign-result-badge ${campaignResultToneClass(result.tone)}`}>
       <strong>{result.label}</strong>
       <span>{result.detail}</span>
     </div>
@@ -150,19 +91,28 @@ function RecipientTable({ title, rows }: { title: string; rows: CampaignRecipien
   return (
     <div className="campaign-recipient-group">
       <h4>{title} ({rows.length})</h4>
-      <table>
-        <thead><tr><th>الاسم</th><th>الرقم</th><th>الحالة</th><th>ملاحظة</th></tr></thead>
-        <tbody>
-          {rows.map((item) => (
-            <tr key={`${item.contact_id}-${item.status}`}>
-              <td>{item.display_name || "—"}</td>
-              <td dir="ltr">{item.phone}</td>
-              <td>{RECIPIENT_STATUS_LABELS[item.status] ?? item.status}</td>
-              <td>{item.error_message || "—"}</td>
+      <div className="admin-table-wrap">
+        <table className="admin-erp-table">
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>الرقم</th>
+              <th>الحالة</th>
+              <th>ملاحظة</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((item) => (
+              <tr key={`${item.contact_id}-${item.status}`}>
+                <td>{item.display_name || "—"}</td>
+                <td dir="ltr">{item.phone}</td>
+                <td>{RECIPIENT_STATUS_LABELS[item.status] ?? item.status}</td>
+                <td>{item.error_message || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -198,16 +148,19 @@ export function CampaignRecipientsPanel({
       {report && (
         <div className="stats-grid campaign-details-stats">
           <article className="metric-card"><span>إجمالي</span><strong>{report.total}</strong></article>
-          <article className="metric-card"><span>تم الإرسال</span><strong>{report.sent + report.delivered + report.read}</strong></article>
+          <article className="metric-card">
+            <span>تم الإرسال</span>
+            <strong>{campaignSentCount(report)}</strong>
+          </article>
           <article className="metric-card"><span>فشل</span><strong>{report.failed}</strong></article>
           <article className="metric-card"><span>لم يُرسل بعد</span><strong>{report.pending ?? notSent.length}</strong></article>
         </div>
       )}
       <div className="inline-actions">
-        <button type="button" className="whatsapp-button" onClick={() => void downloadCampaignRecipients(campaignId, "xlsx")}>
+        <button type="button" className="whatsapp-button compact" onClick={() => void downloadCampaignRecipients(campaignId, "xlsx")}>
           تصدير Excel
         </button>
-        <button type="button" className="secondary-button" onClick={() => void downloadCampaignRecipients(campaignId, "csv")}>
+        <button type="button" className="secondary-button compact" onClick={() => void downloadCampaignRecipients(campaignId, "csv")}>
           CSV
         </button>
       </div>
@@ -225,7 +178,10 @@ export type CampaignSummaryRow = {
   name: string;
   status: string;
   scheduled_at?: string | null;
+  started_at?: string | null;
   completed_at?: string | null;
+  template_name?: string | null;
+  account_label?: string | null;
   total: number;
   sent: number;
   delivered: number;
@@ -247,22 +203,30 @@ function buildSummaryReport(item: CampaignSummaryRow, report?: CampaignReport): 
   };
 }
 
+type CampaignRowActions = {
+  onFollowUp?: (campaignId: string, type: "not_delivered" | "not_read" | "failed") => void;
+  onPause?: (campaignId: string) => void;
+  onCancel?: (campaignId: string) => void;
+  actionBusyId?: string | null;
+};
+
 export function CampaignReportRow({
   item,
   expanded,
   onToggle,
-  showScheduled = false,
-  autoRefresh = false
+  autoRefresh = false,
+  actions
 }: {
   item: CampaignSummaryRow;
   expanded: boolean;
   onToggle: () => void;
-  showScheduled?: boolean;
   autoRefresh?: boolean;
+  actions?: CampaignRowActions;
 }) {
   const summaryReport = buildSummaryReport(item);
   const isActive = isActiveCampaignStatus(item.status);
   const needsRefresh = campaignReportNeedsRefresh(item);
+  const busy = actions?.actionBusyId === item.id;
 
   const report = useQuery({
     queryKey: ["campaign-report", item.id],
@@ -272,42 +236,98 @@ export function CampaignReportRow({
   });
 
   const liveReport = report.data ?? summaryReport;
+  const sentCount = campaignSentCount(liveReport);
   const showDetails = expanded || isActive || needsRefresh || ["completed", "completed_with_errors", "failed"].includes(item.status);
+  const canFollowUp = ["completed", "completed_with_errors", "failed"].includes(item.status);
 
   return (
-    <>
+    <Fragment>
       <tr className={isActive ? "campaign-row-active" : undefined}>
-        <td><strong>{item.name}</strong></td>
-        <td><span className="tag-chip">{CAMPAIGN_STATUS_LABELS[item.status] ?? item.status}</span></td>
+        <td>
+          <div className="admin-cell-main">
+            <strong>{item.name}</strong>
+            {item.template_name && <small>{item.template_name}</small>}
+          </div>
+        </td>
+        <td>
+          <span className={campaignStatusBadgeClass(item.status)}>
+            {formatCampaignStatus(item.status)}
+          </span>
+        </td>
         <td>
           <CampaignResultBadge status={item.status} report={liveReport} />
         </td>
-        {showScheduled && (
-          <td>{item.scheduled_at ? new Date(item.scheduled_at).toLocaleString("ar") : "فوري"}</td>
-        )}
-        <td>{liveReport.total}</td>
-        <td>{liveReport.sent + liveReport.delivered + liveReport.read}</td>
-        <td>{liveReport.delivered}</td>
-        <td>{liveReport.read}</td>
-        <td>{liveReport.failed}</td>
         <td>
-          <button type="button" className="secondary-button compact" onClick={onToggle}>
-            {expanded ? "إخفاء التقرير" : "عرض التقرير"}
-          </button>
+          {item.account_label ? (
+            <div className="admin-cell-stack">
+              <strong dir="ltr">{item.account_label}</strong>
+            </div>
+          ) : (
+            <span className="admin-chip admin-chip-muted">—</span>
+          )}
+        </td>
+        <td>{formatCampaignSchedule(item.scheduled_at, item.started_at)}</td>
+        <td>{formatCampaignCompleted(item.completed_at)}</td>
+        <td>{liveReport.total.toLocaleString("ar")}</td>
+        <td>{sentCount.toLocaleString("ar")}</td>
+        <td>{formatDeliveryRate(liveReport.delivery_rate, liveReport)}</td>
+        <td>{formatReadRate(liveReport.read_rate, liveReport)}</td>
+        <td>{liveReport.failed.toLocaleString("ar")}</td>
+        <td>
+          <div className="admin-actions campaign-row-actions">
+            <button type="button" className="secondary-button compact" onClick={onToggle}>
+              {expanded ? "إخفاء" : "تقرير"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button compact"
+              onClick={() => void downloadCampaignRecipients(item.id, "xlsx")}
+            >
+              Excel
+            </button>
+            {isActive && actions?.onPause && (
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={busy}
+                onClick={() => actions.onPause?.(item.id)}
+              >
+                إيقاف
+              </button>
+            )}
+            {isActive && actions?.onCancel && (
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={busy}
+                onClick={() => actions.onCancel?.(item.id)}
+              >
+                إلغاء
+              </button>
+            )}
+            {canFollowUp && actions?.onFollowUp && (
+              <>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  disabled={busy}
+                  onClick={() => actions.onFollowUp?.(item.id, "not_delivered")}
+                >
+                  متابعة
+                </button>
+              </>
+            )}
+          </div>
         </td>
       </tr>
       {showDetails && (expanded || isActive) && (
-        <tr className="campaign-details-row">
-          <td colSpan={showScheduled ? 10 : 9}>
-            <CampaignRecipientsPanel
-              campaignId={item.id}
-              status={item.status}
-              report={liveReport}
-            />
+        <tr className="campaign-expand-row">
+          <td colSpan={12}>
+            <CampaignRecipientsPanel campaignId={item.id} status={item.status} report={liveReport} />
           </td>
         </tr>
       )}
-    </>
+    </Fragment>
   );
 }
 
@@ -315,34 +335,38 @@ export function CampaignResultsTable({
   items,
   expandedCampaignId,
   onToggleExpanded,
-  showScheduled = false,
   emptyLabel = "لا توجد حملات.",
-  autoRefresh = false
+  autoRefresh = false,
+  actions
 }: {
   items: CampaignSummaryRow[];
   expandedCampaignId: string | null;
   onToggleExpanded: (id: string) => void;
-  showScheduled?: boolean;
   emptyLabel?: string;
   autoRefresh?: boolean;
+  actions?: CampaignRowActions;
 }) {
-  if (!items.length) return <p className="hint-text">{emptyLabel}</p>;
+  if (!items.length) {
+    return <p className="admin-table-empty">{emptyLabel}</p>;
+  }
 
   return (
-    <div className="campaigns-table-wrap">
-      <table className="campaigns-erp-table erp-table-compact">
+    <div className="admin-table-wrap">
+      <table className="admin-erp-table campaigns-erp-table">
         <thead>
           <tr>
-            <th>الحملة</th>
+            <th>الحملة / القالب</th>
             <th>الحالة</th>
-            <th>نتيجة الحملة</th>
-            {showScheduled && <th>الموعد</th>}
+            <th>النتيجة</th>
+            <th>حساب WhatsApp</th>
+            <th>البدء</th>
+            <th>الانتهاء</th>
             <th>إجمالي</th>
             <th>مرسل</th>
-            <th>مُسلَّم</th>
-            <th>مقروء</th>
+            <th>تسليم</th>
+            <th>قراءة</th>
             <th>فشل</th>
-            <th>التقرير</th>
+            <th>إجراءات</th>
           </tr>
         </thead>
         <tbody>
@@ -352,12 +376,40 @@ export function CampaignResultsTable({
               item={item}
               expanded={expandedCampaignId === item.id}
               onToggle={() => onToggleExpanded(item.id)}
-              showScheduled={showScheduled}
               autoRefresh={autoRefresh}
+              actions={actions}
             />
           ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+export function useCampaignActions() {
+  const client = useQueryClient();
+
+  async function pauseCampaign(campaignId: string) {
+    try {
+      await api.post(`/campaigns/${campaignId}/pause`);
+      toastStore.getState().show("تم إيقاف الحملة.", "success");
+      await client.invalidateQueries({ queryKey: ["campaigns"] });
+    } catch {
+      toastStore.getState().show("تعذر إيقاف الحملة.", "error");
+    }
+  }
+
+  async function cancelCampaign(campaignId: string) {
+    const reason = window.prompt("سبب الإلغاء (اختياري):", "إلغاء من لوحة الحملات");
+    if (reason === null) return;
+    try {
+      await api.post(`/campaigns/${campaignId}/cancel`, { reason: reason.trim() || "إلغاء من لوحة الحملات" });
+      toastStore.getState().show("تم إلغاء الحملة.", "success");
+      await client.invalidateQueries({ queryKey: ["campaigns"] });
+    } catch {
+      toastStore.getState().show("تعذر إلغاء الحملة.", "error");
+    }
+  }
+
+  return { pauseCampaign, cancelCampaign };
 }

@@ -1,10 +1,9 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import {
-  type PreflightCheck
-} from "../lib/growthFeatures";
+import { computeCampaignStats } from "../lib/campaignHelpers";
+import { type PreflightCheck } from "../lib/growthFeatures";
 import {
   buildSendComponents,
   getTemplateHeaderInfo,
@@ -17,9 +16,9 @@ import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import { toastStore } from "../stores/toast";
 import {
   CampaignResultsTable,
-  CampaignResultBadge,
-  campaignReportNeedsRefresh,
   isActiveCampaignStatus,
+  campaignReportNeedsRefresh,
+  useCampaignActions,
   type CampaignReport,
   type CampaignSummaryRow
 } from "../components/CampaignRecipientsPanel";
@@ -51,7 +50,10 @@ type CampaignListItem = {
   id: string;
   name: string;
   status: string;
+  template_id: string;
+  whatsapp_account_id: string;
   scheduled_at: string | null;
+  started_at: string | null;
   completed_at: string | null;
   report: CampaignReport & { pending: number; queued: number; skipped: number };
 };
@@ -68,27 +70,13 @@ type TrackedLink = {
   wa_me_url: string;
 };
 
+type PageTab = "list" | "create" | "links";
+
 function resolvePublicApiUrl(path: string) {
   if (path.startsWith("http")) return path;
   const base = api.defaults.baseURL ?? "http://localhost:8000/api/v1";
   const origin = base.replace(/\/api\/v1\/?$/, "");
   return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-function toSummaryRow(campaign: CampaignListItem): CampaignSummaryRow {
-  return {
-    id: campaign.id,
-    name: campaign.name,
-    status: campaign.status,
-    scheduled_at: campaign.scheduled_at,
-    completed_at: campaign.completed_at,
-    total: campaign.report.total,
-    sent: campaign.report.sent,
-    delivered: campaign.report.delivered,
-    read: campaign.report.read,
-    failed: campaign.report.failed,
-    pending: campaign.report.pending
-  };
 }
 
 async function waitForCampaignReport(
@@ -115,8 +103,14 @@ async function waitForCampaignReport(
 export default function CampaignsPage() {
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const listRef = useRef<HTMLElement | null>(null);
   const createRef = useRef<HTMLElement | null>(null);
+  const { pauseCampaign, cancelCampaign } = useCampaignActions();
+
+  const [activeTab, setActiveTab] = useState<PageTab>("list");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+
   const [name, setName] = useState("");
   const [organizationId, setOrganizationId] = useState("");
   const [channelId, setChannelId] = useState("");
@@ -173,15 +167,51 @@ export default function CampaignsPage() {
     queryFn: async () => (await api.get<CatalogProductOption[]>("/catalog")).data
   });
 
-  const campaignRows = useMemo(
-    () => (campaigns.data ?? []).map(toSummaryRow),
-    [campaigns.data]
+  const templateMap = useMemo(
+    () => new Map((templates.data ?? []).map((item) => [item.id, item.name])),
+    [templates.data]
+  );
+  const accountMap = useMemo(
+    () => new Map(
+      (accounts.data ?? []).map((item) => [
+        item.id,
+        item.verified_name || item.display_phone_number
+      ])
+    ),
+    [accounts.data]
   );
 
-  const latestFinishedCampaign = useMemo(
-    () => campaignRows.find((item) => ["completed", "completed_with_errors", "failed"].includes(item.status)),
-    [campaignRows]
+  const campaignRows = useMemo<CampaignSummaryRow[]>(
+    () => (campaigns.data ?? []).map((campaign) => ({
+      id: campaign.id,
+      name: campaign.name,
+      status: campaign.status,
+      scheduled_at: campaign.scheduled_at,
+      started_at: campaign.started_at,
+      completed_at: campaign.completed_at,
+      template_name: templateMap.get(campaign.template_id) ?? null,
+      account_label: accountMap.get(campaign.whatsapp_account_id) ?? null,
+      total: campaign.report.total,
+      sent: campaign.report.sent,
+      delivered: campaign.report.delivered,
+      read: campaign.report.read,
+      failed: campaign.report.failed,
+      pending: campaign.report.pending
+    })),
+    [campaigns.data, templateMap, accountMap]
   );
+
+  const stats = useMemo(() => computeCampaignStats(campaignRows), [campaignRows]);
+
+  const filteredRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return campaignRows.filter((item) => {
+      if (statusFilter && item.status !== statusFilter) return false;
+      if (!term) return true;
+      const haystack = `${item.name} ${item.template_name ?? ""} ${item.account_label ?? ""}`.toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [campaignRows, search, statusFilter]);
 
   useEffect(() => {
     if (!highlightCampaignId) return;
@@ -190,14 +220,10 @@ export default function CampaignsPage() {
   }, [highlightCampaignId]);
 
   useEffect(() => {
-    if (searchParams.get("action") !== "create") return;
-    createRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    createRef.current?.classList.add("page-focus-highlight");
-    const timer = window.setTimeout(() => {
-      createRef.current?.classList.remove("page-focus-highlight");
+    if (searchParams.get("action") === "create") {
+      setActiveTab("create");
       setSearchParams({}, { replace: true });
-    }, 1800);
-    return () => window.clearTimeout(timer);
+    }
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
@@ -206,7 +232,7 @@ export default function CampaignsPage() {
     const ids = idsParam.split(",").map((item) => item.trim()).filter(Boolean);
     if (ids.length > 0) {
       setSelectedContacts(ids);
-      createRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveTab("create");
     }
   }, [searchParams]);
 
@@ -278,14 +304,30 @@ export default function CampaignsPage() {
   }
 
   async function createFollowUp(campaignId: string, followUpType: "not_delivered" | "not_read" | "failed") {
+    setActionBusyId(campaignId);
     try {
       const response = await api.post(`/campaigns/${campaignId}/follow-up`, { follow_up_type: followUpType });
       toastStore.getState().show("تم إنشاء حملة متابعة (مسودة).", "success");
       setExpandedCampaignId(response.data.id as string);
+      setActiveTab("list");
       await client.invalidateQueries({ queryKey: ["campaigns"] });
     } catch {
       toastStore.getState().show("فعّل «حملات متابعة» من Developer → ميزات Watesly.", "error");
+    } finally {
+      setActionBusyId(null);
     }
+  }
+
+  async function handlePause(campaignId: string) {
+    setActionBusyId(campaignId);
+    await pauseCampaign(campaignId);
+    setActionBusyId(null);
+  }
+
+  async function handleCancel(campaignId: string) {
+    setActionBusyId(campaignId);
+    await cancelCampaign(campaignId);
+    setActionBusyId(null);
   }
 
   async function loadSegmentAudience() {
@@ -350,9 +392,9 @@ export default function CampaignsPage() {
       setCampaignMediaOverride(null);
       setExpandedCampaignId(campaignId);
       setHighlightCampaignId(campaignId);
+      setActiveTab("list");
       await waitForCampaignReport(client, campaignId);
-      listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول أدناه.", "success");
+      toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول.", "success");
     } catch {
       toastStore.getState().show("تعذر إنشاء الحملة. تحقق من القالب المعتمد والحساب.", "error");
     }
@@ -394,190 +436,375 @@ export default function CampaignsPage() {
   return (
     <main className="page campaigns-page">
       <header className="page-header">
-        <h1>حملات WhatsApp</h1>
-        <p>إرسال رسائل جماعية بقوالب معتمدة — النتيجة والتقرير تظهر مباشرة بعد الإرسال.</p>
+        <div>
+          <span className="eyebrow whatsapp-eyebrow">WhatsApp Business API</span>
+          <h1>حملات WhatsApp</h1>
+          <p>جدول موحّد لكل حملة — الحالة، النتائج، التسليم، والإجراءات في صف واحد.</p>
+        </div>
+        <Link to="/templates" className="secondary-button">القوالب ←</Link>
       </header>
 
-      {latestFinishedCampaign && (
-        <section className="card campaign-latest-result">
-          <h2 className="section-title-sm">آخر نتيجة حملة</h2>
-          <div className="campaign-latest-result-body">
-            <strong>{latestFinishedCampaign.name}</strong>
-            <CampaignResultBadge status={latestFinishedCampaign.status} report={latestFinishedCampaign} />
+      <section className="admin-stats-row">
+        <article className="admin-stat-card"><span>إجمالي الحملات</span><strong>{stats.total}</strong></article>
+        <article className="admin-stat-card"><span>قيد الإرسال</span><strong>{stats.running}</strong></article>
+        <article className="admin-stat-card"><span>مكتملة</span><strong>{stats.completed}</strong></article>
+        <article className="admin-stat-card"><span>فشلت</span><strong>{stats.failed}</strong></article>
+        <article className="admin-stat-card"><span>مسودات</span><strong>{stats.draft}</strong></article>
+      </section>
+
+      <div className="campaigns-page-tabs">
+        <button
+          type="button"
+          className={activeTab === "list" ? "campaigns-tab active" : "campaigns-tab"}
+          onClick={() => setActiveTab("list")}
+        >
+          جدول الحملات
+        </button>
+        <button
+          type="button"
+          className={activeTab === "create" ? "campaigns-tab active" : "campaigns-tab"}
+          onClick={() => setActiveTab("create")}
+        >
+          إنشاء حملة
+        </button>
+        <button
+          type="button"
+          className={activeTab === "links" ? "campaigns-tab active" : "campaigns-tab"}
+          onClick={() => setActiveTab("links")}
+        >
+          روابط التتبع
+        </button>
+      </div>
+
+      {activeTab === "list" && (
+        <section className={`card admin-table-card${highlightCampaignId ? " campaigns-list-highlight" : ""}`}>
+          <div className="admin-table-header">
+            <div>
+              <h2>جدول الحملات</h2>
+              <small>{filteredRows.length} حملة · نتائج وتقارير</small>
+            </div>
           </div>
-          <div className="inline-actions" style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void createFollowUp(latestFinishedCampaign.id, "not_delivered")}
-            >
-              متابعة — لم يُسلّم
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void createFollowUp(latestFinishedCampaign.id, "not_read")}
-            >
-              متابعة — لم يُقرأ
-            </button>
+
+          <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="بحث بالاسم أو القالب أو الحساب…"
+            />
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">كل الحالات</option>
+              <option value="running">قيد الإرسال</option>
+              <option value="scheduled">مجدولة</option>
+              <option value="completed">مكتملة</option>
+              <option value="completed_with_errors">مكتملة بأخطاء</option>
+              <option value="failed">فشلت</option>
+              <option value="paused">موقوفة</option>
+              <option value="draft">مسودة</option>
+              <option value="cancelled">ملغاة</option>
+            </select>
+          </div>
+
+          {campaigns.isLoading && <p className="hint-text" style={{ padding: "12px 16px" }}>جاري تحميل الحملات…</p>}
+          {campaigns.isError && <p className="hint-text" style={{ padding: "12px 16px" }}>تعذر تحميل الحملات.</p>}
+          {!campaigns.isLoading && !campaigns.isError && (
+            <CampaignResultsTable
+              items={filteredRows}
+              expandedCampaignId={expandedCampaignId}
+              onToggleExpanded={(id) => setExpandedCampaignId((current) => (current === id ? null : id))}
+              autoRefresh
+              emptyLabel="لا توجد حملات بعد. أنشئ حملة من تبويب «إنشاء حملة»."
+              actions={{
+                onFollowUp: createFollowUp,
+                onPause: handlePause,
+                onCancel: handleCancel,
+                actionBusyId
+              }}
+            />
+          )}
+        </section>
+      )}
+
+      {activeTab === "create" && (
+        <section ref={createRef} className="card campaigns-manage-card">
+          <div className="admin-table-header">
+            <div>
+              <h2>إنشاء حملة جديدة</h2>
+              <small>قالب معتمد · جمهور · فحص مسبق · إرسال فوري</small>
+            </div>
+          </div>
+
+          <div className="campaigns-context-row">
+            <label className="field-label">
+              <span>الفرع</span>
+              <select value={organizationId} onChange={(e) => onOrganizationChange(e.target.value)} required form="campaign-create-form">
+                <option value="">اختر الفرع</option>
+                {(organizations.data ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              <span>القناة (لاستيراد Excel)</span>
+              <select value={channelId} onChange={(e) => setChannelId(e.target.value)} disabled={!organizationId}>
+                <option value="">اختر القناة</option>
+                {orgChannels.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="campaigns-actions-grid">
+            <form className="campaigns-panel stack-form" onSubmit={importAudience}>
+              <h3>جمهور الحملة — Excel</h3>
+              <label className="field-label">
+                <span>ملف Excel أو CSV</span>
+                <input
+                  name="file"
+                  type="file"
+                  accept=".xlsx,.xlsm,.csv,text/csv"
+                  required
+                  disabled={!organizationId || !channelId}
+                />
+              </label>
+              <p className="hint-text">الأعمدة: phone (رقم) · name (اسم)</p>
+              <button type="submit" disabled={!organizationId || !channelId}>تحميل العملاء</button>
+              {selectedContacts.length > 0 && (
+                <p className="hint-text">✓ {selectedContacts.length} عميل محدّد للحملة</p>
+              )}
+            </form>
+
+            <form id="campaign-create-form" className="campaigns-panel stack-form" onSubmit={create}>
+              <h3>إعدادات الحملة</h3>
+              <label className="field-label">
+                <span>اسم الحملة</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="عرض رمضان 2026"
+                  required
+                />
+              </label>
+              <label className="field-label">
+                <span>حساب WhatsApp</span>
+                <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+                  <option value="">اختر الحساب</option>
+                  {(accounts.data ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.verified_name || item.display_phone_number}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label">
+                <span>القالب المعتمد</span>
+                <select
+                  value={templateId}
+                  onChange={(e) => {
+                    setTemplateId(e.target.value);
+                    setCampaignMediaOverride(null);
+                  }}
+                  required
+                >
+                  <option value="">اختر القالب</option>
+                  {approvedTemplates.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              {templateHeader && (
+                <div className="campaign-template-media">
+                  <p className="hint-text">
+                    القالب يتضمن رأس {HEADER_FORMAT_LABELS[templateHeader.format]}
+                    {templateHeader.mediaUrl ? " — يُستخدم الملف المخزّن أو ارفع بديلاً." : " — ارفع الملف المطلوب."}
+                  </p>
+                  <label className="field-label">
+                    <span>ملف رأس القالب (اختياري للاستبدال)</span>
+                    <input
+                      type="file"
+                      accept={HEADER_MEDIA_ACCEPT}
+                      onChange={(e) => void onCampaignMediaChange(e)}
+                      disabled={uploadingCampaignMedia}
+                    />
+                    {campaignMediaOverride && (
+                      <p className="hint-text">✓ {campaignMediaOverride.filename}</p>
+                    )}
+                  </label>
+                  {(catalogProducts.data ?? []).some((item) => item.image_url) && (
+                    <label className="field-label">
+                      <span>أو اختر صورة من الكatalog</span>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const product = (catalogProducts.data ?? []).find((item) => item.id === e.target.value);
+                          if (!product?.image_url) return;
+                          setCampaignMediaOverride({
+                            id: product.id,
+                            filename: `${product.name}.jpg`,
+                            content_type: "image/jpeg",
+                            size_bytes: 0,
+                            object_key: product.id,
+                            public_url: product.image_url
+                          });
+                        }}
+                      >
+                        <option value="">—</option>
+                        {(catalogProducts.data ?? [])
+                          .filter((item) => item.image_url)
+                          .map((item) => (
+                            <option key={item.id} value={item.id}>{item.name}</option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              )}
+              {selectedTemplate && (
+                <div className="campaign-template-preview-wrap">
+                  <WhatsAppTemplatePreview
+                    compact
+                    bodyText={selectedTemplate.body_text}
+                    components={selectedTemplate.components}
+                    mediaOverride={
+                      campaignMediaOverride
+                        ? {
+                            mediaUrl: campaignMediaOverride.public_url,
+                            filename: campaignMediaOverride.filename
+                          }
+                        : undefined
+                    }
+                    businessName={
+                      selectedAccount?.verified_name ||
+                      selectedAccount?.display_phone_number ||
+                      "نشاطك التجاري"
+                    }
+                    templateName={selectedTemplate.name}
+                  />
+                </div>
+              )}
+              {preflight && selectedContacts.length > 0 && (
+                <div className="campaign-preflight-panel">
+                  <strong>فحص الجمهور قبل الإرسال</strong>
+                  <div className="campaign-preflight-stats">
+                    <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
+                    <div><strong>{preflight.never_messaged}</strong><span>بدون محادثة</span></div>
+                    <div><strong>{preflight.window_open}</strong><span>نافذة نشطة</span></div>
+                    <div><strong>{preflight.window_closed}</strong><span>نافذة منتهية</span></div>
+                  </div>
+                  {preflight.warnings.map((warning) => (
+                    <p key={warning} className="campaign-warning">⚠ {warning}</p>
+                  ))}
+                  {(preflight.checks ?? []).map((check) => (
+                    <p
+                      key={check.code}
+                      className={
+                        check.level === "error"
+                          ? "campaign-warning"
+                          : check.level === "warning"
+                            ? "campaign-warning"
+                            : "hint-text"
+                      }
+                    >
+                      {check.level === "info" ? "ℹ" : "⚠"} {check.message}
+                    </p>
+                  ))}
+                  {preflight.quality_rating && (
+                    <p className="hint-text">جودة الحساب: {preflight.quality_rating}</p>
+                  )}
+                  <p className="hint-text">{preflight.messaging_tier_hint}</p>
+                </div>
+              )}
+              {!approvedTemplates.length && (
+                <p className="hint-text">لا توجد قوالب معتمدة — أضف من صفحة القوالب أو زامِن من Meta.</p>
+              )}
+              <button type="submit" className="whatsapp-button" disabled={!selectedContacts.length}>
+                إنشاء وبدء الحملة ({selectedContacts.length})
+              </button>
+            </form>
+          </div>
+
+          <div className="campaigns-audience-panel">
+            <div className="campaigns-audience-header">
+              <h3 className="section-title-sm">جمهور من شريحة</h3>
+              <div className="inline-actions">
+                <select value={selectedSegmentId} onChange={(e) => setSelectedSegmentId(e.target.value)}>
+                  <option value="">اختر شريحة</option>
+                  {(segments.data ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+                <button type="button" className="secondary-button" disabled={!selectedSegmentId} onClick={() => void loadSegmentAudience()}>
+                  تحميل الشريحة
+                </button>
+              </div>
+            </div>
+            <div className="campaigns-audience-header">
+              <h3 className="section-title-sm">اختيار العملاء يدوياً</h3>
+              <label className="field-label campaigns-contact-search">
+                <span>بحث</span>
+                <input
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="اسم أو رقم…"
+                />
+              </label>
+            </div>
+            <div className="inline-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setSelectedContacts(filteredContacts.map((c) => c.id))}
+              >
+                تحديد الكل
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setSelectedContacts([])}>
+                إلغاء التحديد
+              </button>
+            </div>
+            <div className="contact-picker campaigns-contact-picker">
+              {filteredContacts.map((item) => (
+                <label key={item.id} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={selectedContacts.includes(item.id)}
+                    onChange={(e) => {
+                      setSelectedContacts((current) =>
+                        e.target.checked
+                          ? [...current, item.id]
+                          : current.filter((id) => id !== item.id)
+                      );
+                    }}
+                  />
+                  <span>{item.display_name || item.external_address}</span>
+                  {item.display_name && <small dir="ltr">{item.external_address}</small>}
+                </label>
+              ))}
+            </div>
           </div>
         </section>
       )}
 
-      <section
-        ref={listRef}
-        className={`card campaigns-list-card${highlightCampaignId ? " campaigns-list-highlight" : ""}`}
-      >
-        <div className="campaigns-list-header">
-          <div>
-            <h2 className="section-title">نتائج الحملات</h2>
-            <p className="hint-text">
-              بعد الإرسال تظهر النتيجة: تمت بنجاح · تمت بأخطاء · فشلت · جاري الإرسال — اضغط «عرض التقرير» للتفاصيل.
-            </p>
+      {activeTab === "links" && (
+        <section className="card admin-table-card">
+          <div className="admin-table-header">
+            <div>
+              <h2>روابط تتبع wa.me</h2>
+              <small>رابط قصير يُحسب عليه النقر ثم يُحوّل إلى WhatsApp</small>
+            </div>
           </div>
-          <p className="hint-text">{campaigns.data?.length ?? 0} حملة</p>
-        </div>
-        {campaigns.isLoading && <p className="hint-text">جاري تحميل نتائج الحملات…</p>}
-        {campaigns.isError && <p className="hint-text">تعذر تحميل نتائج الحملات.</p>}
-        <CampaignResultsTable
-          items={campaignRows}
-          expandedCampaignId={expandedCampaignId}
-          onToggleExpanded={(id) => setExpandedCampaignId((current) => (current === id ? null : id))}
-          showScheduled
-          autoRefresh
-          emptyLabel="لا توجد حملات بعد."
-        />
-      </section>
 
-      <section className="card">
-        <h2 className="section-title">روابط تتبع wa.me</h2>
-        <p className="hint-text">
-          أنشئ رابطاً قصيراً يُحسب عليه النقر ثم يُحوّل إلى WhatsApp مع ref للربط بالحملة — كما في Wati.
-        </p>
-        <form className="stack-form campaigns-actions-grid" onSubmit={(e) => void createTrackedLink(e)}>
-          <label className="field-label">
-            <span>اسم الرابط</span>
-            <input value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="عرض رمضان" required />
-          </label>
-          <label className="field-label">
-            <span>رسالة مسبقة (اختياري)</span>
-            <input value={linkMessage} onChange={(e) => setLinkMessage(e.target.value)} placeholder="مرحباً، أريد العرض" />
-          </label>
-          <label className="field-label">
-            <span>ربط بحملة (اختياري)</span>
-            <select value={linkCampaignId} onChange={(e) => setLinkCampaignId(e.target.value)}>
-              <option value="">—</option>
-              {(campaigns.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </label>
-          <p className="hint-text">
-            {selectedAccount
-              ? `سيُستخدم رقم: ${selectedAccount.display_phone_number}`
-              : "اختر حساب WhatsApp في نموذج الحملة أدناه لتحديد الرقم."}
-          </p>
-          <button type="submit" className="secondary-button" disabled={!linkName.trim() || !selectedAccount}>
-            إنشاء رابط
-          </button>
-        </form>
-        {trackedLinks.isLoading && <p className="hint-text">جاري تحميل الروابط…</p>}
-        {(trackedLinks.data ?? []).length > 0 && (
-          <div className="table-scroll">
-            <table className="data-table tracked-links-table">
-              <thead>
-                <tr>
-                  <th>الاسم</th>
-                  <th>نقرات</th>
-                  <th>رابط التتبع</th>
-                  <th>wa.me</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(trackedLinks.data ?? []).map((item) => {
-                  const trackFull = resolvePublicApiUrl(item.track_url);
-                  return (
-                    <tr key={item.id}>
-                      <td>{item.name}</td>
-                      <td>{item.click_count}</td>
-                      <td>
-                        <code>{trackFull}</code>
-                        <button type="button" className="secondary-button" onClick={() => void copyText(trackFull, "رابط التتبع")}>
-                          نسخ
-                        </button>
-                      </td>
-                      <td>
-                        <button type="button" className="secondary-button" onClick={() => void copyText(item.wa_me_url, "wa.me")}>
-                          نسخ wa.me
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section ref={createRef} className="card campaigns-manage-card">
-        <h2 className="section-title">إنشاء حملة جديدة</h2>
-
-        <div className="campaigns-context-row">
-          <label className="field-label">
-            <span>الفرع</span>
-            <select value={organizationId} onChange={(e) => onOrganizationChange(e.target.value)} required form="campaign-create-form">
-              <option value="">اختر الفرع</option>
-              {(organizations.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field-label">
-            <span>القناة (لاستيراد Excel)</span>
-            <select value={channelId} onChange={(e) => setChannelId(e.target.value)} disabled={!organizationId}>
-              <option value="">اختر القناة</option>
-              {orgChannels.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="campaigns-actions-grid">
-          <form className="campaigns-panel stack-form" onSubmit={importAudience}>
-            <h3>جمهور الحملة — Excel</h3>
+          <form className="stack-form campaigns-actions-grid" style={{ padding: "0 16px" }} onSubmit={(e) => void createTrackedLink(e)}>
             <label className="field-label">
-              <span>ملف Excel أو CSV</span>
-              <input
-                name="file"
-                type="file"
-                accept=".xlsx,.xlsm,.csv,text/csv"
-                required
-                disabled={!organizationId || !channelId}
-              />
+              <span>اسم الرابط</span>
+              <input value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="عرض رمضان" required />
             </label>
-            <p className="hint-text">الأعمدة: phone (رقم) · name (اسم)</p>
-            <button type="submit" disabled={!organizationId || !channelId}>تحميل العملاء</button>
-            {selectedContacts.length > 0 && (
-              <p className="hint-text">✓ {selectedContacts.length} عميل محدّد للحملة</p>
-            )}
-          </form>
-
-          <form id="campaign-create-form" className="campaigns-panel stack-form" onSubmit={create}>
-            <h3>إعدادات الحملة</h3>
             <label className="field-label">
-              <span>اسم الحملة</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="عرض رمضان 2026"
-                required
-              />
+              <span>رسالة مسبقة (اختياري)</span>
+              <input value={linkMessage} onChange={(e) => setLinkMessage(e.target.value)} placeholder="مرحباً، أريد العرض" />
             </label>
             <label className="field-label">
               <span>حساب WhatsApp</span>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 <option value="">اختر الحساب</option>
                 {(accounts.data ?? []).map((item) => (
                   <option key={item.id} value={item.id}>
@@ -587,191 +814,60 @@ export default function CampaignsPage() {
               </select>
             </label>
             <label className="field-label">
-              <span>القالب المعتمد</span>
-              <select
-                value={templateId}
-                onChange={(e) => {
-                  setTemplateId(e.target.value);
-                  setCampaignMediaOverride(null);
-                }}
-                required
-              >
-                <option value="">اختر القالب</option>
-                {approvedTemplates.map((item) => (
+              <span>ربط بحملة (اختياري)</span>
+              <select value={linkCampaignId} onChange={(e) => setLinkCampaignId(e.target.value)}>
+                <option value="">—</option>
+                {(campaigns.data ?? []).map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             </label>
-            {templateHeader && (
-              <div className="campaign-template-media">
-                <p className="hint-text">
-                  القالب يتضمن رأس {HEADER_FORMAT_LABELS[templateHeader.format]}
-                  {templateHeader.mediaUrl ? " — يُستخدم الملف المخزّن أو ارفع بديلاً." : " — ارفع الملف المطلوب."}
-                </p>
-                <label className="field-label">
-                  <span>ملف رأس القالب (اختياري للاستبدال)</span>
-                  <input
-                    type="file"
-                    accept={HEADER_MEDIA_ACCEPT}
-                    onChange={(e) => void onCampaignMediaChange(e)}
-                    disabled={uploadingCampaignMedia}
-                  />
-                  {campaignMediaOverride && (
-                    <p className="hint-text">✓ {campaignMediaOverride.filename}</p>
-                  )}
-                </label>
-                {(catalogProducts.data ?? []).some((item) => item.image_url) && (
-                  <label className="field-label">
-                    <span>أو اختر صورة من الكatalog</span>
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        const product = (catalogProducts.data ?? []).find((item) => item.id === e.target.value);
-                        if (!product?.image_url) return;
-                        setCampaignMediaOverride({
-                          id: product.id,
-                          filename: `${product.name}.jpg`,
-                          content_type: "image/jpeg",
-                          size_bytes: 0,
-                          object_key: product.id,
-                          public_url: product.image_url
-                        });
-                      }}
-                    >
-                      <option value="">—</option>
-                      {(catalogProducts.data ?? [])
-                        .filter((item) => item.image_url)
-                        .map((item) => (
-                          <option key={item.id} value={item.id}>{item.name}</option>
-                        ))}
-                    </select>
-                  </label>
-                )}
-              </div>
-            )}
-            {selectedTemplate && (
-              <div className="campaign-template-preview-wrap">
-                <WhatsAppTemplatePreview
-                  compact
-                  bodyText={selectedTemplate.body_text}
-                  components={selectedTemplate.components}
-                  mediaOverride={
-                    campaignMediaOverride
-                      ? {
-                          mediaUrl: campaignMediaOverride.public_url,
-                          filename: campaignMediaOverride.filename
-                        }
-                      : undefined
-                  }
-                  businessName={
-                    selectedAccount?.verified_name ||
-                    selectedAccount?.display_phone_number ||
-                    "نشاطك التجاري"
-                  }
-                  templateName={selectedTemplate.name}
-                />
-              </div>
-            )}
-            {preflight && selectedContacts.length > 0 && (
-              <div className="campaign-preflight-panel">
-                <strong>فحص الجمهور قبل الإرسال</strong>
-                <div className="campaign-preflight-stats">
-                  <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
-                  <div><strong>{preflight.never_messaged}</strong><span>بدون محادثة</span></div>
-                  <div><strong>{preflight.window_open}</strong><span>نافذة نشطة</span></div>
-                  <div><strong>{preflight.window_closed}</strong><span>نافذة منتهية</span></div>
-                </div>
-                {preflight.warnings.map((warning) => (
-                  <p key={warning} className="campaign-warning">⚠ {warning}</p>
-                ))}
-                {(preflight.checks ?? []).map((check) => (
-                  <p
-                    key={check.code}
-                    className={
-                      check.level === "error"
-                        ? "campaign-warning"
-                        : check.level === "warning"
-                          ? "campaign-warning"
-                          : "hint-text"
-                    }
-                  >
-                    {check.level === "info" ? "ℹ" : "⚠"} {check.message}
-                  </p>
-                ))}
-                {preflight.quality_rating && (
-                  <p className="hint-text">جودة الحساب: {preflight.quality_rating}</p>
-                )}
-                <p className="hint-text">{preflight.messaging_tier_hint}</p>
-              </div>
-            )}
-            {!approvedTemplates.length && (
-              <p className="hint-text">لا توجد قوالب معتمدة — أضف من صفحة القوالب أو زامِن من Meta.</p>
-            )}
-            <button type="submit" className="whatsapp-button" disabled={!selectedContacts.length}>
-              إنشاء وبدء الحملة ({selectedContacts.length})
+            <button type="submit" className="secondary-button" disabled={!linkName.trim() || !accountId}>
+              إنشاء رابط
             </button>
           </form>
-        </div>
 
-        <div className="campaigns-audience-panel">
-          <div className="campaigns-audience-header">
-            <h3 className="section-title-sm">جمهور من شريحة</h3>
-            <div className="inline-actions">
-              <select value={selectedSegmentId} onChange={(e) => setSelectedSegmentId(e.target.value)}>
-                <option value="">اختر شريحة</option>
-                {(segments.data ?? []).map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-              <button type="button" className="secondary-button" disabled={!selectedSegmentId} onClick={() => void loadSegmentAudience()}>
-                تحميل الشريحة
-              </button>
-            </div>
-          </div>
-          <div className="campaigns-audience-header">
-            <h3 className="section-title-sm">اختيار العملاء يدوياً</h3>
-            <label className="field-label campaigns-contact-search">
-              <span>بحث</span>
-              <input
-                value={contactSearch}
-                onChange={(e) => setContactSearch(e.target.value)}
-                placeholder="اسم أو رقم…"
-              />
-            </label>
-          </div>
-          <div className="inline-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setSelectedContacts(filteredContacts.map((c) => c.id))}
-            >
-              تحديد الكل
-            </button>
-            <button type="button" className="secondary-button" onClick={() => setSelectedContacts([])}>
-              إلغاء التحديد
-            </button>
-          </div>
-          <div className="contact-picker campaigns-contact-picker">
-            {filteredContacts.map((item) => (
-              <label key={item.id} className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={selectedContacts.includes(item.id)}
-                  onChange={(e) => {
-                    setSelectedContacts((current) =>
-                      e.target.checked
-                        ? [...current, item.id]
-                        : current.filter((id) => id !== item.id)
+          {trackedLinks.isLoading && <p className="hint-text" style={{ padding: "12px 16px" }}>جاري تحميل الروابط…</p>}
+          {(trackedLinks.data ?? []).length > 0 ? (
+            <div className="admin-table-wrap">
+              <table className="admin-erp-table">
+                <thead>
+                  <tr>
+                    <th>الاسم</th>
+                    <th>نقرات</th>
+                    <th>رابط التتبع</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(trackedLinks.data ?? []).map((item) => {
+                    const trackFull = resolvePublicApiUrl(item.track_url);
+                    return (
+                      <tr key={item.id}>
+                        <td><strong>{item.name}</strong></td>
+                        <td>{item.click_count.toLocaleString("ar")}</td>
+                        <td><code dir="ltr">{trackFull}</code></td>
+                        <td>
+                          <div className="admin-actions campaign-row-actions">
+                            <button type="button" className="secondary-button compact" onClick={() => void copyText(trackFull, "رابط التتبع")}>
+                              نسخ التتبع
+                            </button>
+                            <button type="button" className="secondary-button compact" onClick={() => void copyText(item.wa_me_url, "wa.me")}>
+                              نسخ wa.me
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     );
-                  }}
-                />
-                <span>{item.display_name || item.external_address}</span>
-                {item.display_name && <small dir="ltr">{item.external_address}</small>}
-              </label>
-            ))}
-          </div>
-        </div>
-      </section>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            !trackedLinks.isLoading && <p className="admin-table-empty">لا توجد روابط تتبع بعد.</p>
+          )}
+        </section>
+      )}
     </main>
   );
 }
