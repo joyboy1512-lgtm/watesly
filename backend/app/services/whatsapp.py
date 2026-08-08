@@ -467,297 +467,68 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
             await db.flush()
 
             if whatsapp_account and event_type == "message":
+                from app.services.inbound_whatsapp import (
+                    persist_inbound_message,
+                    process_inbound_side_effects,
+                    publish_inbound_message_event,
+                )
+
                 for item in value.get("messages", []):
-                    external_id = item.get("id")
-                    duplicate = None
-                    if external_id:
-                        duplicate_result = await db.execute(
-                            select(Message).where(Message.external_message_id == external_id)
-                        )
-                        duplicate = duplicate_result.scalar_one_or_none()
-                    if duplicate is not None:
-                        continue
-
                     try:
-                        async with db.begin_nested():
-                            sender = item.get("from", "")
-                            contact_name = None
-                            contacts = value.get("contacts", [])
-                            if contacts:
-                                contact_name = contacts[0].get("profile", {}).get("name")
-                            contact, conversation, created_conversation = await _get_or_create_contact_and_conversation(
-                                db,
-                                whatsapp_account=whatsapp_account,
-                                sender=sender,
-                                display_name=contact_name,
-                            )
-
-                            from app.services.ctwa_attribution import apply_referral_to_contact, extract_referral_fields
-                            from app.services.inbound_interactive import extract_interactive_reply
-
-                            referral_fields = extract_referral_fields(item)
-                            apply_referral_to_contact(contact, referral_fields)
-                            if referral_fields and whatsapp_account:
-                                capi_leads.append(
-                                    (
-                                        str(whatsapp_account.account_id),
-                                        sender,
-                                        referral_fields.get("utm_campaign"),
-                                    )
-                                )
-                            interactive_reply = extract_interactive_reply(item)
-                            message_type_value = item.get("type", "unknown")
-                            try:
-                                message_type = MessageType(message_type_value)
-                            except ValueError:
-                                if message_type_value == "sticker":
-                                    message_type = MessageType.IMAGE
-                                else:
-                                    message_type = MessageType.UNKNOWN
-
-                            from app.services.whatsapp_media import (
-                                MEDIA_MESSAGE_TYPES,
-                                extract_inbound_text_and_caption,
-                                store_inbound_whatsapp_media,
-                            )
-
-                            text_body = extract_inbound_text_and_caption(item, message_type)
-                            if interactive_reply and interactive_reply.get("text") and not text_body:
-                                text_body = str(interactive_reply["text"])
-                            provider_payload = dict(item)
-                            if interactive_reply:
-                                provider_payload["interactive_reply"] = interactive_reply
-                            if message_type in MEDIA_MESSAGE_TYPES:
-                                media_fields = await store_inbound_whatsapp_media(
-                                    whatsapp_account=whatsapp_account,
-                                    item=item,
-                                    message_type=message_type,
-                                    access_token=decrypt_secret(whatsapp_account.access_token_encrypted),
-                                )
-                                provider_payload.update(media_fields)
-                                if not text_body and media_fields.get("caption"):
-                                    text_body = media_fields["caption"]
-
-                            db.add(
-                                Message(
-                                    account_id=whatsapp_account.account_id,
-                                    organization_id=whatsapp_account.organization_id,
-                                    channel_id=whatsapp_account.channel_id,
-                                    contact_id=contact.id,
-                                    conversation_id=conversation.id,
-                                    external_message_id=external_id,
-                                    direction=MessageDirection.INBOUND,
-                                    type=message_type,
-                                    from_address=sender,
-                                    to_address=whatsapp_account.display_phone_number,
-                                    text_body=text_body,
-                                    provider_payload=provider_payload,
-                                    status=MessageStatus.RECEIVED,
-                                )
-                            )
-                            await db.flush()
-                            conversation.last_message_at = datetime.now(UTC)
-
-                            from app.services.feature_flags import get_feature_flags
-                            from app.services.sla_monitor import set_sla_deadline_on_inbound
-
-                            power_flags = await get_feature_flags(db, account_id=whatsapp_account.account_id)
-                            if power_flags.get("sla_monitoring", True):
-                                await set_sla_deadline_on_inbound(db, conversation=conversation)
-
-                            from app.services.link_tracking import apply_inbound_attribution, parse_csat_score
-                            from app.services.csat import submit_conversation_rating
-
-                            await apply_inbound_attribution(db, contact=contact, text_body=text_body)
-                            from app.services.contact_management import apply_auto_tags_from_inbound
-
-                            await apply_auto_tags_from_inbound(
-                                db,
-                                account_id=whatsapp_account.account_id,
-                                contact_id=contact.id,
-                                text_body=text_body,
-                            )
-                            if text_body:
-                                from app.services.crm import maybe_auto_create_deal_from_inbound
-
-                                auto_deal = await maybe_auto_create_deal_from_inbound(
-                                    db,
-                                    account_id=whatsapp_account.account_id,
-                                    contact_id=contact.id,
-                                    organization_id=whatsapp_account.organization_id,
-                                    text_body=text_body,
-                                )
-                                if auto_deal:
-                                    await publish_event(
-                                        whatsapp_account.account_id,
-                                        {
-                                            "type": "crm.deal_created",
-                                            "deal_id": str(auto_deal.id),
-                                            "contact_id": str(contact.id),
-                                            "conversation_id": str(conversation.id),
-                                            "title": auto_deal.title,
-                                        },
-                                    )
-                            csat_score = parse_csat_score(text_body)
-                            if csat_score is not None:
-                                try:
-                                    await submit_conversation_rating(
-                                        db,
-                                        account_id=whatsapp_account.account_id,
-                                        conversation_id=conversation.id,
-                                        score=csat_score,
-                                        comment=None,
-                                        source="customer",
-                                    )
-                                except ValueError:
-                                    pass
-
-                            from app.services.webhook_dispatch import dispatch_account_webhook
-
-                            await dispatch_account_webhook(
-                                db,
-                                account_id=whatsapp_account.account_id,
-                                event_type="message.received",
-                                payload={
-                                    "conversation_id": str(conversation.id),
-                                    "contact_id": str(contact.id),
-                                    "from": sender,
-                                    "text": text_body,
-                                    "created_at": datetime.now(UTC).isoformat(),
-                                },
-                            )
-
-                            trigger_payload = {
-                                "organization_id": str(whatsapp_account.organization_id),
-                                "channel_id": str(whatsapp_account.channel_id),
-                                "conversation_id": str(conversation.id),
-                                "contact_id": str(contact.id),
-                                "whatsapp_account_id": str(whatsapp_account.id),
-                                "from": sender,
-                                "text": text_body,
-                                "message_type": message_type.value,
-                            }
-                            if interactive_reply:
-                                trigger_payload.update(
-                                    {
-                                        "button_id": interactive_reply.get("button_id"),
-                                        "button_title": interactive_reply.get("button_title"),
-                                        "list_id": interactive_reply.get("list_id"),
-                                        "interactive_type": interactive_reply.get("interactive_type"),
-                                    }
-                                )
-                            automation_run_ids.extend(
-                                str(run_id)
-                                for run_id in await queue_automation_runs(
-                                    db,
-                                    account_id=whatsapp_account.account_id,
-                                    trigger_type=AutomationTriggerType.MESSAGE_RECEIVED,
-                                    trigger_payload=trigger_payload,
-                                )
-                            )
-                            if interactive_reply and interactive_reply.get("button_id"):
-                                automation_run_ids.extend(
-                                    str(run_id)
-                                    for run_id in await queue_automation_runs(
-                                        db,
-                                        account_id=whatsapp_account.account_id,
-                                        trigger_type=AutomationTriggerType.BUTTON_CLICKED,
-                                        trigger_payload=trigger_payload,
-                                    )
-                                )
-                            if created_conversation:
-                                automation_run_ids.extend(
-                                    str(run_id)
-                                    for run_id in await queue_automation_runs(
-                                        db,
-                                        account_id=whatsapp_account.account_id,
-                                        trigger_type=AutomationTriggerType.CONVERSATION_CREATED,
-                                        trigger_payload=trigger_payload,
-                                    )
-                                )
-
-                            assignee_user_id = None
-                            if conversation.assigned_membership_id:
-                                membership = await db.get(Membership, conversation.assigned_membership_id)
-                                assignee_user_id = membership.user_id if membership else None
-
-                            await create_notification(
-                                db,
-                                account_id=whatsapp_account.account_id,
-                                user_id=assignee_user_id,
-                                type="message_received",
-                                title="رسالة WhatsApp جديدة",
-                                body=text_body or f"رسالة جديدة من {sender}",
-                                data={"conversation_id": str(conversation.id)},
-                            )
-
-                            if text_body:
-                                from app.services.knowledge_base import get_agent_settings, suggest_smart_reply
-
-                                agent_settings = await get_agent_settings(db, whatsapp_account.account_id)
-                                ai_result = await suggest_smart_reply(
-                                    db,
-                                    account_id=whatsapp_account.account_id,
-                                    query=text_body,
-                                    contact_name=contact.display_name or "",
-                                    mode=agent_settings.default_mode,
-                                    use_llm=agent_settings.llm_enabled,
-                                )
-                                event_type = "ai.kb_suggestion"
-                                if ai_result.get("source") == "catalog":
-                                    event_type = "ai.catalog_suggestion"
-                                elif ai_result.get("source") == "combined":
-                                    event_type = "ai.combined_suggestion"
-                                elif agent_settings.auto_kb_on_inbound and ai_result.get("matched_articles"):
-                                    event_type = "ai.kb_suggestion"
-                                await publish_event(
-                                    whatsapp_account.account_id,
-                                    {
-                                        "type": event_type,
-                                        "conversation_id": str(conversation.id),
-                                        "suggestion": ai_result.get("suggestion"),
-                                        "matched_products": ai_result.get("matched_products", []),
-                                        "matched_articles": ai_result.get("matched_articles", []),
-                                        "confidence": ai_result.get("confidence"),
-                                        "source": ai_result.get("source"),
-                                    },
-                                )
-
-                                from app.services.business_hours import is_within_business_hours
-
-                                if (
-                                    power_flags.get("ai_agent_auto_reply", True)
-                                    and agent_settings.auto_reply_outside_hours
-                                    and not is_within_business_hours(agent_settings.business_hours_json)
-                                    and not conversation.first_response_at
-                                ):
-                                    outside_text = (agent_settings.outside_hours_message or "").strip()
-                                    if not outside_text:
-                                        outside_text = str(ai_result.get("suggestion") or "").strip()
-                                    if not outside_text:
-                                        outside_text = "شكراً لتواصلك. نحن خارج ساعات العمل حالياً وسنرد عليك في أقرب وقت."
-                                    window = compute_service_window(conversation.last_message_at)
-                                    if window.get("service_window_open"):
-                                        try:
-                                            await send_text_message(
-                                                db,
-                                                account_id=whatsapp_account.account_id,
-                                                whatsapp_account_id=whatsapp_account.id,
-                                                payload=SendTextMessageRequest(to=sender, text=outside_text),
-                                            )
-                                            conversation.first_response_at = datetime.now(UTC)
-                                        except ValueError:
-                                            pass
-
+                        ctx = await persist_inbound_message(
+                            db,
+                            whatsapp_account=whatsapp_account,
+                            item=item,
+                            value=value,
+                        )
                     except Exception:
                         logger.exception(
-                            "Failed to process inbound WhatsApp message external_id=%s from=%s",
-                            external_id,
+                            "Failed to persist inbound WhatsApp message external_id=%s from=%s",
+                            item.get("id"),
                             item.get("from"),
                         )
                         continue
 
+                    if ctx is None:
+                        continue
+
+                    if ctx.referral_fields and whatsapp_account:
+                        capi_leads.append(
+                            (
+                                str(whatsapp_account.account_id),
+                                ctx.sender,
+                                ctx.referral_fields.get("utm_campaign"),
+                            )
+                        )
+
                     processed_count += 1
+
+                    try:
+                        await publish_inbound_message_event(
+                            whatsapp_account.account_id,
+                            conversation_id=ctx.conversation.id,
+                            contact_id=ctx.contact.id,
+                            external_id=ctx.external_id,
+                            message_id=ctx.message.id,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to publish realtime event for message_id=%s",
+                            ctx.message.id,
+                        )
+
+                    try:
+                        run_ids = await process_inbound_side_effects(
+                            db,
+                            whatsapp_account=whatsapp_account,
+                            ctx=ctx,
+                        )
+                        automation_run_ids.extend(run_ids)
+                    except Exception:
+                        logger.exception(
+                            "Failed inbound side effects for message_id=%s",
+                            ctx.message.id,
+                        )
 
                 event.status = WebhookEventStatus.PROCESSED
                 event.processed_at = datetime.now(UTC)

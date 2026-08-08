@@ -16,9 +16,11 @@ def test_campaign_recipient_status_is_updated_from_webhook_handler() -> None:
 
 def test_automation_triggers_are_wired_for_inbound_messages() -> None:
     whatsapp = read("app/services/whatsapp.py")
+    inbound = read("app/services/inbound_whatsapp.py")
     triggers = read("app/services/automation_triggers.py")
-    assert "queue_automation_runs" in whatsapp
-    assert "AutomationTriggerType.MESSAGE_RECEIVED" in whatsapp
+    assert "process_inbound_side_effects" in whatsapp
+    assert "queue_automation_runs" in inbound
+    assert "AutomationTriggerType.MESSAGE_RECEIVED" in inbound
     assert "AutomationStatus.ACTIVE" in triggers
 
 
