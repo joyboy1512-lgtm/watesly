@@ -34,7 +34,7 @@ export default function TeamPage() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [workspaceFilter, setWorkspaceFilter] = useState("");
-  const [pendingInvite, setPendingInvite] = useState<{ email: string; url: string; expiresInHours: number } | null>(null);
+  const [pendingInvite, setPendingInvite] = useState<{ email: string; url: string; expiresInHours: number; emailSent: boolean } | null>(null);
   const [inviting, setInviting] = useState(false);
 
   const employeesQuery = useQuery({
@@ -82,15 +82,22 @@ export default function TeamPage() {
         role,
         organization_ids: [organizationId]
       });
-      const inviteUrl = buildInvitationAcceptUrl(response.data.invitation_token);
+      const inviteUrl = response.data.invitation_accept_url || buildInvitationAcceptUrl(response.data.invitation_token);
+      const emailSent = response.data.email_sent;
       setPendingInvite({
         email: email.trim().toLowerCase(),
         url: inviteUrl,
-        expiresInHours: response.data.expires_in_hours
+        expiresInHours: response.data.expires_in_hours,
+        emailSent
       });
       setEmail("");
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
-      toastStore.getState().show("تم إنشاء الدعوة — انسخ الرابط وأرسله للموظف.", "success");
+      toastStore.getState().show(
+        emailSent
+          ? `تم إرسال الدعوة إلى ${email.trim().toLowerCase()}.`
+          : "تم إنشاء الدعوة. انسخ الرابط — لم يُرسل بريد (SMTP غير مفعّل أو فشل الإرسال).",
+        "success"
+      );
     } catch {
       toastStore.getState().show("تعذر إنشاء الدعوة. تحقق من البريد والفرع وحد المستخدمين.", "error");
     } finally {
@@ -160,7 +167,7 @@ export default function TeamPage() {
       <section className="card form-card admin-form-card">
         <h2>دعوة موظف</h2>
         <p className="hint-text" style={{ marginBottom: 12 }}>
-          لا يُرسل بريد تلقائي حالياً. بعد إنشاء الدعوة، انسخ الرابط وأرسله للموظف عبر WhatsApp أو أي وسيلة أخرى.
+          يُرسل رابط الدعوة تلقائياً إلى البريد عند تفعيل SMTP على الخادم. إذا لم يصل البريد، انسخ الرابط الاحتياطي أدناه.
         </p>
         <form className="inline-form" onSubmit={invite}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" required type="email" />
@@ -175,13 +182,19 @@ export default function TeamPage() {
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
-          <button type="submit" disabled={inviting}>{inviting ? "جاري الإنشاء…" : "إنشاء رابط الدعوة"}</button>
+          <button type="submit" disabled={inviting}>{inviting ? "جاري الإرسال…" : "إرسال الدعوة"}</button>
         </form>
 
         {pendingInvite && (
           <div className="admin-invite-link-box" style={{ marginTop: 16 }}>
-            <strong>رابط دعوة {pendingInvite.email}</strong>
-            <small>صالح لمدة {pendingInvite.expiresInHours} ساعة — يفتح صفحة إعداد كلمة المرور.</small>
+            <strong>
+              {pendingInvite.emailSent ? `تم إرسال الدعوة إلى ${pendingInvite.email}` : `رابط احتياطي — ${pendingInvite.email}`}
+            </strong>
+            <small>
+              {pendingInvite.emailSent
+                ? `صالح لمدة ${pendingInvite.expiresInHours} ساعة. إذا لم يصل البريد، انسخ الرابط أدناه.`
+                : `SMTP غير مفعّل أو فشل الإرسال — انسخ الرابط وأرسله يدوياً (صالح ${pendingInvite.expiresInHours} ساعة).`}
+            </small>
             <input value={pendingInvite.url} readOnly dir="ltr" />
             <div className="admin-actions">
               <button type="button" className="secondary-button" onClick={copyInviteLink}>نسخ الرابط</button>
