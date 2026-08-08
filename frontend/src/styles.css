@@ -3495,6 +3495,55 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .whatsapp-connect-page .field-label span { color: var(--muted); font-size: 12px; font-weight: 700; }
 .templates-page { display: grid; gap: 18px; }
+.templates-page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.templates-tab {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+.templates-tab.active {
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+  color: var(--primary-darker);
+  font-weight: 700;
+}
+.templates-erp-table .template-body-cell {
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 13px;
+}
+.templates-row-actions,
+.templates-erp-table .admin-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.templates-row-actions .secondary-button.compact {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.templates-expand-row td {
+  background: color-mix(in srgb, var(--primary) 4%, var(--panel-soft));
+  padding: 0 !important;
+}
+.templates-expand-panel {
+  padding: 16px;
+  max-width: 420px;
+}
+.templates-sync-panel {
+  padding: 0 16px 16px;
+  max-width: 480px;
+}
 .templates-list-card,
 .templates-manage-card { display: grid; gap: 16px; }
 .templates-toolbar {
@@ -4384,6 +4433,22 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .admin-stat-card span { font-size: 12px; color: var(--muted); }
 .admin-stat-card strong { font-size: 22px; color: var(--primary-darker); }
+.admin-stat-card-brand {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
+  border: none;
+  box-shadow: 0 8px 22px rgba(7, 94, 84, 0.22);
+}
+.admin-stat-card-brand span {
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 600;
+}
+.admin-stat-card-brand strong {
+  color: #fff;
+  font-size: 24px;
+}
+.admin-stats-row-brand {
+  margin-bottom: 4px;
+}
 .progress-track-compact {
   height: 6px;
   margin-top: 4px;
