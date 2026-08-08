@@ -266,6 +266,7 @@ async def post_text_message(
             account_id=context.account_id,
             whatsapp_account_id=whatsapp_account_id,
             payload=payload,
+            record_mac=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
@@ -300,6 +301,7 @@ async def _send_media(
             whatsapp_account_id=whatsapp_account_id,
             media_type=media_type,
             payload=payload,
+            record_mac=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
@@ -369,6 +371,7 @@ async def post_template_message(
             account_id=context.account_id,
             whatsapp_account_id=whatsapp_account_id,
             payload=payload,
+            record_mac=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc

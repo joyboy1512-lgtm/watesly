@@ -251,6 +251,7 @@ async def send_conversation_text(
                 to=contact.external_address,
                 text=payload.text,
             ),
+            record_mac=True,
         )
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -336,6 +337,7 @@ async def send_conversation_template(
                 language_code=template.language,
                 components=components,
             ),
+            record_mac=True,
         )
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -414,6 +416,7 @@ async def send_conversation_product(
             body=body,
             footer=payload.footer,
             product_id=product.id,
+            record_mac=True,
         )
     except ValueError as exc:
         if str(exc) == "COMMERCE_NOT_CONFIGURED":
@@ -488,6 +491,7 @@ async def send_conversation_product_list(
             body=payload.body,
             header=payload.header,
             footer=payload.footer,
+            record_mac=True,
         )
     except ValueError as exc:
         if str(exc) == "COMMERCE_NOT_CONFIGURED":

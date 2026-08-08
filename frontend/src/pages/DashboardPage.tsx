@@ -325,6 +325,35 @@ export default function DashboardPage() {
             <div className="progress-track">
               <div style={{ width: `${Math.min(100, ((data?.total_channels ?? 0) / Math.max(1, subscription.data?.max_channels ?? 1)) * 100)}%` }} />
             </div>
+            {subscription.data?.included_mac != null && (
+              <>
+                <div className="progress-row">
+                  <span>MAC (عملاء نشطون)</span>
+                  <strong>
+                    {subscription.data.mac_count ?? 0}/{subscription.data.included_mac ?? "-"}
+                  </strong>
+                </div>
+                <div className="progress-track">
+                  <div
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        ((subscription.data.mac_count ?? 0) / Math.max(1, subscription.data.included_mac ?? 1)) * 100
+                      )}%`
+                    }}
+                  />
+                </div>
+                {subscription.data.is_over_mac ? (
+                  <small className="hint-text">
+                    Over MAC: +{subscription.data.over_mac_count} · تقدير ${subscription.data.estimated_over_mac_charge?.toFixed(2) ?? "0"}
+                  </small>
+                ) : (
+                  <small className="hint-text">
+                    {subscription.data.mac_remaining ?? 0} MAC متبقٍ · {subscription.data.cycle_month ?? ""}
+                  </small>
+                )}
+              </>
+            )}
           </div>
         </article>
       </section>

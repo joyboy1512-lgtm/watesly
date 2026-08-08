@@ -22,6 +22,8 @@ async def get_or_create_trial_plan(db: AsyncSession) -> Plan:
         max_users=3,
         max_organizations=1,
         max_channels=1,
+        included_mac=100,
+        over_mac_price_per_100=12,
         trial_days=14,
         allow_multi_organization=False,
     )

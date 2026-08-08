@@ -4271,6 +4271,24 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .admin-stat-card span { font-size: 12px; color: var(--muted); }
 .admin-stat-card strong { font-size: 22px; color: var(--primary-darker); }
+.progress-track-compact {
+  height: 6px;
+  margin-top: 4px;
+}
+.channel-mac-cell .progress-track-compact div {
+  background: linear-gradient(90deg, var(--primary), #25d366);
+}
+.admin-note-card {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+}
+.admin-note-card p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+}
 .admin-toolbar {
   display: flex;
   flex-wrap: wrap;
