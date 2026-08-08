@@ -501,6 +501,8 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                             )
                         )
 
+                    await db.commit()
+
                     processed_count += 1
 
                     try:
@@ -524,11 +526,13 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                             ctx=ctx,
                         )
                         automation_run_ids.extend(run_ids)
+                        await db.commit()
                     except Exception:
                         logger.exception(
                             "Failed inbound side effects for message_id=%s",
                             ctx.message.id,
                         )
+                        await db.rollback()
 
                 event.status = WebhookEventStatus.PROCESSED
                 event.processed_at = datetime.now(UTC)

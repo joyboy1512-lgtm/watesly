@@ -29,6 +29,13 @@ def test_webhooks_are_processed_asynchronously() -> None:
     tasks = read("app/workers/webhook_tasks.py")
     assert "process_whatsapp_webhook.delay(payload)" in route
     assert "watesly.webhooks.process_whatsapp" in tasks
+    assert "run_async(_process(payload))" in tasks
+
+
+def test_webhook_worker_resets_async_pools() -> None:
+    runner = read("app/workers/async_runner.py")
+    assert "await engine.dispose()" in runner
+    assert "dispose_redis_client" in runner
 
 
 def test_automation_run_queued_dispatches_worker() -> None:
