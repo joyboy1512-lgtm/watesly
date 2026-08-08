@@ -2,12 +2,8 @@ import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, silentRequest } from "../lib/api";
-import {
-  formatMacBalance,
-  formatMacCycleMonth,
-  macBalanceClass,
-  macUsagePercent
-} from "../lib/channelHelpers";
+import MacWorkspaceBalance from "../components/MacWorkspaceBalance";
+import { formatMacTrigger } from "../lib/macHelpers";
 import { formatAppTime } from "../lib/language";
 
 type Subscription = {
@@ -51,15 +47,6 @@ type MacContact = {
   trigger_source: string;
   first_activity_at: string;
 };
-
-const TRIGGER_LABELS: Record<string, string> = {
-  inbound: "رسالة واردة",
-  inbox_outbound: "رد من Inbox"
-};
-
-function formatTrigger(source: string): string {
-  return TRIGGER_LABELS[source] ?? source;
-}
 
 export default function BillingPage() {
   const [channelFilter, setChannelFilter] = useState("");
@@ -131,42 +118,28 @@ export default function BillingPage() {
   }
 
   return (
-    <main className="page">
+    <main className="page billing-page">
       <header className="page-header">
         <div>
           <h1>الفوترة و MAC</h1>
-          <p>
-            Monthly Active Contacts — دورة {formatMacCycleMonth(sub.cycle_month)} ·
-            {" "}الخطة: {sub.plan_name}
-          </p>
+          <p>Monthly Active Contacts — رصيد مساحة العمل والاستخدام الشهري.</p>
         </div>
         <Link to="/channels" className="secondary-button">عرض القنوات ←</Link>
       </header>
 
-      <section className="admin-stats-row admin-stats-row-brand">
-        <article className="admin-stat-card admin-stat-card-brand">
-          <span>MAC المستخدم</span>
-          <strong>{formatMacBalance(sub.mac_count, sub.included_mac)}</strong>
-        </article>
-        <article className="admin-stat-card admin-stat-card-brand">
-          <span>المتبقي</span>
-          <strong>{sub.is_over_mac ? "0" : sub.mac_remaining.toLocaleString("ar")}</strong>
-        </article>
-        <article className="admin-stat-card admin-stat-card-brand">
-          <span>حالة الرصيد</span>
-          <strong className={macBalanceClass(sub.is_over_mac, sub.mac_count, sub.included_mac)}>
-            {sub.is_over_mac ? `Over MAC +${sub.over_mac_count}` : "ضمن الخطة"}
-          </strong>
-        </article>
-        <article className="admin-stat-card admin-stat-card-brand">
-          <span>{sub.is_over_mac ? "تقدير Over MAC" : "سعر Over MAC"}</span>
-          <strong>
-            {sub.is_over_mac
-              ? `$${sub.estimated_over_mac_charge.toFixed(2)}`
-              : `$${sub.over_mac_price_per_100}/100`}
-          </strong>
-        </article>
-      </section>
+      <MacWorkspaceBalance
+        summary={{
+          cycle_month: sub.cycle_month,
+          mac_count: sub.mac_count,
+          included_mac: sub.included_mac,
+          mac_remaining: sub.mac_remaining,
+          is_over_mac: sub.is_over_mac,
+          over_mac_count: sub.over_mac_count,
+          estimated_over_mac_charge: sub.estimated_over_mac_charge,
+          over_mac_price_per_100: sub.over_mac_price_per_100,
+          plan_name: sub.plan_name
+        }}
+      />
 
       {sub.is_over_mac && (
         <section className="card admin-note-card">
@@ -193,20 +166,13 @@ export default function BillingPage() {
           <div><span>MAC مشمول</span><strong>{sub.included_mac.toLocaleString("ar")}</strong></div>
           <div><span>ينتهي</span><strong>{formatAppTime(sub.ends_at)}</strong></div>
         </div>
-        <div className="progress-row">
-          <span>استخدام MAC</span>
-          <strong>{sub.mac_count}/{sub.included_mac}</strong>
-        </div>
-        <div className="progress-track">
-          <div style={{ width: `${macUsagePercent(sub.mac_count, sub.included_mac)}%` }} />
-        </div>
       </section>
 
       <section className="card admin-table-card">
         <div className="admin-table-header">
           <div>
             <h2>MAC حسب القناة</h2>
-            <small>مساهمة كل قناة · الحملات تُحسب برسائل منفصلة</small>
+            <small>أول تفاعل MAC على القناة · الحملات تُحسب برسائل منفصلة</small>
           </div>
         </div>
         <div className="admin-table-wrap">
@@ -214,7 +180,7 @@ export default function BillingPage() {
             <thead>
               <tr>
                 <th>القناة</th>
-                <th>MAC</th>
+                <th>MAC (أول تفاعل)</th>
                 <th>رسائل حملة</th>
                 <th>WhatsApp</th>
                 <th>حالة</th>
@@ -242,7 +208,7 @@ export default function BillingPage() {
         <div className="admin-table-header">
           <div>
             <h2>جهات MAC النشطة</h2>
-            <small>عميل واحد = MAC واحد لكل قناة في الشهر</small>
+            <small>عميل واحد = MAC واحد في الشهر — بغضّ النظر عن عدد الرسائل</small>
           </div>
         </div>
         <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
@@ -265,7 +231,7 @@ export default function BillingPage() {
               <tr>
                 <th>العميل</th>
                 <th>الهاتف</th>
-                <th>القناة</th>
+                <th>قناة أول تفاعل</th>
                 <th>المحفّز</th>
                 <th>أول نشاط</th>
               </tr>
@@ -282,7 +248,7 @@ export default function BillingPage() {
                   <td>{item.contact_display_name ?? "—"}</td>
                   <td dir="ltr">{item.contact_phone ?? "—"}</td>
                   <td>{item.channel_name ?? "—"}</td>
-                  <td>{formatTrigger(item.trigger_source)}</td>
+                  <td>{formatMacTrigger(item.trigger_source)}</td>
                   <td>{formatAppTime(item.first_activity_at)}</td>
                 </tr>
               ))}

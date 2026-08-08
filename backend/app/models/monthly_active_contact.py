@@ -1,8 +1,8 @@
 """Monthly Active Contact (MAC) billing records.
 
 Commercial policy (Watesly):
-- MAC counts a unique WhatsApp contact once per billing cycle (calendar month) per channel.
-- Triggers MAC: inbound customer message OR outbound message sent from Inbox/conversation.
+- MAC counts a unique WhatsApp contact once per billing cycle (calendar month) per account.
+- Triggers MAC: inbound customer message OR outbound from Inbox/staff/AI auto-reply.
 - Bulk campaigns are billed separately by message count - they do NOT increment MAC.
 - Re-contacting the same customer in the same month does NOT create a second MAC.
 """
@@ -20,6 +20,7 @@ from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class MacTriggerSource(StrEnum):
     INBOUND = "inbound"
     INBOX_OUTBOUND = "inbox_outbound"
+    AI_OUTBOUND = "ai_outbound"
 
 
 class MonthlyActiveContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -27,10 +28,9 @@ class MonthlyActiveContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint(
             "account_id",
-            "channel_id",
             "contact_id",
             "cycle_month",
-            name="uq_mac_account_channel_contact_cycle",
+            name="uq_mac_account_contact_cycle",
         ),
     )
 

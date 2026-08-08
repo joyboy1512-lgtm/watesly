@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import Icon from "../components/Icon";
+import MacWorkspaceBalance from "../components/MacWorkspaceBalance";
+import { formatMacUsagePercent } from "../lib/macHelpers";
 
 type CurrentUser = { full_name: string };
 
@@ -164,6 +166,22 @@ export default function DashboardPage() {
           </Link>
         </div>
       </section>
+
+      {subscription.data?.included_mac != null && (
+        <MacWorkspaceBalance
+          showPolicy={false}
+          summary={{
+            cycle_month: subscription.data.cycle_month,
+            mac_count: subscription.data.mac_count ?? 0,
+            included_mac: subscription.data.included_mac,
+            mac_remaining: subscription.data.mac_remaining ?? 0,
+            is_over_mac: Boolean(subscription.data.is_over_mac),
+            over_mac_count: subscription.data.over_mac_count ?? 0,
+            estimated_over_mac_charge: subscription.data.estimated_over_mac_charge ?? 0,
+            plan_name: subscription.data.plan_name
+          }}
+        />
+      )}
 
       {(data?.alerts ?? []).length > 0 && (
         <section className="dashboard-alerts">
@@ -329,9 +347,10 @@ export default function DashboardPage() {
             {subscription.data?.included_mac != null && (
               <>
                 <div className="progress-row">
-                  <span>MAC (عملاء نشطون)</span>
+                  <span>MAC — مساحة العمل</span>
                   <strong>
                     {subscription.data.mac_count ?? 0}/{subscription.data.included_mac ?? "-"}
+                    {" "}({formatMacUsagePercent(subscription.data.mac_count ?? 0, subscription.data.included_mac ?? 0)}%)
                   </strong>
                 </div>
                 <div className="progress-track">

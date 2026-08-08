@@ -1,9 +1,10 @@
 """MAC (Monthly Active Contact) tracking service.
 
 Billing policy:
-- One MAC per unique contact per channel per calendar month (YYYY-MM cycle).
-- Count when customer sends inbound message OR staff/AI sends from Inbox.
+- One MAC per unique contact per account per calendar month (YYYY-MM cycle).
+- Count when customer sends inbound OR staff/AI sends from Inbox/conversation.
 - Campaign bulk sends increment campaign message counters only - never MAC.
+- Same contact on multiple channels in one month still counts as one MAC.
 """
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -101,7 +102,7 @@ async def record_mac(
             first_activity_at=at,
         )
         .on_conflict_do_nothing(
-            constraint="uq_mac_account_channel_contact_cycle",
+            constraint="uq_mac_account_contact_cycle",
         )
     )
     result = await db.execute(stmt)
