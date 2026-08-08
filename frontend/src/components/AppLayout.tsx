@@ -29,7 +29,7 @@ export default function AppLayout() {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "W";
 
-  const items = [
+  const mainItems = [
     ["/dashboard", t("nav.dashboard"), "dashboard"],
     ["/inbox", t("nav.inbox"), "inbox"],
     ["/catalog", t("nav.catalog"), "template"],
@@ -50,13 +50,14 @@ export default function AppLayout() {
     ["/automations", t("nav.automations"), "template"],
     ["/trust-center", t("nav.trustCenter"), "admin"],
     ["/core-health", t("nav.coreHealth"), "dashboard"],
-    ...(profile.data?.is_super_admin
-      ? ([
-          ["/admin", t("nav.admin"), "admin"],
-          ["/admin/site-content", t("nav.siteContent"), "template"],
-        ] as const)
-      : []),
   ] as const;
+
+  const adminItems = profile.data?.is_super_admin
+    ? ([
+        ["/admin", t("nav.admin"), "admin"],
+        ["/admin/site-content", t("nav.siteContent"), "template"],
+      ] as const)
+    : ([] as const);
 
   return (
     <div className="app-shell">
@@ -80,17 +81,34 @@ export default function AppLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {items.map(([to, label, icon]) => (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}
-            >
-              <Icon name={icon} />
-              <span>{label}</span>
-            </NavLink>
-          ))}
+          <div className="sidebar-nav-main">
+            {mainItems.map(([to, label, icon]) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={() => setMobileOpen(false)}
+                className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+              >
+                <Icon name={icon} />
+                <span>{label}</span>
+              </NavLink>
+            ))}
+          </div>
+          {adminItems.length > 0 && (
+            <div className="sidebar-nav-admin">
+              {adminItems.map(([to, label, icon]) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={() => setMobileOpen(false)}
+                  className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+                >
+                  <Icon name={icon} />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          )}
         </nav>
 
         <div className="sidebar-footer">
