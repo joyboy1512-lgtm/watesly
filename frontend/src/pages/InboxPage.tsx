@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, silentRequest } from "../lib/api";
 import { authStore } from "../stores/auth";
 import { toastStore } from "../stores/toast";
 import { uploadFile } from "../lib/uploads";
@@ -85,8 +85,12 @@ export default function InboxPage() {
   const showArchived = filter === "archived";
   const conversationsQuery = useQuery({
     queryKey: ["conversations", showArchived],
-    queryFn: async () => (
-      await api.get<Conversation[]>("/conversations", { params: { archived: showArchived } })
+    queryFn: async ({ signal }) => (
+      await api.get<Conversation[]>("/conversations", {
+        params: { archived: showArchived },
+        signal,
+        ...silentRequest
+      })
     ).data,
     refetchInterval: 30_000
   });
@@ -114,7 +118,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (!selectedId) return;
-    void api.post(`/conversations/${selectedId}/read`).then(() => {
+    void api.post(`/conversations/${selectedId}/read`, undefined, silentRequest).then(() => {
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
     });
   }, [selectedId, queryClient]);
@@ -137,13 +141,17 @@ export default function InboxPage() {
   const messagesQuery = useQuery({
     queryKey: ["conversation-messages", selectedId],
     enabled: Boolean(selectedId),
-    queryFn: async () => (await api.get<Message[]>(`/conversations/${selectedId}/messages`)).data,
+    queryFn: async ({ signal }) => (
+      await api.get<Message[]>(`/conversations/${selectedId}/messages`, { signal, ...silentRequest })
+    ).data,
     refetchInterval: selectedId ? 2_000 : false,
   });
   const contextQuery = useQuery({
     queryKey: ["conversation-context", selectedId],
     enabled: Boolean(selectedId),
-    queryFn: async () => (await api.get<ConversationContext>(`/conversations/${selectedId}/context`)).data,
+    queryFn: async ({ signal }) => (
+      await api.get<ConversationContext>(`/conversations/${selectedId}/context`, { signal, ...silentRequest })
+    ).data,
     refetchInterval: 10_000
   });
 
@@ -217,7 +225,7 @@ export default function InboxPage() {
         organization_id: selectedConversation?.organization_id,
         channel_id: selectedConversation?.channel_id,
         limit: 3
-      })
+      }, silentRequest)
       .then((result) => setSuggestedReplies(result.data))
       .catch(() => undefined);
   }, [selectedId, messagesQuery.data, selectedConversation?.organization_id, selectedConversation?.channel_id, isArchived, windowClosed]);
@@ -247,13 +255,13 @@ export default function InboxPage() {
   useEffect(() => {
     if (!selectedId || isArchived) return;
     const sendView = () => {
-      void api.post(`/conversations/${selectedId}/presence/view`).catch(() => undefined);
+      void api.post(`/conversations/${selectedId}/presence/view`, undefined, silentRequest).catch(() => undefined);
     };
     sendView();
     const interval = window.setInterval(sendView, 20_000);
     return () => {
       window.clearInterval(interval);
-      void api.delete(`/conversations/${selectedId}/presence/view`).catch(() => undefined);
+      void api.delete(`/conversations/${selectedId}/presence/view`, silentRequest).catch(() => undefined);
     };
   }, [selectedId, isArchived]);
 
@@ -447,10 +455,10 @@ export default function InboxPage() {
       setText(body);
     }
     if (options?.articleId) {
-      void api.post(`/knowledge/${options.articleId}/usage`).catch(() => undefined);
+      void api.post(`/knowledge/${options.articleId}/usage`, undefined, silentRequest).catch(() => undefined);
     }
     if (options?.quickReplyId) {
-      void api.post(`/inbox-tools/quick-replies/${options.quickReplyId}/usage`).catch(() => undefined);
+      void api.post(`/inbox-tools/quick-replies/${options.quickReplyId}/usage`, undefined, silentRequest).catch(() => undefined);
       void queryClient.invalidateQueries({ queryKey: ["quick-replies"] });
     }
   }
@@ -470,7 +478,7 @@ export default function InboxPage() {
     if (!selectedId || isArchived) return;
     if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
     typingTimerRef.current = window.setTimeout(() => {
-      void api.post(`/conversations/${selectedId}/presence/typing`).catch(() => undefined);
+      void api.post(`/conversations/${selectedId}/presence/typing`, undefined, silentRequest).catch(() => undefined);
     }, 350);
   }
   async function aiSuggest() {
