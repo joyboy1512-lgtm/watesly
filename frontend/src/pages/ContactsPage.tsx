@@ -291,24 +291,24 @@ export default function ContactsPage() {
         </header>
 
         {stats.data && (
-          <div className="contacts-stats-bar">
-            <div className="contacts-stat-card">
-              <span className="contacts-stat-value">{stats.data.total}</span>
-              <span className="contacts-stat-label">إجمالي العملاء</span>
-            </div>
-            <div className="contacts-stat-card">
-              <span className="contacts-stat-value">{stats.data.new_this_week}</span>
-              <span className="contacts-stat-label">جدد هذا الأسبوع</span>
-            </div>
-            <div className="contacts-stat-card">
-              <span className="contacts-stat-value">{stats.data.without_name}</span>
-              <span className="contacts-stat-label">بدون اسم</span>
-            </div>
-            <div className="contacts-stat-card">
-              <span className="contacts-stat-value">{stats.data.inactive_30d}</span>
-              <span className="contacts-stat-label">غير نشط (30 يوم)</span>
-            </div>
-          </div>
+          <section className="admin-stats-row admin-stats-row-brand contacts-stats-brand">
+            <article className="admin-stat-card admin-stat-card-brand">
+              <span>إجمالي العملاء</span>
+              <strong>{stats.data.total.toLocaleString("ar")}</strong>
+            </article>
+            <article className="admin-stat-card admin-stat-card-brand">
+              <span>جدد هذا الأسبوع</span>
+              <strong>{stats.data.new_this_week.toLocaleString("ar")}</strong>
+            </article>
+            <article className="admin-stat-card admin-stat-card-brand">
+              <span>بدون اسم</span>
+              <strong>{stats.data.without_name.toLocaleString("ar")}</strong>
+            </article>
+            <article className="admin-stat-card admin-stat-card-brand">
+              <span>غير نشط (30 يوم)</span>
+              <strong>{stats.data.inactive_30d.toLocaleString("ar")}</strong>
+            </article>
+          </section>
         )}
 
         <div className="contacts-erp-toolbar">

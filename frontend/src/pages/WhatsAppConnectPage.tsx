@@ -450,12 +450,12 @@ export default function WhatsAppConnectPage() {
         <Link to="/channels" className="secondary-button">إدارة القنوات ←</Link>
       </header>
 
-      <section className="admin-stats-row">
-        <article className="admin-stat-card"><span>قنوات WhatsApp</span><strong>{stats.channels}</strong></article>
-        <article className="admin-stat-card"><span>حسابات مربوطة</span><strong>{stats.linked}</strong></article>
-        <article className="admin-stat-card"><span>متصل</span><strong>{stats.active}</strong></article>
-        <article className="admin-stat-card"><span>Embedded</span><strong>{stats.embedded}</strong></article>
-        <article className="admin-stat-card"><span>غير متصل</span><strong>{stats.disconnected}</strong></article>
+      <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand"><span>قنوات WhatsApp</span><strong>{stats.channels}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>حسابات مربوطة</span><strong>{stats.linked}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>متصل</span><strong>{stats.active}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>Embedded</span><strong>{stats.embedded}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>غير متصل</span><strong>{stats.disconnected}</strong></article>
       </section>
 
       <div className="whatsapp-page-tabs">

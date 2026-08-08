@@ -444,12 +444,12 @@ export default function CampaignsPage() {
         <Link to="/templates" className="secondary-button">القوالب ←</Link>
       </header>
 
-      <section className="admin-stats-row">
-        <article className="admin-stat-card"><span>إجمالي الحملات</span><strong>{stats.total}</strong></article>
-        <article className="admin-stat-card"><span>قيد الإرسال</span><strong>{stats.running}</strong></article>
-        <article className="admin-stat-card"><span>مكتملة</span><strong>{stats.completed}</strong></article>
-        <article className="admin-stat-card"><span>فشلت</span><strong>{stats.failed}</strong></article>
-        <article className="admin-stat-card"><span>مسودات</span><strong>{stats.draft}</strong></article>
+      <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الحملات</span><strong>{stats.total}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>قيد الإرسال</span><strong>{stats.running}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>مكتملة</span><strong>{stats.completed}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>فشلت</span><strong>{stats.failed}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>مسودات</span><strong>{stats.draft}</strong></article>
       </section>
 
       <div className="campaigns-page-tabs">

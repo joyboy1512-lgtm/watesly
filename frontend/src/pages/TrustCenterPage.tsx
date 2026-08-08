@@ -87,30 +87,24 @@ export default function TrustCenterPage() {
         <div className="trust-shield">✓</div>
       </section>
 
-      <section className="stats-grid premium">
-        <article className="metric-card">
-          <div>
-            <span>تشفير الحساب</span>
-            <strong>{status.data?.encryption_enabled ? "مفعّل" : "غير مفعّل"}</strong>
-            <small>Key version {status.data?.key_version ?? "-"}</small>
-          </div>
+      <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand">
+          <span>تشفير الحساب</span>
+          <strong>{status.data?.encryption_enabled ? "مفعّل" : "غير مفعّل"}</strong>
+          <small>Key version {status.data?.key_version ?? "-"}</small>
         </article>
-        <article className="metric-card">
-          <div>
-            <span>صلاحيات الدعم النشطة</span>
-            <strong>{status.data?.active_support_grants ?? 0}</strong>
-            <small>تنتهي تلقائيًا</small>
-          </div>
+        <article className="admin-stat-card admin-stat-card-brand">
+          <span>صلاحيات الدعم النشطة</span>
+          <strong>{status.data?.active_support_grants ?? 0}</strong>
+          <small>تنتهي تلقائيًا</small>
         </article>
-        <article className="metric-card">
-          <div>
-            <span>آخر نشاط تدقيق</span>
-            <strong className="small-metric">
-              {status.data?.last_audit_event_at
-                ? new Date(status.data.last_audit_event_at).toLocaleString()
-                : "-"}
-            </strong>
-          </div>
+        <article className="admin-stat-card admin-stat-card-brand">
+          <span>آخر نشاط تدقيق</span>
+          <strong className="admin-stat-card-subvalue">
+            {status.data?.last_audit_event_at
+              ? new Date(status.data.last_audit_event_at).toLocaleString("ar")
+              : "—"}
+          </strong>
         </article>
       </section>
 

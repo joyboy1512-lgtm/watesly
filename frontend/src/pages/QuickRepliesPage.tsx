@@ -209,12 +209,12 @@ export default function QuickRepliesPage() {
         </div>
       </header>
 
-      <section className="stats-grid quick-replies-stats">
-        <article className="metric-card"><span>إجمالي الردود</span><strong>{analytics.data?.summary?.total ?? "…"}</strong></article>
-        <article className="metric-card"><span>بدون استخدام</span><strong>{analytics.data?.summary?.unused ?? "…"}</strong></article>
-        <article className="metric-card"><span>إجمالي الاستخدام</span><strong>{analytics.data?.summary?.total_usage ?? "…"}</strong></article>
+      <section className="admin-stats-row admin-stats-row-brand quick-replies-stats">
+        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الردود</span><strong>{analytics.data?.summary?.total ?? "…"}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>بدون استخدام</span><strong>{analytics.data?.summary?.unused ?? "…"}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الاستخدام</span><strong>{analytics.data?.summary?.total_usage ?? "…"}</strong></article>
         {(analytics.data?.by_category ?? []).slice(0, 3).map((item) => (
-          <article key={item.category} className="metric-card">
+          <article key={item.category} className="admin-stat-card admin-stat-card-brand">
             <span>{categoryLabel(item.category)}</span>
             <strong>{item.count}</strong>
           </article>

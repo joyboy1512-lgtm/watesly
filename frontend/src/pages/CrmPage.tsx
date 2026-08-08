@@ -142,12 +142,12 @@ export default function CrmPage() {
           <Link to="/reports?tab=crm" className="crm-erp-btn">تقارير CRM</Link>
         </header>
 
-        <div className="crm-stats-grid">
-          <article className="metric-card"><span>إجمالي الصفقات</span><strong>{stats.data?.total ?? "…"}</strong></article>
-          <article className="metric-card"><span>مفتوحة</span><strong>{stats.data?.open ?? "…"}</strong></article>
-          <article className="metric-card"><span>فوز (30 يوم)</span><strong>{stats.data?.won_month ?? "…"}</strong></article>
-          <article className="metric-card"><span>قيمة Pipeline</span><strong>{stats.data?.pipeline_value?.toLocaleString("ar") ?? "…"}</strong></article>
-        </div>
+        <section className="admin-stats-row admin-stats-row-brand">
+          <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الصفقات</span><strong>{stats.data?.total ?? "…"}</strong></article>
+          <article className="admin-stat-card admin-stat-card-brand"><span>مفتوحة</span><strong>{stats.data?.open ?? "…"}</strong></article>
+          <article className="admin-stat-card admin-stat-card-brand"><span>فوز (30 يوم)</span><strong>{stats.data?.won_month ?? "…"}</strong></article>
+          <article className="admin-stat-card admin-stat-card-brand"><span>قيمة Pipeline</span><strong>{stats.data?.pipeline_value?.toLocaleString("ar") ?? "…"}</strong></article>
+        </section>
 
         <div className="crm-funnel">
           {DEAL_STAGES.map((stage) => {
