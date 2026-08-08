@@ -46,6 +46,8 @@ class WhatsAppAccountResponse(BaseModel):
     id: UUID
     channel_id: UUID
     organization_id: UUID
+    channel_name: str | None = None
+    organization_name: str | None = None
     waba_id: str
     phone_number_id: str
     display_phone_number: str
