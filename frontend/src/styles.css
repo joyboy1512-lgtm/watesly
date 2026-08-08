@@ -3382,6 +3382,85 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .composer-meta .link-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .whatsapp-connect-page { display: grid; gap: 18px; }
+.whatsapp-page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.whatsapp-tab {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+.whatsapp-tab.active {
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+  color: var(--primary-darker);
+  font-weight: 700;
+}
+.whatsapp-connect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.whatsapp-erp-table .admin-actions.compact,
+.whatsapp-row-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.whatsapp-row-actions .secondary-button.compact,
+.whatsapp-button.compact {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.whatsapp-expand-row td {
+  background: color-mix(in srgb, var(--primary) 4%, var(--panel-soft));
+  padding: 0;
+}
+.whatsapp-expand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+.whatsapp-expand-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.whatsapp-expand-panel h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.whatsapp-meta-id-list {
+  display: grid;
+  gap: 8px;
+}
+.whatsapp-meta-id-list div {
+  display: grid;
+  gap: 4px;
+}
+.whatsapp-meta-id-list span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.whatsapp-meta-id-list code {
+  font-size: 12px;
+  word-break: break-all;
+}
+.whatsapp-qr-image {
+  max-width: 220px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.danger-text { color: var(--danger); }
 .whatsapp-list-card,
 .whatsapp-manage-card { display: grid; gap: 16px; }
 .whatsapp-list-header {
