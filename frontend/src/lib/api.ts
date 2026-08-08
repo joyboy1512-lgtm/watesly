@@ -2,6 +2,16 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { authStore } from "../stores/auth";
 import { toastStore } from "../stores/toast";
 
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    skipGlobalErrorToast?: boolean;
+  }
+
+  export interface InternalAxiosRequestConfig {
+    skipGlobalErrorToast?: boolean;
+  }
+}
+
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1",
   timeout: 30000,
@@ -11,6 +21,16 @@ export const api = axios.create({
 let refreshPromise: Promise<string> | null = null;
 
 type RetriableRequest = InternalAxiosRequestConfig & { _retry?: boolean };
+
+export const silentRequest = { skipGlobalErrorToast: true } as const;
+
+function isRequestCanceled(error: AxiosError): boolean {
+  return (
+    error.code === "ERR_CANCELED" ||
+    error.name === "CanceledError" ||
+    axios.isCancel(error)
+  );
+}
 type ValidationErrorItem = { msg?: string; loc?: (string | number)[] };
 
 function parseResponseDetail(data: unknown): unknown {
@@ -77,22 +97,25 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const original = error.config as RetriableRequest | undefined;
+    const skipToast = Boolean(original?.skipGlobalErrorToast) || isRequestCanceled(error);
     if (error.response?.status !== 401 || original?._retry) {
-      const status = error.response?.status;
-      if (status && status !== 404) {
-        const message = formatApiError(error);
-        if (status === 429) {
-          toastStore.getState().show("طلبات كثيرة. انتظر قليلًا ثم أعد المحاولة.", "error");
-        } else if (status >= 400) {
+      if (!skipToast) {
+        const status = error.response?.status;
+        if (status && status !== 404) {
+          const message = formatApiError(error);
+          if (status === 429) {
+            toastStore.getState().show("طلبات كثيرة. انتظر قليلًا ثم أعد المحاولة.", "error");
+          } else if (status >= 400) {
+            toastStore.getState().show(message, "error");
+          }
+        }
+        if (!error.response) {
+          const message =
+            error.code === "ECONNABORTED"
+              ? "انتهت مهلة الطلب. حاول مجددًا."
+              : "تعذر الاتصال بالخادم. تحقق من تشغيل Watesly.";
           toastStore.getState().show(message, "error");
         }
-      }
-      if (!error.response) {
-        const message =
-          error.code === "ECONNABORTED"
-            ? "انتهت مهلة الطلب. حاول مجددًا."
-            : "تعذر الاتصال بالخادم. تحقق من تشغيل Watesly.";
-        toastStore.getState().show(message, "error");
       }
       return Promise.reject(error);
     }
