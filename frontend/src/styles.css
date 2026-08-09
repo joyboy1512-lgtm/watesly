@@ -2384,18 +2384,58 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
 }
 .assignments-primary-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.assignments-table-card { overflow: hidden; }
-.assignments-table-title {
-  background: linear-gradient(90deg, rgba(37, 211, 102, 0.1), transparent);
-  border-bottom: 1px solid rgba(37, 211, 102, 0.2);
-}
-.assignments-table-title h2 { color: var(--primary-darker); }
-.assignments-erp-table thead th {
+.assignments-table-card { overflow: hidden; padding: 0; }
+.assignments-table-card .admin-table-header.assignments-table-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  padding: 11px 16px;
+  border-bottom: none;
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
-  color: #fff;
-  font-weight: 700;
-  border-inline-end-color: rgba(255, 255, 255, 0.12);
 }
+.assignments-table-card .assignments-table-title > div {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+.assignments-table-card .assignments-table-title h2 {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+.assignments-table-card .assignments-table-title small {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 11px;
+}
+.assignments-erp-table thead th {
+  background: rgba(37, 211, 102, 0.14);
+  color: var(--primary-darker);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 5px 8px;
+  text-align: center;
+  border-inline-end: 1px solid rgba(7, 94, 84, 0.08);
+  border-bottom: 1px solid var(--line);
+}
+.assignments-erp-table tbody td {
+  padding: 8px 10px;
+  text-align: center;
+  vertical-align: middle;
+}
+.assignments-erp-table tbody td:first-child { text-align: start; }
+.assignments-erp-table .admin-employee-cell {
+  min-width: 0;
+  gap: 8px;
+  justify-content: flex-start;
+}
+.assignments-erp-table .admin-avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+}
+.assignments-erp-table .admin-cell-main strong { font-size: 13px; }
 .assignments-load-badge {
   display: inline-flex;
   min-width: 34px;
