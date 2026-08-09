@@ -8,8 +8,9 @@ from app.models.channel import Channel
 from app.models.contact import Contact
 from app.models.contact_tag import ContactTag
 from app.models.segment import Segment
+from app.models.tag import Tag
 from app.schemas.contact import ContactCreateRequest
-from app.services.contact_management import _apply_segment_filters
+from app.services.contact_management import _apply_segment_filters, apply_contact_tags
 from app.services.gender_inference import infer_gender_from_name, infer_gender_with_llm_fallback
 
 _LIST_LIMIT_MAX = 500
@@ -102,6 +103,9 @@ async def create_contact(
         raise ValueError("CHANNEL_ORGANIZATION_MISMATCH")
 
     gender = await infer_gender_with_llm_fallback(payload.display_name)
+    lifecycle_stage = None
+    if payload.lifecycle_stage and payload.lifecycle_stage.strip():
+        lifecycle_stage = payload.lifecycle_stage.strip()[:30]
 
     existing = await db.execute(
         select(Contact).where(
@@ -122,15 +126,32 @@ async def create_contact(
             contact.language = payload.language
         if payload.country_code is not None:
             contact.country_code = payload.country_code
+        if lifecycle_stage is not None:
+            contact.lifecycle_stage = lifecycle_stage
         contact.updated_at = datetime.now(UTC)
+        await apply_contact_tags(
+            db,
+            account_id=account_id,
+            contact_id=contact.id,
+            tag_ids=payload.tag_ids,
+        )
         await db.commit()
         await db.refresh(contact)
         return contact
 
-    data = payload.model_dump()
+    data = payload.model_dump(exclude={"tag_ids"})
     data["gender"] = gender
+    if lifecycle_stage is not None:
+        data["lifecycle_stage"] = lifecycle_stage
     contact = Contact(account_id=account_id, **data)
     db.add(contact)
+    await db.flush()
+    await apply_contact_tags(
+        db,
+        account_id=account_id,
+        contact_id=contact.id,
+        tag_ids=payload.tag_ids,
+    )
     await db.commit()
     await db.refresh(contact)
     return contact

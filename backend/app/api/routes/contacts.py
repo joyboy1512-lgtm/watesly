@@ -135,6 +135,7 @@ async def post_contact(
         messages = {
             "INVALID_CHANNEL": (400, "Channel is invalid"),
             "CHANNEL_ORGANIZATION_MISMATCH": (400, "Channel does not belong to this organization"),
+            "INVALID_TAG": (400, "One or more tags are invalid"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create contact"))
         raise HTTPException(status_code=code, detail=detail) from exc
