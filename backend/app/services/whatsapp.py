@@ -642,6 +642,13 @@ async def send_media_message(
     contact, conversation, _ = await _get_or_create_contact_and_conversation(
         db, whatsapp_account=wa, sender=payload.to, display_name=None
     )
+    stored_media: dict = {
+        "media_url": str(payload.media_url),
+        "filename": payload.filename,
+    }
+    object_key = storage.key_from_public_url(str(payload.media_url))
+    if object_key:
+        stored_media["object_key"] = object_key
     message = Message(
         account_id=account_id,
         organization_id=wa.organization_id,
@@ -653,7 +660,7 @@ async def send_media_message(
         from_address=wa.display_phone_number,
         to_address=payload.to,
         text_body=payload.caption,
-        provider_payload={"media_url": str(payload.media_url), "filename": payload.filename},
+        provider_payload=stored_media,
         status=MessageStatus.QUEUED,
     )
     db.add(message)
@@ -674,13 +681,13 @@ async def send_media_message(
         )
     except MetaAPIError as exc:
         message.status = MessageStatus.FAILED
-        message.provider_payload = exc.response_data
+        message.provider_payload = {**stored_media, "meta_error": exc.response_data}
         await db.commit()
         raise
 
     items = response.get("messages", [])
     message.external_message_id = items[0].get("id") if items else None
-    message.provider_payload = response
+    message.provider_payload = {**stored_media, "meta_response": response}
     message.status = MessageStatus.SENT
     conversation.last_message_at = datetime.now(UTC)
     await db.commit()
