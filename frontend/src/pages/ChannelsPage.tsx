@@ -4,14 +4,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, formatApiError } from "../lib/api";
 import { hasNavPermission } from "../lib/navPermissions";
 import { toastStore } from "../stores/toast";
-import ChannelBillingEditor from "../components/ChannelBillingEditor";
 import {
   CHANNEL_TYPE_OPTIONS,
   type BasicChannel,
   type ChannelRow,
   type ChannelUsageBoard,
   channelCapabilities,
-  channelPurpose,
   channelSetupState,
   channelStatusClass,
   channelTypeClass,
@@ -22,18 +20,11 @@ import {
   formatMacBalance,
   formatMacCycleMonth,
   macBalanceClass,
-  macUsagePercent,
   mergeChannelRows
 } from "../lib/channelHelpers";
 import { formatWhatsAppStatus, whatsappStatusBadgeClass } from "../lib/teamHelpers";
 
 type Organization = { id: string; name: string };
-type AssignmentRule = {
-  id: string;
-  channel_id: string | null;
-  name: string;
-  is_active: boolean;
-};
 
 export default function ChannelsPage() {
   const navigate = useNavigate();
@@ -65,10 +56,6 @@ export default function ChannelsPage() {
     queryFn: async () => (await api.get<ChannelUsageBoard>("/channels/usage-board")).data,
     retry: 1
   });
-  const rulesQuery = useQuery({
-    queryKey: ["assignment-rules"],
-    queryFn: async () => (await api.get<AssignmentRule[]>("/assignments/rules")).data
-  });
 
   const canManage = hasNavPermission(profile.data?.permissions, "channels.manage");
   const canManageBilling = hasNavPermission(profile.data?.permissions, "billing.manage");
@@ -87,15 +74,6 @@ export default function ChannelsPage() {
     () => channelsForBranch(allRows, branchFilter),
     [allRows, branchFilter]
   );
-
-  const rulesByChannel = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const rule of rulesQuery.data ?? []) {
-      if (!rule.channel_id || !rule.is_active) continue;
-      map.set(rule.channel_id, (map.get(rule.channel_id) ?? 0) + 1);
-    }
-    return map;
-  }, [rulesQuery.data]);
 
   const board = usageBoard.data;
 
@@ -179,9 +157,8 @@ export default function ChannelsPage() {
     }
     const label = channel.whatsapp_verified_name || channel.whatsapp_phone;
     return (
-      <div className="admin-cell-stack">
+      <div className="channels-inline-cell">
         <strong dir="ltr">{label}</strong>
-        <small dir="ltr">{channel.whatsapp_phone}</small>
         {channel.whatsapp_status && (
           <span className={whatsappStatusBadgeClass(channel.whatsapp_status)}>
             {formatWhatsAppStatus(channel.whatsapp_status)}
@@ -191,80 +168,16 @@ export default function ChannelsPage() {
     );
   }
 
-  function renderTasksCell(channel: ChannelRow) {
-    const rulesCount = rulesByChannel.get(channel.channel_id) ?? 0;
-    const caps = channelCapabilities(channel.channel_type);
-    return (
-      <div className="admin-cell-stack channels-tasks-cell">
-        <span>{channelPurpose(channel.channel_type)}</span>
-        <div className="admin-chip-row">
-          {caps.slice(0, 4).map((item) => (
-            <span key={item} className="admin-chip admin-chip-muted">{item}</span>
-          ))}
-        </div>
-        <small>{rulesCount > 0 ? `${rulesCount} قاعدة توجيه نشطة` : "بدون قواعد توجيه"}</small>
-        {channel.campaign_messages_sent > 0 && (
-          <small>{channel.campaign_messages_sent.toLocaleString("ar")} رسالة حملة هذا الشهر</small>
-        )}
-      </div>
-    );
-  }
-
-  function formatPlanDate(value: string | null | undefined): string {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return new Intl.DateTimeFormat("ar", { day: "numeric", month: "short", year: "numeric" }).format(date);
-  }
-
-  function formatPeriodRange(start: string | null | undefined, end: string | null | undefined): string {
-    if (!start || !end) return "—";
-    const s = new Date(start);
-    const e = new Date(end);
-    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return "—";
-    const fmt = new Intl.DateTimeFormat("ar", { day: "numeric", month: "short" });
-    return `${fmt.format(s)} – ${fmt.format(e)}`;
-  }
-
-  function renderBillingCell(channel: ChannelRow) {
-    return (
-      <div className="admin-cell-stack channel-billing-cell">
-        <small>بداية: {formatPlanDate(channel.subscription_starts_at)}</small>
-        <small>نهاية: {formatPlanDate(channel.subscription_ends_at)}</small>
-        <small>دورة MAC: {formatPeriodRange(channel.billing_period_start, channel.billing_period_end)}</small>
-      </div>
-    );
-  }
-
-  function renderOverChargeCell(channel: ChannelRow) {
-    const charge = channel.estimated_channel_over_mac_charge ?? 0;
-    return (
-      <div className="admin-cell-stack">
-        <strong className={charge > 0 ? "billing-over-charge" : ""}>
-          {charge > 0 ? `$${charge.toFixed(2)}` : "—"}
-        </strong>
-        {(channel.attributed_over_mac_count ?? 0) > 0 && (
-          <small>+{(channel.attributed_over_mac_count ?? 0).toLocaleString("ar")} MAC</small>
-        )}
-      </div>
-    );
-  }
-
   function renderMacCell(channel: ChannelRow) {
     if (!board) {
       return <span className="admin-chip admin-chip-muted">{channel.mac_count.toLocaleString("ar")} MAC</span>;
     }
-    const usagePct = macUsagePercent(channel.mac_count, channel.included_mac);
     return (
-      <div className="admin-cell-stack channel-mac-cell">
-        <strong>{channel.mac_count.toLocaleString("ar")} MAC</strong>
-        <small>{formatMacBalance(channel.mac_count, channel.included_mac)} · {usagePct}%</small>
-        <small className={macBalanceClass(channel.is_over_mac, channel.mac_count, channel.included_mac)}>
-          {channel.is_over_mac ? `+${channel.over_mac_count.toLocaleString("ar")} Over` : "ضمن الحصة"}
-        </small>
-        <Link to={`/channels/${channel.channel_id}/mac`} className="channel-mac-detail-link">
-          التفاصيل →
-        </Link>
+      <div className="channels-inline-cell">
+        <strong>{formatMacBalance(channel.mac_count, channel.included_mac)}</strong>
+        <span className={macBalanceClass(channel.is_over_mac, channel.mac_count, channel.included_mac)}>
+          {channel.is_over_mac ? `+${channel.over_mac_count.toLocaleString("ar")}` : "ضمن الحصة"}
+        </span>
       </div>
     );
   }
@@ -288,8 +201,8 @@ export default function ChannelsPage() {
           <strong>فوترة MAC مستقلة لكل قناة</strong>
           <small>
             {canManageBilling
-              ? "اضغط زر تعديل الفوترة في الجدول لتغيير تاريخ الاشتراك، حصة MAC، وسعر Over لكل قناة على حدة."
-              : "كل قناة لها اشتراك وحصة MAC وOver MAC منفصلة. اطلب صلاحية billing.manage للتعديل."}
+              ? "عدّل فوترة MAC لكل قناة من صفحة الفوترة — الجدول هنا للعرض السريع فقط."
+              : "كل قناة لها اشتراك وحصة MAC وOver MAC منفصلة. التفاصيل في صفحة الفوترة."}
           </small>
         </div>
         <span className="billing-per-channel-badge">مستقل</span>
@@ -447,7 +360,7 @@ export default function ChannelsPage() {
         <div className="admin-table-header assignments-table-title">
           <div>
             <h2>جدول القنوات</h2>
-            <small>{filtered.length} قناة · الحالة · المهام · MAC</small>
+            <small>{filtered.length} قناة · MAC · WhatsApp · إجراءات</small>
           </div>
         </div>
 
@@ -491,17 +404,13 @@ export default function ChannelsPage() {
         </div>
 
         <div className="admin-table-wrap">
-          <table className="admin-erp-table channels-erp-table">
+          <table className="admin-erp-table channels-erp-table channels-erp-table-compact">
             <thead>
               <tr>
                 <th>القناة</th>
                 <th>الفرع</th>
                 <th>النوع</th>
                 <th>MAC</th>
-                <th>الاشتراك والدورة</th>
-                <th>فوترة القناة</th>
-                <th>إجمالي Over MAC</th>
-                <th>المهام والاستخدام</th>
                 <th>WhatsApp Business</th>
                 <th>حالة القناة</th>
                 <th>إجراءات</th>
@@ -509,18 +418,18 @@ export default function ChannelsPage() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={11} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={7} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {loadError && (
                 <tr>
-                  <td colSpan={11} className="admin-table-empty">
+                  <td colSpan={7} className="admin-table-empty">
                     تعذر تحميل القنوات. تحقق من الصلاحيات أو اتصال الخادم.
                   </td>
                 </tr>
               )}
               {!isLoading && !loadError && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="admin-table-empty">
+                  <td colSpan={7} className="admin-table-empty">
                     {visibleRows.length === 0
                       ? "لا توجد قنوات بعد. أنشئ قناة من النموذج أعلاه."
                       : "لا توجد نتائج مطابقة للبحث أو التصفية."}
@@ -530,9 +439,9 @@ export default function ChannelsPage() {
               {filtered.map((item) => (
                 <tr key={item.channel_id}>
                   <td>
-                    <div className="admin-cell-main">
+                    <div className="admin-cell-main channels-name-cell">
                       <strong>{item.channel_name}</strong>
-                      <small dir="ltr">{item.external_id ?? "—"}</small>
+                      {item.whatsapp_phone && <small dir="ltr">{item.whatsapp_phone}</small>}
                     </div>
                   </td>
                   <td>{orgMap.get(item.organization_id) ?? "—"}</td>
@@ -540,25 +449,12 @@ export default function ChannelsPage() {
                     <span className={channelTypeClass(item.channel_type)}>{formatChannelType(item.channel_type)}</span>
                   </td>
                   <td>{renderMacCell(item)}</td>
-                  <td>{renderBillingCell(item)}</td>
-                  <td>
-                    <ChannelBillingEditor
-                      channelId={item.channel_id}
-                      billingStartsAt={item.subscription_starts_at}
-                      billingEndsAt={item.subscription_ends_at}
-                      includedMac={item.included_mac}
-                      overMacPricePer100={item.over_mac_price_per_100 ?? board?.over_mac_price_per_100 ?? 0}
-                      disabled={!canManageBilling}
-                    />
-                  </td>
-                  <td>{renderOverChargeCell(item)}</td>
-                  <td>{renderTasksCell(item)}</td>
                   <td>{renderWhatsAppCell(item)}</td>
                   <td>
                     <span className={channelStatusClass(item.channel_status)}>{formatChannelStatus(item.channel_status)}</span>
                   </td>
                   <td>
-                    <div className="admin-actions">
+                    <div className="admin-actions channels-row-actions">
                       <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button">
                         MAC
                       </Link>

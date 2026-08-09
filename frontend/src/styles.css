@@ -3008,6 +3008,41 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   vertical-align: middle;
 }
 .channels-erp-table tbody td:first-child { text-align: start; }
+.channels-erp-table-compact tbody td {
+  padding: 10px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.channels-erp-table-compact tbody td:first-child {
+  white-space: normal;
+  min-width: 140px;
+}
+.channels-inline-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.channels-inline-cell strong {
+  font-size: 13px;
+}
+.channels-name-cell small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.channels-row-actions {
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 6px;
+}
+.channels-row-actions .secondary-button {
+  padding: 5px 10px !important;
+  font-size: 12px !important;
+  white-space: nowrap;
+}
 .channels-tasks-cell .admin-chip-row { justify-content: center; }
 @media (max-width: 980px) {
   .channels-hero { flex-direction: column; }
