@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, formatApiError } from "../lib/api";
 import { computeCampaignStats } from "../lib/campaignHelpers";
 import { type PreflightCheck } from "../lib/growthFeatures";
 import {
@@ -253,6 +253,13 @@ export default function CampaignsPage() {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
+    const orgs = organizations.data ?? [];
+    if (!organizationId && orgs.length === 1) {
+      setOrganizationId(orgs[0].id);
+    }
+  }, [organizations.data, organizationId]);
+
+  useEffect(() => {
     const idsParam = searchParams.get("contact_ids");
     if (!idsParam) return;
     const ids = idsParam.split(",").map((item) => item.trim()).filter(Boolean);
@@ -439,6 +446,14 @@ export default function CampaignsPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
+    if (!organizationId) {
+      toastStore.getState().show("اختر الفرع أولاً.", "error");
+      return;
+    }
+    if (!accountId || !templateId) {
+      toastStore.getState().show("اختر حساب WhatsApp والقالب المعتمد.", "error");
+      return;
+    }
     if (!selectedContacts.length) {
       toastStore.getState().show("اختر عملاء للحملة أو ارفع Excel.", "error");
       return;
@@ -447,6 +462,7 @@ export default function CampaignsPage() {
       toastStore.getState().show("القالب يتطلب وسائط في الرأس — ارفع صورة أو فيديو أو PDF.", "error");
       return;
     }
+    const requestOptions = { skipGlobalErrorToast: true } as const;
     try {
       const templateParameters = buildSendComponents(selectedTemplate?.components, campaignMediaOverride
         ? { mediaUrl: campaignMediaOverride.public_url, filename: campaignMediaOverride.filename }
@@ -463,10 +479,10 @@ export default function CampaignsPage() {
           contact_id,
           template_parameters: templateParameters
         }))
-      });
+      }, requestOptions);
       const campaignId = response.data.id as string;
-      await api.post(`/campaigns/${campaignId}/approve`);
-      await api.post(`/campaigns/${campaignId}/start`);
+      await api.post(`/campaigns/${campaignId}/approve`, undefined, requestOptions);
+      await api.post(`/campaigns/${campaignId}/start`, undefined, requestOptions);
       setName("");
       setSelectedContacts([]);
       setCampaignMediaOverride(null);
@@ -475,8 +491,11 @@ export default function CampaignsPage() {
       setActiveTab("list");
       await waitForCampaignReport(client, campaignId);
       toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول.", "success");
-    } catch {
-      toastStore.getState().show("تعذر إنشاء الحملة. تحقق من القالب المعتمد، أو أن الجمهور لم يرفض التسويق.", "error");
+    } catch (error) {
+      toastStore.getState().show(
+        formatApiError(error, "تعذر إنشاء الحملة. تحقق من القالب المعتمد، أو أن الجمهور لم يرفض التسويق."),
+        "error"
+      );
     }
   }
 

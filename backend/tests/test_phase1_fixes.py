@@ -38,6 +38,13 @@ def test_webhook_worker_resets_async_pools() -> None:
     assert "dispose_redis_client" in runner
 
 
+def test_campaign_worker_uses_async_runner() -> None:
+    source = read("app/workers/campaign_tasks.py")
+    assert "from app.workers.async_runner import run_async" in source
+    assert "return run_async(_run_campaign" in source
+    assert "asyncio.run(_run_campaign" not in source
+
+
 def test_automation_run_queued_dispatches_worker() -> None:
     handlers = read("app/services/event_handlers.py")
     webhook = read("app/workers/webhook_tasks.py")

@@ -102,7 +102,14 @@ async def post_campaign(payload: CampaignCreateRequest, context: AuthContext = D
     except ValueError as exc:
         code = str(exc)
         messages = {
-            "ALL_RECIPIENTS_OPTED_OUT": "All selected contacts opted out of marketing",
+            "ALL_RECIPIENTS_OPTED_OUT": "كل العملاء المختارين رفضوا التسويق (opt-out).",
+            "INVALID_RECIPIENT": "بعض العملاء غير صالحين لهذا الفرع — اختر الفرع والقناة ثم حمّل الجمهور من جديد.",
+            "INVALID_WHATSAPP_ACCOUNT": "حساب WhatsApp غير صالح.",
+            "INVALID_TEMPLATE": "القالب غير موجود.",
+            "TEMPLATE_ACCOUNT_MISMATCH": "القالب لا ينتمي لحساب WhatsApp المختار.",
+            "TEMPLATE_NOT_APPROVED": "القالب غير معتمد بعد — انتظر موافقة Meta.",
+            "DUPLICATE_RECIPIENT": "يوجد عميل مكرر في قائمة المستلمين.",
+            "ORGANIZATION_MISMATCH": "الفرع المختار لا يطابق حساب WhatsApp.",
         }
         raise HTTPException(status_code=400, detail=messages.get(code, code)) from exc
 

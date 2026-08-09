@@ -1,7 +1,10 @@
-import asyncio, random
+import asyncio
+import random
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
+
 from sqlalchemy import select, update
+
 from app.core.encryption import decrypt_secret
 from app.db.session import AsyncSessionFactory
 from app.models.campaign import Campaign, CampaignStatus
@@ -13,6 +16,7 @@ from app.services.feature_flags import get_feature_flags
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 from app.services.phone_normalize import normalize_whatsapp_phone
 from app.services.template_media import resolve_send_components
+from app.workers.async_runner import run_async
 from app.workers.celery_app import celery_app
 
 STALE_SENDING_MINUTES = 10
@@ -70,5 +74,6 @@ async def _run_campaign(campaign_id:UUID,execution_token:UUID)->dict:
     await db.commit(); await asyncio.sleep(sleep_min+random.random()*sleep_jitter)
   campaign.status=CampaignStatus.COMPLETED if failed==0 else CampaignStatus.COMPLETED_WITH_ERRORS; campaign.completed_at=datetime.now(UTC); campaign.active_task_id=None; await db.commit(); return {"status":campaign.status.value,"sent":sent,"failed":failed}
 
-@celery_app.task(name="watesly.campaigns.run",max_retries=0)
-def run_campaign(campaign_id:str,execution_token:str)->dict:return asyncio.run(_run_campaign(UUID(campaign_id),UUID(execution_token)))
+@celery_app.task(name="watesly.campaigns.run", max_retries=0)
+def run_campaign(campaign_id: str, execution_token: str) -> dict:
+    return run_async(_run_campaign(UUID(campaign_id), UUID(execution_token)))
