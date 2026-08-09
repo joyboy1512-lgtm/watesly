@@ -53,7 +53,6 @@ from app.services.interests import (
     create_interest,
     list_contact_interests,
     list_interests,
-    merge_interest_gender_rules,
 )
 from app.services.crm import (
     add_deal_activity,
@@ -334,10 +333,7 @@ async def post_resolve_audience(
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.interest_category import InterestCategory
-
     filters: dict = {}
-    categories: list[InterestCategory] = []
     if payload.organization_id:
         filters["organization_id"] = str(payload.organization_id)
     if payload.channel_id:
@@ -348,17 +344,6 @@ async def post_resolve_audience(
         filters["marketing_opt_in"] = True
     if payload.interest_ids:
         filters["interest_ids"] = [str(item) for item in payload.interest_ids]
-        for interest_id in payload.interest_ids:
-            item = await db.get(InterestCategory, interest_id)
-            if item is not None and item.account_id == context.account_id:
-                categories.append(item)
-        rule_exclude, rule_include = merge_interest_gender_rules(categories)
-        merged_exclude = set(payload.exclude_genders) | rule_exclude
-        if merged_exclude:
-            filters["exclude_genders"] = sorted(merged_exclude)
-        if rule_include and not payload.gender:
-            if len(rule_include) == 1:
-                filters["gender"] = next(iter(rule_include))
     if payload.gender:
         filters["gender"] = payload.gender
     elif payload.exclude_genders:
@@ -370,13 +355,6 @@ async def post_resolve_audience(
         filters=filters,
         limit=payload.limit,
     )
-    warnings: list[str] = []
-    if payload.interest_ids:
-        for category in categories:
-            if category.exclude_genders:
-                labels = {"male": "الرجال", "female": "النساء", "unknown": "غير محدد"}
-                excluded = "، ".join(labels.get(value, value) for value in category.exclude_genders)
-                warnings.append(f"«{category.label}»: مستبعد تلقائياً — {excluded}")
 
     return {
         "count": len(contacts),
@@ -390,7 +368,7 @@ async def post_resolve_audience(
             }
             for item in contacts
         ],
-        "warnings": warnings,
+        "warnings": [],
         "filters_applied": filters,
     }
 
