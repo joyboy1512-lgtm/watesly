@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,5 +51,9 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    included_mac_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    over_mac_price_per_100_override: Mapped[float | None] = mapped_column(
+        Numeric(12, 3), nullable=True
+    )
 
     plan: Mapped["Plan"] = relationship()

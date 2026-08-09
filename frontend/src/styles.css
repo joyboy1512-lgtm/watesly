@@ -5373,6 +5373,43 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   color: var(--muted);
 }
+.billing-over-charge { color: var(--danger); }
+.billing-provider-settings-card { padding: 16px 18px; display: grid; gap: 14px; }
+.billing-provider-readonly {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(7, 94, 84, 0.04);
+}
+.billing-provider-readonly span { display: block; font-size: 12px; color: var(--muted); }
+.billing-provider-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.billing-provider-form label { display: grid; gap: 6px; font-size: 12px; }
+.billing-provider-form input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--panel);
+}
+.channel-price-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.channel-price-input input {
+  width: 88px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.channel-billing-cell small { display: block; line-height: 1.5; }
 .billing-channel-filter-card { padding: 14px 16px; }
 .billing-plan-overview-card {
   padding: 16px 18px;

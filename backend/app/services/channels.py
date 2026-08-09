@@ -9,9 +9,9 @@ from app.models.whatsapp_account import WhatsAppAccount
 from app.schemas.channel import ChannelCreateRequest
 from app.schemas.mac import ChannelUsageBoardItem, ChannelUsageBoardResponse
 from app.services.billing import get_active_subscription
+from app.services.channel_billing import channel_billing_payload
 from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
-    count_mac_for_channel,
     get_account_mac_summary,
 )
 
@@ -74,7 +74,8 @@ async def get_channel_usage_board(
     summary = await get_account_mac_summary(db, account_id=account_id, cycle_month=cycle_month)
     channels = await list_channels(db, account_id)
     cycle = str(summary["cycle_month"])
-    included_per_channel = int(summary["included_mac"])
+    period_start = summary["billing_period_start"]
+    period_end = summary["billing_period_end"]
 
     wa_rows = list(
         (
@@ -87,17 +88,19 @@ async def get_channel_usage_board(
 
     items: list[ChannelUsageBoardItem] = []
     for channel in channels:
-        mac_count = await count_mac_for_channel(
+        billing = await channel_billing_payload(
             db,
             account_id=account_id,
-            channel_id=channel.id,
-            cycle_month=cycle,
+            channel=channel,
+            summary=summary,
+            cycle=cycle,
         )
         campaign_msgs = await count_campaign_messages_for_channel(
             db,
             account_id=account_id,
             channel_id=channel.id,
-            cycle_month=cycle,
+            period_start=period_start,
+            period_end=period_end,
         )
         wa = wa_by_channel.get(channel.id)
         items.append(
@@ -109,14 +112,24 @@ async def get_channel_usage_board(
                 channel_status=channel.status,
                 external_id=channel.external_id,
                 cycle_month=cycle,
-                mac_count=mac_count,
-                included_mac=included_per_channel,
-                mac_remaining=int(summary["mac_remaining"]),
-                is_over_mac=bool(summary["is_over_mac"]),
+                mac_count=int(billing["mac_count"]),
+                included_mac=int(billing["included_mac"]),
+                mac_remaining=int(billing["mac_remaining"]),
+                is_over_mac=bool(billing["is_over_mac"]),
+                over_mac_count=int(billing["over_mac_count"]),
                 campaign_messages_sent=campaign_msgs,
                 whatsapp_status=_enum_str(wa.status) if wa else None,
                 whatsapp_phone=wa.display_phone_number if wa else None,
                 whatsapp_verified_name=wa.verified_name if wa else None,
+                subscription_starts_at=billing["subscription_starts_at"],
+                subscription_ends_at=billing["subscription_ends_at"],
+                billing_period_start=billing["billing_period_start"],
+                billing_period_end=billing["billing_period_end"],
+                over_mac_price_per_100=float(billing["over_mac_price_per_100"]),
+                attributed_over_mac_count=int(billing["attributed_over_mac_count"]),
+                estimated_channel_over_mac_charge=float(
+                    billing["estimated_channel_over_mac_charge"]
+                ),
             )
         )
 
@@ -130,5 +143,9 @@ async def get_channel_usage_board(
         over_mac_blocks=int(summary["over_mac_blocks"]),
         over_mac_price_per_100=float(summary["over_mac_price_per_100"]),
         estimated_over_mac_charge=float(summary["estimated_over_mac_charge"]),
+        subscription_starts_at=summary.get("subscription_starts_at"),
+        subscription_ends_at=summary.get("subscription_ends_at"),
+        billing_period_start=period_start,
+        billing_period_end=period_end,
         channels=items,
     )

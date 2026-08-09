@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, formatApiError } from "../lib/api";
 import { hasNavPermission } from "../lib/navPermissions";
 import { toastStore } from "../stores/toast";
+import ChannelOverMacPriceInput from "../components/ChannelOverMacPriceInput";
 import {
   CHANNEL_TYPE_OPTIONS,
   type BasicChannel,
@@ -70,6 +71,7 @@ export default function ChannelsPage() {
   });
 
   const canManage = hasNavPermission(profile.data?.permissions, "channels.manage");
+  const canManageBilling = hasNavPermission(profile.data?.permissions, "billing.manage");
 
   const orgMap = useMemo(
     () => new Map((organizations.data ?? []).map((item) => [item.id, item.name])),
@@ -208,6 +210,46 @@ export default function ChannelsPage() {
     );
   }
 
+  function formatPlanDate(value: string | null | undefined): string {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("ar", { day: "numeric", month: "short", year: "numeric" }).format(date);
+  }
+
+  function formatPeriodRange(start: string | null | undefined, end: string | null | undefined): string {
+    if (!start || !end) return "—";
+    const s = new Date(start);
+    const e = new Date(end);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return "—";
+    const fmt = new Intl.DateTimeFormat("ar", { day: "numeric", month: "short" });
+    return `${fmt.format(s)} – ${fmt.format(e)}`;
+  }
+
+  function renderBillingCell(channel: ChannelRow) {
+    return (
+      <div className="admin-cell-stack channel-billing-cell">
+        <small>بداية: {formatPlanDate(channel.subscription_starts_at)}</small>
+        <small>نهاية: {formatPlanDate(channel.subscription_ends_at)}</small>
+        <small>دورة MAC: {formatPeriodRange(channel.billing_period_start, channel.billing_period_end)}</small>
+      </div>
+    );
+  }
+
+  function renderOverChargeCell(channel: ChannelRow) {
+    const charge = channel.estimated_channel_over_mac_charge ?? 0;
+    return (
+      <div className="admin-cell-stack">
+        <strong className={charge > 0 ? "billing-over-charge" : ""}>
+          {charge > 0 ? `$${charge.toFixed(2)}` : "—"}
+        </strong>
+        {(channel.attributed_over_mac_count ?? 0) > 0 && (
+          <small>+{(channel.attributed_over_mac_count ?? 0).toLocaleString("ar")} MAC</small>
+        )}
+      </div>
+    );
+  }
+
   function renderMacCell(channel: ChannelRow) {
     if (!board) {
       return <span className="admin-chip admin-chip-muted">{channel.mac_count.toLocaleString("ar")} MAC</span>;
@@ -218,12 +260,8 @@ export default function ChannelsPage() {
         <strong>{channel.mac_count.toLocaleString("ar")} MAC</strong>
         <small>إسناد · {share}% · {formatMacCycleMonth(channel.cycle_month)}</small>
         <small>رصيد مساحة العمل {formatMacBalance(board.mac_count, board.included_mac)}</small>
-        <small>
-          Over ${board.over_mac_price_per_100}/100 ·
-          {board.is_over_mac ? ` +${board.over_mac_count.toLocaleString("ar")} ($${board.estimated_over_mac_charge.toFixed(0)})` : " ضمن الخطة"}
-        </small>
         <Link to={`/channels/${channel.channel_id}/mac`} className="channel-mac-detail-link">
-          الرسم والتفاصيل →
+          التفاصيل →
         </Link>
       </div>
     );
@@ -447,7 +485,10 @@ export default function ChannelsPage() {
                 <th>القناة</th>
                 <th>الفرع</th>
                 <th>النوع</th>
-                <th>MAC / الرصيد</th>
+                <th>MAC</th>
+                <th>الاشتراك والدورة</th>
+                <th>سعر Over/100</th>
+                <th>إجمالي Over MAC</th>
                 <th>المهام والاستخدام</th>
                 <th>WhatsApp Business</th>
                 <th>حالة القناة</th>
@@ -456,18 +497,18 @@ export default function ChannelsPage() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={8} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={11} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {loadError && (
                 <tr>
-                  <td colSpan={8} className="admin-table-empty">
+                  <td colSpan={11} className="admin-table-empty">
                     تعذر تحميل القنوات. تحقق من الصلاحيات أو اتصال الخادم.
                   </td>
                 </tr>
               )}
               {!isLoading && !loadError && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="admin-table-empty">
+                  <td colSpan={11} className="admin-table-empty">
                     {visibleRows.length === 0
                       ? "لا توجد قنوات بعد. أنشئ قناة من النموذج أعلاه."
                       : "لا توجد نتائج مطابقة للبحث أو التصفية."}
@@ -487,6 +528,15 @@ export default function ChannelsPage() {
                     <span className={channelTypeClass(item.channel_type)}>{formatChannelType(item.channel_type)}</span>
                   </td>
                   <td>{renderMacCell(item)}</td>
+                  <td>{renderBillingCell(item)}</td>
+                  <td>
+                    <ChannelOverMacPriceInput
+                      channelId={item.channel_id}
+                      value={item.over_mac_price_per_100 ?? board?.over_mac_price_per_100 ?? 0}
+                      disabled={!canManageBilling}
+                    />
+                  </td>
+                  <td>{renderOverChargeCell(item)}</td>
                   <td>{renderTasksCell(item)}</td>
                   <td>{renderWhatsAppCell(item)}</td>
                   <td>

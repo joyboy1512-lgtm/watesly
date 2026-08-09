@@ -1,7 +1,7 @@
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,3 +44,4 @@ class Channel(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     status: Mapped[ChannelStatus] = mapped_column(
         String(30), nullable=False, default=ChannelStatus.PENDING
     )
+    over_mac_price_per_100: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)

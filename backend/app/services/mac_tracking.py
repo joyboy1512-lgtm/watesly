@@ -86,10 +86,16 @@ async def get_account_mac_summary(
     mac_limit_policy = "soft"
     overage_enabled = True
     subscription_data = await get_active_subscription(db, account_id)
+    subscription = None
+    plan = None
     if subscription_data is not None:
-        _, plan = subscription_data
-        included_mac = plan.included_mac
-        over_mac_price_per_100 = float(plan.over_mac_price_per_100)
+        subscription, plan = subscription_data
+        from app.services.billing_limits import effective_included_mac, effective_workspace_over_price
+
+        included_mac = effective_included_mac(subscription=subscription, plan=plan)
+        over_mac_price_per_100 = effective_workspace_over_price(
+            subscription=subscription, plan=plan
+        )
         mac_limit_policy = getattr(plan, "mac_limit_policy", "soft") or "soft"
         overage_enabled = bool(getattr(plan, "overage_enabled", True))
 
@@ -116,6 +122,8 @@ async def get_account_mac_summary(
         )
         if overage_enabled
         else 0.0,
+        "subscription_starts_at": subscription.starts_at if subscription else None,
+        "subscription_ends_at": subscription.ends_at if subscription else None,
     }
 
 

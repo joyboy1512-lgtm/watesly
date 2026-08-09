@@ -7,7 +7,11 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.permissions import Permission
 from app.db.session import get_db
 from app.models.channel import Channel
-from app.schemas.billing import SubscriptionResponse
+from app.schemas.billing import (
+    BillingProviderSettingsResponse,
+    BillingProviderSettingsUpdate,
+    SubscriptionResponse,
+)
 from app.schemas.mac import (
     BillingUsageResponse,
     ChannelMacUsageResponse,
@@ -17,6 +21,12 @@ from app.schemas.mac import (
     MacStatsResponse,
 )
 from app.services.billing import get_active_subscription
+from app.services.billing_limits import effective_included_mac, effective_workspace_over_price
+from app.services.billing_provider import (
+    get_provider_billing_settings,
+    update_provider_billing_settings,
+)
+from app.services.channel_billing import channel_billing_payload
 from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
     count_mac_for_channel,
@@ -41,6 +51,8 @@ async def current_subscription(
         raise HTTPException(status_code=404, detail="No active subscription")
     subscription, plan = data
     summary = await get_account_mac_summary(db, account_id=context.account_id)
+    effective_included = effective_included_mac(subscription=subscription, plan=plan)
+    effective_price = effective_workspace_over_price(subscription=subscription, plan=plan)
     return SubscriptionResponse(
         plan_id=plan.id,
         plan_code=plan.code,
@@ -52,8 +64,14 @@ async def current_subscription(
         max_users=plan.max_users,
         max_organizations=plan.max_organizations,
         max_channels=plan.max_channels,
-        included_mac=plan.included_mac,
-        over_mac_price_per_100=float(plan.over_mac_price_per_100),
+        included_mac=effective_included,
+        over_mac_price_per_100=effective_price,
+        included_mac_override=subscription.included_mac_override,
+        over_mac_price_per_100_override=(
+            float(subscription.over_mac_price_per_100_override)
+            if subscription.over_mac_price_per_100_override is not None
+            else None
+        ),
         allow_multi_organization=plan.allow_multi_organization,
         cycle_month=str(summary["cycle_month"]),
         mac_count=int(summary["mac_count"]),
@@ -62,7 +80,40 @@ async def current_subscription(
         over_mac_count=int(summary["over_mac_count"]),
         over_mac_blocks=int(summary["over_mac_blocks"]),
         estimated_over_mac_charge=float(summary["estimated_over_mac_charge"]),
+        billing_period_start=summary["billing_period_start"],
+        billing_period_end=summary["billing_period_end"],
     )
+
+
+@router.get("/provider-settings", response_model=BillingProviderSettingsResponse)
+async def billing_provider_settings(
+    context: AuthContext = Depends(require_permissions(Permission.BILLING_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+) -> BillingProviderSettingsResponse:
+    try:
+        data = await get_provider_billing_settings(db, account_id=context.account_id)
+    except ValueError as exc:
+        if str(exc) == "NO_ACTIVE_SUBSCRIPTION":
+            raise HTTPException(status_code=404, detail="No active subscription") from exc
+        raise
+    return BillingProviderSettingsResponse(**data)
+
+
+@router.patch("/provider-settings", response_model=BillingProviderSettingsResponse)
+async def patch_billing_provider_settings(
+    payload: BillingProviderSettingsUpdate,
+    context: AuthContext = Depends(require_permissions(Permission.BILLING_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> BillingProviderSettingsResponse:
+    try:
+        data = await update_provider_billing_settings(
+            db, account_id=context.account_id, payload=payload
+        )
+    except ValueError as exc:
+        if str(exc) == "NO_ACTIVE_SUBSCRIPTION":
+            raise HTTPException(status_code=404, detail="No active subscription") from exc
+        raise
+    return BillingProviderSettingsResponse(**data)
 
 
 @router.get("/mac/stats", response_model=MacStatsResponse)
@@ -124,7 +175,6 @@ async def get_channels_mac_stats(
     )
     period_start = summary["billing_period_start"]
     cycle = str(summary["cycle_month"])
-    included_mac = int(summary["included_mac"])
     channels = await list_channels(db, context.account_id)
     wa_rows = list(
         (
@@ -137,8 +187,12 @@ async def get_channels_mac_stats(
 
     items: list[MacChannelStatsResponse] = []
     for channel in channels:
-        mac_count = await count_mac_for_channel(
-            db, account_id=context.account_id, channel_id=channel.id, period_start=period_start
+        billing = await channel_billing_payload(
+            db,
+            account_id=context.account_id,
+            channel=channel,
+            summary=summary,
+            cycle=cycle,
         )
         campaign_msgs = await count_campaign_messages_for_channel(
             db,
@@ -155,14 +209,23 @@ async def get_channels_mac_stats(
                 channel_type=channel.type,
                 channel_status=channel.status,
                 cycle_month=cycle,
-                mac_count=mac_count,
-                included_mac=included_mac,
-                mac_remaining=int(summary["mac_remaining"]),
-                is_over_mac=bool(summary["is_over_mac"]),
-                over_mac_count=int(summary["over_mac_count"]),
+                mac_count=int(billing["mac_count"]),
+                included_mac=int(billing["included_mac"]),
+                mac_remaining=int(billing["mac_remaining"]),
+                is_over_mac=bool(billing["is_over_mac"]),
+                over_mac_count=int(billing["over_mac_count"]),
                 campaign_messages_sent=campaign_msgs,
                 whatsapp_status=wa.status.value if wa and hasattr(wa.status, "value") else (str(wa.status) if wa else None),
                 whatsapp_phone=wa.display_phone_number if wa else None,
+                subscription_starts_at=billing["subscription_starts_at"],
+                subscription_ends_at=billing["subscription_ends_at"],
+                billing_period_start=billing["billing_period_start"],
+                billing_period_end=billing["billing_period_end"],
+                over_mac_price_per_100=float(billing["over_mac_price_per_100"]),
+                attributed_over_mac_count=int(billing["attributed_over_mac_count"]),
+                estimated_channel_over_mac_charge=float(
+                    billing["estimated_channel_over_mac_charge"]
+                ),
             )
         )
     return items

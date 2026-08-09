@@ -72,7 +72,10 @@ class AdminSubscriptionUpdateRequest(BaseModel):
     plan_id: UUID
     status: SubscriptionStatus
     billing_cycle: BillingCycle
+    starts_at: datetime | None = None
     ends_at: datetime
+    included_mac_override: int | None = Field(default=None, ge=0)
+    over_mac_price_per_100_override: float | None = Field(default=None, ge=0)
 
 
 class AdminSubscriptionResponse(BaseModel):
@@ -84,3 +87,5 @@ class AdminSubscriptionResponse(BaseModel):
     billing_cycle: BillingCycle
     starts_at: datetime
     ends_at: datetime
+    included_mac_override: int | None = None
+    over_mac_price_per_100_override: float | None = None
