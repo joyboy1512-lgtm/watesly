@@ -6,6 +6,7 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.config import settings
 from app.core.permissions import Permission
 from app.db.session import get_db
+from app.models.account import Account
 from app.schemas.team import (
     AcceptInvitationRequest,
     EmployeeResponse,
@@ -20,6 +21,7 @@ from app.services.team import (
     update_employee,
 )
 from app.services.membership_channels import list_membership_channel_ids
+from app.services.email import build_invitation_accept_url, is_smtp_configured, send_team_invitation_email
 
 router = APIRouter()
 
@@ -67,10 +69,24 @@ async def invite_employee(
         code, detail = messages.get(str(exc), (400, "Unable to create invitation"))
         raise HTTPException(status_code=code, detail=detail) from exc
 
+    invite_url = build_invitation_accept_url(token)
+    email_sent = False
+    if is_smtp_configured():
+        account = await db.get(Account, context.account_id)
+        email_sent = await send_team_invitation_email(
+            to=payload.email,
+            invite_url=invite_url,
+            expires_hours=settings.invitation_token_expire_hours,
+            account_name=account.name if account else settings.app_name,
+            role=payload.role,
+        )
+
     return InvitationResponse(
         invitation_id=invitation.id,
         invitation_token=token,
+        invitation_accept_url=invite_url,
         expires_in_hours=settings.invitation_token_expire_hours,
+        email_sent=email_sent,
     )
 
 

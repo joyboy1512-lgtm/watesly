@@ -16,6 +16,16 @@ class Settings(BaseSettings):
     refresh_cookie_samesite: str = "lax"
     refresh_cookie_domain: str | None = None
     invitation_token_expire_hours: int = 72
+    app_public_url: str = "http://localhost:5173"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_email: str | None = None
+    smtp_from_name: str = "Watesly"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout_seconds: int = 20
     login_max_attempts: int = 5
     login_lock_minutes: int = 15
     max_upload_bytes: int = 26214400
