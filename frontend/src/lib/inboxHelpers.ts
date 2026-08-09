@@ -1,5 +1,27 @@
 import { api } from "./api";
 
+const DEFAULT_COUNTRY_CODE = "965";
+
+export function normalizeWhatsAppPhone(value: string, countryCode = DEFAULT_COUNTRY_CODE): string {
+  let digits = (value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  const cc = (countryCode || DEFAULT_COUNTRY_CODE).replace(/\D/g, "") || DEFAULT_COUNTRY_CODE;
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.startsWith("0") && cc === "965") {
+    digits = `${cc}${digits.slice(1)}`;
+  } else if (!digits.startsWith(cc) && digits.length <= 11) {
+    const local = digits.replace(/^0+/, "");
+    if (local) digits = `${cc}${local}`;
+  }
+  return digits;
+}
+
+export function phonesMatch(left: string, right: string, countryCode = DEFAULT_COUNTRY_CODE): boolean {
+  const leftNorm = normalizeWhatsAppPhone(left, countryCode);
+  const rightNorm = normalizeWhatsAppPhone(right, countryCode);
+  return Boolean(leftNorm && rightNorm && leftNorm === rightNorm);
+}
+
 export function formatWaitingMinutes(minutes: number | null | undefined) {
   if (minutes == null) return "";
   if (minutes < 60) return `${minutes} د`;

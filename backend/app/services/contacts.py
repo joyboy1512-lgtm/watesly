@@ -13,8 +13,33 @@ from app.schemas.contact import ContactCreateRequest
 from app.services.contact_management import _apply_segment_filters, apply_contact_tags
 from app.services.interests import apply_contact_interests
 from app.services.gender_inference import infer_gender_from_name, infer_gender_with_llm_fallback
+from app.services.phone_normalize import normalize_whatsapp_phone, phones_match
 
 _LIST_LIMIT_MAX = 500
+
+
+async def find_contact_on_channel_by_phone(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    channel_id: UUID,
+    external_address: str,
+    country_code: str = "965",
+) -> Contact | None:
+    normalized = normalize_whatsapp_phone(external_address, country_code=country_code)
+    if not normalized:
+        return None
+    result = await db.execute(
+        select(Contact).where(
+            Contact.organization_id == organization_id,
+            Contact.channel_id == channel_id,
+            Contact.deleted_at.is_(None),
+        )
+    )
+    for contact in result.scalars().all():
+        if phones_match(contact.external_address, normalized, country_code=country_code):
+            return contact
+    return None
 
 
 async def list_contacts(
@@ -103,21 +128,26 @@ async def create_contact(
     if channel.organization_id != payload.organization_id:
         raise ValueError("CHANNEL_ORGANIZATION_MISMATCH")
 
+    country_code = (payload.country_code or "965").strip() or "965"
+    normalized_address = normalize_whatsapp_phone(payload.external_address, country_code=country_code)
+    if not normalized_address:
+        raise ValueError("INVALID_PHONE")
+
     gender = await infer_gender_with_llm_fallback(payload.display_name)
     lifecycle_stage = None
     if payload.lifecycle_stage and payload.lifecycle_stage.strip():
         lifecycle_stage = payload.lifecycle_stage.strip()[:30]
 
-    existing = await db.execute(
-        select(Contact).where(
-            Contact.organization_id == payload.organization_id,
-            Contact.channel_id == payload.channel_id,
-            Contact.external_address == payload.external_address,
-            Contact.deleted_at.is_(None),
-        )
+    contact = await find_contact_on_channel_by_phone(
+        db,
+        organization_id=payload.organization_id,
+        channel_id=payload.channel_id,
+        external_address=normalized_address,
+        country_code=country_code,
     )
-    contact = existing.scalar_one_or_none()
     if contact is not None:
+        if contact.external_address != normalized_address:
+            contact.external_address = normalized_address
         if payload.display_name is not None:
             contact.display_name = payload.display_name
             contact.gender = await infer_gender_with_llm_fallback(payload.display_name)
@@ -147,6 +177,7 @@ async def create_contact(
         return contact
 
     data = payload.model_dump(exclude={"tag_ids", "interest_ids"})
+    data["external_address"] = normalized_address
     data["gender"] = gender
     if lifecycle_stage is not None:
         data["lifecycle_stage"] = lifecycle_stage

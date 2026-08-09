@@ -57,16 +57,19 @@ async def _get_or_create_contact_and_conversation(
     display_name: str | None,
 ) -> tuple[Contact, Conversation, bool]:
     from app.services.assignments import auto_assign_conversation
+    from app.services.contacts import find_contact_on_channel_by_phone
+    from app.services.phone_normalize import normalize_whatsapp_phone
 
-    result = await db.execute(
-        select(Contact).where(
-            Contact.organization_id == whatsapp_account.organization_id,
-            Contact.channel_id == whatsapp_account.channel_id,
-            Contact.external_address == sender,
-            Contact.deleted_at.is_(None),
-        )
+    sender = normalize_whatsapp_phone(sender)
+    if not sender:
+        raise ValueError("INVALID_SENDER")
+
+    contact = await find_contact_on_channel_by_phone(
+        db,
+        organization_id=whatsapp_account.organization_id,
+        channel_id=whatsapp_account.channel_id,
+        external_address=sender,
     )
-    contact = result.scalar_one_or_none()
     if contact is None:
         contact = Contact(
             account_id=whatsapp_account.account_id,
@@ -79,6 +82,8 @@ async def _get_or_create_contact_and_conversation(
         await db.flush()
     elif display_name and not contact.display_name:
         contact.display_name = display_name
+    elif contact.external_address != sender:
+        contact.external_address = sender
 
     conv_result = await db.execute(
         select(Conversation).where(

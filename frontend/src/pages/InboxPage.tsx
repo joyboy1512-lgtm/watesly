@@ -7,7 +7,7 @@ import { authStore } from "../stores/auth";
 import { toastStore } from "../stores/toast";
 import { uploadFile } from "../lib/uploads";
 import { formatWindowExpiry } from "../lib/serviceWindow";
-import { formatWaitingMinutes, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
+import { formatWaitingMinutes, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
 import { formatAppTime } from "../lib/language";
 import { insertReplyVariable, REPLY_VARIABLES, type ConversationContext } from "../lib/replyVariables";
 import {
@@ -33,9 +33,10 @@ import type { Tag, Note } from "../types/inbox";
 import Icon from "../components/Icon";
 
 type InboxFilter = "all" | "unread" | "waiting" | "mine" | "starred" | "archived";
-type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null };
+type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
 type ChannelOption = { id: string; name: string; phone: string | null };
-type WhatsAppAccountRow = { channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
+type WhatsAppAccountRow = { id: string; channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
+type ChannelThread = { conversation_id: string; channel_id: string; channel_name: string; display_phone_number: string | null; status: string };
 const priorityLabels: Record<string, string> = { low: "منخفضة", normal: "عادية", high: "مرتفعة", urgent: "عاجلة" };
 
 export default function InboxPage() {
@@ -93,14 +94,18 @@ export default function InboxPage() {
 
   const showArchived = filter === "archived";
   const conversationsQuery = useQuery({
-    queryKey: ["conversations", showArchived],
-    queryFn: async ({ signal }) => (
-      await api.get<Conversation[]>("/conversations", {
-        params: { archived: showArchived },
-        signal,
-        ...silentRequest
-      })
-    ).data,
+    queryKey: ["conversations", showArchived, channelFilter],
+    queryFn: async ({ signal }) => {
+      const params: Record<string, string | boolean> = { archived: showArchived };
+      if (channelFilter) params.channel_id = channelFilter;
+      return (
+        await api.get<Conversation[]>("/conversations", {
+          params,
+          signal,
+          ...silentRequest
+        })
+      ).data;
+    },
     refetchInterval: 30_000
   });
   const channelsQuery = useQuery({
@@ -157,8 +162,22 @@ export default function InboxPage() {
   useEffect(() => {
     if (!requestedConversationId) return;
     const match = conversations.find((item) => item.id === requestedConversationId);
-    if (match) setSelectedId(match.id);
-  }, [requestedConversationId, conversations]);
+    if (match) {
+      setSelectedId(match.id);
+      if (match.channel_id && match.channel_id !== channelFilter) {
+        setChannelFilter(match.channel_id);
+      }
+    }
+  }, [requestedConversationId, conversations, channelFilter]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const selected = conversations.find((item) => item.id === selectedId);
+    if (!selected?.channel_id) return;
+    if (channelFilter && selected.channel_id !== channelFilter) {
+      setChannelFilter(selected.channel_id);
+    }
+  }, [selectedId, conversations, channelFilter]);
 
   function setChannelFilter(value: string) {
     const next = new URLSearchParams(searchParams);
@@ -180,7 +199,7 @@ export default function InboxPage() {
     const existing = conversations.find(
       (item) =>
         item.channel_id === targetChannelId &&
-        item.contact_address === selectedConversation.contact_address &&
+        phonesMatch(item.contact_address, selectedConversation.contact_address) &&
         !item.archived_at
     );
     if (existing) {
@@ -190,9 +209,28 @@ export default function InboxPage() {
 
     setSwitchingChannelId(targetChannelId);
     try {
+      const threads = await api.get<ChannelThread[]>("/conversations/channel-threads", {
+        params: {
+          phone: selectedConversation.contact_address,
+          conversation_id: selectedConversation.id
+        },
+        ...silentRequest
+      });
+      const thread = threads.data.find((item) => item.channel_id === targetChannelId);
+      if (thread) {
+        await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        setSelectedId(thread.conversation_id);
+        const next = new URLSearchParams(searchParams);
+        next.set("conversation", thread.conversation_id);
+        next.set("channel_id", thread.channel_id);
+        setSearchParams(next, { replace: true });
+        toastStore.getState().show("تم فتح المحادثة على هذه القناة.", "success");
+        return;
+      }
+
       const result = await startConversationOnChannel({
         channel_id: targetChannelId,
-        external_address: selectedConversation.contact_address,
+        external_address: normalizeWhatsAppPhone(selectedConversation.contact_address),
         display_name: selectedConversation.contact_name
       });
       await queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -223,7 +261,7 @@ export default function InboxPage() {
     try {
       const result = await startConversationOnChannel({
         channel_id: newConversationChannelId,
-        external_address: phone,
+        external_address: normalizeWhatsAppPhone(phone),
         display_name: newConversationName.trim() || null
       });
       await queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -324,9 +362,19 @@ export default function InboxPage() {
     queryKey: ["templates"],
     queryFn: async () => (await api.get<TemplateOption[]>("/templates")).data
   });
+  const selectedChannelAccountId = useMemo(() => {
+    if (!selectedConversation?.channel_id) return null;
+    return (whatsappAccountsQuery.data ?? []).find(
+      (item) => item.channel_id === selectedConversation.channel_id
+    )?.id ?? null;
+  }, [selectedConversation?.channel_id, whatsappAccountsQuery.data]);
   const approvedTemplates = useMemo(
-    () => (templatesQuery.data ?? []).filter((item) => item.status === "approved"),
-    [templatesQuery.data]
+    () => (templatesQuery.data ?? []).filter((item) => {
+      if (item.status !== "approved") return false;
+      if (!selectedChannelAccountId) return true;
+      return item.whatsapp_account_id === selectedChannelAccountId;
+    }),
+    [templatesQuery.data, selectedChannelAccountId]
   );
   const selectedTemplate = useMemo(
     () => approvedTemplates.find((item) => item.id === templateId) ?? null,
@@ -906,7 +954,7 @@ export default function InboxPage() {
                     const hasThread = conversations.some(
                       (row) =>
                         row.channel_id === item.id &&
-                        row.contact_address === selectedConversation.contact_address &&
+                        phonesMatch(row.contact_address, selectedConversation.contact_address) &&
                         !row.archived_at
                     );
                     return (

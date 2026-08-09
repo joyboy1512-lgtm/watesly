@@ -22,3 +22,16 @@ def normalize_whatsapp_phone(value: str | None, *, country_code: str = DEFAULT_C
         if local:
             digits = cc + local
     return digits
+
+
+def phones_match(
+    left: str | None,
+    right: str | None,
+    *,
+    country_code: str = DEFAULT_COUNTRY_CODE,
+) -> bool:
+    left_norm = normalize_whatsapp_phone(left, country_code=country_code)
+    right_norm = normalize_whatsapp_phone(right, country_code=country_code)
+    if not left_norm or not right_norm:
+        return False
+    return left_norm == right_norm

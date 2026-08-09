@@ -79,6 +79,7 @@ async def get_conversations(
     limit: int = Query(100, ge=1, le=200),
     starred: bool = Query(False),
     archived: bool = Query(False),
+    channel_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConversationResponse]:
@@ -90,6 +91,7 @@ async def get_conversations(
         include_archived=archived,
         archived_only=archived,
         starred_only=starred,
+        channel_id=channel_id,
     )
     conversation_ids = [row[0].id for row in rows]
     last_inbound_map = await get_last_inbound_by_conversation(db, conversation_ids)
@@ -115,6 +117,12 @@ async def post_start_conversation(
     from app.services.contact_management import start_conversation_on_channel
 
     try:
+        await ensure_conversation_channel_access(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            channel_id=payload.channel_id,
+        )
         conversation, contact, created = await start_conversation_on_channel(
             db,
             account_id=context.account_id,
@@ -126,6 +134,7 @@ async def post_start_conversation(
         messages = {
             "INVALID_CHANNEL": (400, "Channel is invalid"),
             "INVALID_PHONE": (400, "Phone number is invalid"),
+            "CONVERSATION_FORBIDDEN": (403, "You cannot access this channel"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to start conversation"))
         raise HTTPException(status_code=code, detail=detail) from exc

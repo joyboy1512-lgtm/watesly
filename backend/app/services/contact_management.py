@@ -665,7 +665,7 @@ async def start_conversation_on_channel(
     if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
         raise ValueError("INVALID_CHANNEL")
 
-    phone = external_address.strip()
+    phone = normalize_whatsapp_phone(external_address.strip())
     if len(phone) < 3:
         raise ValueError("INVALID_PHONE")
 
@@ -695,15 +695,18 @@ async def list_channel_threads_for_phone(
     exclude_conversation_id: UUID | None = None,
 ) -> list[dict]:
     from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.phone_normalize import normalize_whatsapp_phone, phones_match
 
-    phone = external_address.strip()
+    target = normalize_whatsapp_phone(external_address.strip())
+    if not target:
+        return []
+
     contact_rows = await db.execute(
         select(Contact, Channel.name, WhatsAppAccount.display_phone_number)
         .join(Channel, Contact.channel_id == Channel.id)
         .outerjoin(WhatsAppAccount, WhatsAppAccount.channel_id == Channel.id)
         .where(
             Contact.account_id == account_id,
-            Contact.external_address == phone,
             Contact.deleted_at.is_(None),
             Channel.deleted_at.is_(None),
         )
@@ -712,6 +715,8 @@ async def list_channel_threads_for_phone(
 
     threads: list[dict] = []
     for contact, channel_name, display_phone in contact_rows.all():
+        if not phones_match(contact.external_address, target):
+            continue
         conv_result = await db.execute(
             select(Conversation)
             .where(
