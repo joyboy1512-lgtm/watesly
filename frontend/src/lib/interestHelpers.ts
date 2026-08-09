@@ -18,13 +18,14 @@ export type AudienceFilterInput = {
   marketingOptInOnly?: boolean;
 };
 
-export function interestGenderHint(interest: Pick<InterestCategory, "exclude_genders" | "include_genders">): string | null {
-  if (interest.exclude_genders?.includes("male")) return "لا يُستهدف الرجال";
-  if (interest.exclude_genders?.includes("female")) return "لا تُستهدف النساء";
-  if (interest.include_genders?.length === 1) {
-    return interest.include_genders[0] === "female" ? "نساء فقط" : "رجال فقط";
-  }
-  return null;
+export function slugifyInterestLabel(label: string): string {
+  const ascii = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (ascii) return ascii.slice(0, 80);
+  return `interest-${Date.now().toString(36)}`;
 }
 
 export function buildAudienceResolvePayload(input: AudienceFilterInput) {

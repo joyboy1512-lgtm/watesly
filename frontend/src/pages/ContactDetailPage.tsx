@@ -22,7 +22,7 @@ import {
   type Tag
 } from "../lib/contactHelpers";
 import { STAGE_LABELS, formatDealAmount, type Deal } from "../lib/crmHelpers";
-import { interestGenderHint, type InterestCategory } from "../lib/interestHelpers";
+import { type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 type CustomFieldDef = { id: string; field_key: string; label: string; field_type: string };
@@ -262,7 +262,7 @@ export default function ContactDetailPage() {
 
           <section className="contacts-detail-panel">
             <h2>اهتمامات العميل</h2>
-            <p className="hint-text">تُستخدم لتوجيه الحملات واستبعاد فئات غير مناسبة (مثل تجميل للرجال).</p>
+            <p className="hint-text">تُستخدم لتوجيه الحملات وتصنيف العملاء.</p>
             <ContactInterestsEditor
               contactId={id!}
               assigned={(contactInterests.data ?? []).map((item) => item.id)}
@@ -515,17 +515,14 @@ function ContactInterestsEditor({
     <div className="contacts-tags-cell">
       {options.map((interest) => {
         const active = selected.includes(interest.id);
-        const hint = interestGenderHint(interest);
         return (
           <button
             key={interest.id}
             type="button"
             className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
             onClick={() => toggle(interest.id)}
-            title={hint ?? undefined}
           >
             {interest.label}
-            {hint && <small> · {hint}</small>}
           </button>
         );
       })}

@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
   buildSegmentFilterJson,
@@ -9,6 +9,7 @@ import {
   type SegmentFilterJson,
   type Tag
 } from "../lib/contactHelpers";
+import { slugifyInterestLabel, type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 type Segment = { id: string; name: string; filter_json: Record<string, unknown> };
@@ -40,6 +41,12 @@ export default function ContactsSegmentsModal({
   const [segmentName, setSegmentName] = useState("");
   const [newTagName, setNewTagName] = useState("");
   const [newTagOrgId, setNewTagOrgId] = useState(activeFilters.organization_id ?? "");
+  const [newInterestLabel, setNewInterestLabel] = useState("");
+
+  const interests = useQuery({
+    queryKey: ["interests"],
+    queryFn: async () => (await api.get<InterestCategory[]>("/platform/interests")).data
+  });
 
   const filterPreview = useMemo(() => {
     const org = organizations.find((item) => item.id === activeFilters.organization_id);
@@ -77,6 +84,19 @@ export default function ContactsSegmentsModal({
     setNewTagName("");
     await client.invalidateQueries({ queryKey: ["tags"] });
     toastStore.getState().show("تم إنشاء الوسم.", "success");
+  }
+
+  async function createInterest(event: FormEvent) {
+    event.preventDefault();
+    const label = newInterestLabel.trim();
+    if (!label) return;
+    await api.post("/platform/interests", {
+      slug: slugifyInterestLabel(label),
+      label
+    });
+    setNewInterestLabel("");
+    await client.invalidateQueries({ queryKey: ["interests"] });
+    toastStore.getState().show("تم إنشاء الاهتمام.", "success");
   }
 
   return (
@@ -146,6 +166,30 @@ export default function ContactsSegmentsModal({
                 إنشاء وسم
               </button>
             </form>
+          </section>
+
+          <section className="contacts-segments-panel">
+            <h3>اهتمام جديد</h3>
+            <p className="hint-text">الاهتمامات تصنّف العملاء وتُستخدم في الحملات (مثل: عطور، مكياج، أثاث).</p>
+            <form className="stack-form" onSubmit={(e) => void createInterest(e)}>
+              <label className="field-label">
+                <span>اسم الاهتمام</span>
+                <input
+                  value={newInterestLabel}
+                  onChange={(e) => setNewInterestLabel(e.target.value)}
+                  placeholder="مثال: عطور"
+                  required
+                />
+              </label>
+              <button type="submit" className="contacts-erp-btn" disabled={!newInterestLabel.trim()}>
+                إضافة اهتمام
+              </button>
+            </form>
+            <ul className="contacts-mini-list">
+              {(interests.data ?? []).map((item) => (
+                <li key={item.id}>{item.label}</li>
+              ))}
+            </ul>
           </section>
 
           <section className="contacts-segments-panel contacts-segments-list-panel">

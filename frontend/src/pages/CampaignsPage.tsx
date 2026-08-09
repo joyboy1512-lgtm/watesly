@@ -16,7 +16,6 @@ import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   AUDIENCE_GENDER_OPTIONS,
   buildAudienceResolvePayload,
-  interestGenderHint,
   type AudienceGenderFilter,
   type InterestCategory
 } from "../lib/interestHelpers";
@@ -133,7 +132,6 @@ export default function CampaignsPage() {
   const [audienceGenderFilter, setAudienceGenderFilter] = useState<AudienceGenderFilter>("");
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
   const [audienceLifecycle, setAudienceLifecycle] = useState("");
-  const [audienceWarnings, setAudienceWarnings] = useState<string[]>([]);
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
@@ -351,7 +349,6 @@ export default function CampaignsPage() {
       const result = await api.get<{ id: string }[]>(`/platform/segments/${selectedSegmentId}/contacts`);
       const ids = result.data.map((item) => item.id);
       setSelectedContacts(ids);
-      setAudienceWarnings([]);
       toastStore.getState().show(`تم تحميل ${ids.length} عميل من الشريحة.`, "success");
     } catch {
       toastStore.getState().show("تعذر تحميل الشريحة.", "error");
@@ -384,7 +381,6 @@ export default function CampaignsPage() {
         warnings: string[];
       }>("/platform/audience/resolve", payload);
       setSelectedContacts(result.data.contact_ids ?? []);
-      setAudienceWarnings(result.data.warnings ?? []);
       toastStore.getState().show(`تم تحميل ${result.data.count} عميل مطابق للفلتر.`, "success");
     } catch {
       toastStore.getState().show("تعذر تطبيق فلتر الجمهور.", "error");
@@ -776,7 +772,7 @@ export default function CampaignsPage() {
             <div className="campaigns-audience-header">
               <h3 className="section-title-sm">استهداف حسب الاهتمام والجنس</h3>
               <p className="hint-text">
-                مثال: حملة تجميل → اختر «تجميل وعناية» + «استبعاد الرجال». يُستبعد تلقائياً من قواعد الاهتمام أيضاً.
+                اختر الاهتمامات ثم حدّد الجنس من القائمة إذا لزم (مثل حملة تجميل → استبعاد الرجال).
               </p>
             </div>
             <div className="campaign-audience-filters">
@@ -804,25 +800,19 @@ export default function CampaignsPage() {
               <div className="contacts-tags-cell">
                 {(interests.data ?? []).map((interest) => {
                   const active = audienceInterestIds.includes(interest.id);
-                  const hint = interestGenderHint(interest);
                   return (
                     <button
                       key={interest.id}
                       type="button"
                       className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
                       onClick={() => toggleAudienceInterest(interest.id)}
-                      title={hint ?? undefined}
                     >
                       {interest.label}
-                      {hint && <small> · {hint}</small>}
                     </button>
                   );
                 })}
               </div>
             </div>
-            {audienceWarnings.map((warning) => (
-              <p key={warning} className="campaign-warning">⚠ {warning}</p>
-            ))}
             <button type="button" className="contacts-erp-btn contacts-erp-btn-primary" onClick={() => void applyAudienceFilter()}>
               تطبيق الفلتر وتحميل الجمهور
             </button>

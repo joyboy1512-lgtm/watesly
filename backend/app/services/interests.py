@@ -8,7 +8,7 @@ from app.models.contact_interest import ContactInterest
 from app.models.interest_category import InterestCategory
 
 DEFAULT_INTEREST_CATEGORIES: list[dict] = [
-    {"slug": "beauty", "label": "تجميل وعناية", "exclude_genders": ["male"], "sort_order": 10},
+    {"slug": "beauty", "label": "تجميل وعناية", "exclude_genders": [], "sort_order": 10},
     {"slug": "fashion", "label": "أزياء وموضة", "exclude_genders": [], "sort_order": 20},
     {"slug": "electronics", "label": "إلكترونيات", "exclude_genders": [], "sort_order": 30},
     {"slug": "home", "label": "منزل ومطبخ", "exclude_genders": [], "sort_order": 40},

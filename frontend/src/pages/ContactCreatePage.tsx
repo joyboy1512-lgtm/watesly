@@ -16,7 +16,7 @@ import {
   type Organization,
   type Tag
 } from "../lib/contactHelpers";
-import { interestGenderHint, type InterestCategory } from "../lib/interestHelpers";
+import { type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 export default function ContactCreatePage() {
@@ -217,25 +217,21 @@ export default function ContactCreatePage() {
           <div className="contacts-form-section">
             <h2>التصنيف والشرائح</h2>
             <p className="hint-text">
-              اختر <strong>اهتمامات العميل</strong> لتوجيه الحملات (مثل: تجميل لا يُرسل للرجال تلقائياً).
-              الشرائح تُبنى من الاهتمامات + الفرع + الوسم + المرحلة.
+              اختر <strong>اهتمامات العميل</strong> لتوجيه الحملات والشرائح لاحقاً.
             </p>
             <div className="field-label">
               <span>اهتمامات العميل</span>
               <div className="contacts-tags-cell">
                 {(interests.data ?? []).map((interest) => {
                   const active = selectedInterestIds.includes(interest.id);
-                  const hint = interestGenderHint(interest);
                   return (
                     <button
                       key={interest.id}
                       type="button"
                       className={`contacts-tag-chip contacts-interest-chip ${active ? "contacts-tag-chip-active" : ""}`}
                       onClick={() => toggleInterest(interest.id)}
-                      title={hint ?? undefined}
                     >
                       {interest.label}
-                      {hint && <small> · {hint}</small>}
                     </button>
                   );
                 })}
