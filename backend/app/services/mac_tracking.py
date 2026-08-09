@@ -245,3 +245,113 @@ async def count_campaign_messages_for_channel(
         )
         or 0
     )
+
+
+def _cycle_bounds(cycle_month: str) -> tuple[datetime, datetime]:
+    year, month = map(int, cycle_month.split("-"))
+    start = datetime(year, month, 1, tzinfo=UTC)
+    if month == 12:
+        end = datetime(year + 1, 1, 1, tzinfo=UTC)
+    else:
+        end = datetime(year, month + 1, 1, tzinfo=UTC)
+    return start, end
+
+
+async def count_campaign_messages_for_account(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    cycle_month: str | None = None,
+) -> int:
+    cycle = cycle_month or current_cycle_month()
+    start, end = _cycle_bounds(cycle)
+
+    wa_ids = list(
+        (
+            await db.execute(
+                select(WhatsAppAccount.id).where(WhatsAppAccount.account_id == account_id)
+            )
+        ).scalars().all()
+    )
+    if not wa_ids:
+        return 0
+
+    return int(
+        (
+            await db.scalar(
+                select(func.count(CampaignRecipient.id))
+                .join(Campaign, Campaign.id == CampaignRecipient.campaign_id)
+                .where(
+                    Campaign.account_id == account_id,
+                    Campaign.whatsapp_account_id.in_(wa_ids),
+                    CampaignRecipient.status.in_(
+                        [
+                            CampaignRecipientStatus.SENT,
+                            CampaignRecipientStatus.DELIVERED,
+                            CampaignRecipientStatus.READ,
+                        ]
+                    ),
+                    CampaignRecipient.updated_at >= start,
+                    CampaignRecipient.updated_at < end,
+                )
+            )
+        )
+        or 0
+    )
+
+
+async def get_mac_insights(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    cycle_month: str | None = None,
+) -> dict:
+    cycle = cycle_month or current_cycle_month()
+
+    trigger_rows = list(
+        (
+            await db.execute(
+                select(MonthlyActiveContact.trigger_source, func.count(MonthlyActiveContact.id))
+                .where(
+                    MonthlyActiveContact.account_id == account_id,
+                    MonthlyActiveContact.cycle_month == cycle,
+                )
+                .group_by(MonthlyActiveContact.trigger_source)
+                .order_by(func.count(MonthlyActiveContact.id).desc())
+            )
+        ).all()
+    )
+
+    day_bucket = func.date_trunc("day", MonthlyActiveContact.first_activity_at)
+    daily_rows = list(
+        (
+            await db.execute(
+                select(day_bucket, func.count(MonthlyActiveContact.id))
+                .where(
+                    MonthlyActiveContact.account_id == account_id,
+                    MonthlyActiveContact.cycle_month == cycle,
+                )
+                .group_by(day_bucket)
+                .order_by(day_bucket.asc())
+            )
+        ).all()
+    )
+
+    campaign_messages = await count_campaign_messages_for_account(
+        db, account_id=account_id, cycle_month=cycle
+    )
+
+    return {
+        "cycle_month": cycle,
+        "trigger_breakdown": [
+            {"source": str(source), "count": int(count)} for source, count in trigger_rows
+        ],
+        "daily_trend": [
+            {
+                "date": day.isoformat()[:10] if hasattr(day, "isoformat") else str(day)[:10],
+                "count": int(count),
+            }
+            for day, count in daily_rows
+        ],
+        "campaign_messages_sent": campaign_messages,
+    }

@@ -73,3 +73,20 @@ class ChannelUsageBoardResponse(BaseModel):
     over_mac_price_per_100: float
     estimated_over_mac_charge: float
     channels: list[ChannelUsageBoardItem] = Field(default_factory=list)
+
+
+class MacTriggerBreakdownItem(BaseModel):
+    source: str
+    count: int
+
+
+class MacDailyTrendItem(BaseModel):
+    date: str
+    count: int
+
+
+class MacInsightsResponse(BaseModel):
+    cycle_month: str
+    trigger_breakdown: list[MacTriggerBreakdownItem] = Field(default_factory=list)
+    daily_trend: list[MacDailyTrendItem] = Field(default_factory=list)
+    campaign_messages_sent: int = 0

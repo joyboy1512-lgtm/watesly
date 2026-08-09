@@ -8,13 +8,14 @@ from app.core.permissions import Permission
 from app.db.session import get_db
 from app.models.channel import Channel
 from app.schemas.billing import SubscriptionResponse
-from app.schemas.mac import MacChannelStatsResponse, MacContactItem, MacStatsResponse
+from app.schemas.mac import MacChannelStatsResponse, MacContactItem, MacInsightsResponse, MacStatsResponse
 from app.services.billing import get_active_subscription
 from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
     count_mac_for_channel,
     current_cycle_month,
     get_account_mac_summary,
+    get_mac_insights,
     list_mac_contacts,
 )
 
@@ -75,6 +76,18 @@ async def get_account_mac_stats(
         over_mac_price_per_100=float(summary["over_mac_price_per_100"]),
         estimated_over_mac_charge=float(summary["estimated_over_mac_charge"]),
     )
+
+
+@router.get("/mac/insights", response_model=MacInsightsResponse)
+async def get_mac_usage_insights(
+    context: AuthContext = Depends(require_permissions(Permission.BILLING_VIEW)),
+    db: AsyncSession = Depends(get_db),
+    cycle_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+) -> MacInsightsResponse:
+    data = await get_mac_insights(
+        db, account_id=context.account_id, cycle_month=cycle_month
+    )
+    return MacInsightsResponse(**data)
 
 
 @router.get("/mac/channels", response_model=list[MacChannelStatsResponse])
