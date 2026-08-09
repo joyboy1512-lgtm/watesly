@@ -1,11 +1,15 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import AuthContext, require_permissions
 from app.db.session import get_db
 from app.core.permissions import Permission
+from app.schemas.billing import ChannelBillingUpdateRequest
 from app.schemas.channel import ChannelCreateRequest, ChannelResponse
 from app.schemas.mac import ChannelUsageBoardResponse
+from app.services.billing_provider import update_channel_billing_price
 from app.services.channels import create_channel, get_channel_usage_board, list_channels
 
 router = APIRouter()
@@ -43,3 +47,24 @@ async def post_channel(
         }
         code, detail = messages.get(str(exc), (400, "Unable to create channel"))
         raise HTTPException(status_code=code, detail=detail) from exc
+
+
+@router.patch("/{channel_id}/billing", response_model=ChannelUsageBoardResponse)
+async def patch_channel_billing(
+    channel_id: UUID,
+    payload: ChannelBillingUpdateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.BILLING_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> ChannelUsageBoardResponse:
+    try:
+        await update_channel_billing_price(
+            db,
+            account_id=context.account_id,
+            channel_id=channel_id,
+            over_mac_price_per_100=payload.over_mac_price_per_100,
+        )
+    except ValueError as exc:
+        if str(exc) == "CHANNEL_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Channel not found") from exc
+        raise
+    return await get_channel_usage_board(db, account_id=context.account_id)

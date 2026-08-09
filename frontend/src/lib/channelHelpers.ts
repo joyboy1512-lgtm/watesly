@@ -12,10 +12,18 @@ export type ChannelRow = {
   included_mac: number;
   mac_remaining: number;
   is_over_mac: boolean;
+  over_mac_count: number;
   campaign_messages_sent: number;
   whatsapp_status: string | null;
   whatsapp_phone: string | null;
   whatsapp_verified_name: string | null;
+  subscription_starts_at?: string | null;
+  subscription_ends_at?: string | null;
+  billing_period_start?: string | null;
+  billing_period_end?: string | null;
+  over_mac_price_per_100?: number;
+  attributed_over_mac_count?: number;
+  estimated_channel_over_mac_charge?: number;
 };
 
 export type BasicChannel = {
@@ -37,6 +45,10 @@ export type ChannelUsageBoard = {
   over_mac_blocks: number;
   over_mac_price_per_100: number;
   estimated_over_mac_charge: number;
+  subscription_starts_at?: string | null;
+  subscription_ends_at?: string | null;
+  billing_period_start?: string | null;
+  billing_period_end?: string | null;
   channels: ChannelRow[];
 };
 
@@ -185,6 +197,7 @@ export function mergeChannelRows(
       included_mac: includedDefault,
       mac_remaining: includedDefault,
       is_over_mac: false,
+      over_mac_count: 0,
       campaign_messages_sent: 0,
       whatsapp_status: null,
       whatsapp_phone: null,

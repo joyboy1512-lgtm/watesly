@@ -121,4 +121,10 @@ async def put_subscription(
         billing_cycle=subscription.billing_cycle,
         starts_at=subscription.starts_at,
         ends_at=subscription.ends_at,
+        included_mac_override=subscription.included_mac_override,
+        over_mac_price_per_100_override=(
+            float(subscription.over_mac_price_per_100_override)
+            if subscription.over_mac_price_per_100_override is not None
+            else None
+        ),
     )

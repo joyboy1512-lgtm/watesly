@@ -87,15 +87,23 @@ async def update_subscription(
             plan_id=plan.id,
             status=payload.status,
             billing_cycle=payload.billing_cycle,
-            starts_at=datetime.now(UTC),
+            starts_at=payload.starts_at or datetime.now(UTC),
             ends_at=payload.ends_at,
+            included_mac_override=payload.included_mac_override,
+            over_mac_price_per_100_override=payload.over_mac_price_per_100_override,
         )
         db.add(subscription)
     else:
         subscription.plan_id = plan.id
         subscription.status = payload.status
         subscription.billing_cycle = payload.billing_cycle
+        if payload.starts_at is not None:
+            subscription.starts_at = payload.starts_at
         subscription.ends_at = payload.ends_at
+        if payload.included_mac_override is not None:
+            subscription.included_mac_override = payload.included_mac_override
+        if payload.over_mac_price_per_100_override is not None:
+            subscription.over_mac_price_per_100_override = payload.over_mac_price_per_100_override
 
     await db.commit()
     await db.refresh(subscription)

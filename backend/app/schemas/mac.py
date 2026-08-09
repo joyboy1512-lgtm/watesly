@@ -45,6 +45,13 @@ class MacChannelStatsResponse(BaseModel):
     campaign_messages_sent: int = 0
     whatsapp_status: str | None = None
     whatsapp_phone: str | None = None
+    subscription_starts_at: datetime | None = None
+    subscription_ends_at: datetime | None = None
+    billing_period_start: datetime | None = None
+    billing_period_end: datetime | None = None
+    over_mac_price_per_100: float = 0
+    attributed_over_mac_count: int = 0
+    estimated_channel_over_mac_charge: float = 0
 
 
 class ChannelUsageBoardItem(BaseModel):
@@ -59,10 +66,18 @@ class ChannelUsageBoardItem(BaseModel):
     included_mac: int = 0
     mac_remaining: int = 0
     is_over_mac: bool = False
+    over_mac_count: int = 0
     campaign_messages_sent: int = 0
     whatsapp_status: str | None = None
     whatsapp_phone: str | None = None
     whatsapp_verified_name: str | None = None
+    subscription_starts_at: datetime | None = None
+    subscription_ends_at: datetime | None = None
+    billing_period_start: datetime | None = None
+    billing_period_end: datetime | None = None
+    over_mac_price_per_100: float = 0
+    attributed_over_mac_count: int = 0
+    estimated_channel_over_mac_charge: float = 0
 
 
 class ChannelUsageBoardResponse(BaseModel):
@@ -75,6 +90,10 @@ class ChannelUsageBoardResponse(BaseModel):
     over_mac_blocks: int
     over_mac_price_per_100: float
     estimated_over_mac_charge: float
+    subscription_starts_at: datetime | None = None
+    subscription_ends_at: datetime | None = None
+    billing_period_start: datetime | None = None
+    billing_period_end: datetime | None = None
     channels: list[ChannelUsageBoardItem] = Field(default_factory=list)
 
 

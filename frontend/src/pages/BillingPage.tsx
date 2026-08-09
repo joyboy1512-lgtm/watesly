@@ -16,7 +16,9 @@ import {
   YAxis
 } from "recharts";
 import { api, silentRequest } from "../lib/api";
+import BillingProviderSettings from "../components/BillingProviderSettings";
 import MacWorkspaceBalance from "../components/MacWorkspaceBalance";
+import { hasNavPermission } from "../lib/navPermissions";
 import {
   formatMacBalance,
   formatMacCycleMonth,
@@ -88,6 +90,13 @@ type ChannelMacStat = {
   campaign_messages_sent: number;
   whatsapp_status: string | null;
   whatsapp_phone: string | null;
+  subscription_starts_at: string | null;
+  subscription_ends_at: string | null;
+  billing_period_start: string | null;
+  billing_period_end: string | null;
+  over_mac_price_per_100: number;
+  attributed_over_mac_count: number;
+  estimated_channel_over_mac_charge: number;
 };
 
 type ChannelMacUsage = {
@@ -184,6 +193,13 @@ export default function BillingPage() {
   const workspaceMac = u?.mac.used ?? sub?.mac_count ?? 0;
   const selectedChannel = channels.find((item) => item.channel_id === selectedChannelId);
   const channelView = channelUsage.data;
+
+  const profile = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async () => (await api.get<{ permissions?: string[] }>("/auth/me")).data
+  });
+
+  const canManageBilling = hasNavPermission(profile.data?.permissions, "billing.manage");
 
   const denied =
     subscription.error &&
@@ -326,6 +342,8 @@ export default function BillingPage() {
         </div>
       </section>
 
+      {canManageBilling && <BillingProviderSettings />}
+
       {u && (
         <MacWorkspaceBalance
           showPolicy={false}
@@ -412,24 +430,30 @@ export default function BillingPage() {
             <thead>
               <tr>
                 <th>القناة</th>
-                <th>MAC مُسنَد</th>
+                <th>MAC</th>
                 <th>الحصة</th>
+                <th>بداية الاشتراك</th>
+                <th>نهاية الاشتراك</th>
                 <th>دورة MAC</th>
-                <th>Over MAC</th>
-                <th>حملات</th>
+                <th>سعر Over/100</th>
+                <th>إجمالي Over MAC</th>
                 <th>إجراء</th>
               </tr>
             </thead>
             <tbody>
               {channelStats.isLoading && (
-                <tr><td colSpan={7} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={9} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {!channelStats.isLoading && filteredChannels.length === 0 && (
-                <tr><td colSpan={7} className="admin-table-empty">لا قنوات مطابقة.</td></tr>
+                <tr><td colSpan={9} className="admin-table-empty">لا قنوات مطابقة.</td></tr>
               )}
               {filteredChannels.map((item) => {
                 const share = workspaceMac > 0 ? Math.round((item.mac_count / workspaceMac) * 100) : 0;
                 const isSelected = item.channel_id === selectedChannelId;
+                const periodLabel =
+                  item.billing_period_start && item.billing_period_end
+                    ? formatPeriodRange(item.billing_period_start, item.billing_period_end)
+                    : formatMacCycleMonth(item.cycle_month);
                 return (
                   <tr key={item.channel_id} className={isSelected ? "billing-row-selected" : undefined}>
                     <td>
@@ -443,12 +467,20 @@ export default function BillingPage() {
                     </td>
                     <td><strong>{item.mac_count.toLocaleString("ar")}</strong></td>
                     <td>{share}%</td>
-                    <td>{formatMacCycleMonth(item.cycle_month)}</td>
+                    <td>{item.subscription_starts_at ? formatPlanDate(item.subscription_starts_at) : "—"}</td>
+                    <td>{item.subscription_ends_at ? formatPlanDate(item.subscription_ends_at) : "—"}</td>
+                    <td>{periodLabel}</td>
+                    <td>${item.over_mac_price_per_100.toFixed(2)}</td>
                     <td>
-                      ${sub.over_mac_price_per_100}/100
-                      {item.is_over_mac ? ` · +${item.over_mac_count.toLocaleString("ar")}` : " · ضمن الخطة"}
+                      <strong className={item.estimated_channel_over_mac_charge > 0 ? "billing-over-charge" : ""}>
+                        {item.estimated_channel_over_mac_charge > 0
+                          ? `$${item.estimated_channel_over_mac_charge.toFixed(2)}`
+                          : "—"}
+                      </strong>
+                      {item.attributed_over_mac_count > 0 && (
+                        <small>+{item.attributed_over_mac_count.toLocaleString("ar")} MAC</small>
+                      )}
                     </td>
-                    <td>{item.campaign_messages_sent > 0 ? item.campaign_messages_sent.toLocaleString("ar") : "—"}</td>
                     <td>
                       <div className="admin-actions">
                         <button
