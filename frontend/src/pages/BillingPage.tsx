@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -70,6 +70,22 @@ type MacContact = {
   first_activity_at: string;
 };
 
+type ChannelMacStat = {
+  channel_id: string;
+  channel_name: string;
+  channel_type: string;
+  channel_status: string | null;
+  cycle_month: string;
+  mac_count: number;
+  included_mac: number;
+  mac_remaining: number;
+  is_over_mac: boolean;
+  over_mac_count: number;
+  campaign_messages_sent: number;
+  whatsapp_status: string | null;
+  whatsapp_phone: string | null;
+};
+
 function formatShortDay(dateKey: string): string {
   const date = new Date(`${dateKey}T12:00:00`);
   if (Number.isNaN(date.getTime())) return dateKey;
@@ -85,6 +101,8 @@ function formatPeriodRange(start: string, end: string): string {
 }
 
 export default function BillingPage() {
+  const navigate = useNavigate();
+
   const subscription = useQuery({
     queryKey: ["subscription"],
     queryFn: async () => (await api.get<Subscription>("/billing/subscription")).data,
@@ -109,8 +127,16 @@ export default function BillingPage() {
       ).data
   });
 
+  const channelStats = useQuery({
+    queryKey: ["billing-mac-channels"],
+    enabled: subscription.isSuccess,
+    queryFn: async () => (await api.get<ChannelMacStat[]>("/billing/mac/channels")).data
+  });
+
   const sub = subscription.data;
   const u = usage.data;
+  const channels = channelStats.data ?? [];
+  const workspaceMac = u?.mac.used ?? sub?.mac_count ?? 0;
 
   const denied =
     subscription.error &&
@@ -203,6 +229,65 @@ export default function BillingPage() {
         </div>
         <Link to="/channels" className="secondary-button">القنوات</Link>
       </header>
+
+      <section className="card assignments-filter-card billing-channel-filter-card">
+        <div className="assignments-filter-bar">
+          <div>
+            <strong>فلترة حسب القناة</strong>
+            <small>اختر قناة لعرض تفاصيل MAC والرسوم داخلها</small>
+          </div>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value) navigate(`/channels/${value}/mac`);
+            }}
+          >
+            <option value="">اختر قناة للتفاصيل والرسوم…</option>
+            {channels.map((item) => (
+              <option key={item.channel_id} value={item.channel_id}>
+                {item.channel_name} · {item.mac_count.toLocaleString("ar")} MAC
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
+      {channels.length > 0 && (
+        <section className="billing-channels-grid">
+          {channels.map((item) => {
+            const share = workspaceMac > 0 ? Math.round((item.mac_count / workspaceMac) * 100) : 0;
+            return (
+              <article key={item.channel_id} className="card billing-channel-card">
+                <div className="billing-channel-head">
+                  <div>
+                    <strong>{item.channel_name}</strong>
+                    <small>{item.channel_type} · {formatMacCycleMonth(item.cycle_month)}</small>
+                  </div>
+                  <span className="billing-per-channel-badge">{share}%</span>
+                </div>
+                <div className="billing-channel-mac">
+                  <strong>{item.mac_count.toLocaleString("ar")} MAC</strong>
+                  <small>
+                    رصيد مساحة العمل {item.mac_count.toLocaleString("ar")} / {item.included_mac.toLocaleString("ar")}
+                    {item.is_over_mac ? ` · Over +${item.over_mac_count.toLocaleString("ar")}` : ""}
+                  </small>
+                  <small>
+                    Over MAC: ${sub?.over_mac_price_per_100 ?? 0} / 100 ·
+                    {item.is_over_mac ? ` تقدير $${sub?.estimated_over_mac_charge.toFixed(0) ?? 0}` : " ضمن الخطة"}
+                  </small>
+                </div>
+                <div className="billing-channel-meta">
+                  {item.whatsapp_phone && <span dir="ltr" className="billing-channel-phone">{item.whatsapp_phone}</span>}
+                  <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button">
+                    الرسم والتفاصيل
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
 
       {u && (
         <MacWorkspaceBalance

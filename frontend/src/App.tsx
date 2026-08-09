@@ -8,6 +8,7 @@ import KnowledgePage from "./pages/KnowledgePage";
 import TeamPage from "./pages/TeamPage";
 import OrganizationsPage from "./pages/OrganizationsPage";
 import ChannelsPage from "./pages/ChannelsPage";
+import ChannelMacDetailPage from "./pages/ChannelMacDetailPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import CampaignsPage from "./pages/CampaignsPage";
 import ContactsPage from "./pages/ContactsPage";
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/assignments" element={<AssignmentsPage />} />
         <Route path="/organizations" element={<OrganizationsPage />} />
         <Route path="/channels" element={<ChannelsPage />} />
+        <Route path="/channels/:channelId/mac" element={<ChannelMacDetailPage />} />
         <Route path="/billing" element={<BillingPage />} />
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/campaigns" element={<CampaignsPage />} />

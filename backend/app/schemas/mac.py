@@ -140,3 +140,33 @@ class BillingUsageResponse(BaseModel):
     breakdown_by_activity: list[MacTriggerBreakdownItem] = Field(default_factory=list)
     daily_trend: list[MacDailyTrendItem] = Field(default_factory=list)
     campaign_messages_sent: int = 0
+
+
+class ChannelMacUsageMacDTO(BaseModel):
+    channel_count: int
+    workspace_used: int
+    workspace_included: int
+    workspace_remaining: int
+    share_percent: float
+
+
+class ChannelMacPricingDTO(BaseModel):
+    plan_name: str
+    included_mac: int
+    over_mac_price_per_100: float
+
+
+class ChannelMacUsageResponse(BaseModel):
+    channel_id: UUID
+    channel_name: str
+    channel_type: str
+    channel_status: str | None = None
+    cycle_month: str
+    billing_period: BillingPeriodDTO
+    mac: ChannelMacUsageMacDTO
+    overage: MacOverageDTO
+    pricing: ChannelMacPricingDTO
+    policy: MacPolicyDTO
+    breakdown_by_activity: list[MacTriggerBreakdownItem] = Field(default_factory=list)
+    daily_trend: list[MacDailyTrendItem] = Field(default_factory=list)
+    campaign_messages_sent: int = 0

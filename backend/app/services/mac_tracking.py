@@ -433,3 +433,125 @@ async def get_billing_usage(
         "daily_trend": insights["daily_trend"],
         "campaign_messages_sent": insights["campaign_messages_sent"],
     }
+
+
+async def get_channel_mac_usage(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    channel_id: UUID,
+    cycle_month: str | None = None,
+) -> dict:
+    """Per-channel MAC drill-down: assigned contacts, trends, workspace overage context."""
+    from app.services.billing import get_active_subscription
+
+    channel = await db.get(Channel, channel_id)
+    if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
+        raise ValueError("CHANNEL_NOT_FOUND")
+
+    summary = await get_account_mac_summary(db, account_id=account_id, cycle_month=cycle_month)
+    period_start = summary["billing_period_start"]
+    period_end = summary["billing_period_end"]
+
+    subscription_data = await get_active_subscription(db, account_id)
+    plan_name = "—"
+    if subscription_data is not None:
+        _, plan = subscription_data
+        plan_name = plan.name
+
+    channel_mac = await count_mac_for_channel(
+        db, account_id=account_id, channel_id=channel_id, period_start=period_start
+    )
+    workspace_used = int(summary["mac_count"])
+    workspace_included = int(summary["included_mac"])
+    share = round((channel_mac / workspace_used) * 100, 1) if workspace_used > 0 else 0.0
+
+    trigger_rows = list(
+        (
+            await db.execute(
+                select(MonthlyActiveContact.trigger_source, func.count(MonthlyActiveContact.id))
+                .where(
+                    MonthlyActiveContact.account_id == account_id,
+                    MonthlyActiveContact.channel_id == channel_id,
+                    MonthlyActiveContact.billing_period_start == period_start,
+                )
+                .group_by(MonthlyActiveContact.trigger_source)
+                .order_by(func.count(MonthlyActiveContact.id).desc())
+            )
+        ).all()
+    )
+
+    day_bucket = func.date_trunc("day", MonthlyActiveContact.first_activity_at)
+    daily_rows = list(
+        (
+            await db.execute(
+                select(day_bucket, func.count(MonthlyActiveContact.id))
+                .where(
+                    MonthlyActiveContact.account_id == account_id,
+                    MonthlyActiveContact.channel_id == channel_id,
+                    MonthlyActiveContact.billing_period_start == period_start,
+                )
+                .group_by(day_bucket)
+                .order_by(day_bucket.asc())
+            )
+        ).all()
+    )
+
+    campaign_messages = await count_campaign_messages_for_channel(
+        db,
+        account_id=account_id,
+        channel_id=channel_id,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+    channel_status = (
+        channel.status.value if hasattr(channel.status, "value") else str(channel.status)
+    )
+    channel_type = channel.type.value if hasattr(channel.type, "value") else str(channel.type)
+
+    return {
+        "channel_id": channel_id,
+        "channel_name": channel.name,
+        "channel_type": channel_type,
+        "channel_status": channel_status,
+        "cycle_month": str(summary["cycle_month"]),
+        "billing_period": {
+            "start": period_start,
+            "end": period_end,
+        },
+        "mac": {
+            "channel_count": channel_mac,
+            "workspace_used": workspace_used,
+            "workspace_included": workspace_included,
+            "workspace_remaining": int(summary["mac_remaining"]),
+            "share_percent": share,
+        },
+        "overage": {
+            "enabled": bool(summary.get("overage_enabled", True)),
+            "is_over": bool(summary["is_over_mac"]),
+            "count": int(summary["over_mac_count"]),
+            "blocks": int(summary["over_mac_blocks"]),
+            "estimated_charge": float(summary["estimated_over_mac_charge"]),
+            "price_per_100": float(summary["over_mac_price_per_100"]),
+        },
+        "pricing": {
+            "plan_name": plan_name,
+            "included_mac": workspace_included,
+            "over_mac_price_per_100": float(summary["over_mac_price_per_100"]),
+        },
+        "policy": {
+            "limit_policy": str(summary.get("mac_limit_policy", "soft")),
+        },
+        "breakdown_by_activity": [
+            {"source": str(source), "count": int(count)} for source, count in trigger_rows
+        ],
+        "daily_trend": [
+            {
+                "date": day.isoformat()[:10] if hasattr(day, "isoformat") else str(day)[:10],
+                "count": int(count),
+            }
+            for day, count in daily_rows
+        ],
+        "campaign_messages_sent": campaign_messages,
+    }

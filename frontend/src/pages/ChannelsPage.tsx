@@ -44,6 +44,7 @@ export default function ChannelsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [macFilter, setMacFilter] = useState("");
   const [creating, setCreating] = useState(false);
 
   const profile = useQuery({
@@ -94,16 +95,21 @@ export default function ChannelsPage() {
     return map;
   }, [rulesQuery.data]);
 
+  const board = usageBoard.data;
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return visibleRows.filter((item) => {
       if (typeFilter && item.channel_type !== typeFilter) return false;
       if (statusFilter && item.channel_status !== statusFilter) return false;
+      if (macFilter === "active" && item.mac_count <= 0) return false;
+      if (macFilter === "idle" && item.mac_count > 0) return false;
+      if (macFilter === "over" && !board?.is_over_mac) return false;
       if (!term) return true;
       const haystack = `${item.channel_name} ${item.channel_type} ${item.external_id ?? ""} ${orgMap.get(item.organization_id) ?? ""} ${item.whatsapp_phone ?? ""}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [visibleRows, search, typeFilter, statusFilter, orgMap]);
+  }, [visibleRows, search, typeFilter, statusFilter, macFilter, orgMap, board?.is_over_mac]);
 
   const stats = useMemo(() => {
     return {
@@ -114,7 +120,6 @@ export default function ChannelsPage() {
     };
   }, [visibleRows]);
 
-  const board = usageBoard.data;
   const setup = channelSetupState(visibleRows);
   const isLoading = channelsQuery.isLoading || (usageBoard.isLoading && !channelsQuery.data);
   const loadError = channelsQuery.isError && usageBoard.isError;
@@ -211,8 +216,15 @@ export default function ChannelsPage() {
     return (
       <div className="admin-cell-stack channel-mac-cell">
         <strong>{channel.mac_count.toLocaleString("ar")} MAC</strong>
-        <small>إسناد القناة · {share}% من إجمالي {board.mac_count.toLocaleString("ar")}</small>
+        <small>إسناد · {share}% · {formatMacCycleMonth(channel.cycle_month)}</small>
         <small>رصيد مساحة العمل {formatMacBalance(board.mac_count, board.included_mac)}</small>
+        <small>
+          Over ${board.over_mac_price_per_100}/100 ·
+          {board.is_over_mac ? ` +${board.over_mac_count.toLocaleString("ar")} ($${board.estimated_over_mac_charge.toFixed(0)})` : " ضمن الخطة"}
+        </small>
+        <Link to={`/channels/${channel.channel_id}/mac`} className="channel-mac-detail-link">
+          الرسم والتفاصيل →
+        </Link>
       </div>
     );
   }
@@ -408,6 +420,12 @@ export default function ChannelsPage() {
             <option value="disconnected">غير متصلة</option>
             <option value="suspended">موقوفة</option>
           </select>
+          <select value={macFilter} onChange={(e) => setMacFilter(e.target.value)}>
+            <option value="">كل MAC</option>
+            <option value="active">قنوات لها MAC</option>
+            <option value="idle">بدون MAC</option>
+            <option value="over">عند تجاوز الرصيد</option>
+          </select>
           {(channelsQuery.isError || usageBoard.isError) && (
             <button
               type="button"
@@ -476,6 +494,9 @@ export default function ChannelsPage() {
                   </td>
                   <td>
                     <div className="admin-actions">
+                      <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button">
+                        MAC
+                      </Link>
                       {item.channel_type === "whatsapp" && canManage && (
                         <Link to={`/whatsapp-connect?channel=${item.channel_id}`} className="secondary-button">
                           {item.whatsapp_phone ? "إدارة الربط" : "ربط"}
