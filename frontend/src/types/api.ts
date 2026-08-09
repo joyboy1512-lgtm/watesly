@@ -41,4 +41,6 @@ export type Message = {
   media_url?: string | null;
   media_filename?: string | null;
   media_caption?: string | null;
+  template_name?: string | null;
+  template_components?: Array<Record<string, unknown>> | null;
 };

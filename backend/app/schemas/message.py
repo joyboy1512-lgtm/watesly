@@ -17,3 +17,5 @@ class MessageResponse(BaseModel):
     media_url: str | None = None
     media_filename: str | None = None
     media_caption: str | None = None
+    template_name: str | None = None
+    template_components: list[dict] | None = None

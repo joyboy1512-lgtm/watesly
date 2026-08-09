@@ -125,22 +125,27 @@ async def get_conversation_messages(
         raise HTTPException(status_code=403 if "FORBIDDEN" in str(exc) else 404, detail=detail) from exc
 
     from app.services.message_media import extract_message_media
+    from app.services.template_display import extract_template_fields
 
-    return [
-        MessageResponse(
-            id=item.id,
-            conversation_id=item.conversation_id,
-            direction=item.direction,
-            type=item.type,
-            from_address=item.from_address,
-            to_address=item.to_address,
-            text_body=item.text_body,
-            status=item.status,
-            created_at=item.created_at,
-            **extract_message_media(item),
+    items: list[MessageResponse] = []
+    for item in messages:
+        template_fields = extract_template_fields(item.provider_payload)
+        items.append(
+            MessageResponse(
+                id=item.id,
+                conversation_id=item.conversation_id,
+                direction=item.direction,
+                type=item.type,
+                from_address=item.from_address,
+                to_address=item.to_address,
+                text_body=item.text_body,
+                status=item.status,
+                created_at=item.created_at,
+                **extract_message_media(item),
+                **template_fields,
+            )
         )
-        for item in messages
-    ]
+    return items
 
 
 @router.patch("/{conversation_id}", response_model=ConversationResponse)
@@ -338,6 +343,8 @@ async def send_conversation_template(
                 components=components,
             ),
             record_mac=True,
+            display_components=template.components,
+            display_body_text=template.body_text,
         )
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

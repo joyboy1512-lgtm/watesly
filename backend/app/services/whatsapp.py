@@ -703,7 +703,11 @@ async def send_template_message(
     whatsapp_account_id: UUID,
     payload: SendTemplateMessageRequest,
     record_mac: bool = False,
+    display_components: list | None = None,
+    display_body_text: str | None = None,
 ) -> Message:
+    from app.services.template_display import render_template_body_text
+
     wa = await db.get(WhatsAppAccount, whatsapp_account_id)
     if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
         raise ValueError("WHATSAPP_ACCOUNT_NOT_AVAILABLE")
@@ -711,6 +715,14 @@ async def send_template_message(
     contact, conversation, _ = await _get_or_create_contact_and_conversation(
         db, whatsapp_account=wa, sender=payload.to, display_name=None
     )
+    stored_components = display_components if display_components else []
+    text_body = render_template_body_text(stored_components, fallback=display_body_text)
+    template_payload = {
+        "template_name": payload.template_name,
+        "language_code": payload.language_code,
+        "send_components": payload.components,
+        "components": stored_components,
+    }
     message = Message(
         account_id=account_id,
         organization_id=wa.organization_id,
@@ -721,11 +733,8 @@ async def send_template_message(
         type=MessageType.TEMPLATE,
         from_address=wa.display_phone_number,
         to_address=payload.to,
-        provider_payload={
-            "template_name": payload.template_name,
-            "language_code": payload.language_code,
-            "components": payload.components,
-        },
+        text_body=text_body,
+        provider_payload=template_payload,
         status=MessageStatus.QUEUED,
     )
     db.add(message)
@@ -745,13 +754,25 @@ async def send_template_message(
         )
     except MetaAPIError as exc:
         message.status = MessageStatus.FAILED
-        message.provider_payload = exc.response_data
+        if isinstance(message.provider_payload, dict):
+            message.provider_payload = {
+                **message.provider_payload,
+                "meta_error": exc.response_data,
+            }
+        else:
+            message.provider_payload = {"meta_error": exc.response_data}
         await db.commit()
         raise
 
     items = response.get("messages", [])
     message.external_message_id = items[0].get("id") if items else None
-    message.provider_payload = response
+    if isinstance(message.provider_payload, dict):
+        message.provider_payload = {
+            **message.provider_payload,
+            "meta_response": response,
+        }
+    else:
+        message.provider_payload = template_payload | {"meta_response": response}
     message.status = MessageStatus.SENT
     conversation.last_message_at = datetime.now(UTC)
     await db.commit()

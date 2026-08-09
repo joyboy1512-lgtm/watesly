@@ -1,5 +1,7 @@
 import type { Message } from "../types/api";
 import { formatMessageStatus } from "../lib/inboxHelpers";
+import WhatsAppTemplatePreview from "./WhatsAppTemplatePreview";
+import type { TemplateComponent } from "../lib/templateMedia";
 
 type Props = {
   message: Message;
@@ -31,8 +33,24 @@ export default function InboxMessageBubble({ message, formatTime, highlight = ""
   const status = formatMessageStatus(message.status, message.direction);
   const caption = message.media_caption || message.text_body;
   const isMedia = message.type !== "text" && message.type !== "template" && message.type !== "interactive";
+  const isTemplate = message.type === "template";
 
   function renderBody() {
+    if (isTemplate) {
+      return (
+        <WhatsAppTemplatePreview
+          variant="inline"
+          bodyText={message.text_body}
+          components={(message.template_components as TemplateComponent[] | null) ?? null}
+          templateName={message.template_name ?? undefined}
+          mediaOverride={
+            message.media_url
+              ? { mediaUrl: message.media_url, filename: message.media_filename ?? undefined }
+              : undefined
+          }
+        />
+      );
+    }
     if (message.type === "image" && message.media_url) {
       return (
         <div className="message-media">
@@ -77,11 +95,13 @@ export default function InboxMessageBubble({ message, formatTime, highlight = ""
         </div>
       );
     }
-    return <div>{highlightText(message.text_body || `[${message.type}]`, highlight)}</div>;
+    return <div className="message-text">{highlightText(message.text_body || `[${message.type}]`, highlight)}</div>;
   }
 
   return (
-    <div className={`message ${message.direction === "outbound" ? "outgoing" : "incoming"}`}>
+    <div
+      className={`message ${message.direction === "outbound" ? "outgoing" : "incoming"}${isTemplate ? " message-template" : ""}`}
+    >
       {renderBody()}
       <small>
         {formatTime(message.created_at)}

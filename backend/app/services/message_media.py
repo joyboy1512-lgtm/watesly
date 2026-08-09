@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.models.message import Message, MessageType
 from app.services.storage import storage
+from app.services.template_media import get_template_header_info
 
 
 def extract_message_media(message: Message) -> dict:
@@ -44,6 +45,15 @@ def extract_message_media(message: Message) -> dict:
             "media_filename": str(filename) if filename else None,
             "media_caption": caption,
         }
+
+    if message_type == MessageType.TEMPLATE:
+        header = get_template_header_info(payload.get("components"))
+        if header and header.get("media_url"):
+            return {
+                "media_url": str(header["media_url"]),
+                "media_filename": str(header.get("filename")) if header.get("filename") else None,
+                "media_caption": caption,
+            }
 
     return {
         "media_url": None,

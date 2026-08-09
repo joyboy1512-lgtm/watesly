@@ -10,7 +10,57 @@ export type WhatsAppTemplatePreviewProps = {
   variableSamples?: string[];
   compact?: boolean;
   className?: string;
+  variant?: "phone" | "inline";
 };
+
+function TemplateBubbleContent({
+  parsed,
+  headerText,
+  body,
+  footer
+}: {
+  parsed: ReturnType<typeof parseTemplatePreview>;
+  headerText: string | null;
+  body: string;
+  footer: string | null;
+}) {
+  return (
+    <>
+      {parsed.headerMedia?.format === "IMAGE" && (
+        <img
+          className="wa-template-media"
+          src={parsed.headerMedia.mediaUrl}
+          alt=""
+        />
+      )}
+      {parsed.headerMedia?.format === "VIDEO" && (
+        <div className="wa-template-media wa-template-video">
+          <video src={parsed.headerMedia.mediaUrl} controls preload="metadata" />
+        </div>
+      )}
+      {parsed.headerMedia?.format === "DOCUMENT" && (
+        <div className="wa-template-document">
+          <span aria-hidden="true">📄</span>
+          <span>{parsed.headerMedia.filename || "مستند.pdf"}</span>
+        </div>
+      )}
+      {headerText && <div className="wa-template-header-text">{headerText}</div>}
+      <div className="wa-template-body">{body}</div>
+      {footer && <div className="wa-template-footer">{footer}</div>}
+      {parsed.buttons.length > 0 && (
+        <div className="wa-template-buttons">
+          {parsed.buttons.map((button, index) => (
+            <button key={`${button.text}-${index}`} type="button" className="wa-template-button" disabled>
+              {button.type === "URL" && "🔗 "}
+              {button.type === "PHONE_NUMBER" && "📞 "}
+              {button.text}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function WhatsAppTemplatePreview({
   bodyText,
@@ -20,7 +70,8 @@ export default function WhatsAppTemplatePreview({
   templateName,
   variableSamples,
   compact = false,
-  className = ""
+  className = "",
+  variant = "phone"
 }: WhatsAppTemplatePreviewProps) {
   const parsed = parseTemplatePreview(bodyText, components, mediaOverride);
   const samples = variableSamples ?? undefined;
@@ -33,6 +84,17 @@ export default function WhatsAppTemplatePreview({
     parsed.body.trim() ||
     parsed.footer ||
     parsed.buttons.length;
+
+  if (variant === "inline") {
+    if (!hasContent) {
+      return <div className="chat-template-fallback">{bodyText || "قالب WhatsApp"}</div>;
+    }
+    return (
+      <div className={`chat-template-bubble ${className}`.trim()}>
+        <TemplateBubbleContent parsed={parsed} headerText={headerText} body={body} footer={footer} />
+      </div>
+    );
+  }
 
   return (
     <div className={`wa-template-preview ${compact ? "compact" : ""} ${className}`.trim()}>
@@ -56,41 +118,10 @@ export default function WhatsAppTemplatePreview({
           )}
           {hasContent && (
             <div className="wa-template-bubble">
-              {parsed.headerMedia?.format === "IMAGE" && (
-                <img
-                  className="wa-template-media"
-                  src={parsed.headerMedia.mediaUrl}
-                  alt=""
-                />
-              )}
-              {parsed.headerMedia?.format === "VIDEO" && (
-                <div className="wa-template-media wa-template-video">
-                  <video src={parsed.headerMedia.mediaUrl} controls preload="metadata" />
-                </div>
-              )}
-              {parsed.headerMedia?.format === "DOCUMENT" && (
-                <div className="wa-template-document">
-                  <span aria-hidden="true">📄</span>
-                  <span>{parsed.headerMedia.filename || "مستند.pdf"}</span>
-                </div>
-              )}
-              {headerText && <div className="wa-template-header-text">{headerText}</div>}
-              <div className="wa-template-body">{body}</div>
-              {footer && <div className="wa-template-footer">{footer}</div>}
+              <TemplateBubbleContent parsed={parsed} headerText={headerText} body={body} footer={footer} />
               <time className="wa-template-time">
                 {new Date().toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" })}
               </time>
-              {parsed.buttons.length > 0 && (
-                <div className="wa-template-buttons">
-                  {parsed.buttons.map((button, index) => (
-                    <button key={`${button.text}-${index}`} type="button" className="wa-template-button" disabled>
-                      {button.type === "URL" && "🔗 "}
-                      {button.type === "PHONE_NUMBER" && "📞 "}
-                      {button.text}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>

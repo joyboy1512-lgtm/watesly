@@ -831,29 +831,33 @@ export default function InboxPage() {
         )}
         {windowClosed && selectedId && !isArchived && (
           <form className="composer template-composer" onSubmit={(e) => void handleSendTemplate(e)}>
-            <p className="hint-text window-closed-hint">
-              انتهت نافذة 24 ساعة — لا يمكن إرسال رد حر. استخدم قالب WhatsApp معتمد أو انتظر رسالة جديدة من العميل.
-            </p>
-            <label className="field-label">
-              <span>إرسال قالب معتمد</span>
-              <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} required>
-                <option value="">اختر القالب</option>
-                {approvedTemplates.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-            </label>
-            {selectedTemplate && (
-              <WhatsAppTemplatePreview
-                compact
-                bodyText={selectedTemplate.body_text}
-                components={selectedTemplate.components}
-                templateName={selectedTemplate.name}
-              />
-            )}
-            <button type="submit" className="whatsapp-button" disabled={!templateId || sendingTemplate}>
-              {sendingTemplate ? "جاري الإرسال…" : "إرسال القالب"}
-            </button>
+            <div className="template-composer-scroll">
+              <p className="hint-text window-closed-hint">
+                انتهت نافذة 24 ساعة — لا يمكن إرسال رد حر. استخدم قالب WhatsApp معتمد أو انتظر رسالة جديدة من العميل.
+              </p>
+              <label className="field-label">
+                <span>إرسال قالب معتمد</span>
+                <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} required>
+                  <option value="">اختر القالب</option>
+                  {approvedTemplates.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              {selectedTemplate && (
+                <WhatsAppTemplatePreview
+                  compact
+                  bodyText={selectedTemplate.body_text}
+                  components={selectedTemplate.components}
+                  templateName={selectedTemplate.name}
+                />
+              )}
+            </div>
+            <div className="template-composer-actions">
+              <button type="submit" className="whatsapp-button" disabled={!templateId || sendingTemplate}>
+                {sendingTemplate ? "جاري الإرسال…" : "إرسال القالب"}
+              </button>
+            </div>
           </form>
         )}
         {!windowClosed && !isArchived && (
