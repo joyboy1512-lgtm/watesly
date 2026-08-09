@@ -44,7 +44,8 @@ from app.models.whatsapp_account import WhatsAppAccount
 from app.models.whatsapp_template import WhatsAppTemplate
 
 from app.models.platform_site_config import PlatformSiteConfig
-from app.models.contact_tag import ContactTag
+from app.models.contact_interest import ContactInterest
+from app.models.interest_category import InterestCategory
 from app.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from app.models.segment import Segment
 from app.models.department import Department
@@ -75,7 +76,7 @@ __all__ = [
     "AccountDataKey", "AuditLog", "SupportAccessGrant",
     "ResourceRecord", "ScheduledJob", "IntegrationSecret", "ModuleHealth",
     "OutboxEvent", "IdempotencyRecord", "ProcessedEvent",
-    "ContactTag", "CustomFieldDefinition", "CustomFieldValue", "Segment",
+    "ContactTag", "ContactInterest", "InterestCategory", "CustomFieldDefinition", "CustomFieldValue", "Segment",
     "Department", "AgentPresence", "ConversationReadState",
     "ApiKey", "Deal", "DealActivity", "WebhookSubscription", "WebhookDelivery", "MarketplaceIntegration",
     "CatalogProduct",

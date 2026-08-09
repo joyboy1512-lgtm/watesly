@@ -199,6 +199,7 @@ export function buildContactCreatePayload(input: {
   countryCode: string;
   lifecycleStage?: string;
   tagIds?: string[];
+  interestIds?: string[];
 }) {
   const trimmedEmail = input.email.trim();
   const trimmedCountry = input.countryCode.trim();
@@ -211,7 +212,8 @@ export function buildContactCreatePayload(input: {
     language: input.language.trim() || null,
     country_code: trimmedCountry ? trimmedCountry.toUpperCase() : null,
     lifecycle_stage: input.lifecycleStage?.trim() || null,
-    tag_ids: input.tagIds ?? []
+    tag_ids: input.tagIds ?? [],
+    interest_ids: input.interestIds ?? []
   };
 }
 

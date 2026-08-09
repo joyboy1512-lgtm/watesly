@@ -2798,6 +2798,16 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   grid-template-columns: 1fr auto;
   gap: 8px;
 }
+.campaign-audience-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.contacts-interest-chip small {
+  opacity: 0.85;
+  font-size: 10px;
+}
 .contacts-back-link {
   display: inline-block;
   margin-bottom: 6px;

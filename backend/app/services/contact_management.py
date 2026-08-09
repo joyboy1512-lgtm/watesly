@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.channel import Channel
 from app.models.contact import Contact
+from app.models.contact_interest import ContactInterest
 from app.models.contact_tag import ContactTag
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.conversation_note import ConversationNote
@@ -266,7 +267,34 @@ def _apply_segment_filters(query, filters: dict):
         )
     if lifecycle_stage := filters.get("lifecycle_stage"):
         query = query.where(Contact.lifecycle_stage == str(lifecycle_stage))
+    if filters.get("marketing_opt_in") is True:
+        query = query.where(Contact.marketing_opt_in.is_(True))
+    if gender := filters.get("gender"):
+        query = query.where(Contact.gender == str(gender))
+    if exclude_genders := filters.get("exclude_genders"):
+        values = [str(item) for item in exclude_genders if str(item) in {"male", "female", "unknown"}]
+        if values:
+            query = query.where(Contact.gender.notin_(values))
+    if interest_ids := filters.get("interest_ids"):
+        ids = [UUID(str(item)) for item in interest_ids]
+        if ids:
+            query = query.join(ContactInterest, ContactInterest.contact_id == Contact.id).where(
+                ContactInterest.interest_id.in_(ids)
+            )
     return query
+
+
+async def resolve_audience_contacts(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    filters: dict,
+    limit: int = 500,
+) -> list[Contact]:
+    query = select(Contact).where(Contact.account_id == account_id, Contact.deleted_at.is_(None))
+    query = _apply_segment_filters(query, filters)
+    result = await db.execute(query.distinct().order_by(Contact.created_at.desc()).limit(min(max(limit, 1), 500)))
+    return list(result.scalars().all())
 
 
 async def resolve_segment_contacts(db: AsyncSession, *, account_id: UUID, segment: Segment) -> list[Contact]:

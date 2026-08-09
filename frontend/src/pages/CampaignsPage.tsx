@@ -13,6 +13,13 @@ import {
 } from "../lib/templateMedia";
 import { uploadFile, type UploadedFile } from "../lib/uploads";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
+import {
+  AUDIENCE_GENDER_OPTIONS,
+  buildAudienceResolvePayload,
+  interestGenderHint,
+  type AudienceGenderFilter,
+  type InterestCategory
+} from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 import {
   CampaignResultsTable,
@@ -123,6 +130,10 @@ export default function CampaignsPage() {
   const [campaignMediaOverride, setCampaignMediaOverride] = useState<UploadedFile | null>(null);
   const [uploadingCampaignMedia, setUploadingCampaignMedia] = useState(false);
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
+  const [audienceGenderFilter, setAudienceGenderFilter] = useState<AudienceGenderFilter>("");
+  const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
+  const [audienceLifecycle, setAudienceLifecycle] = useState("");
+  const [audienceWarnings, setAudienceWarnings] = useState<string[]>([]);
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
@@ -136,6 +147,10 @@ export default function CampaignsPage() {
   const segments = useQuery({
     queryKey: ["segments"],
     queryFn: async () => (await api.get<Segment[]>("/platform/segments")).data
+  });
+  const interests = useQuery({
+    queryKey: ["interests"],
+    queryFn: async () => (await api.get<InterestCategory[]>("/platform/interests")).data
   });
 
   const campaigns = useQuery({
@@ -336,9 +351,43 @@ export default function CampaignsPage() {
       const result = await api.get<{ id: string }[]>(`/platform/segments/${selectedSegmentId}/contacts`);
       const ids = result.data.map((item) => item.id);
       setSelectedContacts(ids);
+      setAudienceWarnings([]);
       toastStore.getState().show(`تم تحميل ${ids.length} عميل من الشريحة.`, "success");
     } catch {
       toastStore.getState().show("تعذر تحميل الشريحة.", "error");
+    }
+  }
+
+  function toggleAudienceInterest(interestId: string) {
+    setAudienceInterestIds((current) =>
+      current.includes(interestId) ? current.filter((id) => id !== interestId) : [...current, interestId]
+    );
+  }
+
+  async function applyAudienceFilter() {
+    if (!organizationId) {
+      toastStore.getState().show("اختر الفرع في نموذج الحملة أولاً.", "error");
+      return;
+    }
+    try {
+      const payload = buildAudienceResolvePayload({
+        organizationId,
+        channelId: channelId || undefined,
+        genderFilter: audienceGenderFilter,
+        interestIds: audienceInterestIds,
+        lifecycleStage: audienceLifecycle || undefined,
+        marketingOptInOnly: true
+      });
+      const result = await api.post<{
+        count: number;
+        contact_ids: string[];
+        warnings: string[];
+      }>("/platform/audience/resolve", payload);
+      setSelectedContacts(result.data.contact_ids ?? []);
+      setAudienceWarnings(result.data.warnings ?? []);
+      toastStore.getState().show(`تم تحميل ${result.data.count} عميل مطابق للفلتر.`, "success");
+    } catch {
+      toastStore.getState().show("تعذر تطبيق فلتر الجمهور.", "error");
     }
   }
 
@@ -725,6 +774,60 @@ export default function CampaignsPage() {
 
           <div className="campaigns-audience-panel">
             <div className="campaigns-audience-header">
+              <h3 className="section-title-sm">استهداف حسب الاهتمام والجنس</h3>
+              <p className="hint-text">
+                مثال: حملة تجميل → اختر «تجميل وعناية» + «استبعاد الرجال». يُستبعد تلقائياً من قواعد الاهتمام أيضاً.
+              </p>
+            </div>
+            <div className="campaign-audience-filters">
+              <label className="field-label">
+                <span>الجنس</span>
+                <select value={audienceGenderFilter} onChange={(e) => setAudienceGenderFilter(e.target.value as AudienceGenderFilter)}>
+                  {AUDIENCE_GENDER_OPTIONS.map((item) => (
+                    <option key={item.value || "all"} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label">
+                <span>مرحلة العميل</span>
+                <select value={audienceLifecycle} onChange={(e) => setAudienceLifecycle(e.target.value)}>
+                  <option value="">كل المراحل</option>
+                  <option value="lead">عميل محتمل</option>
+                  <option value="prospect">مهتم</option>
+                  <option value="customer">عميل</option>
+                  <option value="churned">متوقف</option>
+                </select>
+              </label>
+            </div>
+            <div className="field-label">
+              <span>الاهتمامات</span>
+              <div className="contacts-tags-cell">
+                {(interests.data ?? []).map((interest) => {
+                  const active = audienceInterestIds.includes(interest.id);
+                  const hint = interestGenderHint(interest);
+                  return (
+                    <button
+                      key={interest.id}
+                      type="button"
+                      className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
+                      onClick={() => toggleAudienceInterest(interest.id)}
+                      title={hint ?? undefined}
+                    >
+                      {interest.label}
+                      {hint && <small> · {hint}</small>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {audienceWarnings.map((warning) => (
+              <p key={warning} className="campaign-warning">⚠ {warning}</p>
+            ))}
+            <button type="button" className="contacts-erp-btn contacts-erp-btn-primary" onClick={() => void applyAudienceFilter()}>
+              تطبيق الفلتر وتحميل الجمهور
+            </button>
+
+            <div className="campaigns-audience-header" style={{ marginTop: 18 }}>
               <h3 className="section-title-sm">جمهور من شريحة</h3>
               <div className="inline-actions">
                 <select value={selectedSegmentId} onChange={(e) => setSelectedSegmentId(e.target.value)}>

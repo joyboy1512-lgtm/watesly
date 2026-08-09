@@ -44,9 +44,16 @@ from app.services.contact_management import (
     list_custom_fields,
     list_segments,
     remove_contact_tag,
+    resolve_audience_contacts,
     resolve_segment_contacts,
     set_custom_field_value,
     update_contact,
+)
+from app.services.interests import (
+    create_interest,
+    list_contact_interests,
+    list_interests,
+    merge_interest_gender_rules,
 )
 from app.services.crm import (
     add_deal_activity,
@@ -91,6 +98,33 @@ router = APIRouter()
 class SegmentCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     filter_json: dict = Field(default_factory=dict)
+
+
+class InterestCreateRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=160)
+    exclude_genders: list[str] = Field(default_factory=list)
+    include_genders: list[str] | None = None
+
+
+class InterestResponse(BaseModel):
+    id: UUID
+    slug: str
+    label: str
+    exclude_genders: list[str]
+    include_genders: list[str] | None
+    sort_order: int
+
+
+class AudienceResolveRequest(BaseModel):
+    organization_id: UUID | None = None
+    channel_id: UUID | None = None
+    gender: str | None = Field(default=None, pattern=r"^(male|female|unknown)$")
+    exclude_genders: list[str] = Field(default_factory=list)
+    interest_ids: list[UUID] = Field(default_factory=list)
+    lifecycle_stage: str | None = None
+    marketing_opt_in_only: bool = True
+    limit: int = Field(default=500, ge=1, le=500)
 
 
 class CustomFieldCreateRequest(BaseModel):
@@ -249,6 +283,116 @@ async def get_segment_count(
         raise HTTPException(status_code=404, detail="Segment not found")
     count = await count_segment_contacts(db, account_id=context.account_id, segment=segment)
     return {"segment_id": str(segment_id), "count": count}
+
+
+@router.get("/interests", response_model=list[InterestResponse])
+async def get_interests(
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    items = await list_interests(db, context.account_id)
+    return [
+        InterestResponse(
+            id=item.id,
+            slug=item.slug,
+            label=item.label,
+            exclude_genders=list(item.exclude_genders or []),
+            include_genders=list(item.include_genders) if item.include_genders else None,
+            sort_order=item.sort_order,
+        )
+        for item in items
+    ]
+
+
+@router.post("/interests", response_model=InterestResponse, status_code=201)
+async def post_interest(
+    payload: InterestCreateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await create_interest(
+        db,
+        account_id=context.account_id,
+        slug=payload.slug,
+        label=payload.label,
+        exclude_genders=payload.exclude_genders,
+        include_genders=payload.include_genders,
+    )
+    return InterestResponse(
+        id=item.id,
+        slug=item.slug,
+        label=item.label,
+        exclude_genders=list(item.exclude_genders or []),
+        include_genders=list(item.include_genders) if item.include_genders else None,
+        sort_order=item.sort_order,
+    )
+
+
+@router.post("/audience/resolve")
+async def post_resolve_audience(
+    payload: AudienceResolveRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.interest_category import InterestCategory
+
+    filters: dict = {}
+    categories: list[InterestCategory] = []
+    if payload.organization_id:
+        filters["organization_id"] = str(payload.organization_id)
+    if payload.channel_id:
+        filters["channel_id"] = str(payload.channel_id)
+    if payload.lifecycle_stage:
+        filters["lifecycle_stage"] = payload.lifecycle_stage
+    if payload.marketing_opt_in_only:
+        filters["marketing_opt_in"] = True
+    if payload.interest_ids:
+        filters["interest_ids"] = [str(item) for item in payload.interest_ids]
+        for interest_id in payload.interest_ids:
+            item = await db.get(InterestCategory, interest_id)
+            if item is not None and item.account_id == context.account_id:
+                categories.append(item)
+        rule_exclude, rule_include = merge_interest_gender_rules(categories)
+        merged_exclude = set(payload.exclude_genders) | rule_exclude
+        if merged_exclude:
+            filters["exclude_genders"] = sorted(merged_exclude)
+        if rule_include and not payload.gender:
+            if len(rule_include) == 1:
+                filters["gender"] = next(iter(rule_include))
+    if payload.gender:
+        filters["gender"] = payload.gender
+    elif payload.exclude_genders:
+        filters["exclude_genders"] = payload.exclude_genders
+
+    contacts = await resolve_audience_contacts(
+        db,
+        account_id=context.account_id,
+        filters=filters,
+        limit=payload.limit,
+    )
+    warnings: list[str] = []
+    if payload.interest_ids:
+        for category in categories:
+            if category.exclude_genders:
+                labels = {"male": "الرجال", "female": "النساء", "unknown": "غير محدد"}
+                excluded = "، ".join(labels.get(value, value) for value in category.exclude_genders)
+                warnings.append(f"«{category.label}»: مستبعد تلقائياً — {excluded}")
+
+    return {
+        "count": len(contacts),
+        "contact_ids": [str(item.id) for item in contacts],
+        "contacts": [
+            {
+                "id": str(item.id),
+                "name": item.display_name,
+                "phone": item.external_address,
+                "gender": item.gender,
+            }
+            for item in contacts
+        ],
+        "warnings": warnings,
+        "filters_applied": filters,
+    }
 
 
 @router.get("/custom-fields")
