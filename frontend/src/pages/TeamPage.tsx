@@ -28,6 +28,7 @@ import {
   type Organization,
   type PermissionKey
 } from "../lib/teamHelpers";
+import { APP_NAV_PAGES, applyPageToggle, pageIsEnabled } from "../lib/navPermissions";
 import { toastStore } from "../stores/toast";
 
 type AddEmployeeMode = "direct" | "invite";
@@ -452,32 +453,52 @@ export default function TeamPage() {
               </div>
               <button type="button" className="secondary-button" onClick={() => setPermissionEditor(null)}>إغلاق</button>
             </header>
-            <p className="hint-text">حدّد ما يمكن للموظف رؤيته واستخدامه. الصلاحيات المحجوبة لن تظهر في القائمة الجانبية ولن يتمكن من تنفيذها.</p>
-            <div className="admin-permissions-grid">
-              {PERMISSION_GROUPS.map((group) => {
-                const options = group.permissions.filter((item) =>
-                  editablePermissionsForEmployee(permissionEditor.role, actorPermissions).includes(item.key)
-                );
-                if (options.length === 0) return null;
-                return (
-                  <section key={group.id} className="admin-permissions-group">
-                    <h3>{group.label}</h3>
-                    <div className="admin-permissions-list">
-                      {options.map((item) => (
-                        <label key={item.key} className="admin-permission-item">
-                          <input
-                            type="checkbox"
-                            checked={permissionDraft.has(item.key)}
-                            onChange={() => togglePermissionDraft(item.key)}
-                          />
-                          <span>{item.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
+            <p className="hint-text">حدّد الصفحات التي يراها الموظف في القائمة. لوحة التحكم تظهر دائماً. الصفحات غير المفعّلة تُحجب من القائمة ولا يمكن فتحها.</p>
+            <div className="admin-permissions-grid admin-pages-grid">
+              {APP_NAV_PAGES.filter((page) => {
+                const rule = page.permission;
+                if (rule === null) return false;
+                const keys = Array.isArray(rule) ? rule : [rule];
+                return keys.every((key) => editablePermissionsForEmployee(permissionEditor.role, actorPermissions).includes(key));
+              }).map((page) => (
+                <label key={page.path} className="admin-permission-item admin-page-item">
+                  <input
+                    type="checkbox"
+                    checked={pageIsEnabled(permissionDraft, page.permission)}
+                    onChange={(event) => setPermissionDraft(applyPageToggle(permissionDraft, page.permission, event.target.checked))}
+                  />
+                  <span>{page.label}</span>
+                </label>
+              ))}
             </div>
+            <details className="admin-permissions-advanced">
+              <summary>صلاحيات تفصيلية (متقدم)</summary>
+              <div className="admin-permissions-grid">
+                {PERMISSION_GROUPS.map((group) => {
+                  const options = group.permissions.filter((item) =>
+                    editablePermissionsForEmployee(permissionEditor.role, actorPermissions).includes(item.key)
+                  );
+                  if (options.length === 0) return null;
+                  return (
+                    <section key={group.id} className="admin-permissions-group">
+                      <h3>{group.label}</h3>
+                      <div className="admin-permissions-list">
+                        {options.map((item) => (
+                          <label key={item.key} className="admin-permission-item">
+                            <input
+                              type="checkbox"
+                              checked={permissionDraft.has(item.key)}
+                              onChange={() => togglePermissionDraft(item.key)}
+                            />
+                            <span>{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </details>
             <div className="admin-actions" style={{ marginTop: 16 }}>
               <button type="button" className="secondary-button" onClick={() => setPermissionDraft(new Set(getRolePermissions(permissionEditor.role)))}>
                 افتراضي الدور

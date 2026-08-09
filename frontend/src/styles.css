@@ -2304,6 +2304,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .admin-permissions-group h3 { margin: 0 0 8px; font-size: 14px; }
 .admin-permissions-list { display: grid; gap: 8px; }
 .admin-permission-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.admin-pages-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.admin-page-item { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.4); }
+.admin-permissions-advanced { margin-top: 14px; }
+.admin-permissions-advanced summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.page-loading { padding: 32px 24px; color: var(--muted); }
 .import-block { margin-top: 0; padding-top: 0; border-top: 0; }
 .contacts-page { display: grid; gap: 14px; }
 .contacts-erp-page { max-width: none; }

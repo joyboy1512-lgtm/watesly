@@ -41,7 +41,7 @@ import { useAuth } from "./hooks/useAuth";
 
 function FallbackRedirect() {
   const { accessToken } = useAuth();
-  return <Navigate to={accessToken ? "/inbox" : "/"} replace />;
+  return <Navigate to={accessToken ? "/dashboard" : "/"} replace />;
 }
 
 export default function App() {

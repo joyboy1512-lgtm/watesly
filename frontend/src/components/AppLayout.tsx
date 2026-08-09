@@ -10,8 +10,9 @@ import Icon from "./Icon";
 import NotificationMenu from "./NotificationMenu";
 import LanguageSwitcher from "./LanguageSwitcher";
 import BrandLogo from "./BrandLogo";
+import RequirePermission from "./RequirePermission";
 
-import { filterNavItems } from "../lib/navPermissions";
+import { filterNavItems, hasNavPermission } from "../lib/navPermissions";
 
 type CurrentUser = { full_name: string; email: string; is_super_admin: boolean; role?: string; permissions?: string[] };
 
@@ -62,8 +63,10 @@ export default function AppLayout() {
       ] as const)
     : ([] as const);
 
-  const visibleMainItems = filterNavItems(mainItems, profile.data?.permissions);
+  const permissions = profile.data?.permissions;
+  const visibleMainItems = filterNavItems(mainItems, permissions);
   const visibleAdminItems = profile.data?.is_super_admin ? adminItems : ([] as typeof adminItems);
+  const showCatalogShortcut = hasNavPermission(permissions, "contacts.view");
 
   return (
     <div className="app-shell">
@@ -139,7 +142,9 @@ export default function AppLayout() {
             <input placeholder={t("shell.searchPlaceholder")} />
           </div>
           <div className="topbar-actions">
-            <Link to="/catalog" className="topbar-catalog-btn">🛒 {t("shell.catalogShortcut")}</Link>
+            {showCatalogShortcut && (
+              <Link to="/catalog" className="topbar-catalog-btn">🛒 {t("shell.catalogShortcut")}</Link>
+            )}
             <NotificationMenu />
             <div className="user-chip">
               <div className="avatar">{initials}</div>
@@ -150,7 +155,9 @@ export default function AppLayout() {
             </div>
           </div>
         </header>
-        <Outlet />
+        <RequirePermission>
+          <Outlet />
+        </RequirePermission>
       </section>
     </div>
   );
