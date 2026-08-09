@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import Enum, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -53,6 +53,7 @@ class Membership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=MembershipStatus.ACTIVE,
     )
+    custom_permissions: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
     account: Mapped["Account"] = relationship(back_populates="memberships")
     user: Mapped["User"] = relationship(back_populates="memberships")

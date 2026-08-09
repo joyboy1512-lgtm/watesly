@@ -3,15 +3,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
   INVITABLE_ROLES,
+  PERMISSION_GROUPS,
   ROLE_DESCRIPTIONS,
   TEAM_PAGE_SIZE,
+  canAssignPermissions,
   computeTeamStats,
+  editablePermissionsForEmployee,
   employeeInitials,
   filterEmployees,
   formatRoleLabel,
   formatStatusLabel,
   formatWhatsAppStatus,
   getEmployeeWorkspaces,
+  getRolePermissions,
   mapWhatsAppAccount,
   permissionSummary,
   roleBadgeClass,
@@ -21,7 +25,8 @@ import {
   type Employee,
   type InvitationResult,
   type MembershipRole,
-  type Organization
+  type Organization,
+  type PermissionKey
 } from "../lib/teamHelpers";
 import { toastStore } from "../stores/toast";
 
@@ -43,12 +48,26 @@ export default function TeamPage() {
   const [pendingInvite, setPendingInvite] = useState<{ email: string; url: string; expiresInHours: number; emailSent: boolean } | null>(null);
   const [inviting, setInviting] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [permissionEditor, setPermissionEditor] = useState<Employee | null>(null);
+  const [permissionDraft, setPermissionDraft] = useState<Set<PermissionKey>>(new Set());
+  const [savingPermissions, setSavingPermissions] = useState(false);
+
+  const profileQuery = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async () => (await api.get<{ permissions?: string[]; role?: string }>("/auth/me")).data
+  });
+  const actorPermissions = (profileQuery.data?.permissions ?? []) as PermissionKey[];
+  const canManagePermissions = canAssignPermissions(actorPermissions);
 
   const employeesQuery = useQuery({
     queryKey: ["employees"],
     queryFn: async () => {
-      const rows = (await api.get<Array<Employee & { channel_ids?: string[] }>>("/team/employees")).data;
-      return rows.map((row) => ({ ...row, channel_ids: row.channel_ids ?? [] }));
+      const rows = (await api.get<Array<Employee & { channel_ids?: string[]; permissions?: string[] }>>("/team/employees")).data;
+      return rows.map((row) => ({
+        ...row,
+        channel_ids: row.channel_ids ?? [],
+        permissions: (row.permissions ?? [...getRolePermissions(row.role)]) as PermissionKey[]
+      }));
     }
   });
 
@@ -121,8 +140,8 @@ export default function TeamPage() {
 
   async function createDirect(event: FormEvent) {
     event.preventDefault();
-    if (password.length < 10) {
-      toastStore.getState().show("كلمة المرور يجب أن تكون 10 أحرف على الأقل.", "error");
+    if (password.length < 6) {
+      toastStore.getState().show("كلمة المرور يجب أن تكون 6 أحرف على الأقل.", "error");
       return;
     }
     if (password !== confirmPassword) {
@@ -162,6 +181,37 @@ export default function TeamPage() {
       status: item.status === "active" ? "suspended" : "active"
     });
     await queryClient.invalidateQueries({ queryKey: ["employees"] });
+  }
+
+  function openPermissionEditor(item: Employee) {
+    setPermissionEditor(item);
+    setPermissionDraft(new Set((item.permissions.length ? item.permissions : [...getRolePermissions(item.role)]) as PermissionKey[]));
+  }
+
+  function togglePermissionDraft(key: PermissionKey) {
+    setPermissionDraft((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function savePermissions() {
+    if (!permissionEditor) return;
+    setSavingPermissions(true);
+    try {
+      await api.patch(`/team/employees/${permissionEditor.membership_id}`, {
+        permissions: [...permissionDraft]
+      });
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      setPermissionEditor(null);
+      toastStore.getState().show("تم تحديث صلاحيات الموظف.", "success");
+    } catch {
+      toastStore.getState().show("تعذر حفظ الصلاحيات.", "error");
+    } finally {
+      setSavingPermissions(false);
+    }
   }
 
   function renderWorkspaces(item: Employee) {
@@ -238,8 +288,8 @@ export default function TeamPage() {
             <form className="inline-form" onSubmit={createDirect}>
               <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="الاسم الكامل" required minLength={2} />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" required type="email" />
-              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" required type="password" minLength={10} autoComplete="new-password" />
-              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="تأكيد كلمة المرور" required type="password" minLength={10} autoComplete="new-password" />
+              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
+              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="تأكيد كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
               <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
                 {INVITABLE_ROLES.map((item) => (
                   <option key={item} value={item}>{formatRoleLabel(item)}</option>
@@ -373,6 +423,11 @@ export default function TeamPage() {
                   </td>
                   <td>
                     <div className="admin-actions">
+                      {canManagePermissions && item.role !== "owner" && (
+                        <button type="button" className="secondary-button" onClick={() => openPermissionEditor(item)}>
+                          صلاحيات
+                        </button>
+                      )}
                       {item.role !== "owner" && (
                         <button type="button" className="secondary-button" onClick={() => void toggleStatus(item)}>
                           {item.status === "active" ? "تعطيل" : "تفعيل"}
@@ -386,6 +441,54 @@ export default function TeamPage() {
           </table>
         </div>
       </section>
+
+      {permissionEditor && (
+        <div className="modal-overlay" onClick={() => setPermissionEditor(null)}>
+          <div className="modal-card admin-permissions-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="modal-header">
+              <div>
+                <h2>صلاحيات الوصول</h2>
+                <small>{permissionEditor.full_name} · {formatRoleLabel(permissionEditor.role)}</small>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setPermissionEditor(null)}>إغلاق</button>
+            </header>
+            <p className="hint-text">حدّد ما يمكن للموظف رؤيته واستخدامه. الصلاحيات المحجوبة لن تظهر في القائمة الجانبية ولن يتمكن من تنفيذها.</p>
+            <div className="admin-permissions-grid">
+              {PERMISSION_GROUPS.map((group) => {
+                const options = group.permissions.filter((item) =>
+                  editablePermissionsForEmployee(permissionEditor.role, actorPermissions).includes(item.key)
+                );
+                if (options.length === 0) return null;
+                return (
+                  <section key={group.id} className="admin-permissions-group">
+                    <h3>{group.label}</h3>
+                    <div className="admin-permissions-list">
+                      {options.map((item) => (
+                        <label key={item.key} className="admin-permission-item">
+                          <input
+                            type="checkbox"
+                            checked={permissionDraft.has(item.key)}
+                            onChange={() => togglePermissionDraft(item.key)}
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+            <div className="admin-actions" style={{ marginTop: 16 }}>
+              <button type="button" className="secondary-button" onClick={() => setPermissionDraft(new Set(getRolePermissions(permissionEditor.role)))}>
+                افتراضي الدور
+              </button>
+              <button type="button" disabled={savingPermissions} onClick={() => void savePermissions()}>
+                {savingPermissions ? "جاري الحفظ…" : "حفظ الصلاحيات"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

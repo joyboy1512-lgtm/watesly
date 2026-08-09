@@ -35,8 +35,8 @@ export default function AcceptInvitationPage() {
       setError("رابط الدعوة غير صالح. اطلب رابطاً جديداً من مدير الحساب.");
       return;
     }
-    if (password.length < 10) {
-      setError("كلمة المرور يجب أن تكون 10 أحرف على الأقل.");
+    if (password.length < 6) {
+      setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل.");
       return;
     }
     if (password !== confirmPassword) {
@@ -119,7 +119,7 @@ export default function AcceptInvitationPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={10}
+                    minLength={6}
                     autoComplete="new-password"
                   />
                   <button type="button" onClick={() => setShowPassword((v) => !v)}>
@@ -134,7 +134,7 @@ export default function AcceptInvitationPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  minLength={10}
+                  minLength={6}
                   autoComplete="new-password"
                 />
               </label>

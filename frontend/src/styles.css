@@ -2296,6 +2296,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .admin-mode-tabs { display: inline-flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.5); }
 .admin-mode-tab { border: 0; background: transparent; padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--muted); }
 .admin-mode-tab.active { background: var(--panel); color: var(--text); box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06)); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(16, 24, 40, .45); display: grid; place-items: center; z-index: 120; padding: 16px; }
+.modal-card { width: min(760px, 100%); max-height: min(88vh, 900px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; }
+.modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.admin-permissions-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.admin-permissions-group { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: rgba(255,255,255,.35); }
+.admin-permissions-group h3 { margin: 0 0 8px; font-size: 14px; }
+.admin-permissions-list { display: grid; gap: 8px; }
+.admin-permission-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .import-block { margin-top: 0; padding-top: 0; border-top: 0; }
 .contacts-page { display: grid; gap: 14px; }
 .contacts-erp-page { max-width: none; }

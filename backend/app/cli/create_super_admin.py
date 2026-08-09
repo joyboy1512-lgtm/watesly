@@ -24,8 +24,8 @@ async def main() -> None:
     full_name = input("Full name: ").strip() or "Super Admin"
     password = getpass.getpass("Password: ")
 
-    if len(password) < 10:
-        raise SystemExit("Password must be at least 10 characters.")
+    if len(password) < 6:
+        raise SystemExit("Password must be at least 6 characters.")
 
     async with AsyncSessionFactory() as db:
         result = await db.execute(select(User).where(User.email == email))
