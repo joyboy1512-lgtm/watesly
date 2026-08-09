@@ -16,8 +16,7 @@ import {
   YAxis
 } from "recharts";
 import { api, silentRequest } from "../lib/api";
-import BillingProviderSettings from "../components/BillingProviderSettings";
-import ChannelBillingEditor from "../components/ChannelBillingEditor";
+import CreateMacBillingForm from "../components/CreateMacBillingForm";
 import { hasNavPermission } from "../lib/navPermissions";
 import { formatMacTrigger } from "../lib/macHelpers";
 import { channelTypeClass, formatChannelType } from "../lib/channelHelpers";
@@ -258,37 +257,53 @@ export default function BillingPage() {
       </header>
 
       <section className="billing-kpi-row">
-        <article className="billing-kpi-card">
+        <article className="billing-kpi-card billing-kpi-card-brand">
           <span>MAC المجمّع</span>
           <strong>{macUsed.toLocaleString("ar")} / {macIncluded.toLocaleString("ar")}</strong>
           <small>{macRemaining.toLocaleString("ar")} متبقٍ</small>
         </article>
-        <article className="billing-kpi-card">
+        <article className="billing-kpi-card billing-kpi-card-brand">
           <span>Over MAC</span>
-          <strong className={isOver ? "billing-over-charge" : ""}>
+          <strong className={isOver ? "billing-kpi-over" : ""}>
             {isOver ? `$${overCharge.toFixed(2)}` : "—"}
           </strong>
           <small>${sub.over_mac_price_per_100}/100</small>
         </article>
-        <article className="billing-kpi-card">
+        <article className="billing-kpi-card billing-kpi-card-brand">
           <span>القنوات</span>
           <strong>{channels.length.toLocaleString("ar")}</strong>
-          <small>فوترة مستقلة لكل قnaة</small>
+          <small>فوترة مستقلة لكل قناة</small>
         </article>
-        <article className="billing-kpi-card">
+        <article className="billing-kpi-card billing-kpi-card-brand">
           <span>سياسة الحد</span>
           <strong>{u?.policy.limit_policy ?? "soft"}</strong>
           <small>{isOver ? "تجاوز" : "ضمن الخطة"}</small>
         </article>
       </section>
 
-      <section className="card admin-table-card billing-channels-table-card">
-        <div className="admin-table-header billing-table-head">
-          <div>
-            <h2>فوترة القنوات</h2>
+      {canManageBilling && (
+        <section className="card billing-create-mac-card">
+          <div className="billing-section-head billing-section-head-brand">
+            <h2>إنشاء MAC</h2>
           </div>
+          <CreateMacBillingForm
+            channels={channels.map((item) => ({
+              channel_id: item.channel_id,
+              channel_name: item.channel_name,
+              subscription_starts_at: item.subscription_starts_at,
+              subscription_ends_at: item.subscription_ends_at,
+              included_mac: item.included_mac,
+              over_mac_price_per_100: item.over_mac_price_per_100
+            }))}
+          />
+        </section>
+      )}
+
+      <section className="card admin-table-card billing-channels-table-card">
+        <div className="admin-table-header billing-table-head billing-table-head-brand">
+          <h2>فوترة القنوات</h2>
           <input
-            className="billing-table-search"
+            className="billing-table-search billing-table-search-light"
             value={channelSearch}
             onChange={(e) => setChannelSearch(e.target.value)}
             placeholder="بحث…"
@@ -296,28 +311,27 @@ export default function BillingPage() {
         </div>
         <div className="admin-table-wrap">
           <table className="admin-erp-table billing-channels-table">
-            <thead>
+            <thead className="billing-channels-thead-brand">
               <tr>
-                <th>القnaة</th>
+                <th>القناة</th>
                 <th>MAC</th>
                 <th>الفترة</th>
                 <th>Over</th>
-                {canManageBilling && <th>الفوترة</th>}
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {channelStats.isLoading && (
-                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={5} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {channelStats.isError && (
-                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty">تعذر تحميل القنوات.</td></tr>
+                <tr><td colSpan={5} className="admin-table-empty">تعذر تحميل القنوات.</td></tr>
               )}
               {!channelStats.isLoading && !channelStats.isError && channels.length === 0 && (
-                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty"><Link to="/channels">أضف قnaة</Link></td></tr>
+                <tr><td colSpan={5} className="admin-table-empty"><Link to="/channels">أضف قناة</Link></td></tr>
               )}
               {!channelStats.isLoading && !channelStats.isError && channels.length > 0 && filteredChannels.length === 0 && (
-                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty">لا نتائج.</td></tr>
+                <tr><td colSpan={5} className="admin-table-empty">لا نتائج.</td></tr>
               )}
               {filteredChannels.map((item) => {
                 const period =
@@ -348,17 +362,6 @@ export default function BillingPage() {
                         ? `$${item.estimated_channel_over_mac_charge.toFixed(2)}`
                         : "—"}
                     </td>
-                    {canManageBilling && (
-                      <td>
-                        <ChannelBillingEditor
-                          channelId={item.channel_id}
-                          billingStartsAt={item.subscription_starts_at}
-                          billingEndsAt={item.subscription_ends_at}
-                          includedMac={item.included_mac}
-                          overMacPricePer100={item.over_mac_price_per_100}
-                        />
-                      </td>
-                    )}
                     <td>
                       <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button billing-row-link">
                         التفاصيل
@@ -371,13 +374,6 @@ export default function BillingPage() {
           </table>
         </div>
       </section>
-
-      {canManageBilling && (
-        <details className="card billing-collapsible">
-          <summary>إعدادات الاشتراك الافتراضي</summary>
-          <BillingProviderSettings embedded />
-        </details>
-      )}
 
       <details className="card billing-collapsible">
         <summary>التحليلات والرسوم</summary>
@@ -425,7 +421,7 @@ export default function BillingPage() {
             </div>
           </article>
           <article className="card billing-chart-card billing-chart-wide">
-            <div className="billing-chart-head"><h2>حسب القnaة</h2></div>
+            <div className="billing-chart-head"><h2>حسب القناة</h2></div>
             <div className="billing-chart-wrap">
               {channelChart.length === 0 ? (
                 <p className="hint-text billing-chart-empty">لا بيانات.</p>
@@ -488,8 +484,8 @@ export default function BillingPage() {
       <details className="card billing-policy-details">
         <summary>سياسة MAC</summary>
         <ul className="mac-policy-list">
-          <li>MAC = جهة اتصال فريدة تفاعلت خلال دورة فوترة القnaة.</li>
-          <li>كل قnaة: حصة MAC وOver MAC وتواريخ مستقلة.</li>
+          <li>MAC = جهة اتصال فريدة تفاعلت خلال دورة فوترة القناة.</li>
+          <li>كل قناة: حصة MAC وOver MAC وتواريخ مستقلة.</li>
           <li>نفس الجهة على قناتين = MACان.</li>
           <li>الحملات الجماعية لا تُحسب MAC.</li>
         </ul>

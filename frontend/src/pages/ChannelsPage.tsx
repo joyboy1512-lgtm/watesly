@@ -288,8 +288,8 @@ export default function ChannelsPage() {
           <strong>فوترة MAC مستقلة لكل قناة</strong>
           <small>
             {canManageBilling
-              ? "اضغط زر تعديل الفوترة في الجدول لتغيير تاريخ الاشتراك، حصة MAC، وسعر Over لكل قnaة على حدة."
-              : "كل قnaة لها اشتراك وحصة MAC وOver MAC منفصلة. اطلب صلاحية billing.manage للتعديل."}
+              ? "اضغط زر تعديل الفوترة في الجدول لتغيير تاريخ الاشتراك، حصة MAC، وسعر Over لكل قناة على حدة."
+              : "كل قناة لها اشتراك وحصة MAC وOver MAC منفصلة. اطلب صلاحية billing.manage للتعديل."}
           </small>
         </div>
         <span className="billing-per-channel-badge">مستقل</span>

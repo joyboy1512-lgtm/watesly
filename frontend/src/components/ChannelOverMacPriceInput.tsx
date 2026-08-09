@@ -25,7 +25,7 @@ export default function ChannelOverMacPriceInput({ channelId, value, disabled }:
       await api.patch(`/channels/${channelId}/billing`, {
         over_mac_price_per_100: parsed
       });
-      toastStore.getState().show("تم حفظ سعر القnaة");
+      toastStore.getState().show("تم حفظ سعر القناة");
       void client.invalidateQueries({ queryKey: ["channels-usage-board"] });
       void client.invalidateQueries({ queryKey: ["billing-mac-channels"] });
       void client.invalidateQueries({ queryKey: ["billing-usage"] });
@@ -48,7 +48,7 @@ export default function ChannelOverMacPriceInput({ channelId, value, disabled }:
         step="0.01"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        aria-label="سعر Over MAC للقnaة"
+        aria-label="سعر Over MAC للقناة"
       />
       <button type="button" className="secondary-button" disabled={saving} onClick={() => void save()}>
         {saving ? "…" : "حفظ"}
