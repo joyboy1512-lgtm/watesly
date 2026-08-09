@@ -46,7 +46,7 @@ async def _record_mac_for_contact(
     if contact_id is None:
         return
     from app.models.monthly_active_contact import MacTriggerSource
-    from app.services.mac_tracking import record_mac
+    from app.services.mac_usage import record_mac
 
     source = trigger_source or (
         MacTriggerSource.INBOUND if inbound else MacTriggerSource.INBOX_OUTBOUND
