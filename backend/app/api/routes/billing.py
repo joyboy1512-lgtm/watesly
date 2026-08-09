@@ -10,6 +10,7 @@ from app.models.channel import Channel
 from app.schemas.billing import SubscriptionResponse
 from app.schemas.mac import (
     BillingUsageResponse,
+    ChannelMacUsageResponse,
     MacChannelStatsResponse,
     MacContactItem,
     MacInsightsResponse,
@@ -22,6 +23,7 @@ from app.services.mac_tracking import (
     current_cycle_month,
     get_account_mac_summary,
     get_billing_usage as build_billing_usage,
+    get_channel_mac_usage,
     get_mac_insights,
     list_mac_contacts,
 )
@@ -184,6 +186,27 @@ async def get_mac_contacts(
         offset=offset,
     )
     return [MacContactItem(**row) for row in rows]
+
+
+@router.get("/mac/channels/{channel_id}/usage", response_model=ChannelMacUsageResponse)
+async def get_channel_billing_usage(
+    channel_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.BILLING_VIEW)),
+    db: AsyncSession = Depends(get_db),
+    cycle_month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+) -> ChannelMacUsageResponse:
+    try:
+        data = await get_channel_mac_usage(
+            db,
+            account_id=context.account_id,
+            channel_id=channel_id,
+            cycle_month=cycle_month,
+        )
+    except ValueError as exc:
+        if str(exc) == "CHANNEL_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Channel not found") from exc
+        raise
+    return ChannelMacUsageResponse(**data)
 
 
 @router.get("/mac/channels/{channel_id}/contacts", response_model=list[MacContactItem])
