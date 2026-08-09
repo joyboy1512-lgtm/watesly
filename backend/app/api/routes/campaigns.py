@@ -16,8 +16,10 @@ from app.schemas.campaign import (
 from app.services.whatsapp_window import campaign_audience_preflight
 from app.services.campaigns import (
     approve_campaign,
+    archive_campaign,
     cancel_campaign,
     create_campaign,
+    delete_draft_campaign,
     export_campaign_recipients_csv,
     export_campaign_recipients_xlsx,
     get_campaign_report,
@@ -25,6 +27,7 @@ from app.services.campaigns import (
     list_campaigns_with_reports,
     pause_campaign,
     prepare_campaign_start,
+    unarchive_campaign,
 )
 from app.services.contact_management import import_contacts_file
 from app.workers.campaign_tasks import run_campaign
@@ -35,15 +38,34 @@ class CancelCampaignRequest(BaseModel):
 
 def _error(exc: ValueError) -> HTTPException:
     code = str(exc)
-    return HTTPException(status_code=404 if code == "CAMPAIGN_NOT_FOUND" else 409, detail=code)
+    if code == "CAMPAIGN_NOT_FOUND":
+        status_code = 404
+    elif code in {
+        "CAMPAIGN_CANNOT_ARCHIVE",
+        "CAMPAIGN_NOT_ARCHIVED",
+        "CAMPAIGN_CANNOT_DELETE",
+        "CAMPAIGN_HAS_FOLLOW_UPS",
+    }:
+        status_code = 409
+    else:
+        status_code = 409
+    return HTTPException(status_code=status_code, detail=code)
 
 @router.get("", response_model=list[CampaignListItemResponse])
 async def get_campaigns(
     limit: int = Query(100, ge=1, le=200),
+    include_archived: bool = Query(False),
+    archived_only: bool = Query(False),
     context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_campaigns_with_reports(db, context.account_id, limit=limit)
+    return await list_campaigns_with_reports(
+        db,
+        context.account_id,
+        limit=limit,
+        include_archived=include_archived,
+        archived_only=archived_only,
+    )
 
 @router.get("/{campaign_id}/report", response_model=CampaignReportSummary)
 async def campaign_report(
@@ -203,6 +225,40 @@ async def pause(campaign_id: UUID, context: AuthContext = Depends(require_permis
 async def cancel(campaign_id: UUID, payload: CancelCampaignRequest, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_APPROVE, write=True)), db: AsyncSession = Depends(get_db)):
     try: return await cancel_campaign(db, account_id=context.account_id, campaign_id=campaign_id, reason=payload.reason)
     except ValueError as exc: raise _error(exc) from exc
+
+@router.post("/{campaign_id}/archive", response_model=CampaignResponse)
+async def archive(
+    campaign_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await archive_campaign(db, account_id=context.account_id, campaign_id=campaign_id)
+    except ValueError as exc:
+        raise _error(exc) from exc
+
+@router.post("/{campaign_id}/unarchive", response_model=CampaignResponse)
+async def unarchive(
+    campaign_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await unarchive_campaign(db, account_id=context.account_id, campaign_id=campaign_id)
+    except ValueError as exc:
+        raise _error(exc) from exc
+
+@router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_campaign(
+    campaign_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await delete_draft_campaign(db, account_id=context.account_id, campaign_id=campaign_id)
+    except ValueError as exc:
+        raise _error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 class FollowUpCampaignRequest(BaseModel):

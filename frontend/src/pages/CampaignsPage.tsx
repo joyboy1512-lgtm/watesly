@@ -73,8 +73,10 @@ type CampaignListItem = {
   scheduled_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+  archived_at: string | null;
   report: CampaignReport & { pending: number; queued: number; skipped: number };
 };
+type ArchiveFilter = "active" | "archived";
 type CatalogProductOption = { id: string; name: string; image_url: string | null };
 type TrackedLink = {
   id: string;
@@ -122,11 +124,12 @@ export default function CampaignsPage() {
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const createRef = useRef<HTMLElement | null>(null);
-  const { pauseCampaign, cancelCampaign } = useCampaignActions();
+  const { pauseCampaign, cancelCampaign, archiveCampaign, unarchiveCampaign, deleteDraftCampaign } = useCampaignActions();
 
   const [activeTab, setActiveTab] = useState<PageTab>("list");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("active");
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -165,8 +168,11 @@ export default function CampaignsPage() {
   });
 
   const campaigns = useQuery({
-    queryKey: ["campaigns"],
-    queryFn: async () => (await api.get<CampaignListItem[]>("/campaigns")).data,
+    queryKey: ["campaigns", archiveFilter],
+    queryFn: async () => {
+      const params = archiveFilter === "archived" ? { archived_only: true } : {};
+      return (await api.get<CampaignListItem[]>("/campaigns", { params })).data;
+    },
     refetchInterval: (query) => {
       const rows = query.state.data ?? [];
       if (rows.some((item) => isActiveCampaignStatus(item.status))) return 3000;
@@ -215,6 +221,7 @@ export default function CampaignsPage() {
       scheduled_at: campaign.scheduled_at,
       started_at: campaign.started_at,
       completed_at: campaign.completed_at,
+      archived_at: campaign.archived_at,
       template_name: templateMap.get(campaign.template_id) ?? null,
       account_label: accountMap.get(campaign.whatsapp_account_id) ?? null,
       total: campaign.report.total,
@@ -380,6 +387,24 @@ export default function CampaignsPage() {
   async function handleCancel(campaignId: string) {
     setActionBusyId(campaignId);
     await cancelCampaign(campaignId);
+    setActionBusyId(null);
+  }
+
+  async function handleArchive(campaignId: string) {
+    setActionBusyId(campaignId);
+    await archiveCampaign(campaignId);
+    setActionBusyId(null);
+  }
+
+  async function handleUnarchive(campaignId: string) {
+    setActionBusyId(campaignId);
+    await unarchiveCampaign(campaignId);
+    setActionBusyId(null);
+  }
+
+  async function handleDeleteDraft(campaignId: string) {
+    setActionBusyId(campaignId);
+    await deleteDraftCampaign(campaignId);
     setActionBusyId(null);
   }
 
@@ -601,6 +626,10 @@ export default function CampaignsPage() {
               <option value="draft">مسودة</option>
               <option value="cancelled">ملغاة</option>
             </select>
+            <select value={archiveFilter} onChange={(e) => setArchiveFilter(e.target.value as ArchiveFilter)}>
+              <option value="active">الحملات النشطة</option>
+              <option value="archived">الأرشيف</option>
+            </select>
           </div>
 
           {campaigns.isLoading && <p className="hint-text" style={{ padding: "12px 16px" }}>جاري تحميل الحملات…</p>}
@@ -611,11 +640,19 @@ export default function CampaignsPage() {
               expandedCampaignId={expandedCampaignId}
               onToggleExpanded={(id) => setExpandedCampaignId((current) => (current === id ? null : id))}
               autoRefresh
-              emptyLabel="لا توجد حملات بعد. أنشئ حملة من تبويب «إنشاء حملة»."
+              emptyLabel={
+                archiveFilter === "archived"
+                  ? "لا توجد حملات مؤرشفة."
+                  : "لا توجد حملات بعد. أنشئ حملة من تبويب «إنشاء حملة»."
+              }
               actions={{
-                onFollowUp: createFollowUp,
+                onFollowUp: archiveFilter === "active" ? createFollowUp : undefined,
                 onPause: handlePause,
                 onCancel: handleCancel,
+                onArchive: handleArchive,
+                onUnarchive: handleUnarchive,
+                onDeleteDraft: handleDeleteDraft,
+                showArchived: archiveFilter === "archived",
                 actionBusyId
               }}
             />

@@ -22,6 +22,13 @@ _RECIPIENT_TO_MESSAGE_STATUS = {
     CampaignRecipientStatus.FAILED: MessageStatus.FAILED,
 }
 
+_ARCHIVABLE_STATUSES = {
+    CampaignStatus.COMPLETED,
+    CampaignStatus.COMPLETED_WITH_ERRORS,
+    CampaignStatus.FAILED,
+    CampaignStatus.CANCELLED,
+}
+
 
 async def create_campaign(db: AsyncSession, *, account_id: UUID, user_id: UUID, payload: CampaignCreateRequest) -> Campaign:
     wa = await db.get(WhatsAppAccount, payload.whatsapp_account_id)
@@ -83,20 +90,43 @@ async def create_campaign(db: AsyncSession, *, account_id: UUID, user_id: UUID, 
     return campaign
 
 
-async def list_campaigns(db: AsyncSession, account_id: UUID, *, limit: int = 100) -> list[Campaign]:
-    result = await db.execute(
+async def list_campaigns(
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    limit: int = 100,
+    include_archived: bool = False,
+    archived_only: bool = False,
+) -> list[Campaign]:
+    query = (
         select(Campaign)
         .where(Campaign.account_id == account_id)
         .order_by(Campaign.created_at.desc())
         .limit(min(max(limit, 1), 200))
     )
+    if archived_only:
+        query = query.where(Campaign.archived_at.is_not(None))
+    elif not include_archived:
+        query = query.where(Campaign.archived_at.is_(None))
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
 async def list_campaigns_with_reports(
-    db: AsyncSession, account_id: UUID, *, limit: int = 100
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    limit: int = 100,
+    include_archived: bool = False,
+    archived_only: bool = False,
 ) -> list[dict]:
-    campaigns = await list_campaigns(db, account_id, limit=limit)
+    campaigns = await list_campaigns(
+        db,
+        account_id,
+        limit=limit,
+        include_archived=include_archived,
+        archived_only=archived_only,
+    )
     items: list[dict] = []
     for campaign in campaigns:
         report = await get_campaign_report(
@@ -113,6 +143,8 @@ async def list_campaigns_with_reports(
             "scheduled_at": campaign.scheduled_at,
             "started_at": campaign.started_at,
             "completed_at": campaign.completed_at,
+            "include_opt_out_option": campaign.include_opt_out_option,
+            "archived_at": campaign.archived_at,
             "report": report,
         })
     return items
@@ -179,6 +211,82 @@ async def cancel_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UU
     campaign.completed_at = datetime.now(UTC)
     await db.commit(); await db.refresh(campaign)
     return campaign
+
+
+async def archive_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> Campaign:
+    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+    if campaign.status not in _ARCHIVABLE_STATUSES:
+        raise ValueError("CAMPAIGN_CANNOT_ARCHIVE")
+    if campaign.archived_at is None:
+        campaign.archived_at = datetime.now(UTC)
+        await add_outbox_event(
+            db,
+            account_id=account_id,
+            event_type="campaign.archived",
+            aggregate_type="campaign",
+            aggregate_id=str(campaign.id),
+            payload={"campaign_id": str(campaign.id)},
+        )
+        await db.commit()
+        await db.refresh(campaign)
+    return campaign
+
+
+async def unarchive_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> Campaign:
+    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+    if campaign.archived_at is None:
+        raise ValueError("CAMPAIGN_NOT_ARCHIVED")
+    campaign.archived_at = None
+    await add_outbox_event(
+        db,
+        account_id=account_id,
+        event_type="campaign.unarchived",
+        aggregate_type="campaign",
+        aggregate_id=str(campaign.id),
+        payload={"campaign_id": str(campaign.id)},
+    )
+    await db.commit()
+    await db.refresh(campaign)
+    return campaign
+
+
+async def delete_draft_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> None:
+    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+    if campaign.status != CampaignStatus.DRAFT:
+        raise ValueError("CAMPAIGN_CANNOT_DELETE")
+    sent_count = int(
+        (
+            await db.scalar(
+                select(func.count(CampaignRecipient.id)).where(
+                    CampaignRecipient.campaign_id == campaign.id,
+                    CampaignRecipient.external_message_id.is_not(None),
+                )
+            )
+        )
+        or 0
+    )
+    if sent_count > 0:
+        raise ValueError("CAMPAIGN_CANNOT_DELETE")
+    follow_up_count = int(
+        (
+            await db.scalar(
+                select(func.count(Campaign.id)).where(Campaign.parent_campaign_id == campaign.id)
+            )
+        )
+        or 0
+    )
+    if follow_up_count > 0:
+        raise ValueError("CAMPAIGN_HAS_FOLLOW_UPS")
+    await add_outbox_event(
+        db,
+        account_id=account_id,
+        event_type="campaign.deleted",
+        aggregate_type="campaign",
+        aggregate_id=str(campaign.id),
+        payload={"campaign_id": str(campaign.id), "name": campaign.name},
+    )
+    await db.delete(campaign)
+    await db.commit()
 
 
 async def get_campaign_report(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> dict:

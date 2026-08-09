@@ -42,6 +42,7 @@ class CampaignResponse(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     include_opt_out_option: bool = True
+    archived_at: datetime | None = None
 
 
 class CampaignReportSummary(BaseModel):

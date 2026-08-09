@@ -66,3 +66,4 @@ class Campaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     follow_up_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     include_opt_out_option: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)

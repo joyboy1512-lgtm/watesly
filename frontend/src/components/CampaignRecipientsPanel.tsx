@@ -180,6 +180,7 @@ export type CampaignSummaryRow = {
   scheduled_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  archived_at?: string | null;
   template_name?: string | null;
   account_label?: string | null;
   total: number;
@@ -189,6 +190,8 @@ export type CampaignSummaryRow = {
   failed: number;
   pending?: number;
 };
+
+const ARCHIVABLE_STATUSES = new Set(["completed", "completed_with_errors", "failed", "cancelled"]);
 
 function buildSummaryReport(item: CampaignSummaryRow, report?: CampaignReport): CampaignReport {
   return {
@@ -207,6 +210,10 @@ type CampaignRowActions = {
   onFollowUp?: (campaignId: string, type: "not_delivered" | "not_read" | "failed") => void;
   onPause?: (campaignId: string) => void;
   onCancel?: (campaignId: string) => void;
+  onArchive?: (campaignId: string) => void;
+  onUnarchive?: (campaignId: string) => void;
+  onDeleteDraft?: (campaignId: string) => void;
+  showArchived?: boolean;
   actionBusyId?: string | null;
 };
 
@@ -239,6 +246,9 @@ export function CampaignReportRow({
   const sentCount = campaignSentCount(liveReport);
   const showDetails = expanded || isActive || needsRefresh || ["completed", "completed_with_errors", "failed"].includes(item.status);
   const canFollowUp = ["completed", "completed_with_errors", "failed"].includes(item.status);
+  const canArchive = ARCHIVABLE_STATUSES.has(item.status) && !item.archived_at;
+  const canUnarchive = Boolean(item.archived_at);
+  const canDeleteDraft = item.status === "draft";
 
   return (
     <Fragment>
@@ -305,7 +315,7 @@ export function CampaignReportRow({
                 إلغاء
               </button>
             )}
-            {canFollowUp && actions?.onFollowUp && (
+            {canFollowUp && actions?.onFollowUp && !actions.showArchived && (
               <>
                 <button
                   type="button"
@@ -316,6 +326,36 @@ export function CampaignReportRow({
                   متابعة
                 </button>
               </>
+            )}
+            {canArchive && actions?.onArchive && !actions.showArchived && (
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={busy}
+                onClick={() => actions.onArchive?.(item.id)}
+              >
+                أرشفة
+              </button>
+            )}
+            {canUnarchive && actions?.onUnarchive && actions.showArchived && (
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={busy}
+                onClick={() => actions.onUnarchive?.(item.id)}
+              >
+                استعادة
+              </button>
+            )}
+            {canDeleteDraft && actions?.onDeleteDraft && !actions.showArchived && (
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={busy}
+                onClick={() => actions.onDeleteDraft?.(item.id)}
+              >
+                حذف
+              </button>
             )}
           </div>
         </td>
@@ -411,5 +451,37 @@ export function useCampaignActions() {
     }
   }
 
-  return { pauseCampaign, cancelCampaign };
+  async function archiveCampaign(campaignId: string) {
+    if (!window.confirm("أرشفة هذه الحملة؟ ستختفي من القائمة الرئيسية مع بقاء التقارير.")) return;
+    try {
+      await api.post(`/campaigns/${campaignId}/archive`);
+      toastStore.getState().show("تمت أرشفة الحملة.", "success");
+      await client.invalidateQueries({ queryKey: ["campaigns"] });
+    } catch {
+      toastStore.getState().show("تعذر أرشفة الحملة — متاحة للحملات المنتهية فقط.", "error");
+    }
+  }
+
+  async function unarchiveCampaign(campaignId: string) {
+    try {
+      await api.post(`/campaigns/${campaignId}/unarchive`);
+      toastStore.getState().show("تمت استعادة الحملة من الأرشيف.", "success");
+      await client.invalidateQueries({ queryKey: ["campaigns"] });
+    } catch {
+      toastStore.getState().show("تعذر استعادة الحملة.", "error");
+    }
+  }
+
+  async function deleteDraftCampaign(campaignId: string) {
+    if (!window.confirm("حذف هذه المسودة نهائياً؟ لا يمكن التراجع.")) return;
+    try {
+      await api.delete(`/campaigns/${campaignId}`);
+      toastStore.getState().show("تم حذف المسودة.", "success");
+      await client.invalidateQueries({ queryKey: ["campaigns"] });
+    } catch {
+      toastStore.getState().show("تعذر الحذف — المسودات فقط وقبل أي إرسال.", "error");
+    }
+  }
+
+  return { pauseCampaign, cancelCampaign, archiveCampaign, unarchiveCampaign, deleteDraftCampaign };
 }
