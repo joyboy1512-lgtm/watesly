@@ -18,14 +18,8 @@ import {
 import { api, silentRequest } from "../lib/api";
 import BillingProviderSettings from "../components/BillingProviderSettings";
 import ChannelBillingEditor from "../components/ChannelBillingEditor";
-import MacWorkspaceBalance from "../components/MacWorkspaceBalance";
 import { hasNavPermission } from "../lib/navPermissions";
-import {
-  formatMacBalance,
-  formatMacCycleMonth,
-  formatMacTrigger,
-  macBalanceClass
-} from "../lib/macHelpers";
+import { formatMacTrigger } from "../lib/macHelpers";
 import { channelTypeClass, formatChannelType } from "../lib/channelHelpers";
 import { formatAppTime } from "../lib/language";
 
@@ -46,7 +40,6 @@ type BillingUsage = {
   breakdown_by_channel: Array<{ channel_name: string; channel_type: string; count: number }>;
   breakdown_by_activity: Array<{ source: string; count: number }>;
   daily_trend: Array<{ date: string; count: number }>;
-  campaign_messages_sent: number;
 };
 
 type Subscription = {
@@ -55,16 +48,11 @@ type Subscription = {
   billing_cycle: string;
   starts_at: string;
   ends_at: string;
-  max_users: number;
-  max_channels: number;
   included_mac: number;
   over_mac_price_per_100: number;
-  cycle_month: string;
   mac_count: number;
   mac_remaining: number;
   is_over_mac: boolean;
-  over_mac_count: number;
-  over_mac_blocks: number;
   estimated_over_mac_charge: number;
 };
 
@@ -81,38 +69,18 @@ type ChannelMacStat = {
   channel_id: string;
   channel_name: string;
   channel_type: string;
-  channel_status: string | null;
-  cycle_month: string;
   mac_count: number;
   included_mac: number;
   mac_remaining: number;
   is_over_mac: boolean;
   over_mac_count: number;
-  campaign_messages_sent: number;
-  whatsapp_status: string | null;
   whatsapp_phone: string | null;
   subscription_starts_at: string | null;
   subscription_ends_at: string | null;
   billing_period_start: string | null;
   billing_period_end: string | null;
   over_mac_price_per_100: number;
-  attributed_over_mac_count: number;
   estimated_channel_over_mac_charge: number;
-};
-
-type ChannelMacUsage = {
-  channel_id: string;
-  channel_name: string;
-  mac: {
-    channel_count: number;
-    channel_included?: number;
-    channel_remaining?: number;
-    usage_percent?: number;
-    workspace_used: number;
-    share_percent: number;
-  };
-  breakdown_by_activity: Array<{ source: string; count: number }>;
-  daily_trend: Array<{ date: string; count: number }>;
 };
 
 function formatShortDay(dateKey: string): string {
@@ -129,29 +97,19 @@ function formatPeriodRange(start: string, end: string): string {
   return `${fmt.format(s)} – ${fmt.format(e)}`;
 }
 
-function formatPlanDate(value: string): string {
+function formatPlanDate(value: string | null | undefined): string {
+  if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("ar", { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
 function formatBillingCycle(cycle: string): string {
-  const labels: Record<string, string> = { monthly: "شهري", yearly: "سنوي", annual: "سنوي" };
+  const labels: Record<string, string> = { monthly: "شهري", yearly: "سنوي", trial: "تجربة" };
   return labels[cycle] ?? cycle;
 }
 
-function formatPlanStatus(status: string): string {
-  const labels: Record<string, string> = {
-    active: "نشط",
-    trialing: "تجربة",
-    past_due: "متأخر",
-    canceled: "ملغى"
-  };
-  return labels[status] ?? status;
-}
-
 export default function BillingPage() {
-  const [selectedChannelId, setSelectedChannelId] = useState("");
   const [channelSearch, setChannelSearch] = useState("");
 
   const subscription = useQuery({
@@ -172,41 +130,26 @@ export default function BillingPage() {
     queryFn: async () => (await api.get<ChannelMacStat[]>("/billing/mac/channels")).data
   });
 
-  const channelUsage = useQuery({
-    queryKey: ["billing-channel-usage", selectedChannelId],
-    enabled: Boolean(selectedChannelId),
-    queryFn: async () =>
-      (await api.get<ChannelMacUsage>(`/billing/mac/channels/${selectedChannelId}/usage`)).data
-  });
-
   const contacts = useQuery({
-    queryKey: ["billing-mac-contacts", selectedChannelId],
+    queryKey: ["billing-mac-contacts"],
     enabled: subscription.isSuccess,
     queryFn: async () =>
       (
         await api.get<MacContact[]>("/billing/mac/contacts", {
-          params: {
-            limit: 12,
-            offset: 0,
-            ...(selectedChannelId ? { channel_id: selectedChannelId } : {})
-          },
+          params: { limit: 8, offset: 0 },
           ...silentRequest
         })
       ).data
   });
-
-  const sub = subscription.data;
-  const u = usage.data;
-  const channels = channelStats.data ?? [];
-  const workspaceMac = u?.mac.used ?? sub?.mac_count ?? 0;
-  const selectedChannel = channels.find((item) => item.channel_id === selectedChannelId);
-  const channelView = channelUsage.data;
 
   const profile = useQuery({
     queryKey: ["current-user"],
     queryFn: async () => (await api.get<{ permissions?: string[] }>("/auth/me")).data
   });
 
+  const sub = subscription.data;
+  const u = usage.data;
+  const channels = channelStats.data ?? [];
   const canManageBilling = hasNavPermission(profile.data?.permissions, "billing.manage");
 
   const denied =
@@ -223,6 +166,12 @@ export default function BillingPage() {
     );
   }, [channels, channelSearch]);
 
+  const macUsed = u?.mac.used ?? sub?.mac_count ?? 0;
+  const macIncluded = u?.mac.included ?? sub?.included_mac ?? 0;
+  const macRemaining = u?.mac.remaining ?? sub?.mac_remaining ?? 0;
+  const isOver = u?.overage.is_over ?? sub?.is_over_mac ?? false;
+  const overCharge = u?.overage.estimated_charge ?? sub?.estimated_over_mac_charge ?? 0;
+
   const balanceChart = useMemo(() => {
     if (!u) return [];
     if (u.overage.is_over) {
@@ -237,33 +186,28 @@ export default function BillingPage() {
     ].filter((item) => item.value > 0);
   }, [u]);
 
-  const channelChart = useMemo(() => {
-    const rows = (u?.breakdown_by_channel ?? []).map((item) => ({
-      name: item.channel_name,
-      count: item.count,
-      highlight: selectedChannel?.channel_name === item.channel_name
-    }));
-    if (selectedChannelId && channelView) {
-      return rows.filter((item) => item.name === channelView.channel_name);
-    }
-    return rows;
-  }, [u?.breakdown_by_channel, selectedChannelId, channelView, selectedChannel?.channel_name]);
+  const channelChart = useMemo(
+    () =>
+      (u?.breakdown_by_channel ?? []).map((item) => ({
+        name: item.channel_name,
+        count: item.count
+      })),
+    [u?.breakdown_by_channel]
+  );
 
-  const trendChart = useMemo(() => {
-    const source = selectedChannelId && channelView ? channelView.daily_trend : (u?.daily_trend ?? []);
-    return source.map((item) => ({ ...item, label: formatShortDay(item.date) }));
-  }, [u?.daily_trend, selectedChannelId, channelView]);
+  const trendChart = useMemo(
+    () => (u?.daily_trend ?? []).map((item) => ({ ...item, label: formatShortDay(item.date) })),
+    [u?.daily_trend]
+  );
 
-  const triggerChart = useMemo(() => {
-    const source =
-      selectedChannelId && channelView
-        ? channelView.breakdown_by_activity
-        : (u?.breakdown_by_activity ?? []);
-    return source.map((item) => ({
-      source: formatMacTrigger(item.source),
-      count: item.count
-    }));
-  }, [u?.breakdown_by_activity, selectedChannelId, channelView]);
+  const triggerChart = useMemo(
+    () =>
+      (u?.breakdown_by_activity ?? []).map((item) => ({
+        source: formatMacTrigger(item.source),
+        count: item.count
+      })),
+    [u?.breakdown_by_activity]
+  );
 
   if (subscription.isLoading) {
     return (
@@ -277,7 +221,7 @@ export default function BillingPage() {
     return (
       <main className="page billing-page">
         <header className="page-header billing-hero">
-          <h1>الفوترة و MAC</h1>
+          <h1>الفوترة</h1>
           <p>ليست لديك صلاحية عرض الفوترة.</p>
         </header>
       </main>
@@ -288,24 +232,24 @@ export default function BillingPage() {
     return (
       <main className="page billing-page">
         <header className="page-header billing-hero">
-          <h1>الفوترة و MAC</h1>
+          <h1>الفوترة</h1>
           <p>لا يوجد اشتراك نشط حالياً.</p>
         </header>
       </main>
     );
   }
 
+  const periodLabel = u
+    ? formatPeriodRange(u.billing_period.start, u.billing_period.end)
+    : `${formatPlanDate(sub.starts_at)} – ${formatPlanDate(sub.ends_at)}`;
+
   return (
-    <main className="page billing-page">
-      <header className="page-header billing-hero">
-        <div>
+    <main className="page billing-page billing-page-v2">
+      <header className="billing-hero billing-hero-compact">
+        <div className="billing-hero-main">
           <span className="billing-eyebrow">{sub.plan_name} · {formatBillingCycle(sub.billing_cycle)}</span>
           <h1>الفوترة و MAC</h1>
-          <p>
-            {u
-              ? `${u.mac.used.toLocaleString("ar")} / ${u.mac.included.toLocaleString("ar")} MAC · ${formatPeriodRange(u.billing_period.start, u.billing_period.end)}`
-              : `${formatMacCycleMonth(sub.cycle_month)} · ${formatPlanStatus(sub.status)}`}
-          </p>
+          <p className="billing-hero-sub">{periodLabel}</p>
         </div>
         <div className="channels-hero-actions">
           <Link to="/channels" className="secondary-button">القنوات</Link>
@@ -313,75 +257,75 @@ export default function BillingPage() {
         </div>
       </header>
 
-      <section className="billing-per-channel-banner ready card">
-        <div>
-          <strong>فوترة MAC مستقلة لكل قناة — نشطة الآن</strong>
-          <small>
-            كل قناة لها تاريخ اشتراك وحصة MAC وسعر Over MAC ودورة فوترة خاصة.
-            نفس الجهة على قناتين = MACان. الإجمالي في الأعلى = مجموع كل القنوات.
-          </small>
-        </div>
-        <span className="billing-per-channel-badge">لكل قناة</span>
+      <section className="billing-kpi-row">
+        <article className="billing-kpi-card">
+          <span>MAC المجمّع</span>
+          <strong>{macUsed.toLocaleString("ar")} / {macIncluded.toLocaleString("ar")}</strong>
+          <small>{macRemaining.toLocaleString("ar")} متبقٍ</small>
+        </article>
+        <article className="billing-kpi-card">
+          <span>Over MAC</span>
+          <strong className={isOver ? "billing-over-charge" : ""}>
+            {isOver ? `$${overCharge.toFixed(2)}` : "—"}
+          </strong>
+          <small>${sub.over_mac_price_per_100}/100</small>
+        </article>
+        <article className="billing-kpi-card">
+          <span>القنوات</span>
+          <strong>{channels.length.toLocaleString("ar")}</strong>
+          <small>فوترة مستقلة لكل قnaة</small>
+        </article>
+        <article className="billing-kpi-card">
+          <span>سياسة الحد</span>
+          <strong>{u?.policy.limit_policy ?? "soft"}</strong>
+          <small>{isOver ? "تجاوز" : "ضمن الخطة"}</small>
+        </article>
       </section>
 
-      <section className="card admin-table-card billing-channels-table-card billing-channels-table-top">
-        <div className="admin-table-header">
+      <section className="card admin-table-card billing-channels-table-card">
+        <div className="admin-table-header billing-table-head">
           <div>
-            <h2>فوترة MAC — كل قnaة</h2>
-            <small>
-              {canManageBilling
-                ? "عدّل تواريخ الاشتراك، حصة MAC، وسعر Over لكل قnaة من العمود الأخير"
-                : "كل قnaة لها اشتراك وحصة MAC وOver MAC مستقلة"}
-            </small>
+            <h2>فوترة القنوات</h2>
           </div>
-          <Link to="/channels" className="secondary-button">صفحة القنوات</Link>
-        </div>
-        <div className="billing-table-toolbar">
           <input
+            className="billing-table-search"
             value={channelSearch}
             onChange={(e) => setChannelSearch(e.target.value)}
-            placeholder="بحث باسم القnaة أو النوع أو رقم WhatsApp"
+            placeholder="بحث…"
           />
         </div>
         <div className="admin-table-wrap">
-          <table className="admin-erp-table">
+          <table className="admin-erp-table billing-channels-table">
             <thead>
               <tr>
                 <th>القnaة</th>
                 <th>MAC</th>
-                <th>مشمول / متبقٍ</th>
-                <th>بداية</th>
-                <th>نهاية</th>
-                <th>دورة MAC</th>
-                <th>Over MAC</th>
-                {canManageBilling && <th>تعديل الفوترة</th>}
-                <th>إجراء</th>
+                <th>الفترة</th>
+                <th>Over</th>
+                {canManageBilling && <th>الفوترة</th>}
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {channelStats.isLoading && (
-                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {channelStats.isError && (
-                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">تعذر تحميل القنوات — حدّث الصفحة.</td></tr>
+                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty">تعذر تحميل القنوات.</td></tr>
               )}
               {!channelStats.isLoading && !channelStats.isError && channels.length === 0 && (
-                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">لا قنوات بعد. <Link to="/channels">أنشئ قnaة</Link></td></tr>
+                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty"><Link to="/channels">أضف قnaة</Link></td></tr>
               )}
               {!channelStats.isLoading && !channelStats.isError && channels.length > 0 && filteredChannels.length === 0 && (
-                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">لا قنوات مطابقة للبحث.</td></tr>
+                <tr><td colSpan={canManageBilling ? 6 : 5} className="admin-table-empty">لا نتائج.</td></tr>
               )}
               {filteredChannels.map((item) => {
-                const usagePct = item.included_mac > 0
-                  ? Math.round((item.mac_count / item.included_mac) * 100)
-                  : 0;
-                const isSelected = item.channel_id === selectedChannelId;
-                const periodLabel =
+                const period =
                   item.billing_period_start && item.billing_period_end
                     ? formatPeriodRange(item.billing_period_start, item.billing_period_end)
-                    : formatMacCycleMonth(item.cycle_month);
+                    : `${formatPlanDate(item.subscription_starts_at)} – ${formatPlanDate(item.subscription_ends_at)}`;
                 return (
-                  <tr key={item.channel_id} className={isSelected ? "billing-row-selected" : undefined}>
+                  <tr key={item.channel_id}>
                     <td>
                       <div className="admin-cell-main">
                         <strong>{item.channel_name}</strong>
@@ -393,17 +337,12 @@ export default function BillingPage() {
                     </td>
                     <td>
                       <strong>{item.mac_count.toLocaleString("ar")}</strong>
+                      <small> / {item.included_mac.toLocaleString("ar")}</small>
                       {item.is_over_mac && (
-                        <small className="billing-over-charge">+{item.over_mac_count.toLocaleString("ar")}</small>
+                        <small className="billing-over-charge"> +{item.over_mac_count.toLocaleString("ar")}</small>
                       )}
                     </td>
-                    <td>
-                      <strong>{item.included_mac.toLocaleString("ar")}</strong>
-                      <small>{item.mac_remaining.toLocaleString("ar")} · {usagePct}%</small>
-                    </td>
-                    <td>{item.subscription_starts_at ? formatPlanDate(item.subscription_starts_at) : "—"}</td>
-                    <td>{item.subscription_ends_at ? formatPlanDate(item.subscription_ends_at) : "—"}</td>
-                    <td>{periodLabel}</td>
+                    <td><small>{period}</small></td>
                     <td>
                       {item.estimated_channel_over_mac_charge > 0
                         ? `$${item.estimated_channel_over_mac_charge.toFixed(2)}`
@@ -421,18 +360,9 @@ export default function BillingPage() {
                       </td>
                     )}
                     <td>
-                      <div className="admin-actions">
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => setSelectedChannelId(item.channel_id)}
-                        >
-                          فلتر
-                        </button>
-                        <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button">
-                          التفاصيل
-                        </Link>
-                      </div>
+                      <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button billing-row-link">
+                        التفاصيل
+                      </Link>
                     </td>
                   </tr>
                 );
@@ -442,260 +372,126 @@ export default function BillingPage() {
         </div>
       </section>
 
-      <section className="card billing-plan-grid billing-plan-overview-card">
-        <div>
-          <span>الخطة</span>
-          <strong>{sub.plan_name}</strong>
-        </div>
-        <div>
-          <span>حالة الاشتراك</span>
-          <strong>{formatPlanStatus(sub.status)}</strong>
-        </div>
-        <div>
-          <span>بداية الاشتراك</span>
-          <strong>{formatPlanDate(sub.starts_at)}</strong>
-        </div>
-        <div>
-          <span>نهاية / تجديد</span>
-          <strong>{formatPlanDate(sub.ends_at)}</strong>
-        </div>
-        <div>
-          <span>MAC مشمول (مجمّع)</span>
-          <strong>{sub.included_mac.toLocaleString("ar")}</strong>
-        </div>
-        <div>
-          <span>Over MAC</span>
-          <strong>${sub.over_mac_price_per_100} / 100</strong>
-        </div>
-        <div>
-          <span>دورة MAC الحالية</span>
-          <strong>{u ? formatPeriodRange(u.billing_period.start, u.billing_period.end) : formatMacCycleMonth(sub.cycle_month)}</strong>
-        </div>
-        <div>
-          <span>{sub.is_over_mac ? "تقدير Over MAC" : "حالة الرصيد"}</span>
-          <strong className={macBalanceClass(sub.is_over_mac, sub.mac_count, sub.included_mac)}>
-            {sub.is_over_mac ? `$${sub.estimated_over_mac_charge.toFixed(2)}` : "ضمن الخطة"}
-          </strong>
-        </div>
-      </section>
-
-      {canManageBilling && <BillingProviderSettings />}
-
-      {u && (
-        <MacWorkspaceBalance
-          showPolicy={false}
-          billingPeriod={{ start: u.billing_period.start, end: u.billing_period.end }}
-          summary={{
-            cycle_month: sub.cycle_month,
-            mac_count: u.mac.used,
-            included_mac: u.mac.included,
-            mac_remaining: u.mac.remaining,
-            is_over_mac: u.overage.is_over,
-            over_mac_count: u.overage.count,
-            estimated_over_mac_charge: u.overage.estimated_charge,
-            over_mac_price_per_100: u.overage.price_per_100,
-            plan_name: sub.plan_name
-          }}
-        />
+      {canManageBilling && (
+        <details className="card billing-collapsible">
+          <summary>إعدادات الاشتراك الافتراضي</summary>
+          <BillingProviderSettings embedded />
+        </details>
       )}
 
-      <section className="card assignments-filter-card billing-channel-filter-card">
-        <div className="assignments-filter-bar billing-filter-row">
-          <div>
-            <strong>فلترة حسب القناة</strong>
-            <small>فلتر الرسوم والجهات على نفس الصفحة — أو افتح التفاصيل الكاملة</small>
-          </div>
-          <div className="billing-filter-controls">
-            <select
-              value={selectedChannelId}
-              onChange={(e) => setSelectedChannelId(e.target.value)}
-            >
-              <option value="">كل القنوات — نظرة عامة</option>
-              {channels.map((item) => (
-                <option key={item.channel_id} value={item.channel_id}>
-                  {item.channel_name} · {item.mac_count.toLocaleString("ar")} MAC
-                </option>
-              ))}
-            </select>
-            {selectedChannelId && (
-              <>
-                <button type="button" className="secondary-button" onClick={() => setSelectedChannelId("")}>
-                  إلغاء الفلتر
-                </button>
-                <Link to={`/channels/${selectedChannelId}/mac`} className="secondary-button">
-                  صفحة التفاصيل
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-        {selectedChannel && channelView && (
-          <div className="billing-channel-active-filter">
-            <strong>{selectedChannel.channel_name}</strong>
-            <span>
-              {channelView.mac.channel_count.toLocaleString("ar")} / {selectedChannel.included_mac.toLocaleString("ar")} MAC
-              {" "}· {formatMacBalance(channelView.mac.channel_count, selectedChannel.included_mac)}
-            </span>
-            <span className={channelTypeClass(selectedChannel.channel_type)}>{formatChannelType(selectedChannel.channel_type)}</span>
-          </div>
-        )}
-      </section>
+      <details className="card billing-collapsible">
+        <summary>التحليلات والرسوم</summary>
+        <section className="billing-charts-grid billing-charts-compact">
+          <article className="card billing-chart-card">
+            <div className="billing-chart-head">
+              <h2>الرصيد</h2>
+              <span>{macUsed} / {macIncluded}</span>
+            </div>
+            <div className="billing-chart-wrap billing-chart-donut">
+              {balanceChart.length === 0 ? (
+                <p className="hint-text billing-chart-empty">لا MAC.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={balanceChart} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={72}>
+                      {balanceChart.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </article>
+          <article className="card billing-chart-card">
+            <div className="billing-chart-head">
+              <h2>MAC يومي</h2>
+            </div>
+            <div className="billing-chart-wrap">
+              {trendChart.length === 0 ? (
+                <p className="hint-text billing-chart-empty">لا بيانات.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={trendChart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(7,94,84,0.08)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
+                    <Area type="monotone" dataKey="count" stroke={CHART_COLORS[0]} fill="rgba(37,211,102,0.15)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </article>
+          <article className="card billing-chart-card billing-chart-wide">
+            <div className="billing-chart-head"><h2>حسب القnaة</h2></div>
+            <div className="billing-chart-wrap">
+              {channelChart.length === 0 ? (
+                <p className="hint-text billing-chart-empty">لا بيانات.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={channelChart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(7,94,84,0.08)" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
+                    <Bar dataKey="count" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </article>
+          <article className="card billing-chart-card billing-chart-wide">
+            <div className="billing-chart-head"><h2>مصادر النشاط</h2></div>
+            <div className="billing-chart-wrap">
+              {triggerChart.length === 0 ? (
+                <p className="hint-text billing-chart-empty">لا بيانات.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={triggerChart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(7,94,84,0.08)" />
+                    <XAxis dataKey="source" tick={{ fontSize: 10 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
+                    <Bar dataKey="count" fill={CHART_COLORS[1]} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </article>
+        </section>
+      </details>
 
-      {u?.overage.is_over && (
-        <section className="card admin-note-card">
-          <p>
-            تجاوزت {u.mac.included.toLocaleString("ar")} MAC ·
-            +{u.overage.count.toLocaleString("ar")} ({u.overage.blocks} × 100 @ ${u.overage.price_per_100}/100) ·
-            تقدير ${u.overage.estimated_charge.toFixed(2)}
-          </p>
+      {(contacts.data ?? []).length > 0 && (
+        <section className="card billing-recent-card billing-recent-compact">
+          <div className="billing-chart-head">
+            <h2>آخر جهات MAC</h2>
+          </div>
+          <ul className="billing-recent-list">
+            {(contacts.data ?? []).map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.contact_display_name ?? "عميل"}</strong>
+                  <small dir="ltr">{item.contact_phone ?? "—"}</small>
+                </div>
+                <div className="billing-recent-meta">
+                  <span>{item.channel_name ?? "—"}</span>
+                  <small>{formatMacTrigger(item.trigger_source)} · {formatAppTime(item.first_activity_at)}</small>
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
-
-      <section className="billing-charts-grid">
-        <article className="card billing-chart-card">
-          <div className="billing-chart-head">
-            <h2>{selectedChannelId ? "رصيد القناة" : "MAC المجمّع (كل القنوات)"}</h2>
-            <span>{u?.mac.used ?? 0} / {u?.mac.included ?? sub.included_mac}</span>
-          </div>
-          <div className="billing-chart-wrap billing-chart-donut">
-            {balanceChart.length === 0 ? (
-              <p className="hint-text billing-chart-empty">لا MAC بعد.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={balanceChart} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={88}>
-                    {balanceChart.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </article>
-
-        <article className="card billing-chart-card">
-          <div className="billing-chart-head">
-            <h2>MAC يومي</h2>
-            <span>{selectedChannel ? selectedChannel.channel_name : "تراكم خلال الدورة"}</span>
-          </div>
-          <div className="billing-chart-wrap">
-            {trendChart.length === 0 ? (
-              <p className="hint-text billing-chart-empty">لا بيانات بعد.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={trendChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(7,94,84,0.08)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
-                  <Area type="monotone" dataKey="count" name="MAC" stroke={CHART_COLORS[0]} fill="rgba(37,211,102,0.18)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </article>
-
-        <article className="card billing-chart-card billing-chart-wide">
-          <div className="billing-chart-head">
-            <h2>MAC حسب القناة</h2>
-            <small>MAC مستقل لكل قناة — نفس الجهة على قناتين = MACان</small>
-          </div>
-          <div className="billing-chart-wrap">
-            {channelChart.length === 0 ? (
-              <p className="hint-text billing-chart-empty">لا بيانات قنوات.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={channelChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(7,94,84,0.08)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
-                  <Bar dataKey="count" name="MAC" radius={[6, 6, 0, 0]}>
-                    {channelChart.map((entry) => (
-                      <Cell
-                        key={entry.name}
-                        fill={entry.highlight ? CHART_COLORS[0] : CHART_COLORS[1]}
-                        opacity={selectedChannelId && !entry.highlight ? 0.35 : 1}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </article>
-
-        <article className="card billing-chart-card billing-chart-wide">
-          <div className="billing-chart-head">
-            <h2>مصادر النشاط</h2>
-            <span>{selectedChannel ? selectedChannel.channel_name : "Incoming / Outgoing / AI"}</span>
-          </div>
-          <div className="billing-chart-wrap">
-            {triggerChart.length === 0 ? (
-              <p className="hint-text billing-chart-empty">لا مصادر بعد.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={triggerChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(7,94,84,0.08)" />
-                  <XAxis dataKey="source" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value: number) => value.toLocaleString("ar")} />
-                  <Bar dataKey="count" name="MAC" radius={[6, 6, 0, 0]}>
-                    {triggerChart.map((_, index) => (
-                      <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </article>
-      </section>
-
-      <section className="billing-plan-strip card">
-        <div><span>الموظفون</span><strong>{sub.max_users}</strong></div>
-        <div><span>القنوات</span><strong>{sub.max_channels}</strong></div>
-        <div><span>MAC مشمول</span><strong>{sub.included_mac.toLocaleString("ar")}</strong></div>
-        <div><span>سياسة الحد</span><strong>{u?.policy.limit_policy ?? "soft"}</strong></div>
-        <div><span>رصيد MAC</span><strong>{formatMacBalance(workspaceMac, sub.included_mac)}</strong></div>
-        <div><span>Over MAC</span><strong>${sub.over_mac_price_per_100}/100</strong></div>
-      </section>
-
-      <section className="card billing-recent-card">
-        <div className="billing-chart-head">
-          <h2>آخر جهات MAC</h2>
-          <span>{selectedChannel ? selectedChannel.channel_name : "كل القنوات"}</span>
-        </div>
-        <ul className="billing-recent-list">
-          {(contacts.data ?? []).length === 0 && (
-            <li><p className="hint-text billing-chart-empty">لا جهات MAC في هذا العرض.</p></li>
-          )}
-          {(contacts.data ?? []).map((item) => (
-            <li key={item.id}>
-              <div>
-                <strong>{item.contact_display_name ?? "عميل"}</strong>
-                <small dir="ltr">{item.contact_phone ?? "—"}</small>
-              </div>
-              <div className="billing-recent-meta">
-                <span>{item.channel_name ?? "—"}</span>
-                <small>{formatMacTrigger(item.trigger_source)} · {formatAppTime(item.first_activity_at)}</small>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       <details className="card billing-policy-details">
-        <summary>سياسة MAC والتسعير</summary>
+        <summary>سياسة MAC</summary>
         <ul className="mac-policy-list">
-          <li>MAC = Contact فريد تفاعل خلال دورة فوترة القناة (ليس عدد الرسائل).</li>
-          <li>Broadcast/حملات جماعية لا تُحسب MAC.</li>
-          <li>كل قناة لها دورة اشتراك، حصة MAC، وسعر Over MAC مستقل.</li>
-          <li>نفس الجهة على قناتين مختلفتين في نفس الدورة = MACان.</li>
-          <li>Over MAC: يُحسب لكل قناة على حدة (ceil لكل 100).</li>
+          <li>MAC = جهة اتصال فريدة تفاعلت خلال دورة فوترة القnaة.</li>
+          <li>كل قnaة: حصة MAC وOver MAC وتواريخ مستقلة.</li>
+          <li>نفس الجهة على قناتين = MACان.</li>
+          <li>الحملات الجماعية لا تُحسب MAC.</li>
         </ul>
       </details>
     </main>

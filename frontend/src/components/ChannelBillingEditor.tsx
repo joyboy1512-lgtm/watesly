@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, formatApiError } from "../lib/api";
 import { toastStore } from "../stores/toast";
@@ -25,13 +25,6 @@ function fromDatetimeLocal(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }
 
-function formatShortDate(value: string | null | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("ar", { day: "numeric", month: "short", year: "numeric" }).format(date);
-}
-
 export default function ChannelBillingEditor({
   channelId,
   billingStartsAt,
@@ -42,29 +35,17 @@ export default function ChannelBillingEditor({
 }: Props) {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
+  const [startsAt, setStartsAt] = useState(toDatetimeLocal(billingStartsAt));
+  const [endsAt, setEndsAt] = useState(toDatetimeLocal(billingEndsAt));
   const [included, setIncluded] = useState(String(includedMac));
   const [price, setPrice] = useState(String(overMacPricePer100));
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    setStartsAt(toDatetimeLocal(billingStartsAt));
-    setEndsAt(toDatetimeLocal(billingEndsAt));
-    setIncluded(String(includedMac));
-    setPrice(String(overMacPricePer100));
-  }, [billingStartsAt, billingEndsAt, includedMac, overMacPricePer100]);
-
-  async function save(event: FormEvent) {
-    event.preventDefault();
+  async function save() {
     const parsedIncluded = Number(included);
     const parsedPrice = Number(price);
-    if (Number.isNaN(parsedIncluded) || parsedIncluded < 0) {
-      toastStore.getState().show("أدخل حصة MAC صالحة", "error");
-      return;
-    }
-    if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
-      toastStore.getState().show("أدخل سعراً صالحاً", "error");
+    if (Number.isNaN(parsedIncluded) || parsedIncluded < 0 || Number.isNaN(parsedPrice) || parsedPrice < 0) {
+      toastStore.getState().show("قيم غير صالحة", "error");
       return;
     }
     setSaving(true);
@@ -75,7 +56,7 @@ export default function ChannelBillingEditor({
         included_mac: parsedIncluded,
         over_mac_price_per_100: parsedPrice
       });
-      toastStore.getState().show("تم حفظ إعدادات فوترة القnaة");
+      toastStore.getState().show("تم الحفظ");
       setOpen(false);
       void client.invalidateQueries({ queryKey: ["channels-usage-board"] });
       void client.invalidateQueries({ queryKey: ["billing-mac-channels"] });
@@ -88,49 +69,26 @@ export default function ChannelBillingEditor({
     }
   }
 
-  if (open && !disabled) {
+  if (disabled) return null;
+
+  if (open) {
     return (
-      <form className="channel-billing-editor" onSubmit={(e) => void save(e)}>
-        <label>
-          <span>بداية</span>
-          <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
-        </label>
-        <label>
-          <span>نهاية</span>
-          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
-        </label>
-        <label>
-          <span>MAC مشمول</span>
-          <input type="number" min={0} value={included} onChange={(e) => setIncluded(e.target.value)} />
-        </label>
-        <label>
-          <span>Over $/100</span>
-          <input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
-        </label>
+      <div className="channel-billing-popover">
+        <label><span>بداية</span><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} /></label>
+        <label><span>نهاية</span><input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} /></label>
+        <label><span>MAC</span><input type="number" min={0} value={included} onChange={(e) => setIncluded(e.target.value)} /></label>
+        <label><span>Over</span><input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
         <div className="channel-billing-editor-actions">
-          <button type="submit" className="assignments-primary-btn" disabled={saving}>
-            {saving ? "…" : "حفظ"}
-          </button>
-          <button type="button" className="secondary-button" onClick={() => setOpen(false)}>
-            إلغاء
-          </button>
+          <button type="button" className="assignments-primary-btn" disabled={saving} onClick={() => void save()}>{saving ? "…" : "حفظ"}</button>
+          <button type="button" className="secondary-button" onClick={() => setOpen(false)}>إلغاء</button>
         </div>
-      </form>
+      </div>
     );
   }
 
   return (
-    <div className="channel-billing-summary">
-      <div className="admin-cell-stack">
-        <strong>{includedMac.toLocaleString("ar")} MAC</strong>
-        <small>${overMacPricePer100.toFixed(2)}/100 Over</small>
-        <small>{formatShortDate(billingStartsAt)} – {formatShortDate(billingEndsAt)}</small>
-      </div>
-      {!disabled && (
-        <button type="button" className="assignments-primary-btn channel-billing-edit-btn" onClick={() => setOpen(true)}>
-          تعديل الفوترة
-        </button>
-      )}
-    </div>
+    <button type="button" className="secondary-button channel-billing-edit-btn" onClick={() => setOpen(true)}>
+      تعديل
+    </button>
   );
 }

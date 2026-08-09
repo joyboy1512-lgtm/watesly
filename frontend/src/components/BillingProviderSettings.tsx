@@ -6,16 +6,14 @@ import { toastStore } from "../stores/toast";
 type ProviderSettings = {
   starts_at: string;
   ends_at: string;
-  billing_cycle: string;
-  billing_period_start: string;
-  billing_period_end: string;
-  included_mac: number;
   included_mac_override: number | null;
-  over_mac_price_per_100: number;
   over_mac_price_per_100_override: number | null;
-  plan_name: string;
   plan_included_mac: number;
-  plan_over_mac_price_per_100: number;
+  over_mac_price_per_100: number;
+};
+
+type Props = {
+  embedded?: boolean;
 };
 
 function toDatetimeLocal(value: string): string {
@@ -30,17 +28,7 @@ function fromDatetimeLocal(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }
 
-function formatPeriodDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("ar", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  }).format(date);
-}
-
-export default function BillingProviderSettings() {
+export default function BillingProviderSettings({ embedded = false }: Props) {
   const client = useQueryClient();
   const settings = useQuery({
     queryKey: ["billing-provider-settings"],
@@ -72,7 +60,7 @@ export default function BillingProviderSettings() {
         })
       ).data,
     onSuccess: () => {
-      toastStore.getState().show("تم حفظ إعدادات الفوترة");
+      toastStore.getState().show("تم الحفظ");
       void client.invalidateQueries({ queryKey: ["billing-provider-settings"] });
       void client.invalidateQueries({ queryKey: ["subscription"] });
       void client.invalidateQueries({ queryKey: ["billing-usage"] });
@@ -84,11 +72,7 @@ export default function BillingProviderSettings() {
 
   if (settings.isError) return null;
   if (settings.isLoading || !settings.data) {
-    return (
-      <section className="card billing-provider-settings-card">
-        <p className="hint-text">جاري تحميل إعدادات مزود الخدمة…</p>
-      </section>
-    );
+    return <p className="hint-text">جاري التحميل…</p>;
   }
 
   const s = settings.data;
@@ -98,56 +82,51 @@ export default function BillingProviderSettings() {
     save.mutate();
   }
 
+  const form = (
+    <form className="billing-provider-form billing-provider-form-compact" onSubmit={submit}>
+      <label>
+        <span>بداية الاشتراك</span>
+        <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
+      </label>
+      <label>
+        <span>نهاية الاشتراك</span>
+        <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} required />
+      </label>
+      <label>
+        <span>MAC مشمول (افتراضي)</span>
+        <input
+          type="number"
+          min={0}
+          value={includedOverride}
+          onChange={(e) => setIncludedOverride(e.target.value)}
+          placeholder={String(s.plan_included_mac)}
+        />
+      </label>
+      <label>
+        <span>Over MAC $/100</span>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={priceOverride}
+          onChange={(e) => setPriceOverride(e.target.value)}
+          placeholder={String(s.over_mac_price_per_100)}
+        />
+      </label>
+      <button type="submit" className="assignments-primary-btn" disabled={save.isPending}>
+        {save.isPending ? "…" : "حفظ"}
+      </button>
+    </form>
+  );
+
+  if (embedded) return form;
+
   return (
     <section className="card billing-provider-settings-card">
       <div className="billing-chart-head">
-        <div>
-          <h2>إعدادات الفوترة — مزود الخدمة</h2>
-          <small>صلاحية billing.manage · تحديد الاشتراك، دورة MAC، والتسعير الافتراضي</small>
-        </div>
+        <h2>إعدادات الاشتراك الافتراضي</h2>
       </div>
-
-      <div className="billing-provider-readonly">
-        <div><span>الخطة</span><strong>{s.plan_name}</strong></div>
-        <div><span>دورة MAC الحالية</span><strong>{formatPeriodDate(s.billing_period_start)} – {formatPeriodDate(s.billing_period_end)}</strong></div>
-        <div><span>MAC من الباقة</span><strong>{s.plan_included_mac.toLocaleString("ar")}</strong></div>
-        <div><span>Over MAC من الباقة</span><strong>${s.plan_over_mac_price_per_100}/100</strong></div>
-      </div>
-
-      <form className="billing-provider-form" onSubmit={submit}>
-        <label>
-          <span>بداية الاشتراك</span>
-          <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
-        </label>
-        <label>
-          <span>نهاية / تجديد الاشتراك</span>
-          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} required />
-        </label>
-        <label>
-          <span>MAC مشمول (تجاوز للباقة)</span>
-          <input
-            type="number"
-            min={0}
-            value={includedOverride}
-            onChange={(e) => setIncludedOverride(e.target.value)}
-            placeholder={String(s.plan_included_mac)}
-          />
-        </label>
-        <label>
-          <span>Over MAC $/100 (تجاوز للباقة)</span>
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            value={priceOverride}
-            onChange={(e) => setPriceOverride(e.target.value)}
-            placeholder={String(s.over_mac_price_per_100)}
-          />
-        </label>
-        <button type="submit" className="assignments-primary-btn" disabled={save.isPending}>
-          {save.isPending ? "جاري الحفظ…" : "حفظ إعدادات المزود"}
-        </button>
-      </form>
+      {form}
     </section>
   );
 }
