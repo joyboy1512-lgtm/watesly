@@ -125,7 +125,7 @@ async def get_channels_mac_stats(
                 is_over_mac=bool(summary["is_over_mac"]),
                 over_mac_count=max(0, int(summary["mac_count"]) - included_mac),
                 campaign_messages_sent=campaign_msgs,
-                whatsapp_status=wa.status.value if wa else None,
+                whatsapp_status=wa.status.value if wa and hasattr(wa.status, "value") else (str(wa.status) if wa else None),
                 whatsapp_phone=wa.display_phone_number if wa else None,
             )
         )
