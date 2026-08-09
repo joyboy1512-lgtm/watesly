@@ -11,7 +11,9 @@ import NotificationMenu from "./NotificationMenu";
 import LanguageSwitcher from "./LanguageSwitcher";
 import BrandLogo from "./BrandLogo";
 
-type CurrentUser = { full_name: string; email: string; is_super_admin: boolean };
+import { filterNavItems } from "../lib/navPermissions";
+
+type CurrentUser = { full_name: string; email: string; is_super_admin: boolean; role?: string; permissions?: string[] };
 
 export default function AppLayout() {
   const { t } = useTranslation();
@@ -60,6 +62,9 @@ export default function AppLayout() {
       ] as const)
     : ([] as const);
 
+  const visibleMainItems = filterNavItems(mainItems, profile.data?.permissions);
+  const visibleAdminItems = profile.data?.is_super_admin ? adminItems : ([] as typeof adminItems);
+
   return (
     <div className="app-shell">
       <button
@@ -83,7 +88,7 @@ export default function AppLayout() {
 
         <nav className="sidebar-nav">
           <div className="sidebar-nav-main">
-            {mainItems.map(([to, label, icon]) => (
+            {visibleMainItems.map(([to, label, icon]) => (
               <NavLink
                 key={to}
                 to={to}
@@ -95,9 +100,9 @@ export default function AppLayout() {
               </NavLink>
             ))}
           </div>
-          {adminItems.length > 0 && (
+          {visibleAdminItems.length > 0 && (
             <div className="sidebar-nav-admin">
-              {adminItems.map(([to, label, icon]) => (
+              {visibleAdminItems.map(([to, label, icon]) => (
                 <NavLink
                   key={to}
                   to={to}

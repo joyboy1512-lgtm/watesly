@@ -2,11 +2,13 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.auth import get_current_user
+from app.api.dependencies.auth import AuthContext, get_auth_context, get_current_user
+from app.core.permissions import get_effective_permissions, permissions_for_response, role_permissions
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.db.session import get_db
 from app.models.user import User
+from app.models.membership import Membership
 from app.schemas.auth import AccountChoice, AccountChoicesResponse, CurrentUserResponse, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, RegistrationResponse, TokenResponse
 from app.services.auth import authenticate_user, issue_token_pair, list_active_memberships, register_owner, revoke_refresh_token, rotate_refresh_token
 
@@ -96,8 +98,23 @@ async def logout(payload: LogoutRequest, response: Response, cookie_token: str |
 
 
 @router.get("/me", response_model=CurrentUserResponse)
-async def me(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+async def me(context: AuthContext = Depends(get_auth_context)) -> CurrentUserResponse:
+    membership = context.membership
+    role = membership.role.value if hasattr(membership, "role") else None
+    permissions = (
+        permissions_for_response(membership)
+        if isinstance(membership, Membership)
+        else sorted(item.value for item in role_permissions(membership.role))
+    )
+    return CurrentUserResponse(
+        id=context.user.id,
+        email=context.user.email,
+        full_name=context.user.full_name,
+        preferred_language=context.user.preferred_language,
+        is_super_admin=context.user.is_super_admin,
+        role=role,
+        permissions=permissions,
+    )
 
 
 @router.post("/switch-account/{account_id}", response_model=TokenResponse)

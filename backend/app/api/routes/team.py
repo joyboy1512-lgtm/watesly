@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.config import settings
-from app.core.permissions import Permission
+from app.core.permissions import Permission, permissions_for_response
 from app.db.session import get_db
 from app.models.account import Account
 from app.schemas.team import (
@@ -45,6 +45,7 @@ async def _employee_response(
         status=membership.status,
         organization_ids=organization_ids,
         channel_ids=channel_ids,
+        permissions=permissions_for_response(membership),
     )
 
 
@@ -120,6 +121,7 @@ async def create_employee_account(
         membership, user, organization_ids = await create_employee(
             db,
             account_id=context.account_id,
+            actor_membership=context.membership,
             payload=payload,
         )
     except ValueError as exc:
@@ -129,6 +131,8 @@ async def create_employee_account(
             "EMAIL_ALREADY_REGISTERED": (409, "This email is already registered. Use an invitation link instead."),
             "USER_LIMIT_REACHED": (403, "User limit reached for this plan"),
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
+            "FORBIDDEN": (403, "You cannot create this employee"),
+            "OUT_OF_SCOPE": (403, "You can only manage employees in your branch"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create employee"))
         raise HTTPException(status_code=code, detail=detail) from exc
@@ -170,7 +174,7 @@ async def patch_employee(
             db,
             account_id=context.account_id,
             membership_id=membership_id,
-            actor_membership_id=context.membership.id,
+            actor_membership=context.membership,
             payload=payload,
         )
     except ValueError as exc:
@@ -179,6 +183,11 @@ async def patch_employee(
             "CANNOT_SUSPEND_SELF": (400, "You cannot suspend your own membership"),
             "LAST_OWNER": (400, "The account must have at least one active owner"),
             "INVALID_ORGANIZATION": (400, "One or more organizations are invalid"),
+            "FORBIDDEN": (403, "You cannot modify this employee"),
+            "OUT_OF_SCOPE": (403, "You can only manage employees in your branch"),
+            "PERMISSION_EXCEEDS_ROLE": (400, "One or more permissions exceed the employee role"),
+            "PERMISSION_NOT_ASSIGNABLE": (403, "You cannot assign one or more of these permissions"),
+            "INVALID_PERMISSION": (400, "One or more permissions are invalid"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to update employee"))
         raise HTTPException(status_code=code, detail=detail) from exc

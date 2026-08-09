@@ -22,8 +22,8 @@ def make_slug(value: str) -> str:
 
 
 async def bootstrap(email: str, password: str, full_name: str) -> None:
-    if len(password) < 10:
-        raise SystemExit("Password must be at least 10 characters.")
+    if len(password) < 6:
+        raise SystemExit("Password must be at least 6 characters.")
 
     async with AsyncSessionFactory() as db:
         user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()

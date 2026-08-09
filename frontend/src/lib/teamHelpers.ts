@@ -10,6 +10,7 @@ export type Employee = {
   status: MembershipStatus;
   organization_ids: string[];
   channel_ids: string[];
+  permissions: string[];
 };
 
 export type Organization = { id: string; name: string };
@@ -233,6 +234,7 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, ReadonlySet<PermissionKey>
     "automations.edit",
     "automations.publish",
     "users.view",
+    "users.manage",
     "organizations.view",
     "reports.view",
     "reports.export",
@@ -341,6 +343,30 @@ export function statusBadgeClass(status: MembershipStatus): string {
 
 export function getRolePermissions(role: MembershipRole): ReadonlySet<PermissionKey> {
   return ROLE_PERMISSIONS[role] ?? new Set();
+}
+
+export function permissionsForRole(role: MembershipRole): PermissionKey[] {
+  return [...getRolePermissions(role)];
+}
+
+export function canAssignPermissions(actorPermissions: ReadonlySet<PermissionKey> | PermissionKey[]): boolean {
+  const granted = actorPermissions instanceof Set ? actorPermissions : new Set(actorPermissions);
+  return granted.has("users.manage");
+}
+
+export function assignablePermissionsForActor(actorPermissions: ReadonlySet<PermissionKey> | PermissionKey[]): ReadonlySet<PermissionKey> {
+  const granted = actorPermissions instanceof Set ? actorPermissions : new Set(actorPermissions);
+  if (granted.has("billing.manage")) return new Set(ALL_PERMISSIONS);
+  return granted;
+}
+
+export function editablePermissionsForEmployee(
+  employeeRole: MembershipRole,
+  actorPermissions: ReadonlySet<PermissionKey> | PermissionKey[]
+): PermissionKey[] {
+  const rolePerms = getRolePermissions(employeeRole);
+  const assignable = assignablePermissionsForActor(actorPermissions);
+  return [...rolePerms].filter((item) => assignable.has(item));
 }
 
 export function permissionSummary(role: MembershipRole): string {

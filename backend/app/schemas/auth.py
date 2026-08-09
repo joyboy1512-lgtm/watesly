@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=160)
     email: EmailStr
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     account_name: str = Field(min_length=2, max_length=160)
     organization_name: str = Field(min_length=2, max_length=160)
     organization_slug: str = Field(min_length=2, max_length=80, pattern=r"^[a-z0-9-]+$")
@@ -66,6 +66,8 @@ class CurrentUserResponse(BaseModel):
     full_name: str
     preferred_language: str
     is_super_admin: bool
+    role: str | None = None
+    permissions: list[str] = Field(default_factory=list)
 
 
 class AccountChoice(BaseModel):

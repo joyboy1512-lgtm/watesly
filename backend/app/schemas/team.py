@@ -19,7 +19,7 @@ class InviteEmployeeRequest(BaseModel):
 class CreateEmployeeRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=2, max_length=160)
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     role: MembershipRole
     organization_ids: list[UUID] = Field(min_length=1)
     preferred_language: str = Field(default="ar", pattern=r"^(ar|en)$")
@@ -41,7 +41,7 @@ class InvitationResponse(BaseModel):
 class AcceptInvitationRequest(BaseModel):
     token: str
     full_name: str = Field(min_length=2, max_length=160)
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     preferred_language: str = Field(default="ar", pattern=r"^(ar|en)$")
 
 
@@ -49,6 +49,7 @@ class EmployeeUpdateRequest(BaseModel):
     role: MembershipRole | None = None
     status: MembershipStatus | None = None
     organization_ids: list[UUID] | None = None
+    permissions: list[str] | None = None
 
 
 class EmployeeResponse(BaseModel):
@@ -60,3 +61,4 @@ class EmployeeResponse(BaseModel):
     status: MembershipStatus
     organization_ids: list[UUID]
     channel_ids: list[UUID] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)

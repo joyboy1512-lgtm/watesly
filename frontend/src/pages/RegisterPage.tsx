@@ -133,7 +133,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={10}
+                  minLength={6}
                   autoComplete="new-password"
                 />
                 <button type="button" onClick={() => setShowPassword((v) => !v)}>

@@ -5,6 +5,11 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.permissions import (
+    MANAGER_ASSIGNABLE_PERMISSIONS,
+    ROLE_RANK,
+    validate_custom_permissions_for_role,
+)
 from app.core.security import create_invitation_token, decode_invitation_token, hash_password
 from app.models.invitation import Invitation, InvitationStatus
 from app.models.invitation_organization import InvitationOrganization
@@ -19,6 +24,46 @@ from app.schemas.team import (
     InviteEmployeeRequest,
 )
 from app.services.billing import get_active_subscription
+
+
+async def _membership_organization_ids(db: AsyncSession, membership_id: UUID) -> set[UUID]:
+    result = await db.execute(
+        select(OrganizationMembership.organization_id).where(
+            OrganizationMembership.membership_id == membership_id
+        )
+    )
+    return set(result.scalars().all())
+
+
+def _assignable_permissions_for_actor(actor_role: MembershipRole):
+    if actor_role in (MembershipRole.OWNER, MembershipRole.ADMIN):
+        return None
+    if actor_role == MembershipRole.MANAGER:
+        return MANAGER_ASSIGNABLE_PERMISSIONS
+    return frozenset()
+
+
+def _assert_actor_can_manage_target(
+    *,
+    actor_role: MembershipRole,
+    actor_org_ids: set[UUID],
+    target_role: MembershipRole,
+    target_org_ids: set[UUID],
+    new_role: MembershipRole | None = None,
+) -> None:
+    effective_role = new_role or target_role
+    if actor_role in (MembershipRole.OWNER, MembershipRole.ADMIN):
+        return
+    if actor_role != MembershipRole.MANAGER:
+        raise ValueError("FORBIDDEN")
+    if target_role in (MembershipRole.OWNER, MembershipRole.ADMIN):
+        raise ValueError("FORBIDDEN")
+    if effective_role in (MembershipRole.OWNER, MembershipRole.ADMIN):
+        raise ValueError("FORBIDDEN")
+    if ROLE_RANK[effective_role] > ROLE_RANK[MembershipRole.MANAGER]:
+        raise ValueError("FORBIDDEN")
+    if not target_org_ids or not target_org_ids.issubset(actor_org_ids):
+        raise ValueError("OUT_OF_SCOPE")
 
 
 async def create_invitation(
@@ -103,8 +148,16 @@ async def create_employee(
     db: AsyncSession,
     *,
     account_id: UUID,
+    actor_membership: Membership,
     payload: CreateEmployeeRequest,
 ) -> tuple[Membership, User, list[UUID]]:
+    actor_org_ids = await _membership_organization_ids(db, actor_membership.id)
+    _assert_actor_can_manage_target(
+        actor_role=actor_membership.role,
+        actor_org_ids=actor_org_ids,
+        target_role=payload.role,
+        target_org_ids=set(payload.organization_ids),
+    )
     await _validate_new_member_capacity(db, account_id=account_id, email=payload.email)
     valid_ids = await _validate_organization_ids(
         db,
@@ -226,13 +279,22 @@ async def update_employee(
     *,
     account_id: UUID,
     membership_id: UUID,
-    actor_membership_id: UUID,
+    actor_membership: Membership,
     payload: EmployeeUpdateRequest,
 ) -> tuple[Membership, User, list[UUID]]:
     membership = await db.get(Membership, membership_id)
     if membership is None or membership.account_id != account_id:
         raise ValueError("EMPLOYEE_NOT_FOUND")
-    if membership.id == actor_membership_id and payload.status == MembershipStatus.SUSPENDED:
+    actor_org_ids = await _membership_organization_ids(db, actor_membership.id)
+    target_org_ids = await _membership_organization_ids(db, membership.id)
+    _assert_actor_can_manage_target(
+        actor_role=actor_membership.role,
+        actor_org_ids=actor_org_ids,
+        target_role=membership.role,
+        target_org_ids=target_org_ids,
+        new_role=payload.role,
+    )
+    if membership.id == actor_membership.id and payload.status == MembershipStatus.SUSPENDED:
         raise ValueError("CANNOT_SUSPEND_SELF")
     if membership.role == MembershipRole.OWNER and payload.role not in (None, MembershipRole.OWNER):
         owner_count = await db.scalar(
@@ -251,6 +313,9 @@ async def update_employee(
         membership.status = payload.status
 
     if payload.organization_ids is not None:
+        valid_ids = set(payload.organization_ids)
+        if actor_membership.role == MembershipRole.MANAGER and not valid_ids.issubset(actor_org_ids):
+            raise ValueError("OUT_OF_SCOPE")
         result = await db.execute(
             select(Organization.id).where(
                 Organization.account_id == account_id,
@@ -272,6 +337,18 @@ async def update_employee(
             )
             for organization_id in valid_ids
         ])
+
+    if payload.permissions is not None:
+        if len(payload.permissions) == 0:
+            membership.custom_permissions = None
+        else:
+            effective_role = payload.role or membership.role
+            assignable = _assignable_permissions_for_actor(actor_membership.role)
+            membership.custom_permissions = validate_custom_permissions_for_role(
+                effective_role,
+                payload.permissions,
+                assignable=assignable,
+            )
 
     await db.commit()
     user = await db.get(User, membership.user_id)

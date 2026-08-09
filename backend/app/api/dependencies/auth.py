@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import Permission, role_has_permission
+from app.core.permissions import Permission, get_effective_permissions, membership_has_permission
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.account import Account, AccountStatus
@@ -154,7 +154,7 @@ def require_permissions(*permissions: Permission, write: bool = False):
                     detail={"code": "SUPPORT_ACCESS_REQUIRED"},
                 )
             return context
-        missing = [p.value for p in permissions if not role_has_permission(context.membership.role, p)]
+        missing = [p.value for p in permissions if not membership_has_permission(context.membership, p)]
         if missing:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
