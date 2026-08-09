@@ -11,7 +11,7 @@ import {
   formatStrategy,
   teamsForBranch
 } from "../lib/assignmentHelpers";
-import { formatRoleLabel, type Employee } from "../lib/teamHelpers";
+import { employeeInitials, formatRoleLabel, type Employee } from "../lib/teamHelpers";
 import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
@@ -207,11 +207,20 @@ export default function AssignmentsPage() {
     );
   }
 
+  function workloadBadgeClass(count: number): string {
+    if (count >= 8) return "assignments-load-badge assignments-load-high";
+    if (count >= 4) return "assignments-load-badge assignments-load-medium";
+    return "assignments-load-badge assignments-load-low";
+  }
+
   return (
-    <main className="page">
-      <header className="page-header">
-        <h1>الفرق والتوزيع</h1>
-        <p>أنشئ فرق التوزيع لكل فرع، وحدّد كيف تُوزَّع المحادثات الواردة تلقائياً على الموظفين.</p>
+    <main className="page assignments-page">
+      <header className="page-header assignments-hero">
+        <div>
+          <span className="assignments-eyebrow">إدارة التشغيل</span>
+          <h1>الفرق والتوزيع</h1>
+          <p>أنشئ فرق التوزيع لكل فرع، وحدّد كيف تُوزَّع المحادثات الواردة تلقائياً على الموظفين.</p>
+        </div>
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">
@@ -221,8 +230,12 @@ export default function AssignmentsPage() {
         <article className="admin-stat-card admin-stat-card-brand"><span>محادثات مفتوحة</span><strong>{workloadRows.reduce((s, r) => s + r.open_conversations, 0)}</strong></article>
       </section>
 
-      <section className="card admin-table-card" style={{ marginBottom: 16 }}>
-        <div className="admin-toolbar" style={{ padding: "12px 16px" }}>
+      <section className="card assignments-filter-card">
+        <div className="assignments-filter-bar">
+          <div>
+            <strong>تصفية حسب الفرع</strong>
+            <small>اعرض فرق وقواعد فرع محدد</small>
+          </div>
           <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}>
             <option value="">كل الأفرع</option>
             {(organizations.data ?? []).map((item) => (
@@ -232,9 +245,12 @@ export default function AssignmentsPage() {
         </div>
       </section>
 
-      <section className="dashboard-grid">
-        <article className="card form-card admin-form-card">
-          <h2>إنشاء فريق توزيع</h2>
+      <section className="assignments-forms-grid">
+        <article className="card form-card admin-form-card assignments-form-card">
+          <div className="assignments-form-head">
+            <h2>إنشاء فريق توزيع</h2>
+            <span className="assignments-form-step">1</span>
+          </div>
           <p className="hint-text">اختر الفرع ثم حدّد موظفيه النشطين فقط.</p>
           <form className="stack-form" onSubmit={createTeam}>
             <select value={organizationId} onChange={(e) => { setOrganizationId(e.target.value); setSelectedMembers([]); }} required>
@@ -244,7 +260,7 @@ export default function AssignmentsPage() {
               ))}
             </select>
             <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="اسم الفريق (مثال: فريق المبيعات)" required />
-            <div className="contact-picker admin-permissions-list">
+            <div className="contact-picker assignments-member-picker admin-permissions-list">
               {branchEmployees.length === 0 && organizationId && (
                 <small className="hint-text">لا يوجد موظفون نشطون في هذا الفرع.</small>
               )}
@@ -265,12 +281,15 @@ export default function AssignmentsPage() {
                 </label>
               ))}
             </div>
-            <button type="submit" disabled={!organizationId || selectedMembers.length === 0}>إنشاء الفريق</button>
+            <button className="assignments-primary-btn" type="submit" disabled={!organizationId || selectedMembers.length === 0}>إنشاء الفريق</button>
           </form>
         </article>
 
-        <article className="card form-card admin-form-card">
-          <h2>قاعدة توزيع تلقائي</h2>
+        <article className="card form-card admin-form-card assignments-form-card">
+          <div className="assignments-form-head">
+            <h2>قاعدة توزيع تلقائي</h2>
+            <span className="assignments-form-step">2</span>
+          </div>
           <p className="hint-text">تُطبَّق على المحادثات الجديدة حسب الفرع والقناة.</p>
           <form className="stack-form" onSubmit={createRule}>
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} required>
@@ -293,22 +312,26 @@ export default function AssignmentsPage() {
               <span>الأولوية (أقل = أسبق)</span>
               <input type="number" min={1} max={1000} value={rulePriority} onChange={(e) => setRulePriority(Number(e.target.value))} />
             </label>
-            <button type="submit" disabled={!teamId}>حفظ القاعدة</button>
+            <button className="assignments-primary-btn" type="submit" disabled={!teamId}>حفظ القاعدة</button>
           </form>
         </article>
       </section>
 
-      <section className="card admin-table-card" style={{ marginBottom: 16 }}>
-        <div className="admin-table-header">
+      <section className="card admin-table-card assignments-table-card">
+        <div className="admin-table-header assignments-table-title">
           <div>
             <h2>حمل الموظفين الآن</h2>
             <small>عدد المحادثات المفتوحة/المعلّقة لكل موظف</small>
           </div>
         </div>
         <div className="admin-table-wrap">
-          <table className="admin-erp-table">
+          <table className="admin-erp-table assignments-erp-table">
             <thead>
-              <tr><th>الموظف</th><th>الدور</th><th>محادثات مفتوحة</th></tr>
+              <tr>
+                <th className="th-brand">الموظف</th>
+                <th>الدور</th>
+                <th className="th-brand">محادثات مفتوحة</th>
+              </tr>
             </thead>
             <tbody>
               {workloadRows.length === 0 && (
@@ -316,9 +339,18 @@ export default function AssignmentsPage() {
               )}
               {workloadRows.map((row) => (
                 <tr key={row.membership_id}>
-                  <td>{row.employee?.full_name ?? row.membership_id.slice(0, 8)}</td>
+                  <td>
+                    <div className="admin-employee-cell">
+                      <div className="admin-avatar">
+                        {row.employee ? employeeInitials(row.employee) : "?"}
+                      </div>
+                      <div className="admin-cell-main">
+                        <strong>{row.employee?.full_name ?? row.membership_id.slice(0, 8)}</strong>
+                      </div>
+                    </div>
+                  </td>
                   <td>{row.employee ? formatRoleLabel(row.employee.role) : row.role}</td>
-                  <td><strong>{row.open_conversations}</strong></td>
+                  <td><span className={workloadBadgeClass(row.open_conversations)}>{row.open_conversations}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -326,12 +358,22 @@ export default function AssignmentsPage() {
         </div>
       </section>
 
-      <section className="card admin-table-card" style={{ marginBottom: 16 }}>
-        <div className="admin-table-header"><h2>فرق التوزيع</h2></div>
+      <section className="card admin-table-card assignments-table-card">
+        <div className="admin-table-header assignments-table-title">
+          <div>
+            <h2>فرق التوزيع</h2>
+            <small>{visibleTeams.length} فريق</small>
+          </div>
+        </div>
         <div className="admin-table-wrap">
-          <table className="admin-erp-table">
+          <table className="admin-erp-table assignments-erp-table">
             <thead>
-              <tr><th>الفريق</th><th>الفرع</th><th>الأعضاء</th><th>إجراءات</th></tr>
+              <tr>
+                <th className="th-brand">الفريق</th>
+                <th>الفرع</th>
+                <th className="th-brand">الأعضاء</th>
+                <th>إجراءات</th>
+              </tr>
             </thead>
             <tbody>
               {visibleTeams.length === 0 && (
@@ -344,8 +386,8 @@ export default function AssignmentsPage() {
                   <td>{renderMemberChips(team.membership_ids)}</td>
                   <td>
                     <div className="admin-actions">
-                      <button type="button" className="secondary-button" onClick={() => openTeamEditor(team)}>تعديل</button>
-                      <button type="button" className="secondary-button" onClick={() => void deleteTeamItem(team)}>حذف</button>
+                      <button type="button" className="secondary-button assignments-action-btn" onClick={() => openTeamEditor(team)}>تعديل</button>
+                      <button type="button" className="secondary-button assignments-action-btn assignments-action-danger" onClick={() => void deleteTeamItem(team)}>حذف</button>
                     </div>
                   </td>
                 </tr>
@@ -355,12 +397,25 @@ export default function AssignmentsPage() {
         </div>
       </section>
 
-      <section className="card admin-table-card">
-        <div className="admin-table-header"><h2>قواعد التوزيع</h2></div>
+      <section className="card admin-table-card assignments-table-card">
+        <div className="admin-table-header assignments-table-title">
+          <div>
+            <h2>قواعد التوزيع</h2>
+            <small>{visibleRules.filter((r) => r.is_active).length} نشطة من {visibleRules.length}</small>
+          </div>
+        </div>
         <div className="admin-table-wrap">
-          <table className="admin-erp-table">
+          <table className="admin-erp-table assignments-erp-table">
             <thead>
-              <tr><th>الاسم</th><th>الفريق</th><th>القناة</th><th>الاستراتيجية</th><th>الأولوية</th><th>الحالة</th><th>إجراءات</th></tr>
+              <tr>
+                <th className="th-brand">الاسم</th>
+                <th className="th-brand">الفريق</th>
+                <th>القناة</th>
+                <th className="th-brand">الاستراتيجية</th>
+                <th>الأولوية</th>
+                <th className="th-brand">الحالة</th>
+                <th>إجراءات</th>
+              </tr>
             </thead>
             <tbody>
               {visibleRules.length === 0 && (
@@ -368,18 +423,22 @@ export default function AssignmentsPage() {
               )}
               {visibleRules.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.name}</td>
+                  <td><strong>{item.name}</strong></td>
                   <td>{teamMap.get(item.team_id) ?? "—"}</td>
                   <td>{item.channel_id ? (channelMap.get(item.channel_id) ?? item.channel_id.slice(0, 8)) : "كل القنوات"}</td>
-                  <td>{formatStrategy(item.strategy)}</td>
-                  <td>{item.priority}</td>
-                  <td>{item.is_active ? "نشطة" : "متوقفة"}</td>
+                  <td><span className="admin-chip admin-chip-whatsapp">{formatStrategy(item.strategy)}</span></td>
+                  <td><span className="assignments-priority-badge">{item.priority}</span></td>
+                  <td>
+                    <span className={item.is_active ? "admin-status admin-status-active" : "admin-status admin-status-offline"}>
+                      {item.is_active ? "نشطة" : "متوقفة"}
+                    </span>
+                  </td>
                   <td>
                     <div className="admin-actions">
-                      <button type="button" className="secondary-button" onClick={() => void toggleRule(item)}>
+                      <button type="button" className="secondary-button assignments-action-btn" onClick={() => void toggleRule(item)}>
                         {item.is_active ? "إيقاف" : "تفعيل"}
                       </button>
-                      <button type="button" className="secondary-button" onClick={() => void deleteRuleItem(item)}>حذف</button>
+                      <button type="button" className="secondary-button assignments-action-btn assignments-action-danger" onClick={() => void deleteRuleItem(item)}>حذف</button>
                     </div>
                   </td>
                 </tr>
@@ -391,7 +450,7 @@ export default function AssignmentsPage() {
 
       {editingTeam && (
         <div className="modal-overlay" onClick={() => setEditingTeam(null)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-card assignments-modal" onClick={(event) => event.stopPropagation()}>
             <header className="modal-header">
               <div>
                 <h2>تعديل فريق {editingTeam.name}</h2>
@@ -418,7 +477,7 @@ export default function AssignmentsPage() {
               ))}
             </div>
             <div className="admin-actions" style={{ marginTop: 16 }}>
-              <button type="button" disabled={savingTeam || editMembers.length === 0} onClick={() => void saveTeamMembers()}>
+              <button type="button" className="assignments-primary-btn" disabled={savingTeam || editMembers.length === 0} onClick={() => void saveTeamMembers()}>
                 {savingTeam ? "جاري الحفظ…" : "حفظ الأعضاء"}
               </button>
             </div>

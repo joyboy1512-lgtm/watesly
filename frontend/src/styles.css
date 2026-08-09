@@ -2309,6 +2309,129 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .admin-permissions-advanced { margin-top: 14px; }
 .admin-permissions-advanced summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
 .page-loading { padding: 32px 24px; color: var(--muted); }
+
+/* Assignments — teams & routing page */
+.assignments-page { display: grid; gap: 16px; }
+.assignments-hero {
+  padding: 20px 22px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(37, 211, 102, 0.08) 0%, rgba(7, 94, 84, 0.06) 100%);
+  border: 1px solid rgba(37, 211, 102, 0.18);
+}
+.assignments-eyebrow {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(37, 211, 102, 0.14);
+  color: var(--primary-darker);
+  font-size: 12px;
+  font-weight: 700;
+}
+.assignments-filter-card { padding: 0; overflow: hidden; }
+.assignments-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(7, 94, 84, 0.04);
+}
+.assignments-filter-bar strong { display: block; font-size: 14px; }
+.assignments-filter-bar small { color: var(--muted); font-size: 12px; }
+.assignments-filter-bar select { min-width: 220px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); }
+.assignments-forms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.assignments-form-card { display: grid; gap: 12px; }
+.assignments-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(37, 211, 102, 0.35);
+}
+.assignments-form-head h2 { margin: 0; font-size: 16px; color: var(--primary-darker); }
+.assignments-form-step {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+.assignments-member-picker {
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.assignments-primary-btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 55%, var(--primary-darker) 100%);
+  color: #fff;
+  font-weight: 700;
+}
+.assignments-primary-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.assignments-table-card { overflow: hidden; }
+.assignments-table-title {
+  background: linear-gradient(90deg, rgba(37, 211, 102, 0.1), transparent);
+  border-bottom: 1px solid rgba(37, 211, 102, 0.2);
+}
+.assignments-table-title h2 { color: var(--primary-darker); }
+.assignments-erp-table thead th.th-brand,
+.admin-erp-table.assignments-erp-table thead th.th-brand {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
+  color: #fff;
+  font-weight: 700;
+  border-inline-end-color: rgba(255, 255, 255, 0.12);
+}
+.assignments-erp-table thead th:not(.th-brand) {
+  background: rgba(37, 211, 102, 0.1);
+  color: var(--primary-darker);
+  font-weight: 600;
+}
+.assignments-load-badge {
+  display: inline-flex;
+  min-width: 34px;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+}
+.assignments-load-low { background: rgba(18, 183, 106, 0.12); color: #027a48; }
+.assignments-load-medium { background: rgba(247, 144, 9, 0.14); color: #b54708; }
+.assignments-load-high { background: rgba(240, 68, 56, 0.12); color: #b42318; }
+.assignments-priority-badge {
+  display: inline-flex;
+  min-width: 28px;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(7, 94, 84, 0.08);
+  color: var(--primary-darker);
+  font-weight: 700;
+  font-size: 12px;
+}
+.assignments-action-btn { font-size: 12px; }
+.assignments-action-danger { color: var(--danger); border-color: rgba(234, 0, 56, 0.25); }
+.assignments-modal { border-top: 4px solid var(--primary); }
+@media (max-width: 980px) {
+  .assignments-forms-grid { grid-template-columns: 1fr; }
+  .assignments-filter-bar { align-items: flex-start; flex-direction: column; }
+}
 .import-block { margin-top: 0; padding-top: 0; border-top: 0; }
 .contacts-page { display: grid; gap: 14px; }
 .contacts-erp-page { max-width: none; }
