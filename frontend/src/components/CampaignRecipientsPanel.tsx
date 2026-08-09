@@ -50,6 +50,7 @@ const RECIPIENT_STATUS_LABELS: Record<string, string> = {
 
 const SUCCESS_STATUSES = new Set(["sent", "delivered", "read"]);
 const PENDING_STATUSES = new Set(["pending", "queued", "sending"]);
+const ARCHIVABLE_STATUSES = new Set(["completed", "completed_with_errors", "failed", "cancelled", "paused"]);
 
 export { isActiveCampaignStatus, campaignReportNeedsRefresh, CAMPAIGN_STATUS_LABELS };
 
@@ -120,11 +121,21 @@ function RecipientTable({ title, rows }: { title: string; rows: CampaignRecipien
 export function CampaignRecipientsPanel({
   campaignId,
   status,
-  report
+  report,
+  archivedAt,
+  showArchived,
+  onArchive,
+  onUnarchive,
+  actionBusy
 }: {
   campaignId: string;
   status?: string;
   report?: CampaignReport;
+  archivedAt?: string | null;
+  showArchived?: boolean;
+  onArchive?: () => void;
+  onUnarchive?: () => void;
+  actionBusy?: boolean;
 }) {
   const recipients = useQuery({
     queryKey: ["campaign-recipients", campaignId],
@@ -136,6 +147,8 @@ export function CampaignRecipientsPanel({
   const sent = rows.filter((r) => SUCCESS_STATUSES.has(r.status));
   const failed = rows.filter((r) => r.status === "failed");
   const notSent = rows.filter((r) => PENDING_STATUSES.has(r.status));
+  const canArchive = status ? ARCHIVABLE_STATUSES.has(status) && !archivedAt : false;
+  const canUnarchive = Boolean(archivedAt);
 
   return (
     <div className="campaign-details-panel">
@@ -163,6 +176,26 @@ export function CampaignRecipientsPanel({
         <button type="button" className="secondary-button compact" onClick={() => void downloadCampaignRecipients(campaignId, "csv")}>
           CSV
         </button>
+        {canArchive && onArchive && !showArchived && (
+          <button
+            type="button"
+            className="secondary-button compact"
+            disabled={actionBusy}
+            onClick={onArchive}
+          >
+            أرشفة الحملة
+          </button>
+        )}
+        {canUnarchive && onUnarchive && showArchived && (
+          <button
+            type="button"
+            className="secondary-button compact"
+            disabled={actionBusy}
+            onClick={onUnarchive}
+          >
+            استعادة من الأرشيف
+          </button>
+        )}
       </div>
       {recipients.isLoading && <p className="hint-text">جاري تحميل الأرقام…</p>}
       <RecipientTable title="تم الإرسال لهم" rows={sent} />
@@ -190,8 +223,6 @@ export type CampaignSummaryRow = {
   failed: number;
   pending?: number;
 };
-
-const ARCHIVABLE_STATUSES = new Set(["completed", "completed_with_errors", "failed", "cancelled"]);
 
 function buildSummaryReport(item: CampaignSummaryRow, report?: CampaignReport): CampaignReport {
   return {
@@ -363,7 +394,16 @@ export function CampaignReportRow({
       {showDetails && (expanded || isActive) && (
         <tr className="campaign-expand-row">
           <td colSpan={12}>
-            <CampaignRecipientsPanel campaignId={item.id} status={item.status} report={liveReport} />
+            <CampaignRecipientsPanel
+              campaignId={item.id}
+              status={item.status}
+              report={liveReport}
+              archivedAt={item.archived_at}
+              showArchived={actions?.showArchived}
+              onArchive={canArchive && actions?.onArchive ? () => actions.onArchive?.(item.id) : undefined}
+              onUnarchive={canUnarchive && actions?.onUnarchive ? () => actions.onUnarchive?.(item.id) : undefined}
+              actionBusy={busy}
+            />
           </td>
         </tr>
       )}

@@ -27,6 +27,7 @@ _ARCHIVABLE_STATUSES = {
     CampaignStatus.COMPLETED_WITH_ERRORS,
     CampaignStatus.FAILED,
     CampaignStatus.CANCELLED,
+    CampaignStatus.PAUSED,
 }
 
 

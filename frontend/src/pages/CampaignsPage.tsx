@@ -604,9 +604,31 @@ export default function CampaignsPage() {
         <section className={`card admin-table-card${highlightCampaignId ? " campaigns-list-highlight" : ""}`}>
           <div className="admin-table-header">
             <div>
-              <h2>جدول الحملات</h2>
-              <small>{filteredRows.length} حملة · نتائج وتقارير</small>
+              <h2>{archiveFilter === "archived" ? "أرشيف الحملات" : "جدول الحملات"}</h2>
+              <small>
+                {filteredRows.length} حملة ·{" "}
+                {archiveFilter === "archived"
+                  ? "حملات مؤرشفة — اضغط «استعادة» لإرجاعها للقائمة النشطة"
+                  : "الحملات المنتهية يمكن أرشفتها من عمود الإجراءات أو من التقرير"}
+              </small>
             </div>
+          </div>
+
+          <div className="inline-actions" style={{ padding: "12px 16px 0" }}>
+            <button
+              type="button"
+              className={archiveFilter === "active" ? "whatsapp-button compact" : "secondary-button compact"}
+              onClick={() => setArchiveFilter("active")}
+            >
+              الحملات النشطة
+            </button>
+            <button
+              type="button"
+              className={archiveFilter === "archived" ? "whatsapp-button compact" : "secondary-button compact"}
+              onClick={() => setArchiveFilter("archived")}
+            >
+              الأرشيف
+            </button>
           </div>
 
           <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
@@ -625,10 +647,6 @@ export default function CampaignsPage() {
               <option value="paused">موقوفة</option>
               <option value="draft">مسودة</option>
               <option value="cancelled">ملغاة</option>
-            </select>
-            <select value={archiveFilter} onChange={(e) => setArchiveFilter(e.target.value as ArchiveFilter)}>
-              <option value="active">الحملات النشطة</option>
-              <option value="archived">الأرشيف</option>
             </select>
           </div>
 
