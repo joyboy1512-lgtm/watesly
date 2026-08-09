@@ -177,7 +177,12 @@ export default function LandingPage() {
             <h3>{txt("companyLegal", "landing.companyLegal")}</h3>
             <ul className="landing-company-details">
               <li>{txt("companyProduct", "landing.companyProduct")}</li>
-              <li>{txt("companyLocation", "landing.companyLocation")}</li>
+              <li>{txt("companyAddress", "landing.companyAddress")}</li>
+              <li>
+                <a href={`tel:+965${txt("companyPhone", "landing.companyPhone").replace(/\D/g, "")}`} dir="ltr">
+                  {txt("companyPhone", "landing.companyPhone")}
+                </a>
+              </li>
               <li>
                 <a href={`mailto:${txt("companyEmail", "landing.companyEmail")}`}>
                   {txt("companyEmail", "landing.companyEmail")}
@@ -235,6 +240,12 @@ export default function LandingPage() {
           <div className="landing-footer-col">
             <h4>{txt("aboutNav", "landing.aboutNav")}</h4>
             <p>{txt("footerCompany", "landing.footerCompany")}</p>
+            <p>{txt("footerAddress", "landing.footerAddress")}</p>
+            <p>
+              <a href={`tel:+965${txt("footerPhone", "landing.footerPhone").replace(/\D/g, "")}`} dir="ltr">
+                {txt("footerPhone", "landing.footerPhone")}
+              </a>
+            </p>
             <p>
               <a href={`mailto:${txt("footerContact", "landing.footerContact")}`}>
                 {txt("footerContact", "landing.footerContact")}
