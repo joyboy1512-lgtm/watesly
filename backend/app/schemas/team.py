@@ -16,10 +16,26 @@ class InviteEmployeeRequest(BaseModel):
         return str(value).strip().lower()
 
 
+class CreateEmployeeRequest(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=160)
+    password: str = Field(min_length=10, max_length=128)
+    role: MembershipRole
+    organization_ids: list[UUID] = Field(min_length=1)
+    preferred_language: str = Field(default="ar", pattern=r"^(ar|en)$")
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
+
+
 class InvitationResponse(BaseModel):
     invitation_id: UUID
     invitation_token: str
+    invitation_accept_url: str
     expires_in_hours: int
+    email_sent: bool = False
 
 
 class AcceptInvitationRequest(BaseModel):

@@ -12,7 +12,12 @@ from app.models.membership import Membership, MembershipRole, MembershipStatus
 from app.models.organization import Organization
 from app.models.organization_membership import OrganizationMembership
 from app.models.user import User, UserStatus
-from app.schemas.team import AcceptInvitationRequest, EmployeeUpdateRequest, InviteEmployeeRequest
+from app.schemas.team import (
+    AcceptInvitationRequest,
+    CreateEmployeeRequest,
+    EmployeeUpdateRequest,
+    InviteEmployeeRequest,
+)
 from app.services.billing import get_active_subscription
 
 
@@ -23,37 +28,12 @@ async def create_invitation(
     invited_by_user_id: UUID,
     payload: InviteEmployeeRequest,
 ) -> tuple[Invitation, str]:
-    subscription_data = await get_active_subscription(db, account_id)
-    if subscription_data is None:
-        raise ValueError("NO_ACTIVE_SUBSCRIPTION")
-    _, plan = subscription_data
-
-    member_count = await db.scalar(
-        select(func.count(Membership.id)).where(
-            Membership.account_id == account_id,
-            Membership.status == MembershipStatus.ACTIVE,
-        )
+    await _validate_new_member_capacity(db, account_id=account_id, email=payload.email)
+    valid_ids = await _validate_organization_ids(
+        db,
+        account_id=account_id,
+        organization_ids=payload.organization_ids,
     )
-    if (member_count or 0) >= plan.max_users:
-        raise ValueError("USER_LIMIT_REACHED")
-
-    result = await db.execute(
-        select(Organization.id).where(
-            Organization.account_id == account_id,
-            Organization.id.in_(payload.organization_ids),
-        )
-    )
-    valid_ids = set(result.scalars().all())
-    if valid_ids != set(payload.organization_ids):
-        raise ValueError("INVALID_ORGANIZATION")
-
-    existing_membership = await db.execute(
-        select(Membership)
-        .join(User, User.id == Membership.user_id)
-        .where(Membership.account_id == account_id, User.email == payload.email)
-    )
-    if existing_membership.scalar_one_or_none() is not None:
-        raise ValueError("ALREADY_MEMBER")
 
     invitation = Invitation(
         account_id=account_id,
@@ -70,6 +50,100 @@ async def create_invitation(
     ])
     await db.commit()
     return invitation, create_invitation_token(invitation_id=invitation.id)
+
+
+async def _validate_new_member_capacity(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    email: str,
+) -> None:
+    subscription_data = await get_active_subscription(db, account_id)
+    if subscription_data is None:
+        raise ValueError("NO_ACTIVE_SUBSCRIPTION")
+    _, plan = subscription_data
+
+    member_count = await db.scalar(
+        select(func.count(Membership.id)).where(
+            Membership.account_id == account_id,
+            Membership.status == MembershipStatus.ACTIVE,
+        )
+    )
+    if (member_count or 0) >= plan.max_users:
+        raise ValueError("USER_LIMIT_REACHED")
+
+    existing_membership = await db.execute(
+        select(Membership)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.account_id == account_id, User.email == email)
+    )
+    if existing_membership.scalar_one_or_none() is not None:
+        raise ValueError("ALREADY_MEMBER")
+
+
+async def _validate_organization_ids(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    organization_ids: list[UUID],
+) -> set[UUID]:
+    result = await db.execute(
+        select(Organization.id).where(
+            Organization.account_id == account_id,
+            Organization.id.in_(organization_ids),
+        )
+    )
+    valid_ids = set(result.scalars().all())
+    if valid_ids != set(organization_ids):
+        raise ValueError("INVALID_ORGANIZATION")
+    return valid_ids
+
+
+async def create_employee(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    payload: CreateEmployeeRequest,
+) -> tuple[Membership, User, list[UUID]]:
+    await _validate_new_member_capacity(db, account_id=account_id, email=payload.email)
+    valid_ids = await _validate_organization_ids(
+        db,
+        account_id=account_id,
+        organization_ids=payload.organization_ids,
+    )
+
+    existing_user = await db.execute(select(User).where(User.email == payload.email))
+    if existing_user.scalar_one_or_none() is not None:
+        raise ValueError("EMAIL_ALREADY_REGISTERED")
+
+    user = User(
+        email=payload.email,
+        full_name=payload.full_name.strip(),
+        password_hash=hash_password(payload.password),
+        preferred_language=payload.preferred_language,
+        status=UserStatus.ACTIVE,
+    )
+    db.add(user)
+    await db.flush()
+
+    membership = Membership(
+        account_id=account_id,
+        user_id=user.id,
+        role=payload.role,
+        status=MembershipStatus.ACTIVE,
+    )
+    db.add(membership)
+    await db.flush()
+
+    db.add_all([
+        OrganizationMembership(
+            organization_id=organization_id,
+            membership_id=membership.id,
+        )
+        for organization_id in valid_ids
+    ])
+    await db.commit()
+    return membership, user, list(valid_ids)
 
 
 async def accept_invitation(

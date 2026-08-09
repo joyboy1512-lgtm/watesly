@@ -6,8 +6,10 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.config import settings
 from app.core.permissions import Permission
 from app.db.session import get_db
+from app.models.account import Account
 from app.schemas.team import (
     AcceptInvitationRequest,
+    CreateEmployeeRequest,
     EmployeeResponse,
     EmployeeUpdateRequest,
     InvitationResponse,
@@ -15,11 +17,13 @@ from app.schemas.team import (
 )
 from app.services.team import (
     accept_invitation,
+    create_employee,
     create_invitation,
     list_employees,
     update_employee,
 )
 from app.services.membership_channels import list_membership_channel_ids
+from app.services.email import build_invitation_accept_url, is_smtp_configured, send_team_invitation_email
 
 router = APIRouter()
 
@@ -67,10 +71,24 @@ async def invite_employee(
         code, detail = messages.get(str(exc), (400, "Unable to create invitation"))
         raise HTTPException(status_code=code, detail=detail) from exc
 
+    invite_url = build_invitation_accept_url(token)
+    email_sent = False
+    if is_smtp_configured():
+        account = await db.get(Account, context.account_id)
+        email_sent = await send_team_invitation_email(
+            to=payload.email,
+            invite_url=invite_url,
+            expires_hours=settings.invitation_token_expire_hours,
+            account_name=account.name if account else settings.app_name,
+            role=payload.role,
+        )
+
     return InvitationResponse(
         invitation_id=invitation.id,
         invitation_token=token,
+        invitation_accept_url=invite_url,
         expires_in_hours=settings.invitation_token_expire_hours,
+        email_sent=email_sent,
     )
 
 
@@ -83,6 +101,37 @@ async def accept_employee_invitation(
         user, membership, organization_ids = await accept_invitation(db, payload)
     except (ValueError, jwt.InvalidTokenError) as exc:
         raise HTTPException(status_code=400, detail="Invalid or expired invitation") from exc
+
+    return await _employee_response(
+        db,
+        membership=membership,
+        user=user,
+        organization_ids=organization_ids,
+    )
+
+
+@router.post("/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
+async def create_employee_account(
+    payload: CreateEmployeeRequest,
+    context: AuthContext = Depends(require_permissions(Permission.USERS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> EmployeeResponse:
+    try:
+        membership, user, organization_ids = await create_employee(
+            db,
+            account_id=context.account_id,
+            payload=payload,
+        )
+    except ValueError as exc:
+        messages = {
+            "INVALID_ORGANIZATION": (400, "One or more organizations are invalid"),
+            "ALREADY_MEMBER": (409, "This user is already a member of the account"),
+            "EMAIL_ALREADY_REGISTERED": (409, "This email is already registered. Use an invitation link instead."),
+            "USER_LIMIT_REACHED": (403, "User limit reached for this plan"),
+            "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
+        }
+        code, detail = messages.get(str(exc), (400, "Unable to create employee"))
+        raise HTTPException(status_code=code, detail=detail) from exc
 
     return await _employee_response(
         db,
