@@ -5935,3 +5935,41 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .admin-toolbar input,
   .admin-toolbar select { min-width: 140px; flex: 1; }
 }
+
+/* Billing page — must stay last to override admin ERP table globals */
+.billing-page-v2 .billing-kpi-card.billing-kpi-card-brand span {
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-weight: 600;
+}
+.billing-page-v2 .billing-kpi-card.billing-kpi-card-brand strong {
+  color: #ffffff !important;
+}
+.billing-page-v2 .billing-kpi-card.billing-kpi-card-brand small {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+.billing-channels-table-card .admin-table-header.billing-table-title-brand {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%) !important;
+  border-bottom: none !important;
+}
+.billing-channels-table-card .billing-table-title-brand h2 {
+  color: #ffffff !important;
+}
+.billing-channels-table-card .billing-table-title-brand small {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+.billing-channels-table.admin-erp-table thead.billing-channels-thead-brand tr {
+  background: linear-gradient(135deg, #128c7e 0%, #075e54 100%) !important;
+}
+.billing-channels-table.admin-erp-table thead.billing-channels-thead-brand th {
+  background: transparent !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-bottom: none !important;
+  border-inline-end-color: rgba(255, 255, 255, 0.14) !important;
+}
+.billing-create-mac-card .billing-section-head-brand {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%) !important;
+}
+.billing-create-mac-card .billing-section-head-brand h2 {
+  color: #ffffff !important;
+}
