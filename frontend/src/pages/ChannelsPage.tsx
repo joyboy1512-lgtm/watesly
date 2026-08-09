@@ -2,55 +2,31 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, formatApiError } from "../lib/api";
+import { hasNavPermission } from "../lib/navPermissions";
 import { toastStore } from "../stores/toast";
 import {
+  CHANNEL_TYPE_OPTIONS,
+  type BasicChannel,
+  type ChannelRow,
+  type ChannelUsageBoard,
+  channelCapabilities,
   channelPurpose,
+  channelSetupState,
   channelStatusClass,
   channelTypeClass,
+  channelTypeHint,
+  channelsForBranch,
   formatChannelStatus,
   formatChannelType,
   formatMacBalance,
   formatMacCycleMonth,
   macBalanceClass,
-  macUsagePercent
+  macUsagePercent,
+  mergeChannelRows
 } from "../lib/channelHelpers";
 import { formatWhatsAppStatus, whatsappStatusBadgeClass } from "../lib/teamHelpers";
 
 type Organization = { id: string; name: string };
-type Channel = {
-  id: string;
-  organization_id: string;
-  type: string;
-  name: string;
-  external_id: string | null;
-  status: string;
-};
-type ChannelUsageBoardItem = {
-  channel_id: string;
-  channel_name: string;
-  organization_id: string;
-  channel_type: string;
-  channel_status: string;
-  external_id: string | null;
-  cycle_month: string;
-  mac_count: number;
-  campaign_messages_sent: number;
-  whatsapp_status: string | null;
-  whatsapp_phone: string | null;
-  whatsapp_verified_name: string | null;
-};
-type ChannelUsageBoard = {
-  cycle_month: string;
-  mac_count: number;
-  included_mac: number;
-  mac_remaining: number;
-  is_over_mac: boolean;
-  over_mac_count: number;
-  over_mac_blocks: number;
-  over_mac_price_per_100: number;
-  estimated_over_mac_charge: number;
-  channels: ChannelUsageBoardItem[];
-};
 type AssignmentRule = {
   id: string;
   channel_id: string | null;
@@ -61,29 +37,52 @@ type AssignmentRule = {
 export default function ChannelsPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
+  const [branchFilter, setBranchFilter] = useState("");
   const [organizationId, setOrganizationId] = useState("");
   const [type, setType] = useState("whatsapp");
   const [name, setName] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [creating, setCreating] = useState(false);
 
+  const profile = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async () => (await api.get<{ permissions?: string[] }>("/auth/me")).data
+  });
   const organizations = useQuery({
     queryKey: ["organizations"],
     queryFn: async () => (await api.get<Organization[]>("/organizations")).data
   });
+  const channelsQuery = useQuery({
+    queryKey: ["channels"],
+    queryFn: async () => (await api.get<BasicChannel[]>("/channels")).data
+  });
   const usageBoard = useQuery({
     queryKey: ["channels-usage-board"],
-    queryFn: async () => (await api.get<ChannelUsageBoard>("/channels/usage-board")).data
+    queryFn: async () => (await api.get<ChannelUsageBoard>("/channels/usage-board")).data,
+    retry: 1
   });
   const rulesQuery = useQuery({
     queryKey: ["assignment-rules"],
     queryFn: async () => (await api.get<AssignmentRule[]>("/assignments/rules")).data
   });
 
+  const canManage = hasNavPermission(profile.data?.permissions, "channels.manage");
+
   const orgMap = useMemo(
     () => new Map((organizations.data ?? []).map((item) => [item.id, item.name])),
     [organizations.data]
+  );
+
+  const allRows = useMemo(
+    () => mergeChannelRows(channelsQuery.data ?? [], usageBoard.data),
+    [channelsQuery.data, usageBoard.data]
+  );
+
+  const visibleRows = useMemo(
+    () => channelsForBranch(allRows, branchFilter),
+    [allRows, branchFilter]
   );
 
   const rulesByChannel = useMemo(() => {
@@ -97,34 +96,42 @@ export default function ChannelsPage() {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return (usageBoard.data?.channels ?? []).filter((item) => {
+    return visibleRows.filter((item) => {
       if (typeFilter && item.channel_type !== typeFilter) return false;
       if (statusFilter && item.channel_status !== statusFilter) return false;
       if (!term) return true;
       const haystack = `${item.channel_name} ${item.channel_type} ${item.external_id ?? ""} ${orgMap.get(item.organization_id) ?? ""} ${item.whatsapp_phone ?? ""}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [usageBoard.data?.channels, search, typeFilter, statusFilter, orgMap]);
+  }, [visibleRows, search, typeFilter, statusFilter, orgMap]);
 
   const stats = useMemo(() => {
-    const rows = usageBoard.data?.channels ?? [];
     return {
-      total: rows.length,
-      whatsapp: rows.filter((item) => item.channel_type === "whatsapp").length,
-      active: rows.filter((item) => item.channel_status === "active").length,
-      connected: rows.filter((item) => item.whatsapp_status === "active").length
+      total: visibleRows.length,
+      whatsapp: visibleRows.filter((item) => item.channel_type === "whatsapp").length,
+      active: visibleRows.filter((item) => item.channel_status === "active").length,
+      connected: visibleRows.filter((item) => item.whatsapp_status === "active").length
     };
-  }, [usageBoard.data?.channels]);
+  }, [visibleRows]);
 
   const board = usageBoard.data;
+  const setup = channelSetupState(visibleRows);
+  const isLoading = channelsQuery.isLoading || (usageBoard.isLoading && !channelsQuery.data);
+  const loadError = channelsQuery.isError && usageBoard.isError;
+  const boardPartial = usageBoard.isError && (channelsQuery.data?.length ?? 0) > 0;
 
   async function create(event: FormEvent) {
     event.preventDefault();
+    if (!canManage) {
+      toastStore.getState().show("ليس لديك صلاحية إضافة قنوات.", "error");
+      return;
+    }
+    setCreating(true);
     try {
-      const response = await api.post<Channel>("/channels", {
+      const response = await api.post<BasicChannel>("/channels", {
         organization_id: organizationId,
         type,
-        name,
+        name: name.trim(),
         external_id: null
       });
       setName("");
@@ -149,10 +156,12 @@ export default function ChannelsPage() {
                 ? "ليس لديك صلاحية إضافة قنوات."
                 : detail;
       toastStore.getState().show(msg, "error");
+    } finally {
+      setCreating(false);
     }
   }
 
-  function renderWhatsAppCell(channel: ChannelUsageBoardItem) {
+  function renderWhatsAppCell(channel: ChannelRow) {
     if (channel.channel_type !== "whatsapp") return <span className="admin-chip admin-chip-muted">—</span>;
     if (!channel.whatsapp_phone) {
       return (
@@ -175,11 +184,17 @@ export default function ChannelsPage() {
     );
   }
 
-  function renderTasksCell(channel: ChannelUsageBoardItem) {
+  function renderTasksCell(channel: ChannelRow) {
     const rulesCount = rulesByChannel.get(channel.channel_id) ?? 0;
+    const caps = channelCapabilities(channel.channel_type);
     return (
-      <div className="admin-cell-stack">
+      <div className="admin-cell-stack channels-tasks-cell">
         <span>{channelPurpose(channel.channel_type)}</span>
+        <div className="admin-chip-row">
+          {caps.slice(0, 4).map((item) => (
+            <span key={item} className="admin-chip admin-chip-muted">{item}</span>
+          ))}
+        </div>
         <small>{rulesCount > 0 ? `${rulesCount} قاعدة توجيه نشطة` : "بدون قواعد توجيه"}</small>
         {channel.campaign_messages_sent > 0 && (
           <small>{channel.campaign_messages_sent.toLocaleString("ar")} رسالة حملة هذا الشهر</small>
@@ -188,9 +203,12 @@ export default function ChannelsPage() {
     );
   }
 
-  function renderMacCell(channel: ChannelUsageBoardItem) {
-    const included = board?.included_mac ?? 0;
-    const accountUsed = board?.mac_count ?? 0;
+  function renderMacCell(channel: ChannelRow) {
+    if (!board) {
+      return <span className="admin-chip admin-chip-muted">—</span>;
+    }
+    const included = board.included_mac;
+    const accountUsed = board.mac_count;
     const percent = macUsagePercent(channel.mac_count, included);
     return (
       <div className="admin-cell-stack channel-mac-cell">
@@ -199,23 +217,27 @@ export default function ChannelsPage() {
         <div className="progress-track progress-track-compact">
           <div style={{ width: `${percent}%` }} />
         </div>
-        <span className={macBalanceClass(Boolean(board?.is_over_mac), accountUsed, included)}>
-          {board?.is_over_mac
+        <span className={macBalanceClass(board.is_over_mac, accountUsed, included)}>
+          {board.is_over_mac
             ? `Over MAC +${board.over_mac_count.toLocaleString("ar")}`
-            : `${board?.mac_remaining.toLocaleString("ar") ?? 0} متبقٍ`}
+            : `${board.mac_remaining.toLocaleString("ar")} متبقٍ`}
         </span>
       </div>
     );
   }
 
   return (
-    <main className="page">
-      <header className="page-header">
+    <main className="page channels-page">
+      <header className="page-header channels-hero">
         <div>
+          <span className="channels-eyebrow">إدارة القنوات</span>
           <h1>القنوات</h1>
-          <p>حالة كل قناة، ربط WhatsApp Business، ورصيد MAC (Monthly Active Contacts) للدورة الحالية.</p>
+          <p>أنشئ قنوات التواصل لكل فرع، اربط WhatsApp Business، وتابع MAC والاستخدام الشهري.</p>
         </div>
-        <Link to="/billing" className="secondary-button">الفوترة و MAC</Link>
+        <div className="channels-hero-actions">
+          <Link to="/assignments" className="secondary-button">قواعد التوزيع</Link>
+          <Link to="/billing" className="secondary-button">الفوترة و MAC</Link>
+        </div>
       </header>
 
       {board && (
@@ -235,9 +257,7 @@ export default function ChannelsPage() {
           <article className="admin-stat-card admin-stat-card-brand">
             <span>{board.is_over_mac ? "رسوم Over MAC التقديرية" : "حالة الرصيد"}</span>
             <strong>
-              {board.is_over_mac
-                ? `$${board.estimated_over_mac_charge.toFixed(0)}`
-                : "ضمن الخطة"}
+              {board.is_over_mac ? `$${board.estimated_over_mac_charge.toFixed(0)}` : "ضمن الخطة"}
             </strong>
           </article>
         </section>
@@ -249,6 +269,20 @@ export default function ChannelsPage() {
         <article className="admin-stat-card admin-stat-card-brand"><span>قنوات نشطة</span><strong>{stats.active}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>WhatsApp متصل</span><strong>{stats.connected}</strong></article>
       </section>
+
+      <section className={`channels-setup-banner ${setup.ready ? "ready" : "pending"}`}>
+        <div>
+          <strong>{setup.title}</strong>
+          <small>{setup.detail}</small>
+        </div>
+        <span className="channels-setup-status">{setup.statusLabel}</span>
+      </section>
+
+      {boardPartial && (
+        <section className="card admin-note-card">
+          <p>تعذر تحميل تفاصيل MAC — القنوات معروضة من القائمة الأساسية. جرّب تحديث الصفحة.</p>
+        </section>
+      )}
 
       {board?.is_over_mac && (
         <section className="card admin-note-card">
@@ -262,43 +296,119 @@ export default function ChannelsPage() {
         </section>
       )}
 
-      <section className="card form-card admin-form-card">
-        <h2>إضافة قناة</h2>
-        <form className="inline-form" onSubmit={create}>
-          <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} required>
-            <option value="">اختر الفرع</option>
-            {(organizations.data ?? []).map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-          </select>
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="telegram">Telegram</option>
-            <option value="instagram">Instagram</option>
-            <option value="messenger">Messenger</option>
-            <option value="email">Email</option>
-          </select>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسم القناة" required />
-          <button type="submit">إضافة قناة</button>
-        </form>
+      <section className="channels-types-grid">
+        {CHANNEL_TYPE_OPTIONS.map((item) => (
+          <article key={item} className="channels-type-card">
+            <div className="channels-type-head">
+              <span className={channelTypeClass(item)}>{formatChannelType(item)}</span>
+            </div>
+            <p>{channelTypeHint(item)}</p>
+            <div className="admin-chip-row">
+              {channelCapabilities(item).map((cap) => (
+                <span key={cap} className="admin-chip admin-chip-muted">{cap}</span>
+              ))}
+            </div>
+          </article>
+        ))}
       </section>
 
-      <section className="card admin-table-card">
-        <div className="admin-table-header">
+      <section className="card assignments-filter-card channels-filter-card">
+        <div className="assignments-filter-bar">
+          <div>
+            <strong>تصفية حسب الفرع</strong>
+            <small>اعرض قنوات فرع محدد</small>
+          </div>
+          <select
+            value={branchFilter}
+            onChange={(e) => {
+              const value = e.target.value;
+              setBranchFilter(value);
+              if (value) setOrganizationId(value);
+            }}
+          >
+            <option value="">كل الأفرع</option>
+            {(organizations.data ?? []).map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </div>
+      </section>
+
+      {canManage && (
+        <article className="card form-card admin-form-card channels-form-card">
+          <div className="assignments-form-head">
+            <div>
+              <h2>إضافة قناة</h2>
+              <small>اختر الفرع والنوع — بعد WhatsApp سيتم توجيهك لصفحة الربط</small>
+            </div>
+            <span className="assignments-form-step">+</span>
+          </div>
+          <form className="assignments-setup-form" onSubmit={create}>
+            <div className="assignments-field-grid">
+              <label className="assignments-field">
+                <span>الفرع</span>
+                <select
+                  value={organizationId}
+                  onChange={(e) => setOrganizationId(e.target.value)}
+                  required
+                >
+                  <option value="">اختر الفرع</option>
+                  {(organizations.data ?? []).map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="assignments-field">
+                <span>نوع القناة</span>
+                <select value={type} onChange={(e) => setType(e.target.value)}>
+                  {CHANNEL_TYPE_OPTIONS.map((item) => (
+                    <option key={item} value={item}>{formatChannelType(item)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="assignments-field">
+              <span>اسم القناة</span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="مثال: WhatsApp المبيعات"
+                required
+              />
+            </label>
+            {type !== "whatsapp" && (
+              <p className="hint-text">{channelTypeHint(type)}</p>
+            )}
+            <button
+              className="assignments-primary-btn assignments-form-submit"
+              type="submit"
+              disabled={creating || !organizationId || !name.trim()}
+            >
+              {creating ? "جاري الإضافة…" : "إضافة قناة"}
+            </button>
+          </form>
+        </article>
+      )}
+
+      <section className="card admin-table-card channels-table-card">
+        <div className="admin-table-header assignments-table-title">
           <div>
             <h2>جدول القنوات</h2>
-            <small>{filtered.length} قناة · MAC + حالة + رصيد</small>
+            <small>{filtered.length} قناة · الحالة · المهام · MAC</small>
           </div>
-          <Link to="/assignments" className="admin-table-link">قواعد التوجيه ←</Link>
         </div>
 
-        <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو الفرع أو رقم WhatsApp" />
+        <div className="channels-table-toolbar">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="بحث بالاسم أو الفرع أو رقم WhatsApp"
+          />
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
             <option value="">كل الأنواع</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="telegram">Telegram</option>
-            <option value="instagram">Instagram</option>
-            <option value="messenger">Messenger</option>
-            <option value="email">Email</option>
+            {CHANNEL_TYPE_OPTIONS.map((item) => (
+              <option key={item} value={item}>{formatChannelType(item)}</option>
+            ))}
           </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">كل الحالات</option>
@@ -307,28 +417,53 @@ export default function ChannelsPage() {
             <option value="disconnected">غير متصلة</option>
             <option value="suspended">موقوفة</option>
           </select>
+          {(channelsQuery.isError || usageBoard.isError) && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                void channelsQuery.refetch();
+                void usageBoard.refetch();
+              }}
+            >
+              إعادة المحاولة
+            </button>
+          )}
         </div>
 
         <div className="admin-table-wrap">
-          <table className="admin-erp-table">
+          <table className="admin-erp-table channels-erp-table">
             <thead>
               <tr>
                 <th>القناة</th>
                 <th>الفرع</th>
                 <th>النوع</th>
                 <th>MAC / الرصيد</th>
-                <th>المهام</th>
+                <th>المهام والاستخدام</th>
                 <th>WhatsApp Business</th>
                 <th>حالة القناة</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
             <tbody>
-              {usageBoard.isLoading && (
+              {isLoading && (
                 <tr><td colSpan={8} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
-              {!usageBoard.isLoading && filtered.length === 0 && (
-                <tr><td colSpan={8} className="admin-table-empty">لا توجد قنوات.</td></tr>
+              {loadError && (
+                <tr>
+                  <td colSpan={8} className="admin-table-empty">
+                    تعذر تحميل القنوات. تحقق من الصلاحيات أو اتصال الخادم.
+                  </td>
+                </tr>
+              )}
+              {!isLoading && !loadError && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="admin-table-empty">
+                    {visibleRows.length === 0
+                      ? "لا توجد قنوات بعد. أنشئ قناة من النموذج أعلاه."
+                      : "لا توجد نتائج مطابقة للبحث أو التصفية."}
+                  </td>
+                </tr>
               )}
               {filtered.map((item) => (
                 <tr key={item.channel_id}>
@@ -350,11 +485,12 @@ export default function ChannelsPage() {
                   </td>
                   <td>
                     <div className="admin-actions">
-                      {item.channel_type === "whatsapp" && (
+                      {item.channel_type === "whatsapp" && canManage && (
                         <Link to={`/whatsapp-connect?channel=${item.channel_id}`} className="secondary-button">
                           {item.whatsapp_phone ? "إدارة الربط" : "ربط"}
                         </Link>
                       )}
+                      <Link to="/inbox" className="secondary-button">الوارد</Link>
                     </div>
                   </td>
                 </tr>

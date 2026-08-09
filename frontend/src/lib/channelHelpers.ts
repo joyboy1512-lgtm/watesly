@@ -1,5 +1,42 @@
 export type ChannelType = "whatsapp" | "telegram" | "instagram" | "messenger" | "email";
 
+export type ChannelRow = {
+  channel_id: string;
+  channel_name: string;
+  organization_id: string;
+  channel_type: string;
+  channel_status: string;
+  external_id: string | null;
+  cycle_month: string;
+  mac_count: number;
+  campaign_messages_sent: number;
+  whatsapp_status: string | null;
+  whatsapp_phone: string | null;
+  whatsapp_verified_name: string | null;
+};
+
+export type BasicChannel = {
+  id: string;
+  organization_id: string;
+  type: string;
+  name: string;
+  external_id: string | null;
+  status: string;
+};
+
+export type ChannelUsageBoard = {
+  cycle_month: string;
+  mac_count: number;
+  included_mac: number;
+  mac_remaining: number;
+  is_over_mac: boolean;
+  over_mac_count: number;
+  over_mac_blocks: number;
+  over_mac_price_per_100: number;
+  estimated_over_mac_charge: number;
+  channels: ChannelRow[];
+};
+
 export const CHANNEL_TYPE_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   telegram: "Telegram",
@@ -16,6 +53,22 @@ export const CHANNEL_PURPOSES: Record<string, string> = {
   email: "بريد · تذاكر ومتابعة"
 };
 
+export const CHANNEL_TYPE_HINTS: Record<string, string> = {
+  whatsapp: "القناة الرئيسية للمحادثات والحملات عبر WhatsApp Business API.",
+  telegram: "استقبال وإرسال رسائل Telegram للدعم.",
+  instagram: "ردود رسائل Instagram Direct من صندوق الوارد.",
+  messenger: "إدارة محادثات Facebook Messenger.",
+  email: "قناة بريد للمتابعة والتذاكر."
+};
+
+export const CHANNEL_CAPABILITIES: Record<string, string[]> = {
+  whatsapp: ["صندوق الوارد", "حملات جماعية", "قوالب Meta", "أتمتة", "CRM", "MAC"],
+  telegram: ["صندوق الوارد", "ردود فورية"],
+  instagram: ["صندوق الوارد", "Direct"],
+  messenger: ["صندوق الوارد", "ردود"],
+  email: ["صندوق الوارد", "متابعة"]
+};
+
 export const CHANNEL_STATUS_LABELS: Record<string, string> = {
   pending: "قيد الإعداد",
   active: "نشطة",
@@ -23,12 +76,28 @@ export const CHANNEL_STATUS_LABELS: Record<string, string> = {
   suspended: "موقوفة"
 };
 
+export const CHANNEL_TYPE_OPTIONS: ChannelType[] = [
+  "whatsapp",
+  "telegram",
+  "instagram",
+  "messenger",
+  "email"
+];
+
 export function formatChannelType(type: string): string {
   return CHANNEL_TYPE_LABELS[type] ?? type;
 }
 
 export function channelPurpose(type: string): string {
   return CHANNEL_PURPOSES[type] ?? "—";
+}
+
+export function channelTypeHint(type: string): string {
+  return CHANNEL_TYPE_HINTS[type] ?? "";
+}
+
+export function channelCapabilities(type: string): string[] {
+  return CHANNEL_CAPABILITIES[type] ?? [];
 }
 
 export function formatChannelStatus(status: string): string {
@@ -80,4 +149,73 @@ export function macBalanceClass(isOver: boolean, used: number, included: number)
 
 export function formatMacBalance(used: number, included: number): string {
   return `${used.toLocaleString("ar")} / ${included.toLocaleString("ar")} MAC`;
+}
+
+export function channelsForBranch<T extends { organization_id: string }>(
+  channels: T[],
+  organizationId: string
+): T[] {
+  if (!organizationId) return channels;
+  return channels.filter((item) => item.organization_id === organizationId);
+}
+
+export function mergeChannelRows(
+  basic: BasicChannel[],
+  board: ChannelUsageBoard | undefined
+): ChannelRow[] {
+  const boardById = new Map((board?.channels ?? []).map((item) => [item.channel_id, item]));
+  const cycle = board?.cycle_month ?? new Date().toISOString().slice(0, 7);
+
+  return basic.map((channel) => {
+    const existing = boardById.get(channel.id);
+    if (existing) return existing;
+    return {
+      channel_id: channel.id,
+      channel_name: channel.name,
+      organization_id: channel.organization_id,
+      channel_type: channel.type,
+      channel_status: channel.status,
+      external_id: channel.external_id,
+      cycle_month: cycle,
+      mac_count: 0,
+      campaign_messages_sent: 0,
+      whatsapp_status: null,
+      whatsapp_phone: null,
+      whatsapp_verified_name: null
+    };
+  });
+}
+
+export function channelSetupState(rows: ChannelRow[]): {
+  ready: boolean;
+  title: string;
+  detail: string;
+  statusLabel: string;
+} {
+  if (rows.length === 0) {
+    return {
+      ready: false,
+      title: "ابدأ بإضافة قناة",
+      detail: "① أنشئ قناة للفرع → ② اربط WhatsApp → ③ استخدمها في الوارد والحملات.",
+      statusLabel: "لا توجد قنوات"
+    };
+  }
+
+  const whatsappRows = rows.filter((item) => item.channel_type === "whatsapp");
+  const connected = whatsappRows.filter((item) => item.whatsapp_status === "active").length;
+  if (whatsappRows.length > 0 && connected === 0) {
+    return {
+      ready: false,
+      title: "اربط WhatsApp Business",
+      detail: "القنوات موجودة لكن WhatsApp غير متصل — أكمل الربط لاستقبال المحادثات.",
+      statusLabel: "يتطلب ربط"
+    };
+  }
+
+  return {
+    ready: true,
+    title: "القنوات جاهزة للعمل",
+    detail: "يمكنك استقبال المحادثات، إرسال الحملات، وربط قواعد التوزيع.",
+    statusLabel: "جاهز"
+  };
 }

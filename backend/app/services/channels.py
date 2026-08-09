@@ -16,6 +16,12 @@ from app.services.mac_tracking import (
 )
 
 
+def _enum_str(value) -> str | None:
+    if value is None:
+        return None
+    return value.value if hasattr(value, "value") else str(value)
+
+
 async def list_channels(db: AsyncSession, account_id: UUID) -> list[Channel]:
     result = await db.execute(
         select(Channel)
@@ -104,7 +110,7 @@ async def get_channel_usage_board(
                 cycle_month=cycle,
                 mac_count=mac_count,
                 campaign_messages_sent=campaign_msgs,
-                whatsapp_status=wa.status.value if wa else None,
+                whatsapp_status=_enum_str(wa.status) if wa else None,
                 whatsapp_phone=wa.display_phone_number if wa else None,
                 whatsapp_verified_name=wa.verified_name if wa else None,
             )
