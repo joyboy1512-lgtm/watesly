@@ -674,7 +674,7 @@ export default function InboxPage() {
         </div>
       </aside>
 
-      <section className="chat-column">
+      <section className={`chat-column${!selectedId ? " chat-column-idle" : ""}`}>
         <header className="chat-header">
           <div className="chat-user">
             <button className="mobile-back-button" onClick={() => setSelectedId(null)}>‹</button>
@@ -737,7 +737,21 @@ export default function InboxPage() {
         <div className="messages premium-messages">
           {messagesQuery.isLoading && <div className="message-loading"><span /><span /><span /></div>}
           {messagesQuery.isError && <div className="inbox-state error"><strong>تعذر تحميل الرسائل</strong><button onClick={() => messagesQuery.refetch()}>إعادة المحاولة</button></div>}
-          {!selectedId && <div className="empty-conversation"><div className="empty-conversation-icon">💬</div><h3>اختر محادثة</h3><p>ستظهر الرسائل وبيانات العميل هنا.</p></div>}
+          {!selectedId && (
+            <div className="empty-conversation chat-idle-state">
+              <div className="chat-date-pill">اليوم</div>
+              <div className="chat-idle-samples">
+                <div className="message incoming">
+                  <div className="message-text">مرحباً، كيف يمكننا مساعدتك؟</div>
+                </div>
+                <div className="message outgoing">
+                  <div className="message-text">اختر محادثة من القائمة لبدء الرد</div>
+                </div>
+              </div>
+              <h3>المحادثات</h3>
+              <p>اختر محادثة من القائمة — الخلفية والألوان كما في WhatsApp.</p>
+            </div>
+          )}
           {selectedId && !messagesQuery.isLoading && !messagesQuery.isError && (messagesQuery.data ?? []).length === 0 && <div className="empty-conversation"><h3>بداية محادثة جديدة</h3><p>أرسل أول رسالة من مربع الكتابة.</p></div>}
           {selectedId && !messagesQuery.isLoading && !messagesQuery.isError && messageSearch && visibleMessages.length === 0 && (
             <div className="inbox-state"><strong>لا توجد رسائل مطابقة</strong></div>
