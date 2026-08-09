@@ -814,6 +814,34 @@ select, input, textarea {
   border-color: transparent;
 }
 
+.inbox-channel-filter {
+  padding: 0 14px 10px;
+}
+
+.inbox-channel-filter select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.inbox-channel-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-teal) 12%, transparent);
+  color: var(--primary-darker);
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .conversation-scroll {
   flex: 1;
   min-height: 0;

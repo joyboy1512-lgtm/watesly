@@ -34,6 +34,8 @@ import Icon from "../components/Icon";
 
 type InboxFilter = "all" | "unread" | "waiting" | "mine" | "starred" | "archived";
 type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null };
+type ChannelOption = { id: string; name: string; phone: string | null };
+type WhatsAppAccountRow = { channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
 const priorityLabels: Record<string, string> = { low: "منخفضة", normal: "عادية", high: "مرتفعة", urgent: "عاجلة" };
 
 export default function InboxPage() {
@@ -54,7 +56,8 @@ export default function InboxPage() {
     "combined+llm": `${t("inbox.sourceCombined")} + LLM`
   }), [t]);
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const channelFilter = searchParams.get("channel_id") ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -94,13 +97,47 @@ export default function InboxPage() {
     ).data,
     refetchInterval: 30_000
   });
+  const channelsQuery = useQuery({
+    queryKey: ["channels"],
+    queryFn: async () => (await api.get<Array<{ id: string; name: string; type: string }>>("/channels")).data
+  });
+  const whatsappAccountsQuery = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
+  });
   const conversations = conversationsQuery.data ?? [];
+  const channelOptions = useMemo<ChannelOption[]>(() => {
+    const accountByChannel = new Map(
+      (whatsappAccountsQuery.data ?? []).map((item) => [item.channel_id, item])
+    );
+    return (channelsQuery.data ?? [])
+      .filter((item) => item.type === "whatsapp")
+      .map((item) => {
+        const account = accountByChannel.get(item.id);
+        return {
+          id: item.id,
+          name: account?.channel_name ?? item.name,
+          phone: account?.display_phone_number ?? null
+        };
+      });
+  }, [channelsQuery.data, whatsappAccountsQuery.data]);
+  const channelLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of channelOptions) {
+      map.set(item.id, item.phone ? `${item.name} · ${item.phone}` : item.name);
+    }
+    return map;
+  }, [channelOptions]);
+  const channelScopedConversations = useMemo(
+    () => conversations.filter((item) => !channelFilter || item.channel_id === channelFilter),
+    [conversations, channelFilter]
+  );
   const waitingCount = useMemo(
-    () => conversations.filter((item) => item.needs_reply).length,
-    [conversations]
+    () => channelScopedConversations.filter((item) => item.needs_reply).length,
+    [channelScopedConversations]
   );
   const requestedConversationId = searchParams.get("conversation");
-  const filtered = useMemo(() => conversations.filter((item) => {
+  const filtered = useMemo(() => channelScopedConversations.filter((item) => {
     const haystack = `${item.contact_name ?? ""} ${item.contact_address} ${item.last_message_text ?? ""}`.toLowerCase();
     const matchesSearch = haystack.includes(search.trim().toLowerCase());
     const matchesFilter = filter === "all" || filter === "archived"
@@ -109,12 +146,26 @@ export default function InboxPage() {
       || (filter === "mine" && Boolean(item.assigned_membership_id))
       || (filter === "starred" && item.is_starred);
     return matchesSearch && matchesFilter;
-  }), [conversations, filter, search]);
+  }), [channelScopedConversations, filter, search]);
 
   useEffect(() => {
-    if (requestedConversationId && conversations.some((item) => item.id === requestedConversationId)) setSelectedId(requestedConversationId);
-    else if (!selectedId && conversations.length > 0) setSelectedId(conversations[0].id);
-  }, [conversations, requestedConversationId, selectedId]);
+    if (requestedConversationId && channelScopedConversations.some((item) => item.id === requestedConversationId)) {
+      setSelectedId(requestedConversationId);
+      return;
+    }
+    if (selectedId && !channelScopedConversations.some((item) => item.id === selectedId)) {
+      setSelectedId(channelScopedConversations[0]?.id ?? null);
+      return;
+    }
+    if (!selectedId && channelScopedConversations.length > 0) setSelectedId(channelScopedConversations[0].id);
+  }, [channelScopedConversations, requestedConversationId, selectedId]);
+
+  function setChannelFilter(value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("channel_id", value);
+    else next.delete("channel_id");
+    setSearchParams(next, { replace: true });
+  }
 
   useEffect(() => {
     if (!selectedId) return;
@@ -630,8 +681,26 @@ export default function InboxPage() {
   return (
     <main className={`inbox-workspace ${detailsOpen ? "details-open" : ""}`}>
       <aside className={`conversation-column ${selectedId ? "has-selection" : ""}`}>
-        <div className="conversation-column-header"><div><span className="eyebrow">{t("eyebrow.unifiedInbox")}</span><h2>{t("pages.inbox")}</h2></div><span className="count-badge">{conversations.length}</span></div>
+        <div className="conversation-column-header"><div><span className="eyebrow">{t("eyebrow.unifiedInbox")}</span><h2>{t("pages.inbox")}</h2></div><span className="count-badge">{channelScopedConversations.length}</span></div>
         <div className="conversation-search"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم، رقم أو نص رسالة" aria-label="بحث في المحادثات" /></div>
+        {channelOptions.length > 1 && (
+          <div className="inbox-channel-filter">
+            <label className="sr-only" htmlFor="inbox-channel-filter">فلتر القناة</label>
+            <select
+              id="inbox-channel-filter"
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value)}
+              aria-label="فلتر القناة"
+            >
+              <option value="">كل القنوات ({conversations.length})</option>
+              {channelOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="filter-pills" role="tablist">
           {(["all", "waiting", "unread", "mine", "starred", "archived"] as InboxFilter[]).map((value) => (
             <button
@@ -656,6 +725,9 @@ export default function InboxPage() {
                 <strong>{item.contact_name || item.contact_address}</strong>
                 <time>{item.last_message_at ? formatAppTime(item.last_message_at) : ""}</time>
               </div>
+              {channelOptions.length > 1 && !channelFilter && (
+                <small className="inbox-channel-badge">{channelLabelById.get(item.channel_id) ?? "WhatsApp"}</small>
+              )}
               <div className="conversation-preview">
                 <span>{item.last_message_text || "رسالة غير نصية"}</span>
                 {item.needs_reply && item.waiting_minutes != null && (
@@ -682,7 +754,11 @@ export default function InboxPage() {
             <div>
               <h2>{selectedConversation?.contact_name || selectedConversation?.contact_address || t("inbox.selectConversation")}</h2>
               <span>
-                WhatsApp · {statusLabels[selectedConversation?.status ?? ""] ?? ""}
+                WhatsApp
+                {selectedConversation?.channel_id && channelLabelById.get(selectedConversation.channel_id)
+                  ? ` · ${channelLabelById.get(selectedConversation.channel_id)}`
+                  : ""}
+                {" · "}{statusLabels[selectedConversation?.status ?? ""] ?? ""}
                 {isArchived ? " · مؤرشفة" : ""}
                 {selectedConversation?.service_window_open
                   ? ` · نافذة نشطة (${formatWindowExpiry(selectedConversation.service_window_expires_at)})`
