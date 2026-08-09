@@ -2,6 +2,18 @@ import type { UploadedFile } from "./uploads";
 
 export type TemplateHeaderFormat = "IMAGE" | "VIDEO" | "DOCUMENT";
 
+const EPHEMERAL_MEDIA_HOSTS = ["scontent.whatsapp.net", "fbcdn.net"];
+
+function isEphemeralMetaMediaUrl(url: string | null | undefined) {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return EPHEMERAL_MEDIA_HOSTS.some((item) => host === item || host.endsWith(`.${item}`));
+  } catch {
+    return false;
+  }
+}
+
 export type TemplateComponent = {
   type: string;
   format?: string;
@@ -36,11 +48,15 @@ export function getTemplateHeaderInfo(components: TemplateComponent[] | null | u
     if (component.type?.toUpperCase() !== "HEADER") continue;
     const format = (component.format ?? "").toUpperCase() as TemplateHeaderFormat;
     if (!["IMAGE", "VIDEO", "DOCUMENT"].includes(format)) continue;
-    const mediaUrl =
-      component.media_url ||
-      component.example?.header_url?.[0] ||
-      component.example?.header_handle?.[0];
-    if (mediaUrl) {
+    let mediaUrl = component.media_url || null;
+    if ((!mediaUrl || isEphemeralMetaMediaUrl(mediaUrl)) && component.example) {
+      const candidates = [
+        ...(component.example.header_url ?? []),
+        ...(component.example.header_handle ?? [])
+      ];
+      mediaUrl = candidates.find((item) => item && !isEphemeralMetaMediaUrl(item)) ?? null;
+    }
+    if (mediaUrl && !isEphemeralMetaMediaUrl(mediaUrl)) {
       return { format, mediaUrl, filename: component.filename ?? null };
     }
   }

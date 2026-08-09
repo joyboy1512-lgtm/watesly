@@ -10,6 +10,39 @@ from app.schemas.template import TemplateCreateRequest
 from app.services.meta_client import MetaWhatsAppClient
 
 
+def _merge_template_components(existing: list | None, incoming: list | None) -> list:
+    """Keep stable header media_url when Meta sync omits or replaces it with expiring CDN handles."""
+    incoming_components = list(incoming or [])
+    if not existing:
+        return incoming_components
+
+    preserved_media: dict[str, str] = {}
+    preserved_filename: dict[str, str | None] = {}
+    for component in existing:
+        if str(component.get("type", "")).upper() != "HEADER":
+            continue
+        header_format = str(component.get("format", "")).upper()
+        media_url = component.get("media_url") or component.get("url")
+        if header_format and media_url and not str(media_url).startswith("https://scontent.whatsapp.net"):
+            preserved_media[header_format] = str(media_url)
+            preserved_filename[header_format] = component.get("filename")
+
+    if not preserved_media:
+        return incoming_components
+
+    merged: list[dict] = []
+    for component in incoming_components:
+        item = dict(component)
+        if str(item.get("type", "")).upper() == "HEADER":
+            header_format = str(item.get("format", "")).upper()
+            if header_format in preserved_media and not item.get("media_url"):
+                item["media_url"] = preserved_media[header_format]
+                if preserved_filename.get(header_format) and not item.get("filename"):
+                    item["filename"] = preserved_filename[header_format]
+        merged.append(item)
+    return merged
+
+
 async def create_template(
     db: AsyncSession,
     *,
@@ -93,7 +126,10 @@ async def sync_templates_from_meta(
             template.meta_template_id = str(item.get("id")) if item.get("id") else template.meta_template_id
             template.category = raw_category
             template.status = raw_status
-            template.components = item.get("components", [])
+            template.components = _merge_template_components(
+                template.components,
+                item.get("components", []),
+            )
             updated += 1
 
     await db.commit()
