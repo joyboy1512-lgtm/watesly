@@ -5128,6 +5128,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: #fecaca !important;
 }
 .billing-section-head-brand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 100%;
   padding: 14px 18px;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
   border-radius: 14px 14px 0 0;
@@ -5137,6 +5142,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   margin: 0;
   color: #fff;
   font-size: 16px;
+  font-weight: 700;
+  width: 100%;
+  text-align: center;
 }
 .billing-create-mac-card {
   padding: 0 0 16px;
@@ -5173,7 +5181,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .billing-channels-table-card .admin-table-header.billing-table-title-brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
   gap: 12px;
   margin: 0;
   padding: 14px 18px;
@@ -5181,17 +5191,26 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-radius: 14px 14px 0 0;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
 }
+.billing-table-title-brand > div {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+  width: 100%;
+}
 .billing-table-title-brand h2 {
   margin: 0;
   color: #fff;
   font-size: 16px;
   font-weight: 700;
+  text-align: center;
 }
 .billing-table-title-brand small {
   display: block;
   margin-top: 2px;
   color: rgba(255, 255, 255, 0.84);
   font-size: 11px;
+  text-align: center;
 }
 .billing-table-toolbar {
   display: flex;
@@ -5950,12 +5969,21 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .billing-channels-table-card .admin-table-header.billing-table-title-brand {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%) !important;
   border-bottom: none !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+.billing-channels-table-card .billing-table-title-brand > div {
+  justify-items: center !important;
+  text-align: center !important;
+  width: 100%;
 }
 .billing-channels-table-card .billing-table-title-brand h2 {
   color: #ffffff !important;
+  text-align: center !important;
 }
 .billing-channels-table-card .billing-table-title-brand small {
   color: rgba(255, 255, 255, 0.85) !important;
+  text-align: center !important;
 }
 .billing-channels-table.admin-erp-table thead.billing-channels-thead-brand tr {
   background: linear-gradient(135deg, #128c7e 0%, #075e54 100%) !important;
@@ -5969,7 +5997,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .billing-create-mac-card .billing-section-head-brand {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%) !important;
+  justify-content: center !important;
+  text-align: center !important;
 }
 .billing-create-mac-card .billing-section-head-brand h2 {
   color: #ffffff !important;
+  text-align: center !important;
+  width: 100%;
 }
