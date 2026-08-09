@@ -58,6 +58,7 @@ async def get_public_site_content(
             stats=locale_defaults.get("stats", []),
             features=locale_defaults.get("features", []),
             steps=locale_defaults.get("steps", []),
+            clients=locale_defaults.get("clients", []),
             mockup=locale_defaults.get("mockup", {}),
             api=locale_defaults.get("api", {}),
             published=False,

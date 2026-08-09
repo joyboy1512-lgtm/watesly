@@ -54,6 +54,16 @@ export default function LandingPage() {
 
   const mockup = site?.mockup;
   const apiSection = site?.api;
+  const clients =
+    site?.clients?.length
+      ? site.clients
+      : [
+          { icon: "✈️", name: "ترافل زون", industry: "السياحة والسفر" },
+          { icon: "✨", name: "ثري شايني", industry: "تجارة وتجزئة" },
+          { icon: "💄", name: "أوليفز", industry: "مستحضرات التجميل" },
+          { icon: "🛒", name: "بيغ باغ", industry: "بقالة ومواد غذائية" },
+          { icon: "🌍", name: "كينج ترافل", industry: "السياحة والسفر" },
+        ];
   const txt = (key: string, fallbackKey: string) =>
     pickSiteText(site, "landing", key, t(fallbackKey));
 
@@ -67,6 +77,7 @@ export default function LandingPage() {
           <a href="#features">{txt("features", "landing.features")}</a>
           <a href="#how">{txt("howItWorks", "landing.howItWorks")}</a>
           <a href="#about">{txt("aboutNav", "landing.aboutNav")}</a>
+          <a href="#clients">{txt("clientsNav", "landing.clientsNav")}</a>
           <a href="/pricing">{txt("pricingNav", "landing.pricingNav")}</a>
           {(display?.show_api ?? true) && <a href="#api">{txt("api", "landing.api")}</a>}
         </nav>
@@ -198,6 +209,25 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {(display?.show_clients ?? true) && (
+        <section id="clients" className="landing-section landing-section-alt landing-clients">
+          <div className="landing-section-head">
+            <p className="landing-eyebrow">{txt("clientsEyebrow", "landing.clientsEyebrow")}</p>
+            <h2>{txt("clientsTitle", "landing.clientsTitle")}</h2>
+            <p>{txt("clientsSubtitle", "landing.clientsSubtitle")}</p>
+          </div>
+          <div className="landing-clients-grid">
+            {clients.map((client) => (
+              <article key={client.name} className="landing-client-card">
+                <span className="landing-client-icon">{client.icon ?? "🏢"}</span>
+                <h3>{client.name}</h3>
+                <p>{client.industry}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       {(display?.show_api ?? true) && (
         <section id="api" className="landing-section">
           <div className="landing-api-grid">
@@ -257,6 +287,8 @@ export default function LandingPage() {
             <nav className="landing-footer-links">
               <a href="#features">{txt("features", "landing.features")}</a>
               <a href="#how">{txt("howItWorks", "landing.howItWorks")}</a>
+              <a href="#about">{txt("aboutNav", "landing.aboutNav")}</a>
+              <a href="#clients">{txt("clientsNav", "landing.clientsNav")}</a>
               <a href="#api">{txt("api", "landing.api")}</a>
               <Link to="/pricing">{txt("pricingNav", "landing.pricingNav")}</Link>
             </nav>

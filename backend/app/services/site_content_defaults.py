@@ -22,6 +22,7 @@ DEFAULT_DISPLAY: dict[str, bool] = {
     "show_api": True,
     "show_cta": True,
     "show_stats": True,
+    "show_clients": True,
 }
 
 LOCALE_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -30,6 +31,7 @@ LOCALE_DEFAULTS: dict[str, dict[str, Any]] = {
             "features": "الميزات",
             "howItWorks": "كيف يعمل",
             "aboutNav": "عن الشركة",
+            "clientsNav": "عملاؤنا",
             "api": "واجهة برمجية",
             "signIn": "تسجيل الدخول",
             "getStarted": "ابدأ الآن",
@@ -60,6 +62,9 @@ LOCALE_DEFAULTS: dict[str, dict[str, Any]] = {
             "companyEmail": "info@directdealkwt.com",
             "companyWebsite": "www.watesly.com",
             "companyMission": "مهمتنا: تحويل واتساب من قناة محادثات إلى قناة مبيعات ودعم قابلة للقياس والتوسع.",
+            "clientsEyebrow": "ثقة وشراكات",
+            "clientsTitle": "عملاؤنا وعلاماتنا التجارية",
+            "clientsSubtitle": "نفتخر بخدمة شركات وعلامات في قطاعات متعددة — من السياحة والتجميل إلى التجزئة والمواد الغذائية.",
             "ctaTitle": "جاهز لتحويل واتساب إلى قناة مبيعات؟",
             "ctaBody": "ابدأ اليوم — اربط رقمك، أضف منتجاتك، واستقبل أول محادثة.",
             "enterPlatform": "دخول المنصة",
@@ -119,12 +124,20 @@ LOCALE_DEFAULTS: dict[str, dict[str, Any]] = {
             ],
             "code_sample": 'curl -H "Authorization: Bearer mw_..." \\\n  https://api.watesly.com/v1/external/contacts\n\n# Webhook signature\nX-Watesly-Signature: sha256=...',
         },
+        "clients": [
+            {"icon": "✈️", "name": "ترافل زون", "industry": "السياحة والسفر"},
+            {"icon": "✨", "name": "ثري شايني", "industry": "تجارة وتجزئة"},
+            {"icon": "💄", "name": "أوليفز", "industry": "مستحضرات التجميل"},
+            {"icon": "🛒", "name": "بيغ باغ", "industry": "بقالة ومواد غذائية"},
+            {"icon": "🌍", "name": "كينج ترافل", "industry": "السياحة والسفر"},
+        ],
     },
     "en": {
         "landing": {
             "features": "Features",
             "howItWorks": "How it works",
             "aboutNav": "About",
+            "clientsNav": "Our Clients",
             "api": "API",
             "signIn": "Sign In",
             "getStarted": "Get Started",
@@ -155,6 +168,9 @@ LOCALE_DEFAULTS: dict[str, dict[str, Any]] = {
             "companyEmail": "info@directdealkwt.com",
             "companyWebsite": "www.watesly.com",
             "companyMission": "Our mission: turn WhatsApp from a chat channel into a measurable, scalable sales and support channel.",
+            "clientsEyebrow": "Trust & partnerships",
+            "clientsTitle": "Our clients and brands",
+            "clientsSubtitle": "We serve companies and brands across tourism, cosmetics, groceries, and retail.",
             "ctaTitle": "Ready to turn WhatsApp into a sales channel?",
             "ctaBody": "Start today — connect your number, add products, and receive your first conversation.",
             "enterPlatform": "Enter platform",
@@ -214,6 +230,13 @@ LOCALE_DEFAULTS: dict[str, dict[str, Any]] = {
             ],
             "code_sample": 'curl -H "Authorization: Bearer mw_..." \\\n  https://api.watesly.com/v1/external/contacts\n\n# Webhook signature\nX-Watesly-Signature: sha256=...',
         },
+        "clients": [
+            {"icon": "✈️", "name": "Travel Zone", "industry": "Tourism & Travel"},
+            {"icon": "✨", "name": "Three Shiny", "industry": "Trading & Retail"},
+            {"icon": "💄", "name": "Olives", "industry": "Cosmetics"},
+            {"icon": "🛒", "name": "Big Bag", "industry": "Groceries & Food"},
+            {"icon": "🌍", "name": "King Travel", "industry": "Tourism & Travel"},
+        ],
     },
 }
 
