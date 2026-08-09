@@ -56,6 +56,9 @@ class ChannelUsageBoardItem(BaseModel):
     external_id: str | None = None
     cycle_month: str
     mac_count: int
+    included_mac: int = 0
+    mac_remaining: int = 0
+    is_over_mac: bool = False
     campaign_messages_sent: int = 0
     whatsapp_status: str | None = None
     whatsapp_phone: str | None = None
@@ -90,3 +93,5 @@ class MacInsightsResponse(BaseModel):
     trigger_breakdown: list[MacTriggerBreakdownItem] = Field(default_factory=list)
     daily_trend: list[MacDailyTrendItem] = Field(default_factory=list)
     campaign_messages_sent: int = 0
+    included_mac_per_channel: int = 0
+    channel_count: int = 0

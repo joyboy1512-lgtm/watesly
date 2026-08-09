@@ -9,6 +9,9 @@ export type ChannelRow = {
   external_id: string | null;
   cycle_month: string;
   mac_count: number;
+  included_mac: number;
+  mac_remaining: number;
+  is_over_mac: boolean;
   campaign_messages_sent: number;
   whatsapp_status: string | null;
   whatsapp_phone: string | null;
@@ -165,6 +168,7 @@ export function mergeChannelRows(
 ): ChannelRow[] {
   const boardById = new Map((board?.channels ?? []).map((item) => [item.channel_id, item]));
   const cycle = board?.cycle_month ?? new Date().toISOString().slice(0, 7);
+  const includedDefault = board?.included_mac ?? 0;
 
   return basic.map((channel) => {
     const existing = boardById.get(channel.id);
@@ -178,6 +182,9 @@ export function mergeChannelRows(
       external_id: channel.external_id,
       cycle_month: cycle,
       mac_count: 0,
+      included_mac: includedDefault,
+      mac_remaining: includedDefault,
+      is_over_mac: false,
       campaign_messages_sent: 0,
       whatsapp_status: null,
       whatsapp_phone: null,

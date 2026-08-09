@@ -13,6 +13,7 @@ from app.services.billing import get_active_subscription
 from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
     count_mac_for_channel,
+    compute_mac_balance,
     current_cycle_month,
     get_account_mac_summary,
     get_mac_insights,
@@ -125,6 +126,7 @@ async def get_channels_mac_stats(
             db, account_id=context.account_id, channel_id=channel.id, cycle_month=cycle
         )
         wa = wa_by_channel.get(channel.id)
+        channel_balance = compute_mac_balance(mac_count=mac_count, included_mac=included_mac)
         items.append(
             MacChannelStatsResponse(
                 channel_id=channel.id,
@@ -134,9 +136,9 @@ async def get_channels_mac_stats(
                 cycle_month=cycle,
                 mac_count=mac_count,
                 included_mac=included_mac,
-                mac_remaining=max(0, included_mac - int(summary["mac_count"])),
-                is_over_mac=bool(summary["is_over_mac"]),
-                over_mac_count=max(0, int(summary["mac_count"]) - included_mac),
+                mac_remaining=int(channel_balance["mac_remaining"]),
+                is_over_mac=bool(channel_balance["is_over_mac"]),
+                over_mac_count=int(channel_balance["over_mac_count"]),
                 campaign_messages_sent=campaign_msgs,
                 whatsapp_status=wa.status.value if wa and hasattr(wa.status, "value") else (str(wa.status) if wa else None),
                 whatsapp_phone=wa.display_phone_number if wa else None,
