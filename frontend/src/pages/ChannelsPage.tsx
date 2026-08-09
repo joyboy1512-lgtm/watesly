@@ -204,23 +204,19 @@ export default function ChannelsPage() {
   }
 
   function renderMacCell(channel: ChannelRow) {
-    if (!board) {
-      return <span className="admin-chip admin-chip-muted">—</span>;
-    }
-    const included = board.included_mac;
-    const accountUsed = board.mac_count;
+    const included = channel.included_mac || board?.included_mac || 0;
     const percent = macUsagePercent(channel.mac_count, included);
     return (
       <div className="admin-cell-stack channel-mac-cell">
-        <strong>{channel.mac_count.toLocaleString("ar")} MAC</strong>
-        <small>مساهمة القناة · إجمالي الحساب {formatMacBalance(accountUsed, included)}</small>
+        <strong>{channel.mac_count.toLocaleString("ar")} / {included.toLocaleString("ar")} MAC</strong>
+        <small>رصيد القناة · {channel.mac_remaining.toLocaleString("ar")} متبقٍ</small>
         <div className="progress-track progress-track-compact">
           <div style={{ width: `${percent}%` }} />
         </div>
-        <span className={macBalanceClass(board.is_over_mac, accountUsed, included)}>
-          {board.is_over_mac
-            ? `Over MAC +${board.over_mac_count.toLocaleString("ar")}`
-            : `${board.mac_remaining.toLocaleString("ar")} متبقٍ`}
+        <span className={macBalanceClass(channel.is_over_mac, channel.mac_count, included)}>
+          {channel.is_over_mac
+            ? `تجاوز +${Math.max(0, channel.mac_count - included).toLocaleString("ar")}`
+            : "ضمن رصيد القناة"}
         </span>
       </div>
     );

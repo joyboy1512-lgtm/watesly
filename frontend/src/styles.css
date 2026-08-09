@@ -5098,6 +5098,81 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   font-weight: 700;
 }
+.billing-per-channel-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(37, 211, 102, 0.32);
+  background: rgba(37, 211, 102, 0.08);
+}
+.billing-per-channel-banner strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+.billing-per-channel-banner small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.billing-per-channel-badge {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(37, 211, 102, 0.18);
+  color: var(--primary-darker);
+}
+.billing-channels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.billing-channel-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+}
+.billing-channel-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  gap: 12px;
+}
+.billing-channel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.billing-channel-head strong {
+  display: block;
+  font-size: 14px;
+}
+.billing-channel-head small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.billing-channel-mac { display: grid; gap: 6px; }
+.billing-channel-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.billing-channel-meta small { color: var(--muted); }
+.billing-channel-phone {
+  color: var(--muted);
+  font-size: 11px;
+}
 .billing-summary-card {
   display: grid;
   gap: 10px;

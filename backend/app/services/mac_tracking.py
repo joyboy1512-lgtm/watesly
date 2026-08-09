@@ -307,6 +307,15 @@ async def get_mac_insights(
     cycle_month: str | None = None,
 ) -> dict:
     cycle = cycle_month or current_cycle_month()
+    included_per_channel = 1000
+    subscription_data = await get_active_subscription(db, account_id)
+    if subscription_data is not None:
+        _, plan = subscription_data
+        included_per_channel = plan.included_mac
+
+    from app.services.channels import list_channels
+
+    channel_count = len(await list_channels(db, account_id))
 
     trigger_rows = list(
         (
@@ -343,6 +352,8 @@ async def get_mac_insights(
 
     return {
         "cycle_month": cycle,
+        "included_mac_per_channel": included_per_channel,
+        "channel_count": channel_count,
         "trigger_breakdown": [
             {"source": str(source), "count": int(count)} for source, count in trigger_rows
         ],
