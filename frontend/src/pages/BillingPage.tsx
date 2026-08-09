@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import { api, silentRequest } from "../lib/api";
 import BillingProviderSettings from "../components/BillingProviderSettings";
+import ChannelBillingEditor from "../components/ChannelBillingEditor";
 import MacWorkspaceBalance from "../components/MacWorkspaceBalance";
 import { hasNavPermission } from "../lib/navPermissions";
 import {
@@ -323,6 +324,124 @@ export default function BillingPage() {
         <span className="billing-per-channel-badge">لكل قناة</span>
       </section>
 
+      <section className="card admin-table-card billing-channels-table-card billing-channels-table-top">
+        <div className="admin-table-header">
+          <div>
+            <h2>فوترة MAC — كل قnaة</h2>
+            <small>
+              {canManageBilling
+                ? "عدّل تواريخ الاشتراك، حصة MAC، وسعر Over لكل قnaة من العمود الأخير"
+                : "كل قnaة لها اشتراك وحصة MAC وOver MAC مستقلة"}
+            </small>
+          </div>
+          <Link to="/channels" className="secondary-button">صفحة القنوات</Link>
+        </div>
+        <div className="billing-table-toolbar">
+          <input
+            value={channelSearch}
+            onChange={(e) => setChannelSearch(e.target.value)}
+            placeholder="بحث باسم القnaة أو النوع أو رقم WhatsApp"
+          />
+        </div>
+        <div className="admin-table-wrap">
+          <table className="admin-erp-table">
+            <thead>
+              <tr>
+                <th>القnaة</th>
+                <th>MAC</th>
+                <th>مشمول / متبقٍ</th>
+                <th>بداية</th>
+                <th>نهاية</th>
+                <th>دورة MAC</th>
+                <th>Over MAC</th>
+                {canManageBilling && <th>تعديل الفوترة</th>}
+                <th>إجراء</th>
+              </tr>
+            </thead>
+            <tbody>
+              {channelStats.isLoading && (
+                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">جاري التحميل…</td></tr>
+              )}
+              {channelStats.isError && (
+                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">تعذر تحميل القنوات — حدّث الصفحة.</td></tr>
+              )}
+              {!channelStats.isLoading && !channelStats.isError && channels.length === 0 && (
+                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">لا قنوات بعد. <Link to="/channels">أنشئ قnaة</Link></td></tr>
+              )}
+              {!channelStats.isLoading && !channelStats.isError && channels.length > 0 && filteredChannels.length === 0 && (
+                <tr><td colSpan={canManageBilling ? 9 : 8} className="admin-table-empty">لا قنوات مطابقة للبحث.</td></tr>
+              )}
+              {filteredChannels.map((item) => {
+                const usagePct = item.included_mac > 0
+                  ? Math.round((item.mac_count / item.included_mac) * 100)
+                  : 0;
+                const isSelected = item.channel_id === selectedChannelId;
+                const periodLabel =
+                  item.billing_period_start && item.billing_period_end
+                    ? formatPeriodRange(item.billing_period_start, item.billing_period_end)
+                    : formatMacCycleMonth(item.cycle_month);
+                return (
+                  <tr key={item.channel_id} className={isSelected ? "billing-row-selected" : undefined}>
+                    <td>
+                      <div className="admin-cell-main">
+                        <strong>{item.channel_name}</strong>
+                        <small>
+                          <span className={channelTypeClass(item.channel_type)}>{formatChannelType(item.channel_type)}</span>
+                          {item.whatsapp_phone ? ` · ${item.whatsapp_phone}` : ""}
+                        </small>
+                      </div>
+                    </td>
+                    <td>
+                      <strong>{item.mac_count.toLocaleString("ar")}</strong>
+                      {item.is_over_mac && (
+                        <small className="billing-over-charge">+{item.over_mac_count.toLocaleString("ar")}</small>
+                      )}
+                    </td>
+                    <td>
+                      <strong>{item.included_mac.toLocaleString("ar")}</strong>
+                      <small>{item.mac_remaining.toLocaleString("ar")} · {usagePct}%</small>
+                    </td>
+                    <td>{item.subscription_starts_at ? formatPlanDate(item.subscription_starts_at) : "—"}</td>
+                    <td>{item.subscription_ends_at ? formatPlanDate(item.subscription_ends_at) : "—"}</td>
+                    <td>{periodLabel}</td>
+                    <td>
+                      {item.estimated_channel_over_mac_charge > 0
+                        ? `$${item.estimated_channel_over_mac_charge.toFixed(2)}`
+                        : "—"}
+                    </td>
+                    {canManageBilling && (
+                      <td>
+                        <ChannelBillingEditor
+                          channelId={item.channel_id}
+                          billingStartsAt={item.subscription_starts_at}
+                          billingEndsAt={item.subscription_ends_at}
+                          includedMac={item.included_mac}
+                          overMacPricePer100={item.over_mac_price_per_100}
+                        />
+                      </td>
+                    )}
+                    <td>
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => setSelectedChannelId(item.channel_id)}
+                        >
+                          فلتر
+                        </button>
+                        <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button">
+                          التفاصيل
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section className="card billing-plan-grid billing-plan-overview-card">
         <div>
           <span>الخطة</span>
@@ -432,107 +551,6 @@ export default function BillingPage() {
         </section>
       )}
 
-      <section className="card admin-table-card billing-channels-table-card">
-        <div className="admin-table-header">
-          <div>
-            <h2>MAC حسب القناة</h2>
-            <small>فوترة مستقلة لكل قناة — MAC و Over MAC ودورة اشتراك منفصلة</small>
-          </div>
-        </div>
-        <div className="billing-table-toolbar">
-          <input
-            value={channelSearch}
-            onChange={(e) => setChannelSearch(e.target.value)}
-            placeholder="بحث باسم القناة أو النوع أو رقم WhatsApp"
-          />
-        </div>
-        <div className="admin-table-wrap">
-          <table className="admin-erp-table">
-            <thead>
-              <tr>
-                <th>القناة</th>
-                <th>MAC مستخدم</th>
-                <th>MAC مشمول / متبقٍ</th>
-                <th>بداية الاشتراك</th>
-                <th>نهاية الاشتراك</th>
-                <th>دورة MAC</th>
-                <th>سعر Over/100</th>
-                <th>إجمالي Over MAC</th>
-                <th>إجراء</th>
-              </tr>
-            </thead>
-            <tbody>
-              {channelStats.isLoading && (
-                <tr><td colSpan={9} className="admin-table-empty">جاري التحميل…</td></tr>
-              )}
-              {!channelStats.isLoading && filteredChannels.length === 0 && (
-                <tr><td colSpan={9} className="admin-table-empty">لا قنوات مطابقة.</td></tr>
-              )}
-              {filteredChannels.map((item) => {
-                const usagePct = item.included_mac > 0
-                  ? Math.round((item.mac_count / item.included_mac) * 100)
-                  : 0;
-                const isSelected = item.channel_id === selectedChannelId;
-                const periodLabel =
-                  item.billing_period_start && item.billing_period_end
-                    ? formatPeriodRange(item.billing_period_start, item.billing_period_end)
-                    : formatMacCycleMonth(item.cycle_month);
-                return (
-                  <tr key={item.channel_id} className={isSelected ? "billing-row-selected" : undefined}>
-                    <td>
-                      <div className="admin-cell-main">
-                        <strong>{item.channel_name}</strong>
-                        <small>
-                          <span className={channelTypeClass(item.channel_type)}>{formatChannelType(item.channel_type)}</span>
-                          {item.whatsapp_phone ? ` · ${item.whatsapp_phone}` : ""}
-                        </small>
-                      </div>
-                    </td>
-                    <td>
-                      <strong>{item.mac_count.toLocaleString("ar")}</strong>
-                      {item.is_over_mac && (
-                        <small className="billing-over-charge">+{item.over_mac_count.toLocaleString("ar")} Over</small>
-                      )}
-                    </td>
-                    <td>
-                      <strong>{item.included_mac.toLocaleString("ar")}</strong>
-                      <small>{item.mac_remaining.toLocaleString("ar")} متبقٍ · {usagePct}%</small>
-                    </td>
-                    <td>{item.subscription_starts_at ? formatPlanDate(item.subscription_starts_at) : "—"}</td>
-                    <td>{item.subscription_ends_at ? formatPlanDate(item.subscription_ends_at) : "—"}</td>
-                    <td>{periodLabel}</td>
-                    <td>${item.over_mac_price_per_100.toFixed(2)}</td>
-                    <td>
-                      <strong className={item.estimated_channel_over_mac_charge > 0 ? "billing-over-charge" : ""}>
-                        {item.estimated_channel_over_mac_charge > 0
-                          ? `$${item.estimated_channel_over_mac_charge.toFixed(2)}`
-                          : "—"}
-                      </strong>
-                      {item.attributed_over_mac_count > 0 && (
-                        <small>+{item.attributed_over_mac_count.toLocaleString("ar")} MAC</small>
-                      )}
-                    </td>
-                    <td>
-                      <div className="admin-actions">
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => setSelectedChannelId(item.channel_id)}
-                        >
-                          فلتر
-                        </button>
-                        <Link to={`/channels/${item.channel_id}/mac`} className="secondary-button">
-                          التفاصيل
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       <section className="billing-charts-grid">
         <article className="card billing-chart-card">

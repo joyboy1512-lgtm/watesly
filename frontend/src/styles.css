@@ -5098,6 +5098,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   font-weight: 700;
 }
+.billing-channels-table-top {
+  border: 2px solid rgba(37, 211, 102, 0.45);
+  box-shadow: 0 8px 24px rgba(7, 94, 84, 0.08);
+}
+.billing-channels-table-top .admin-table-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.billing-channels-table-top h2 {
+  color: var(--primary-darker);
+}
 .billing-per-channel-banner {
   display: flex;
   align-items: center;

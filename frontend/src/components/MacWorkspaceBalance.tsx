@@ -58,7 +58,7 @@ export default function MacWorkspaceBalance({ summary, showPolicy = true, billin
       <section className="card mac-workspace-summary-card">
         <div className="mac-workspace-summary-head">
           <div>
-            <h2 className="section-title-sm">رصيد MAC — مساحة العمل</h2>
+            <h2 className="section-title-sm">رصيد MAC — مجموع كل القنوات</h2>
             <small>
               {billingPeriod
                 ? `دورة الفوترة: ${new Intl.DateTimeFormat("ar", { day: "numeric", month: "short" }).format(new Date(billingPeriod.start))} – ${new Intl.DateTimeFormat("ar", { day: "numeric", month: "short", year: "numeric" }).format(new Date(billingPeriod.end))}`
