@@ -8,7 +8,7 @@ export type TemplateComponent = {
   text?: string;
   media_url?: string;
   filename?: string;
-  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }>;
+  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; id?: string; marketing_opt_out?: boolean }>;
   example?: { header_url?: string[]; header_handle?: string[] };
 };
 
@@ -50,7 +50,8 @@ export function getTemplateHeaderInfo(components: TemplateComponent[] | null | u
 export function buildStoredComponents(
   bodyText: string | null,
   uploaded: UploadedFile | null,
-  headerFormat: TemplateHeaderFormat | null
+  headerFormat: TemplateHeaderFormat | null,
+  options?: { includeMarketingOptOut?: boolean; category?: string | null }
 ): TemplateComponent[] {
   const components: TemplateComponent[] = [];
   if (uploaded && headerFormat) {
@@ -63,6 +64,13 @@ export function buildStoredComponents(
   }
   if (bodyText?.trim()) {
     components.push({ type: "BODY", text: bodyText.trim() });
+  }
+  if (options?.includeMarketingOptOut && (options.category ?? "marketing") === "marketing") {
+    components.push({
+      type: "BUTTONS",
+      buttons: [{ type: "QUICK_REPLY", text: "عدم الإزعاج", id: "watesly_marketing_opt_out", marketing_opt_out: true }]
+    });
+    components.push({ type: "FOOTER", text: "أرسل «إيقاف» لإلغاء الاشتراك" });
   }
   return components;
 }

@@ -30,14 +30,22 @@ async def create_campaign(db: AsyncSession, *, account_id: UUID, user_id: UUID, 
     contact_ids = [r.contact_id for r in payload.recipients]
     if len(set(contact_ids)) != len(contact_ids):
         raise ValueError("DUPLICATE_RECIPIENT")
-    result = await db.execute(select(Contact.id).where(
+    contact_query = select(Contact.id, Contact.marketing_opt_in).where(
         Contact.account_id == account_id,
         Contact.organization_id == payload.organization_id,
         Contact.deleted_at.is_(None),
         Contact.id.in_(contact_ids),
-    ))
-    if set(result.scalars().all()) != set(contact_ids):
+    )
+    result = await db.execute(contact_query)
+    rows = {row[0]: row[1] for row in result.all()}
+    if set(rows.keys()) != set(contact_ids):
         raise ValueError("INVALID_RECIPIENT")
+
+    recipients = payload.recipients
+    if payload.exclude_marketing_opt_out:
+        recipients = [item for item in recipients if rows.get(item.contact_id) is not False]
+        if not recipients:
+            raise ValueError("ALL_RECIPIENTS_OPTED_OUT")
 
     campaign = Campaign(
         account_id=account_id,
@@ -48,8 +56,9 @@ async def create_campaign(db: AsyncSession, *, account_id: UUID, user_id: UUID, 
         name=payload.name,
         status=CampaignStatus.DRAFT,
         scheduled_at=payload.scheduled_at,
-        max_recipients=min(max(len(payload.recipients), 1), 10000),
+        max_recipients=min(max(len(recipients), 1), 10000),
         requires_approval=True,
+        include_opt_out_option=payload.include_opt_out_option,
     )
     db.add(campaign)
     await db.flush()
@@ -57,7 +66,7 @@ async def create_campaign(db: AsyncSession, *, account_id: UUID, user_id: UUID, 
         campaign_id=campaign.id,
         contact_id=item.contact_id,
         template_parameters=item.template_parameters,
-    ) for item in payload.recipients])
+    ) for item in recipients])
     await add_outbox_event(db, account_id=account_id, event_type="campaign.created", aggregate_type="campaign", aggregate_id=str(campaign.id), payload={"campaign_id": str(campaign.id)})
     await db.commit()
     await db.refresh(campaign)

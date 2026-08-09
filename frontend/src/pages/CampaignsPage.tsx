@@ -46,6 +46,11 @@ type CampaignPreflight = {
   never_messaged: number;
   window_open: number;
   window_closed: number;
+  marketing_opt_in?: number;
+  marketing_opt_out?: number;
+  eligible_recipients?: number;
+  template_has_opt_out_button?: boolean;
+  include_opt_out_option?: boolean;
   warnings: string[];
   messaging_tier_hint: string;
   quality_rating?: string | null;
@@ -133,6 +138,7 @@ export default function CampaignsPage() {
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
   const [audienceLifecycle, setAudienceLifecycle] = useState("");
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
+  const [includeOptOutOption, setIncludeOptOutOption] = useState(true);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
   const [linkCampaignId, setLinkCampaignId] = useState("");
@@ -281,11 +287,12 @@ export default function CampaignsPage() {
       .post("/campaigns/preflight", {
         template_id: templateId,
         contact_ids: selectedContacts,
-        whatsapp_account_id: accountId || null
+        whatsapp_account_id: accountId || null,
+        include_opt_out_option: includeOptOutOption
       })
       .then((res) => setPreflight(res.data as CampaignPreflight))
       .catch(() => setPreflight(null));
-  }, [templateId, selectedContacts, accountId]);
+  }, [templateId, selectedContacts, accountId, includeOptOutOption]);
 
   function onOrganizationChange(value: string) {
     setOrganizationId(value);
@@ -424,6 +431,8 @@ export default function CampaignsPage() {
         template_id: templateId,
         name,
         scheduled_at: null,
+        include_opt_out_option: includeOptOutOption,
+        exclude_marketing_opt_out: true,
         recipients: selectedContacts.map((contact_id) => ({
           contact_id,
           template_parameters: templateParameters
@@ -441,7 +450,7 @@ export default function CampaignsPage() {
       await waitForCampaignReport(client, campaignId);
       toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول.", "success");
     } catch {
-      toastStore.getState().show("تعذر إنشاء الحملة. تحقق من القالب المعتمد والحساب.", "error");
+      toastStore.getState().show("تعذر إنشاء الحملة. تحقق من القالب المعتمد، أو أن الجمهور لم يرفض التسويق.", "error");
     }
   }
 
@@ -732,6 +741,8 @@ export default function CampaignsPage() {
                   <strong>فحص الجمهور قبل الإرسال</strong>
                   <div className="campaign-preflight-stats">
                     <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
+                    <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
+                    <div><strong>{preflight.marketing_opt_out ?? 0}</strong><span>عدم الإزعاج</span></div>
                     <div><strong>{preflight.never_messaged}</strong><span>بدون محادثة</span></div>
                     <div><strong>{preflight.window_open}</strong><span>نافذة نشطة</span></div>
                     <div><strong>{preflight.window_closed}</strong><span>نافذة منتهية</span></div>
@@ -762,8 +773,20 @@ export default function CampaignsPage() {
               {!approvedTemplates.length && (
                 <p className="hint-text">لا توجد قوالب معتمدة — أضف من صفحة القوالب أو زامِن من Meta.</p>
               )}
-              <button type="submit" className="whatsapp-button" disabled={!selectedContacts.length}>
-                إنشاء وبدء الحملة ({selectedContacts.length})
+              <label className="field-label checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={includeOptOutOption}
+                  onChange={(event) => setIncludeOptOutOption(event.target.checked)}
+                />
+                <span>إظهار خيار «عدم الإزعاج» للعملاء واستبعاد من اختاروه تلقائياً</span>
+              </label>
+              <button
+                type="submit"
+                className="whatsapp-button"
+                disabled={!selectedContacts.length || preflight?.eligible_recipients === 0}
+              >
+                إنشاء وبدء الحملة ({preflight?.eligible_recipients ?? selectedContacts.length})
               </button>
             </form>
           </div>

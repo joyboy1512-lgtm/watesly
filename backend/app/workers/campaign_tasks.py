@@ -44,7 +44,16 @@ async def _run_campaign(campaign_id:UUID,execution_token:UUID)->dict:
    for recipient,contact in rows:
     await db.refresh(campaign)
     if campaign.execution_token!=execution_token or campaign.status in {CampaignStatus.PAUSED,CampaignStatus.CANCELLED}: await db.commit(); return {"status":campaign.status.value,"sent":sent,"failed":failed}
-    now=datetime.now(UTC); recipient.status=CampaignRecipientStatus.SENDING; recipient.sending_started_at=now; recipient.last_attempt_at=now; recipient.delivery_key=recipient.delivery_key or f"campaign:{campaign.id}:recipient:{recipient.id}"; campaign.last_heartbeat_at=now; await db.commit()
+    now=datetime.now(UTC)
+    if contact.marketing_opt_in is False:
+     recipient.status=CampaignRecipientStatus.SKIPPED
+     recipient.error_message="Marketing opt-out"
+     recipient.last_attempt_at=now
+     campaign.last_heartbeat_at=now
+     await db.commit()
+     await asyncio.sleep(sleep_min+random.random()*sleep_jitter)
+     continue
+    recipient.status=CampaignRecipientStatus.SENDING; recipient.sending_started_at=now; recipient.last_attempt_at=now; recipient.delivery_key=recipient.delivery_key or f"campaign:{campaign.id}:recipient:{recipient.id}"; campaign.last_heartbeat_at=now; await db.commit()
     try:
      components=resolve_send_components(template.components, recipient.template_parameters)
      dial=COUNTRY_DIAL.get((contact.country_code or "KW").upper(), "965")

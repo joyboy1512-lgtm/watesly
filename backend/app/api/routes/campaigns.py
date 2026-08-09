@@ -97,8 +97,14 @@ async def export_campaign_recipients(
 
 @router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
 async def post_campaign(payload: CampaignCreateRequest, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)), db: AsyncSession = Depends(get_db)):
-    try: return await create_campaign(db, account_id=context.account_id, user_id=context.user.id, payload=payload)
-    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        return await create_campaign(db, account_id=context.account_id, user_id=context.user.id, payload=payload)
+    except ValueError as exc:
+        code = str(exc)
+        messages = {
+            "ALL_RECIPIENTS_OPTED_OUT": "All selected contacts opted out of marketing",
+        }
+        raise HTTPException(status_code=400, detail=messages.get(code, code)) from exc
 
 @router.post("/import-audience")
 async def import_campaign_audience(
@@ -147,6 +153,7 @@ async def post_campaign_preflight(
         template_category=category,
         whatsapp_account_id=payload.whatsapp_account_id,
         template_components=template.components,
+        include_opt_out_option=payload.include_opt_out_option,
     )
 
 

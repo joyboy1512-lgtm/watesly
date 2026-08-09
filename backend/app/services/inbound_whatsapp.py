@@ -287,6 +287,20 @@ async def process_inbound_side_effects(
     except Exception:
         logger.exception("Auto tags failed for contact_id=%s", contact.id)
 
+    try:
+        from app.services.marketing_compliance import maybe_handle_marketing_opt_out
+
+        await maybe_handle_marketing_opt_out(
+            db,
+            whatsapp_account=whatsapp_account,
+            contact=contact,
+            conversation=conversation,
+            text_body=text_body,
+            interactive_reply=interactive_reply,
+        )
+    except Exception:
+        logger.exception("Marketing opt-out handling failed for contact_id=%s", contact.id)
+
     if text_body:
         try:
             from app.services.crm import maybe_auto_create_deal_from_inbound
