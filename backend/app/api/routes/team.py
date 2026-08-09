@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models.account import Account
 from app.schemas.team import (
     AcceptInvitationRequest,
+    CreateEmployeeRequest,
     EmployeeResponse,
     EmployeeUpdateRequest,
     InvitationResponse,
@@ -16,6 +17,7 @@ from app.schemas.team import (
 )
 from app.services.team import (
     accept_invitation,
+    create_employee,
     create_invitation,
     list_employees,
     update_employee,
@@ -99,6 +101,37 @@ async def accept_employee_invitation(
         user, membership, organization_ids = await accept_invitation(db, payload)
     except (ValueError, jwt.InvalidTokenError) as exc:
         raise HTTPException(status_code=400, detail="Invalid or expired invitation") from exc
+
+    return await _employee_response(
+        db,
+        membership=membership,
+        user=user,
+        organization_ids=organization_ids,
+    )
+
+
+@router.post("/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
+async def create_employee_account(
+    payload: CreateEmployeeRequest,
+    context: AuthContext = Depends(require_permissions(Permission.USERS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> EmployeeResponse:
+    try:
+        membership, user, organization_ids = await create_employee(
+            db,
+            account_id=context.account_id,
+            payload=payload,
+        )
+    except ValueError as exc:
+        messages = {
+            "INVALID_ORGANIZATION": (400, "One or more organizations are invalid"),
+            "ALREADY_MEMBER": (409, "This user is already a member of the account"),
+            "EMAIL_ALREADY_REGISTERED": (409, "This email is already registered. Use an invitation link instead."),
+            "USER_LIMIT_REACHED": (403, "User limit reached for this plan"),
+            "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
+        }
+        code, detail = messages.get(str(exc), (400, "Unable to create employee"))
+        raise HTTPException(status_code=code, detail=detail) from exc
 
     return await _employee_response(
         db,
