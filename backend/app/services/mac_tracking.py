@@ -1,28 +1,27 @@
-"""MAC (Monthly Active Contact) tracking service.
+"""MAC (Monthly Active Contact) tracking — queries and summaries.
 
-Billing policy:
-- One MAC per unique contact per account per calendar month (YYYY-MM cycle).
-- Count when customer sends inbound OR staff/AI sends from Inbox/conversation.
-- Campaign bulk sends increment campaign message counters only - never MAC.
-- Same contact on multiple channels in one month still counts as one MAC.
+Recording is handled by mac_usage.record_activity (central, idempotent service).
 """
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.campaign import Campaign
 from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
 from app.models.channel import Channel
 from app.models.contact import Contact
-from app.models.monthly_active_contact import MacTriggerSource, MonthlyActiveContact
+from app.models.monthly_active_contact import MonthlyActiveContact
 from app.models.whatsapp_account import WhatsAppAccount
+from app.services.billing_period import cycle_month_key, resolve_billing_period
+
+# Re-export for backward compatibility
+from app.services.mac_usage import MacActivityType, record_activity, record_mac  # noqa: F401
 
 
 def current_cycle_month(when: datetime | None = None) -> str:
-    """Return billing cycle key as YYYY-MM (UTC calendar month)."""
+    """Legacy helper — prefer billing period from subscription."""
     dt = when or datetime.now(UTC)
     return dt.strftime("%Y-%m")
 
@@ -39,8 +38,36 @@ def compute_mac_balance(*, mac_count: int, included_mac: int) -> dict[str, int |
 
 
 def estimate_over_mac_charge(*, over_mac_count: int, price_per_100: float) -> float:
+    if over_mac_count <= 0:
+        return 0.0
     blocks = (over_mac_count + 99) // 100
     return round(blocks * price_per_100, 3)
+
+
+async def _period_for_account(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    cycle_month: str | None = None,
+) -> tuple[datetime, datetime]:
+    if cycle_month:
+        year, month = map(int, cycle_month.split("-"))
+        start = datetime(year, month, 1, tzinfo=UTC)
+        if month == 12:
+            end = datetime(year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end = datetime(year, month + 1, 1, tzinfo=UTC)
+        return start, end
+    period = await resolve_billing_period(db, account_id=account_id)
+    if period is None:
+        now = datetime.now(UTC)
+        start = datetime(now.year, now.month, 1, tzinfo=UTC)
+        if now.month == 12:
+            end = datetime(now.year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end = datetime(now.year, now.month + 1, 1, tzinfo=UTC)
+        return start, end
+    return period
 
 
 async def get_account_mac_summary(
@@ -51,62 +78,45 @@ async def get_account_mac_summary(
 ) -> dict:
     from app.services.billing import get_active_subscription
 
-    cycle = cycle_month or current_cycle_month()
+    period_start, period_end = await _period_for_account(
+        db, account_id=account_id, cycle_month=cycle_month
+    )
     included_mac = 1000
     over_mac_price_per_100 = 12.0
+    mac_limit_policy = "soft"
+    overage_enabled = True
     subscription_data = await get_active_subscription(db, account_id)
     if subscription_data is not None:
         _, plan = subscription_data
         included_mac = plan.included_mac
         over_mac_price_per_100 = float(plan.over_mac_price_per_100)
+        mac_limit_policy = getattr(plan, "mac_limit_policy", "soft") or "soft"
+        overage_enabled = bool(getattr(plan, "overage_enabled", True))
 
-    mac_count = await count_mac_for_account(db, account_id=account_id, cycle_month=cycle)
+    mac_count = await count_mac_for_account(
+        db,
+        account_id=account_id,
+        period_start=period_start,
+    )
     balance = compute_mac_balance(mac_count=mac_count, included_mac=included_mac)
     over_mac_count = int(balance["over_mac_count"])
     return {
-        "cycle_month": cycle,
+        "cycle_month": cycle_month_key(period_start),
+        "billing_period_start": period_start,
+        "billing_period_end": period_end,
         "mac_count": mac_count,
         "included_mac": included_mac,
+        "mac_limit_policy": mac_limit_policy,
+        "overage_enabled": overage_enabled,
         "over_mac_price_per_100": over_mac_price_per_100,
         **balance,
         "estimated_over_mac_charge": estimate_over_mac_charge(
             over_mac_count=over_mac_count,
             price_per_100=over_mac_price_per_100,
-        ),
+        )
+        if overage_enabled
+        else 0.0,
     }
-
-
-async def record_mac(
-    db: AsyncSession,
-    *,
-    account_id: UUID,
-    channel_id: UUID,
-    contact_id: UUID,
-    trigger_source: MacTriggerSource,
-    activity_at: datetime | None = None,
-) -> bool:
-    """Record MAC if not already counted this cycle. Returns True when newly created."""
-    if contact_id is None:
-        return False
-    at = activity_at or datetime.now(UTC)
-    cycle = current_cycle_month(at)
-    stmt = (
-        insert(MonthlyActiveContact)
-        .values(
-            id=uuid4(),
-            account_id=account_id,
-            channel_id=channel_id,
-            contact_id=contact_id,
-            cycle_month=cycle,
-            trigger_source=trigger_source.value,
-            first_activity_at=at,
-        )
-        .on_conflict_do_nothing(
-            constraint="uq_mac_account_contact_cycle",
-        )
-    )
-    result = await db.execute(stmt)
-    return result.rowcount > 0
 
 
 async def count_mac_for_channel(
@@ -115,15 +125,17 @@ async def count_mac_for_channel(
     account_id: UUID,
     channel_id: UUID,
     cycle_month: str | None = None,
+    period_start: datetime | None = None,
 ) -> int:
-    cycle = cycle_month or current_cycle_month()
+    if period_start is None:
+        period_start, _ = await _period_for_account(db, account_id=account_id, cycle_month=cycle_month)
     return int(
         (
             await db.scalar(
                 select(func.count(MonthlyActiveContact.id)).where(
                     MonthlyActiveContact.account_id == account_id,
                     MonthlyActiveContact.channel_id == channel_id,
-                    MonthlyActiveContact.cycle_month == cycle,
+                    MonthlyActiveContact.billing_period_start == period_start,
                 )
             )
         )
@@ -136,14 +148,16 @@ async def count_mac_for_account(
     *,
     account_id: UUID,
     cycle_month: str | None = None,
+    period_start: datetime | None = None,
 ) -> int:
-    cycle = cycle_month or current_cycle_month()
+    if period_start is None:
+        period_start, _ = await _period_for_account(db, account_id=account_id, cycle_month=cycle_month)
     return int(
         (
             await db.scalar(
                 select(func.count(MonthlyActiveContact.id)).where(
                     MonthlyActiveContact.account_id == account_id,
-                    MonthlyActiveContact.cycle_month == cycle,
+                    MonthlyActiveContact.billing_period_start == period_start,
                 )
             )
         )
@@ -160,14 +174,14 @@ async def list_mac_contacts(
     limit: int = 200,
     offset: int = 0,
 ) -> list[dict]:
-    cycle = cycle_month or current_cycle_month()
+    period_start, _ = await _period_for_account(db, account_id=account_id, cycle_month=cycle_month)
     query = (
         select(MonthlyActiveContact, Contact, Channel.name)
         .join(Contact, Contact.id == MonthlyActiveContact.contact_id)
         .join(Channel, Channel.id == MonthlyActiveContact.channel_id)
         .where(
             MonthlyActiveContact.account_id == account_id,
-            MonthlyActiveContact.cycle_month == cycle,
+            MonthlyActiveContact.billing_period_start == period_start,
             Contact.deleted_at.is_(None),
         )
         .order_by(MonthlyActiveContact.first_activity_at.desc())
@@ -189,6 +203,7 @@ async def list_mac_contacts(
             "cycle_month": mac.cycle_month,
             "trigger_source": mac.trigger_source,
             "first_activity_at": mac.first_activity_at,
+            "last_active_at": mac.last_active_at,
         }
         for mac, contact, channel_name in rows
     ]
@@ -199,16 +214,14 @@ async def count_campaign_messages_for_channel(
     *,
     account_id: UUID,
     channel_id: UUID,
+    period_start: datetime | None = None,
+    period_end: datetime | None = None,
     cycle_month: str | None = None,
 ) -> int:
-    """Count successful campaign sends in cycle - billed by message, not MAC."""
-    cycle = cycle_month or current_cycle_month()
-    year, month = map(int, cycle.split("-"))
-    start = datetime(year, month, 1, tzinfo=UTC)
-    if month == 12:
-        end = datetime(year + 1, 1, 1, tzinfo=UTC)
-    else:
-        end = datetime(year, month + 1, 1, tzinfo=UTC)
+    if period_start is None or period_end is None:
+        period_start, period_end = await _period_for_account(
+            db, account_id=account_id, cycle_month=cycle_month
+        )
 
     wa_ids = list(
         (
@@ -238,23 +251,13 @@ async def count_campaign_messages_for_channel(
                             CampaignRecipientStatus.READ,
                         ]
                     ),
-                    CampaignRecipient.updated_at >= start,
-                    CampaignRecipient.updated_at < end,
+                    CampaignRecipient.updated_at >= period_start,
+                    CampaignRecipient.updated_at < period_end,
                 )
             )
         )
         or 0
     )
-
-
-def _cycle_bounds(cycle_month: str) -> tuple[datetime, datetime]:
-    year, month = map(int, cycle_month.split("-"))
-    start = datetime(year, month, 1, tzinfo=UTC)
-    if month == 12:
-        end = datetime(year + 1, 1, 1, tzinfo=UTC)
-    else:
-        end = datetime(year, month + 1, 1, tzinfo=UTC)
-    return start, end
 
 
 async def count_campaign_messages_for_account(
@@ -263,9 +266,9 @@ async def count_campaign_messages_for_account(
     account_id: UUID,
     cycle_month: str | None = None,
 ) -> int:
-    cycle = cycle_month or current_cycle_month()
-    start, end = _cycle_bounds(cycle)
-
+    period_start, period_end = await _period_for_account(
+        db, account_id=account_id, cycle_month=cycle_month
+    )
     wa_ids = list(
         (
             await db.execute(
@@ -291,8 +294,8 @@ async def count_campaign_messages_for_account(
                             CampaignRecipientStatus.READ,
                         ]
                     ),
-                    CampaignRecipient.updated_at >= start,
-                    CampaignRecipient.updated_at < end,
+                    CampaignRecipient.updated_at >= period_start,
+                    CampaignRecipient.updated_at < period_end,
                 )
             )
         )
@@ -306,14 +309,17 @@ async def get_mac_insights(
     account_id: UUID,
     cycle_month: str | None = None,
 ) -> dict:
-    cycle = cycle_month or current_cycle_month()
-    included_per_channel = 1000
+    from app.services.billing import get_active_subscription
+    from app.services.channels import list_channels
+
+    period_start, period_end = await _period_for_account(
+        db, account_id=account_id, cycle_month=cycle_month
+    )
+    included_mac = 1000
     subscription_data = await get_active_subscription(db, account_id)
     if subscription_data is not None:
         _, plan = subscription_data
-        included_per_channel = plan.included_mac
-
-    from app.services.channels import list_channels
+        included_mac = plan.included_mac
 
     channel_count = len(await list_channels(db, account_id))
 
@@ -323,9 +329,24 @@ async def get_mac_insights(
                 select(MonthlyActiveContact.trigger_source, func.count(MonthlyActiveContact.id))
                 .where(
                     MonthlyActiveContact.account_id == account_id,
-                    MonthlyActiveContact.cycle_month == cycle,
+                    MonthlyActiveContact.billing_period_start == period_start,
                 )
                 .group_by(MonthlyActiveContact.trigger_source)
+                .order_by(func.count(MonthlyActiveContact.id).desc())
+            )
+        ).all()
+    )
+
+    channel_rows = list(
+        (
+            await db.execute(
+                select(Channel.name, Channel.type, func.count(MonthlyActiveContact.id))
+                .join(Channel, Channel.id == MonthlyActiveContact.channel_id)
+                .where(
+                    MonthlyActiveContact.account_id == account_id,
+                    MonthlyActiveContact.billing_period_start == period_start,
+                )
+                .group_by(Channel.name, Channel.type)
                 .order_by(func.count(MonthlyActiveContact.id).desc())
             )
         ).all()
@@ -338,7 +359,7 @@ async def get_mac_insights(
                 select(day_bucket, func.count(MonthlyActiveContact.id))
                 .where(
                     MonthlyActiveContact.account_id == account_id,
-                    MonthlyActiveContact.cycle_month == cycle,
+                    MonthlyActiveContact.billing_period_start == period_start,
                 )
                 .group_by(day_bucket)
                 .order_by(day_bucket.asc())
@@ -347,15 +368,21 @@ async def get_mac_insights(
     )
 
     campaign_messages = await count_campaign_messages_for_account(
-        db, account_id=account_id, cycle_month=cycle
+        db, account_id=account_id, cycle_month=cycle_month
     )
 
     return {
-        "cycle_month": cycle,
-        "included_mac_per_channel": included_per_channel,
+        "cycle_month": cycle_month_key(period_start),
+        "billing_period_start": period_start,
+        "billing_period_end": period_end,
+        "included_mac": included_mac,
         "channel_count": channel_count,
         "trigger_breakdown": [
             {"source": str(source), "count": int(count)} for source, count in trigger_rows
+        ],
+        "channel_breakdown": [
+            {"channel_name": name, "channel_type": str(ctype), "count": int(count)}
+            for name, ctype, count in channel_rows
         ],
         "daily_trend": [
             {
@@ -365,4 +392,44 @@ async def get_mac_insights(
             for day, count in daily_rows
         ],
         "campaign_messages_sent": campaign_messages,
+    }
+
+
+async def get_billing_usage(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+) -> dict:
+    """Unified usage payload for GET /billing/usage."""
+    summary = await get_account_mac_summary(db, account_id=account_id)
+    insights = await get_mac_insights(db, account_id=account_id)
+    used = int(summary["mac_count"])
+    included = int(summary["included_mac"])
+    percentage = round((used / included) * 100, 1) if included > 0 else (100.0 if used > 0 else 0.0)
+    return {
+        "billing_period": {
+            "start": summary["billing_period_start"],
+            "end": summary["billing_period_end"],
+        },
+        "mac": {
+            "used": used,
+            "included": included,
+            "remaining": int(summary["mac_remaining"]),
+            "percentage": percentage,
+        },
+        "overage": {
+            "enabled": bool(summary.get("overage_enabled", True)),
+            "is_over": bool(summary["is_over_mac"]),
+            "count": int(summary["over_mac_count"]),
+            "blocks": int(summary["over_mac_blocks"]),
+            "estimated_charge": float(summary["estimated_over_mac_charge"]),
+            "price_per_100": float(summary["over_mac_price_per_100"]),
+        },
+        "policy": {
+            "limit_policy": str(summary.get("mac_limit_policy", "soft")),
+        },
+        "breakdown_by_channel": insights["channel_breakdown"],
+        "breakdown_by_activity": insights["trigger_breakdown"],
+        "daily_trend": insights["daily_trend"],
+        "campaign_messages_sent": insights["campaign_messages_sent"],
     }

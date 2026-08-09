@@ -88,10 +88,55 @@ class MacDailyTrendItem(BaseModel):
     count: int
 
 
+class MacChannelBreakdownItem(BaseModel):
+    channel_name: str
+    channel_type: str
+    count: int
+
+
 class MacInsightsResponse(BaseModel):
     cycle_month: str
+    billing_period_start: datetime | None = None
+    billing_period_end: datetime | None = None
+    included_mac: int = 0
+    channel_count: int = 0
     trigger_breakdown: list[MacTriggerBreakdownItem] = Field(default_factory=list)
+    channel_breakdown: list[MacChannelBreakdownItem] = Field(default_factory=list)
     daily_trend: list[MacDailyTrendItem] = Field(default_factory=list)
     campaign_messages_sent: int = 0
-    included_mac_per_channel: int = 0
-    channel_count: int = 0
+
+
+class BillingPeriodDTO(BaseModel):
+    start: datetime
+    end: datetime
+
+
+class MacUsageDTO(BaseModel):
+    used: int
+    included: int
+    remaining: int
+    percentage: float
+
+
+class MacOverageDTO(BaseModel):
+    enabled: bool
+    is_over: bool
+    count: int
+    blocks: int
+    estimated_charge: float
+    price_per_100: float
+
+
+class MacPolicyDTO(BaseModel):
+    limit_policy: str
+
+
+class BillingUsageResponse(BaseModel):
+    billing_period: BillingPeriodDTO
+    mac: MacUsageDTO
+    overage: MacOverageDTO
+    policy: MacPolicyDTO
+    breakdown_by_channel: list[MacChannelBreakdownItem] = Field(default_factory=list)
+    breakdown_by_activity: list[MacTriggerBreakdownItem] = Field(default_factory=list)
+    daily_trend: list[MacDailyTrendItem] = Field(default_factory=list)
+    campaign_messages_sent: int = 0

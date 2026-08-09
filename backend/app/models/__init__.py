@@ -20,6 +20,7 @@ from app.models.invitation_channel_access import InvitationChannelAccess
 from app.models.invitation_organization import InvitationOrganization
 from app.models.membership_channel_access import MembershipChannelAccess
 from app.models.monthly_active_contact import MonthlyActiveContact
+from app.models.mac_activation_audit import MacActivationAudit
 from app.models.membership import Membership
 from app.models.module_health import ModuleHealth
 from app.models.message import Message

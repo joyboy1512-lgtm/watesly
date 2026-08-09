@@ -8,14 +8,20 @@ from app.core.permissions import Permission
 from app.db.session import get_db
 from app.models.channel import Channel
 from app.schemas.billing import SubscriptionResponse
-from app.schemas.mac import MacChannelStatsResponse, MacContactItem, MacInsightsResponse, MacStatsResponse
+from app.schemas.mac import (
+    BillingUsageResponse,
+    MacChannelStatsResponse,
+    MacContactItem,
+    MacInsightsResponse,
+    MacStatsResponse,
+)
 from app.services.billing import get_active_subscription
 from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
     count_mac_for_channel,
-    compute_mac_balance,
     current_cycle_month,
     get_account_mac_summary,
+    get_billing_usage as build_billing_usage,
     get_mac_insights,
     list_mac_contacts,
 )
@@ -79,6 +85,15 @@ async def get_account_mac_stats(
     )
 
 
+@router.get("/usage", response_model=BillingUsageResponse)
+async def billing_usage(
+    context: AuthContext = Depends(require_permissions(Permission.BILLING_VIEW)),
+    db: AsyncSession = Depends(get_db),
+) -> BillingUsageResponse:
+    data = await build_billing_usage(db, account_id=context.account_id)
+    return BillingUsageResponse(**data)
+
+
 @router.get("/mac/insights", response_model=MacInsightsResponse)
 async def get_mac_usage_insights(
     context: AuthContext = Depends(require_permissions(Permission.BILLING_VIEW)),
@@ -105,6 +120,7 @@ async def get_channels_mac_stats(
     summary = await get_account_mac_summary(
         db, account_id=context.account_id, cycle_month=cycle_month
     )
+    period_start = summary["billing_period_start"]
     cycle = str(summary["cycle_month"])
     included_mac = int(summary["included_mac"])
     channels = await list_channels(db, context.account_id)
@@ -120,13 +136,16 @@ async def get_channels_mac_stats(
     items: list[MacChannelStatsResponse] = []
     for channel in channels:
         mac_count = await count_mac_for_channel(
-            db, account_id=context.account_id, channel_id=channel.id, cycle_month=cycle
+            db, account_id=context.account_id, channel_id=channel.id, period_start=period_start
         )
         campaign_msgs = await count_campaign_messages_for_channel(
-            db, account_id=context.account_id, channel_id=channel.id, cycle_month=cycle
+            db,
+            account_id=context.account_id,
+            channel_id=channel.id,
+            period_start=period_start,
+            period_end=summary["billing_period_end"],
         )
         wa = wa_by_channel.get(channel.id)
-        channel_balance = compute_mac_balance(mac_count=mac_count, included_mac=included_mac)
         items.append(
             MacChannelStatsResponse(
                 channel_id=channel.id,
@@ -136,9 +155,9 @@ async def get_channels_mac_stats(
                 cycle_month=cycle,
                 mac_count=mac_count,
                 included_mac=included_mac,
-                mac_remaining=int(channel_balance["mac_remaining"]),
-                is_over_mac=bool(channel_balance["is_over_mac"]),
-                over_mac_count=int(channel_balance["over_mac_count"]),
+                mac_remaining=int(summary["mac_remaining"]),
+                is_over_mac=bool(summary["is_over_mac"]),
+                over_mac_count=int(summary["over_mac_count"]),
                 campaign_messages_sent=campaign_msgs,
                 whatsapp_status=wa.status.value if wa and hasattr(wa.status, "value") else (str(wa.status) if wa else None),
                 whatsapp_phone=wa.display_phone_number if wa else None,

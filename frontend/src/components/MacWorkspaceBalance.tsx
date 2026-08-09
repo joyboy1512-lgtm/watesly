@@ -21,9 +21,10 @@ export type MacWorkspaceSummary = {
 type MacWorkspaceBalanceProps = {
   summary: MacWorkspaceSummary;
   showPolicy?: boolean;
+  billingPeriod?: { start: string; end: string };
 };
 
-export default function MacWorkspaceBalance({ summary, showPolicy = true }: MacWorkspaceBalanceProps) {
+export default function MacWorkspaceBalance({ summary, showPolicy = true, billingPeriod }: MacWorkspaceBalanceProps) {
   const usagePercent = formatMacUsagePercent(summary.mac_count, summary.included_mac);
   const overageCharge = formatMacOverageCharge(summary.estimated_over_mac_charge, summary.is_over_mac);
 
@@ -59,7 +60,9 @@ export default function MacWorkspaceBalance({ summary, showPolicy = true }: MacW
           <div>
             <h2 className="section-title-sm">رصيد MAC — مساحة العمل</h2>
             <small>
-              دورة {formatMacCycleMonth(summary.cycle_month)}
+              {billingPeriod
+                ? `دورة الفوترة: ${new Intl.DateTimeFormat("ar", { day: "numeric", month: "short" }).format(new Date(billingPeriod.start))} – ${new Intl.DateTimeFormat("ar", { day: "numeric", month: "short", year: "numeric" }).format(new Date(billingPeriod.end))}`
+                : `دورة ${formatMacCycleMonth(summary.cycle_month)}`}
               {summary.plan_name ? ` · ${summary.plan_name}` : ""}
             </small>
           </div>
