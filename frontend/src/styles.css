@@ -842,6 +842,48 @@ select, input, textarea {
   white-space: nowrap;
 }
 
+.inbox-column-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inbox-new-conversation-button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.inbox-new-conversation-panel {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-channel-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.inbox-channel-pill {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.inbox-channel-pill.active {
+  background: color-mix(in srgb, var(--accent-teal) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent-teal) 35%, var(--line));
+  color: var(--primary-darker);
+  font-weight: 700;
+}
+
 .conversation-scroll {
   flex: 1;
   min-height: 0;

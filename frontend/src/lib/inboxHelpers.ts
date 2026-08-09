@@ -1,3 +1,5 @@
+import { api } from "./api";
+
 export function formatWaitingMinutes(minutes: number | null | undefined) {
   if (minutes == null) return "";
   if (minutes < 60) return `${minutes} د`;
@@ -30,4 +32,18 @@ export function snoozeUntilTomorrowMorning(): Date {
   date.setDate(date.getDate() + 1);
   date.setHours(9, 0, 0, 0);
   return date;
+}
+
+export async function startConversationOnChannel(payload: {
+  channel_id: string;
+  external_address: string;
+  display_name?: string | null;
+}): Promise<{ conversation_id: string; channel_id: string; contact_id: string; created: boolean }> {
+  const response = await api.post<{
+    conversation_id: string;
+    channel_id: string;
+    contact_id: string;
+    created: boolean;
+  }>("/conversations/start", payload);
+  return response.data;
 }

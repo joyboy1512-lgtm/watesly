@@ -8,6 +8,7 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.permissions import Permission
 from app.db.session import get_db
 from app.schemas.conversation import (
+    ChannelThreadResponse,
     ConversationResponse,
     ConversationUpdateRequest,
     ConversationSendTextRequest,
@@ -16,6 +17,8 @@ from app.schemas.conversation import (
     ConversationSendProductListRequest,
     ConversationRenderTextRequest,
     ConversationContextResponse,
+    StartConversationRequest,
+    StartConversationResponse,
 )
 from app.schemas.growth import ConversationRatingRequest
 from app.services.whatsapp_window import (
@@ -101,6 +104,56 @@ async def get_conversations(
         for conversation, contact, message, unread in rows
     ]
     return await _mask_conversation_list(db, context, items)
+
+
+@router.post("/start", response_model=StartConversationResponse, status_code=201)
+async def post_start_conversation(
+    payload: StartConversationRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> StartConversationResponse:
+    from app.services.contact_management import start_conversation_on_channel
+
+    try:
+        conversation, contact, created = await start_conversation_on_channel(
+            db,
+            account_id=context.account_id,
+            channel_id=payload.channel_id,
+            external_address=payload.external_address,
+            display_name=payload.display_name,
+        )
+    except ValueError as exc:
+        messages = {
+            "INVALID_CHANNEL": (400, "Channel is invalid"),
+            "INVALID_PHONE": (400, "Phone number is invalid"),
+        }
+        code, detail = messages.get(str(exc), (400, "Unable to start conversation"))
+        raise HTTPException(status_code=code, detail=detail) from exc
+
+    return StartConversationResponse(
+        conversation_id=conversation.id,
+        contact_id=contact.id,
+        channel_id=conversation.channel_id,
+        created=created,
+    )
+
+
+@router.get("/channel-threads", response_model=list[ChannelThreadResponse])
+async def get_channel_threads(
+    phone: str = Query(..., min_length=3, max_length=120),
+    conversation_id: UUID | None = None,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+) -> list[ChannelThreadResponse]:
+    from app.services.contact_management import list_channel_threads_for_phone
+
+    rows = await list_channel_threads_for_phone(
+        db,
+        account_id=context.account_id,
+        external_address=phone.strip(),
+        exclude_conversation_id=conversation_id,
+    )
+    return [ChannelThreadResponse(**row) for row in rows]
 
 
 @router.get("/{conversation_id}/messages", response_model=list[MessageResponse])
