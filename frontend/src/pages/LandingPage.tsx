@@ -54,6 +54,16 @@ export default function LandingPage() {
 
   const mockup = site?.mockup;
   const apiSection = site?.api;
+  const clients =
+    site?.clients?.length
+      ? site.clients
+      : [
+          { icon: "✈️", name: "ترافل زون", industry: "السياحة والسفر" },
+          { icon: "✨", name: "ثري شايني", industry: "تجارة وتجزئة" },
+          { icon: "💄", name: "أوليفز", industry: "مستحضرات التجميل" },
+          { icon: "🛒", name: "بيغ باغ", industry: "بقالة ومواد غذائية" },
+          { icon: "🌍", name: "كينج ترافل", industry: "السياحة والسفر" },
+        ];
   const txt = (key: string, fallbackKey: string) =>
     pickSiteText(site, "landing", key, t(fallbackKey));
 
@@ -66,6 +76,8 @@ export default function LandingPage() {
         <nav className="landing-nav-links">
           <a href="#features">{txt("features", "landing.features")}</a>
           <a href="#how">{txt("howItWorks", "landing.howItWorks")}</a>
+          <a href="#about">{txt("aboutNav", "landing.aboutNav")}</a>
+          <a href="#clients">{txt("clientsNav", "landing.clientsNav")}</a>
           <a href="/pricing">{txt("pricingNav", "landing.pricingNav")}</a>
           {(display?.show_api ?? true) && <a href="#api">{txt("api", "landing.api")}</a>}
         </nav>
@@ -164,6 +176,58 @@ export default function LandingPage() {
         </section>
       )}
 
+      <section id="about" className="landing-section landing-about">
+        <div className="landing-about-grid">
+          <div className="landing-about-copy">
+            <p className="landing-eyebrow">{txt("aboutEyebrow", "landing.aboutEyebrow")}</p>
+            <h2>{txt("aboutTitle", "landing.aboutTitle")}</h2>
+            <p className="landing-about-lead">{txt("aboutLead", "landing.aboutLead")}</p>
+            <p className="landing-about-mission">{txt("companyMission", "landing.companyMission")}</p>
+          </div>
+          <div className="landing-company-card">
+            <h3>{txt("companyLegal", "landing.companyLegal")}</h3>
+            <ul className="landing-company-details">
+              <li>{txt("companyProduct", "landing.companyProduct")}</li>
+              <li>{txt("companyAddress", "landing.companyAddress")}</li>
+              <li>
+                <a href={`tel:+965${txt("companyPhone", "landing.companyPhone").replace(/\D/g, "")}`} dir="ltr">
+                  {txt("companyPhone", "landing.companyPhone")}
+                </a>
+              </li>
+              <li>
+                <a href={`mailto:${txt("companyEmail", "landing.companyEmail")}`}>
+                  {txt("companyEmail", "landing.companyEmail")}
+                </a>
+              </li>
+              <li>
+                <a href={`https://${txt("companyWebsite", "landing.companyWebsite")}`} target="_blank" rel="noreferrer">
+                  {txt("companyWebsite", "landing.companyWebsite")}
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {(display?.show_clients ?? true) && (
+        <section id="clients" className="landing-section landing-section-alt landing-clients">
+          <div className="landing-section-head">
+            <p className="landing-eyebrow">{txt("clientsEyebrow", "landing.clientsEyebrow")}</p>
+            <h2>{txt("clientsTitle", "landing.clientsTitle")}</h2>
+            <p>{txt("clientsSubtitle", "landing.clientsSubtitle")}</p>
+          </div>
+          <div className="landing-clients-grid">
+            {clients.map((client) => (
+              <article key={client.name} className="landing-client-card">
+                <span className="landing-client-icon">{client.icon ?? "🏢"}</span>
+                <h3>{client.name}</h3>
+                <p>{client.industry}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       {(display?.show_api ?? true) && (
         <section id="api" className="landing-section">
           <div className="landing-api-grid">
@@ -198,17 +262,48 @@ export default function LandingPage() {
       )}
 
       <footer className="landing-footer">
-        <div className="landing-footer-brand">
-          <BrandLogo tone="light" size="md" src={branding?.logo_light_url} alt={branding?.app_name} />
+        <div className="landing-footer-grid">
+          <div className="landing-footer-col landing-footer-brand">
+            <BrandLogo tone="light" size="md" src={branding?.logo_light_url} alt={branding?.app_name} />
+            <p>{txt("footerTagline", "landing.footerTagline")}</p>
+          </div>
+          <div className="landing-footer-col">
+            <h4>{txt("aboutNav", "landing.aboutNav")}</h4>
+            <p>{txt("footerCompany", "landing.footerCompany")}</p>
+            <p>{txt("footerAddress", "landing.footerAddress")}</p>
+            <p>
+              <a href={`tel:+965${txt("footerPhone", "landing.footerPhone").replace(/\D/g, "")}`} dir="ltr">
+                {txt("footerPhone", "landing.footerPhone")}
+              </a>
+            </p>
+            <p>
+              <a href={`mailto:${txt("footerContact", "landing.footerContact")}`}>
+                {txt("footerContact", "landing.footerContact")}
+              </a>
+            </p>
+          </div>
+          <div className="landing-footer-col">
+            <h4>{txt("features", "landing.features")}</h4>
+            <nav className="landing-footer-links">
+              <a href="#features">{txt("features", "landing.features")}</a>
+              <a href="#how">{txt("howItWorks", "landing.howItWorks")}</a>
+              <a href="#about">{txt("aboutNav", "landing.aboutNav")}</a>
+              <a href="#clients">{txt("clientsNav", "landing.clientsNav")}</a>
+              <a href="#api">{txt("api", "landing.api")}</a>
+              <Link to="/pricing">{txt("pricingNav", "landing.pricingNav")}</Link>
+            </nav>
+          </div>
+          <div className="landing-footer-col">
+            <h4>{txt("termsLink", "landing.termsLink")}</h4>
+            <nav className="landing-footer-links">
+              <Link to="/privacy">{txt("privacyLink", "landing.privacyLink")}</Link>
+              <Link to="/terms">{txt("termsLink", "landing.termsLink")}</Link>
+              <Link to="/register">{txt("getStarted", "landing.getStarted")}</Link>
+              <Link to="/login">{txt("signIn", "landing.signIn")}</Link>
+            </nav>
+          </div>
         </div>
-        <p>{txt("footerTagline", "landing.footerTagline")}</p>
-        <nav className="landing-footer-links">
-          <Link to="/pricing">{txt("pricingNav", "landing.pricingNav")}</Link>
-          <Link to="/privacy">{txt("privacyLink", "landing.privacyLink")}</Link>
-          <Link to="/terms">{txt("termsLink", "landing.termsLink")}</Link>
-          <Link to="/register">{txt("getStarted", "landing.getStarted")}</Link>
-        </nav>
-        <small>
+        <small className="landing-footer-rights">
           {(txt("footerRights", "landing.footerRights")).replace("{{year}}", String(new Date().getFullYear()))}
         </small>
       </footer>
