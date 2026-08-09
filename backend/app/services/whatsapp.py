@@ -25,6 +25,7 @@ from app.realtime.event_bus import publish_event
 from app.schemas.whatsapp import SendTextMessageRequest, WhatsAppAccountCreateRequest
 from app.schemas.whatsapp_media import SendMediaMessageRequest, SendTemplateMessageRequest
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
+from app.services.storage import storage
 from app.services.whatsapp_window import compute_service_window
 from app.models.automation import AutomationTriggerType
 from app.services.automation_triggers import queue_automation_runs
