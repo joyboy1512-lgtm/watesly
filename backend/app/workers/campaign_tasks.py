@@ -69,6 +69,12 @@ async def _run_campaign(campaign_id:UUID,execution_token:UUID)->dict:
      else:
       response=await client.send_template(to=to,template_name=template.name,language_code=template.language,components=components)
       messages=response.get("messages",[]); recipient.external_message_id=messages[0].get("id") if messages else None; recipient.status=CampaignRecipientStatus.SENT; recipient.error_message=None; sent+=1
+      if recipient.external_message_id:
+       from app.services.campaigns import record_campaign_outbound_message
+       from app.realtime.event_bus import publish_event
+       message=await record_campaign_outbound_message(db,campaign=campaign,recipient=recipient,contact=contact,wa=wa,template=template,to_address=to,external_message_id=recipient.external_message_id,send_components=components)
+       if message is not None:
+        await publish_event(campaign.account_id,{"type":"whatsapp.updated","conversation_id":str(message.conversation_id)})
     except MetaAPIError as exc: recipient.status=CampaignRecipientStatus.FAILED; recipient.error_message=str(exc)[:2000]; failed+=1
     finally: recipient.sending_started_at=None
     await db.commit(); await asyncio.sleep(sleep_min+random.random()*sleep_jitter)

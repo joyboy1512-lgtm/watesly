@@ -426,6 +426,8 @@ export default function InboxPage() {
           }
           const refreshMessages =
             payload.type === "message.received" ||
+            payload.type === "message.sent" ||
+            payload.type === "conversation.updated" ||
             payload.type === "whatsapp.updated" ||
             !payload.type;
           if (refreshMessages) {

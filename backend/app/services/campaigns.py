@@ -7,10 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
 from app.models.contact import Contact
+from app.models.conversation import Conversation, ConversationStatus
+from app.models.message import Message, MessageDirection, MessageStatus, MessageType
 from app.models.whatsapp_account import WhatsAppAccount
 from app.models.whatsapp_template import TemplateStatus, WhatsAppTemplate
 from app.schemas.campaign import CampaignCreateRequest
 from app.services.outbox import add_outbox_event
+from app.services.template_display import render_template_body_text
+
+_RECIPIENT_TO_MESSAGE_STATUS = {
+    CampaignRecipientStatus.SENT: MessageStatus.SENT,
+    CampaignRecipientStatus.DELIVERED: MessageStatus.DELIVERED,
+    CampaignRecipientStatus.READ: MessageStatus.READ,
+    CampaignRecipientStatus.FAILED: MessageStatus.FAILED,
+}
 
 
 async def create_campaign(db: AsyncSession, *, account_id: UUID, user_id: UUID, payload: CampaignCreateRequest) -> Campaign:
@@ -264,3 +274,136 @@ async def export_campaign_recipients_xlsx(
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+async def record_campaign_outbound_message(
+    db: AsyncSession,
+    *,
+    campaign: Campaign,
+    recipient: CampaignRecipient,
+    contact: Contact,
+    wa: WhatsAppAccount,
+    template: WhatsAppTemplate,
+    to_address: str,
+    external_message_id: str,
+    send_components: list,
+    recipient_status: CampaignRecipientStatus = CampaignRecipientStatus.SENT,
+) -> Message | None:
+    """Persist a successful campaign send in inbox messages/conversations."""
+    if not external_message_id:
+        return None
+
+    existing = (
+        await db.execute(select(Message).where(Message.external_message_id == external_message_id))
+    ).scalar_one_or_none()
+    if existing is not None:
+        mapped = _RECIPIENT_TO_MESSAGE_STATUS.get(recipient_status)
+        if mapped and existing.status != mapped:
+            existing.status = mapped
+            if recipient.error_message and recipient_status == CampaignRecipientStatus.FAILED:
+                payload = existing.provider_payload if isinstance(existing.provider_payload, dict) else {}
+                existing.provider_payload = {**payload, "delivery_error": recipient.error_message}
+        return existing
+
+    conv_result = await db.execute(
+        select(Conversation).where(
+            Conversation.contact_id == contact.id,
+            Conversation.channel_id == wa.channel_id,
+            Conversation.deleted_at.is_(None),
+            Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+        )
+    )
+    conversation = conv_result.scalars().first()
+    if conversation is None:
+        conversation = Conversation(
+            account_id=campaign.account_id,
+            organization_id=campaign.organization_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            status=ConversationStatus.OPEN,
+        )
+        db.add(conversation)
+        await db.flush()
+
+    message_status = _RECIPIENT_TO_MESSAGE_STATUS.get(recipient_status, MessageStatus.SENT)
+    message = Message(
+        account_id=campaign.account_id,
+        organization_id=campaign.organization_id,
+        channel_id=wa.channel_id,
+        contact_id=contact.id,
+        conversation_id=conversation.id,
+        external_message_id=external_message_id,
+        direction=MessageDirection.OUTBOUND,
+        type=MessageType.TEMPLATE,
+        from_address=wa.display_phone_number,
+        to_address=to_address,
+        text_body=render_template_body_text(template.components, fallback=template.body_text),
+        provider_payload={
+            "template_name": template.name,
+            "language_code": template.language,
+            "campaign_id": str(campaign.id),
+            "campaign_recipient_id": str(recipient.id),
+            "send_components": send_components,
+            "components": template.components,
+        },
+        status=message_status,
+    )
+    db.add(message)
+    now = datetime.now(UTC)
+    conversation.last_message_at = now
+    await db.flush()
+    return message
+
+
+async def backfill_campaign_inbox_messages(db: AsyncSession, *, account_id: UUID, limit: int = 500) -> int:
+    """Create inbox messages for campaign sends that were not previously recorded."""
+    rows = (
+        await db.execute(
+            select(CampaignRecipient, Campaign, Contact, WhatsAppAccount, WhatsAppTemplate)
+            .join(Campaign, Campaign.id == CampaignRecipient.campaign_id)
+            .join(Contact, Contact.id == CampaignRecipient.contact_id)
+            .join(WhatsAppAccount, WhatsAppAccount.id == Campaign.whatsapp_account_id)
+            .join(WhatsAppTemplate, WhatsAppTemplate.id == Campaign.template_id)
+            .outerjoin(Message, Message.external_message_id == CampaignRecipient.external_message_id)
+            .where(
+                Campaign.account_id == account_id,
+                CampaignRecipient.external_message_id.is_not(None),
+                Message.id.is_(None),
+                CampaignRecipient.status.in_([
+                    CampaignRecipientStatus.SENT,
+                    CampaignRecipientStatus.DELIVERED,
+                    CampaignRecipientStatus.READ,
+                    CampaignRecipientStatus.FAILED,
+                ]),
+            )
+            .order_by(CampaignRecipient.last_attempt_at.desc())
+            .limit(min(max(limit, 1), 2000))
+        )
+    ).all()
+
+    created = 0
+    for recipient, campaign, contact, wa, template in rows:
+        from app.services.phone_normalize import normalize_whatsapp_phone
+
+        dial = {"KW": "965", "SA": "966", "AE": "971", "QA": "974", "BH": "973", "OM": "968"}.get(
+            (contact.country_code or "KW").upper(), "965"
+        )
+        to_address = normalize_whatsapp_phone(contact.external_address, country_code=dial) or contact.external_address
+        components = recipient.template_parameters or []
+        message = await record_campaign_outbound_message(
+            db,
+            campaign=campaign,
+            recipient=recipient,
+            contact=contact,
+            wa=wa,
+            template=template,
+            to_address=to_address,
+            external_message_id=recipient.external_message_id or "",
+            send_components=components if isinstance(components, list) else [],
+            recipient_status=recipient.status,
+        )
+        if message is not None:
+            created += 1
+    if created:
+        await db.commit()
+    return created
