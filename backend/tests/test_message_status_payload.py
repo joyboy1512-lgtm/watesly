@@ -20,7 +20,7 @@ def test_extract_message_media_preserves_media_with_delivery_status() -> None:
         },
     )
     with patch(
-        "app.services.message_media.storage.create_presigned_download_url",
+        "app.services.message_media.storage.resolve_accessible_url",
         return_value="https://signed.example/photo.jpg",
     ):
         media = extract_message_media(message)

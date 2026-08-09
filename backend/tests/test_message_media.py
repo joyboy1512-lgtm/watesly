@@ -13,7 +13,23 @@ def _message(*, message_type: MessageType, provider_payload: dict, text_body: st
     )
 
 
-def test_extract_message_media_uses_object_key() -> None:
+def test_extract_message_media_uses_public_url_when_object_key_present() -> None:
+    message = _message(
+        message_type=MessageType.IMAGE,
+        provider_payload={
+            "object_key": "accounts/123/photo.jpg",
+            "media_url": "https://files.example.com/accounts/123/photo.jpg",
+            "filename": "photo.jpg",
+        },
+    )
+    with patch(
+        "app.services.message_media.storage.resolve_accessible_url",
+        return_value="https://files.example.com/accounts/123/photo.jpg",
+    ) as resolve:
+        media = extract_message_media(message)
+    resolve.assert_called_once_with("accounts/123/photo.jpg", expires_seconds=3600)
+    assert media["media_url"] == "https://files.example.com/accounts/123/photo.jpg"
+
     message = _message(
         message_type=MessageType.IMAGE,
         provider_payload={
@@ -22,7 +38,10 @@ def test_extract_message_media_uses_object_key() -> None:
             "meta_response": {"messages": [{"id": "wamid.test"}]},
         },
     )
-    with patch("app.services.message_media.storage.create_presigned_download_url", return_value="https://signed.example/photo.jpg"):
+    with patch(
+        "app.services.message_media.storage.resolve_accessible_url",
+        return_value="https://signed.example/photo.jpg",
+    ):
         media = extract_message_media(message)
     assert media["media_url"] == "https://signed.example/photo.jpg"
     assert media["media_filename"] == "photo.jpg"

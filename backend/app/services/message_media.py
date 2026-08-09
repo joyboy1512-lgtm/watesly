@@ -30,7 +30,7 @@ def extract_message_media(message: Message) -> dict:
     media_url = payload.get("media_url") or payload.get("url")
 
     if object_key:
-        media_url = storage.create_presigned_download_url(str(object_key), expires_seconds=3600)
+        media_url = storage.resolve_accessible_url(str(object_key), expires_seconds=3600)
         filename = filename or str(object_key).rsplit("/", 1)[-1]
 
     if media_url:
