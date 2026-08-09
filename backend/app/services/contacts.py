@@ -11,6 +11,7 @@ from app.models.segment import Segment
 from app.models.tag import Tag
 from app.schemas.contact import ContactCreateRequest
 from app.services.contact_management import _apply_segment_filters, apply_contact_tags
+from app.services.interests import apply_contact_interests
 from app.services.gender_inference import infer_gender_from_name, infer_gender_with_llm_fallback
 
 _LIST_LIMIT_MAX = 500
@@ -135,11 +136,17 @@ async def create_contact(
             contact_id=contact.id,
             tag_ids=payload.tag_ids,
         )
+        await apply_contact_interests(
+            db,
+            account_id=account_id,
+            contact_id=contact.id,
+            interest_ids=payload.interest_ids,
+        )
         await db.commit()
         await db.refresh(contact)
         return contact
 
-    data = payload.model_dump(exclude={"tag_ids"})
+    data = payload.model_dump(exclude={"tag_ids", "interest_ids"})
     data["gender"] = gender
     if lifecycle_stage is not None:
         data["lifecycle_stage"] = lifecycle_stage
@@ -151,6 +158,12 @@ async def create_contact(
         account_id=account_id,
         contact_id=contact.id,
         tag_ids=payload.tag_ids,
+    )
+    await apply_contact_interests(
+        db,
+        account_id=account_id,
+        contact_id=contact.id,
+        interest_ids=payload.interest_ids,
     )
     await db.commit()
     await db.refresh(contact)

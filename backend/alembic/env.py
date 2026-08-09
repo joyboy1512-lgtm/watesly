@@ -52,6 +52,8 @@ from app.models import (  # noqa: F401
     whatsapp_account,
     whatsapp_template,
     contact_tag,
+    contact_interest,
+    interest_category,
     custom_field,
     segment,
     department,

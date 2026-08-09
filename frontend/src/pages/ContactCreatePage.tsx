@@ -16,6 +16,7 @@ import {
   type Organization,
   type Tag
 } from "../lib/contactHelpers";
+import { interestGenderHint, type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 export default function ContactCreatePage() {
@@ -32,6 +33,7 @@ export default function ContactCreatePage() {
   const [countryCode, setCountryCode] = useState("KW");
   const [lifecycleStage, setLifecycleStage] = useState("lead");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState("");
 
   const organizations = useQuery({
@@ -46,6 +48,10 @@ export default function ContactCreatePage() {
     queryKey: ["tags"],
     queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data
   });
+  const interests = useQuery({
+    queryKey: ["interests"],
+    queryFn: async () => (await api.get<InterestCategory[]>("/platform/interests")).data
+  });
 
   const orgChannels = useMemo(
     () => (channels.data ?? []).filter((item) => !organizationId || item.organization_id === organizationId),
@@ -55,6 +61,12 @@ export default function ContactCreatePage() {
     () => (tags.data ?? []).filter((item) => !organizationId || item.organization_id === organizationId),
     [tags.data, organizationId]
   );
+
+  function toggleInterest(interestId: string) {
+    setSelectedInterestIds((current) =>
+      current.includes(interestId) ? current.filter((id) => id !== interestId) : [...current, interestId]
+    );
+  }
 
   function toggleTag(tagId: string) {
     setSelectedTagIds((current) =>
@@ -117,7 +129,8 @@ export default function ContactCreatePage() {
           language,
           countryCode,
           lifecycleStage,
-          tagIds: selectedTagIds
+          tagIds: selectedTagIds,
+          interestIds: selectedInterestIds
         })
       );
       await refreshContactsAfterMutation(client, response.data);
@@ -204,9 +217,30 @@ export default function ContactCreatePage() {
           <div className="contacts-form-section">
             <h2>التصنيف والشرائح</h2>
             <p className="hint-text">
-              الشرائح تُبنى من الفلاتر (الفرع، الوسم، المرحلة). عيّن الوسوم والمرحلة هنا ليدخل العميل الشرائح المطابقة.
-              لإنشاء شريحة جديدة: صفحة العملاء → زر <strong>الشرائح</strong>.
+              اختر <strong>اهتمامات العميل</strong> لتوجيه الحملات (مثل: تجميل لا يُرسل للرجال تلقائياً).
+              الشرائح تُبنى من الاهتمامات + الفرع + الوسم + المرحلة.
             </p>
+            <div className="field-label">
+              <span>اهتمامات العميل</span>
+              <div className="contacts-tags-cell">
+                {(interests.data ?? []).map((interest) => {
+                  const active = selectedInterestIds.includes(interest.id);
+                  const hint = interestGenderHint(interest);
+                  return (
+                    <button
+                      key={interest.id}
+                      type="button"
+                      className={`contacts-tag-chip contacts-interest-chip ${active ? "contacts-tag-chip-active" : ""}`}
+                      onClick={() => toggleInterest(interest.id)}
+                      title={hint ?? undefined}
+                    >
+                      {interest.label}
+                      {hint && <small> · {hint}</small>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <label className="field-label">
               <span>مرحلة العميل</span>
               <select value={lifecycleStage} onChange={(e) => setLifecycleStage(e.target.value)}>

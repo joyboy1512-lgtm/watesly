@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -22,6 +22,7 @@ import {
   type Tag
 } from "../lib/contactHelpers";
 import { STAGE_LABELS, formatDealAmount, type Deal } from "../lib/crmHelpers";
+import { interestGenderHint, type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 type CustomFieldDef = { id: string; field_key: string; label: string; field_type: string };
@@ -55,6 +56,17 @@ export default function ContactDetailPage() {
   const allTags = useQuery({
     queryKey: ["tags"],
     queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data
+  });
+
+  const contactInterests = useQuery({
+    queryKey: ["contact-interests", id],
+    enabled: Boolean(id),
+    queryFn: async () => (await api.get<InterestCategory[]>(`/contacts/${id}/interests`)).data
+  });
+
+  const allInterests = useQuery({
+    queryKey: ["interests"],
+    queryFn: async () => (await api.get<InterestCategory[]>("/platform/interests")).data
   });
 
   const customFieldValues = useQuery({
@@ -246,6 +258,17 @@ export default function ContactDetailPage() {
               <div><dt>تاريخ الإضافة</dt><dd>{formatContactDate(item.created_at)}</dd></div>
               <div><dt>آخر تحديث</dt><dd>{item.updated_at ? formatContactDate(item.updated_at) : "—"}</dd></div>
             </dl>
+          </section>
+
+          <section className="contacts-detail-panel">
+            <h2>اهتمامات العميل</h2>
+            <p className="hint-text">تُستخدم لتوجيه الحملات واستبعاد فئات غير مناسبة (مثل تجميل للرجال).</p>
+            <ContactInterestsEditor
+              contactId={id!}
+              assigned={(contactInterests.data ?? []).map((item) => item.id)}
+              options={allInterests.data ?? []}
+              onSaved={() => void client.invalidateQueries({ queryKey: ["contact-interests", id] })}
+            />
           </section>
 
           <section className="contacts-detail-panel">
@@ -447,6 +470,68 @@ function ContactEditModal({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function ContactInterestsEditor({
+  contactId,
+  assigned,
+  options,
+  onSaved
+}: {
+  contactId: string;
+  assigned: string[];
+  options: InterestCategory[];
+  onSaved: () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(assigned);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setSelected(assigned);
+  }, [assigned]);
+
+  function toggle(interestId: string) {
+    setSelected((current) =>
+      current.includes(interestId) ? current.filter((id) => id !== interestId) : [...current, interestId]
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.put(`/contacts/${contactId}/interests`, { interest_ids: selected });
+      onSaved();
+      toastStore.getState().show("تم حفظ الاهتمامات.", "success");
+    } catch {
+      toastStore.getState().show("تعذر حفظ الاهتمامات.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="contacts-tags-cell">
+      {options.map((interest) => {
+        const active = selected.includes(interest.id);
+        const hint = interestGenderHint(interest);
+        return (
+          <button
+            key={interest.id}
+            type="button"
+            className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
+            onClick={() => toggle(interest.id)}
+            title={hint ?? undefined}
+          >
+            {interest.label}
+            {hint && <small> · {hint}</small>}
+          </button>
+        );
+      })}
+      <button type="button" className="contacts-erp-btn" disabled={saving} onClick={() => void save()}>
+        {saving ? "جاري الحفظ…" : "حفظ الاهتمامات"}
+      </button>
     </div>
   );
 }

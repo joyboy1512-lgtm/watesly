@@ -32,6 +32,7 @@ from app.services.contact_management import (
     remove_contact_tag,
     update_contact,
 )
+from app.services.interests import apply_contact_interests, list_contact_interests
 from app.services.contacts import create_contact, list_contacts
 from app.services.contact_serialization import contact_to_response
 from app.services.feature_flags import get_feature_flags
@@ -52,6 +53,10 @@ class ContactUpdateBody(BaseModel):
     country_code: str | None = None
     marketing_opt_in: bool | None = None
     lifecycle_stage: str | None = Field(default=None, max_length=30)
+
+
+class ContactInterestsBody(BaseModel):
+    interest_ids: list[UUID] = Field(default_factory=list)
 
 
 def _contact_permissions(context: AuthContext) -> set[str]:
@@ -136,6 +141,7 @@ async def post_contact(
             "INVALID_CHANNEL": (400, "Channel is invalid"),
             "CHANNEL_ORGANIZATION_MISMATCH": (400, "Channel does not belong to this organization"),
             "INVALID_TAG": (400, "One or more tags are invalid"),
+            "INVALID_INTEREST": (400, "One or more interests are invalid"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create contact"))
         raise HTTPException(status_code=code, detail=detail) from exc
@@ -352,6 +358,58 @@ async def delete_contact_tag(
         await remove_contact_tag(db, account_id=context.account_id, contact_id=contact_id, tag_id=tag_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{contact_id}/interests")
+async def get_contact_interests(
+    contact_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        items = await list_contact_interests(db, context.account_id, contact_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [
+        {
+            "id": str(item.id),
+            "slug": item.slug,
+            "label": item.label,
+            "exclude_genders": list(item.exclude_genders or []),
+        }
+        for item in items
+    ]
+
+
+@router.put("/{contact_id}/interests")
+async def put_contact_interests(
+    contact_id: UUID,
+    payload: ContactInterestsBody,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await apply_contact_interests(
+            db,
+            account_id=context.account_id,
+            contact_id=contact_id,
+            interest_ids=payload.interest_ids,
+        )
+        await db.commit()
+        items = await list_contact_interests(db, context.account_id, contact_id)
+    except ValueError as exc:
+        if str(exc) == "INVALID_INTEREST":
+            raise HTTPException(status_code=400, detail="One or more interests are invalid") from exc
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [
+        {
+            "id": str(item.id),
+            "slug": item.slug,
+            "label": item.label,
+            "exclude_genders": list(item.exclude_genders or []),
+        }
+        for item in items
+    ]
 
 
 @router.get("/{contact_id}/custom-fields")
