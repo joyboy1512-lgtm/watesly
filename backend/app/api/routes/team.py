@@ -65,6 +65,7 @@ async def invite_employee(
     except ValueError as exc:
         messages = {
             "INVALID_ORGANIZATION": (400, "One or more organizations are invalid"),
+            "INVALID_CHANNEL": (400, "One or more WhatsApp channels are invalid for the selected branches"),
             "ALREADY_MEMBER": (409, "This user is already a member of the account"),
             "USER_LIMIT_REACHED": (403, "User limit reached for this plan"),
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),

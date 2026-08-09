@@ -5,10 +5,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.campaign import Campaign
 from app.models.channel import Channel
 from app.models.membership import Membership, MembershipRole
 from app.models.organization import Organization, OrganizationStatus
 from app.models.organization_membership import OrganizationMembership
+from app.models.whatsapp_account import WhatsAppAccount
+from app.models.whatsapp_template import WhatsAppTemplate
 from app.services.membership_channels import (
     get_accessible_channel_ids,
     list_membership_channel_ids,
@@ -103,3 +106,145 @@ async def filter_channels_for_membership(
 
 async def has_explicit_channel_restrictions(db: AsyncSession, membership_id: UUID) -> bool:
     return bool(await list_membership_channel_ids(db, membership_id))
+
+
+async def ensure_membership_organization_access(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+    organization_id: UUID,
+) -> None:
+    allowed = await resolve_accessible_organization_ids(
+        db, account_id=account_id, membership=membership
+    )
+    if allowed is None:
+        return
+    if organization_id not in allowed:
+        raise ValueError("ACCESS_FORBIDDEN")
+
+
+async def ensure_whatsapp_account_access(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+    whatsapp_account_id: UUID,
+) -> WhatsAppAccount:
+    wa = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if wa is None or wa.account_id != account_id:
+        raise ValueError("INVALID_WHATSAPP_ACCOUNT")
+    await ensure_membership_organization_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        organization_id=wa.organization_id,
+    )
+    await ensure_membership_channel_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        channel_id=wa.channel_id,
+    )
+    return wa
+
+
+async def ensure_campaign_access(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+    campaign: Campaign,
+) -> None:
+    await ensure_membership_organization_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        organization_id=campaign.organization_id,
+    )
+    wa = await db.get(WhatsAppAccount, campaign.whatsapp_account_id)
+    if wa is None or wa.account_id != account_id:
+        raise ValueError("CAMPAIGN_NOT_FOUND")
+    await ensure_membership_channel_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        channel_id=wa.channel_id,
+    )
+
+
+async def ensure_template_access(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+    template: WhatsAppTemplate,
+) -> None:
+    await ensure_membership_organization_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        organization_id=template.organization_id,
+    )
+    await ensure_whatsapp_account_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        whatsapp_account_id=template.whatsapp_account_id,
+    )
+
+
+async def campaign_list_filters(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+) -> list:
+    org_ids = await resolve_accessible_organization_ids(
+        db, account_id=account_id, membership=membership
+    )
+    channel_ids = await resolve_accessible_channel_ids(
+        db, account_id=account_id, membership=membership
+    )
+    filters = []
+    if org_ids is not None:
+        if not org_ids:
+            return [Campaign.id.is_(None)]
+        filters.append(Campaign.organization_id.in_(org_ids))
+    if channel_ids is not None:
+        if not channel_ids:
+            return [Campaign.id.is_(None)]
+        wa_ids = select(WhatsAppAccount.id).where(
+            WhatsAppAccount.account_id == account_id,
+            WhatsAppAccount.channel_id.in_(channel_ids),
+        )
+        filters.append(Campaign.whatsapp_account_id.in_(wa_ids))
+    return filters
+
+
+async def template_list_filters(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+) -> list:
+    org_ids = await resolve_accessible_organization_ids(
+        db, account_id=account_id, membership=membership
+    )
+    channel_ids = await resolve_accessible_channel_ids(
+        db, account_id=account_id, membership=membership
+    )
+    filters = []
+    if org_ids is not None:
+        if not org_ids:
+            return [WhatsAppTemplate.id.is_(None)]
+        filters.append(WhatsAppTemplate.organization_id.in_(org_ids))
+    if channel_ids is not None:
+        if not channel_ids:
+            return [WhatsAppTemplate.id.is_(None)]
+        wa_ids = select(WhatsAppAccount.id).where(
+            WhatsAppAccount.account_id == account_id,
+            WhatsAppAccount.channel_id.in_(channel_ids),
+        )
+        filters.append(WhatsAppTemplate.whatsapp_account_id.in_(wa_ids))
+    return filters

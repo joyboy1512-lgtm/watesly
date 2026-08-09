@@ -48,10 +48,21 @@ async def create_template(
     *,
     account_id: UUID,
     payload: TemplateCreateRequest,
+    membership=None,
 ) -> WhatsAppTemplate:
-    wa = await db.get(WhatsAppAccount, payload.whatsapp_account_id)
-    if wa is None or wa.account_id != account_id:
-        raise ValueError("INVALID_WHATSAPP_ACCOUNT")
+    from app.services.membership_access import ensure_whatsapp_account_access
+
+    if membership is not None:
+        wa = await ensure_whatsapp_account_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            whatsapp_account_id=payload.whatsapp_account_id,
+        )
+    else:
+        wa = await db.get(WhatsAppAccount, payload.whatsapp_account_id)
+        if wa is None or wa.account_id != account_id:
+            raise ValueError("INVALID_WHATSAPP_ACCOUNT")
     template = WhatsAppTemplate(
         account_id=account_id,
         organization_id=wa.organization_id,
@@ -63,12 +74,24 @@ async def create_template(
     return template
 
 
-async def list_templates(db: AsyncSession, account_id: UUID) -> list[WhatsAppTemplate]:
-    result = await db.execute(
-        select(WhatsAppTemplate)
-        .where(WhatsAppTemplate.account_id == account_id)
-        .order_by(WhatsAppTemplate.created_at.desc())
-    )
+async def list_templates(
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    membership=None,
+) -> list[WhatsAppTemplate]:
+    from app.services.membership_access import template_list_filters
+
+    query = select(WhatsAppTemplate).where(WhatsAppTemplate.account_id == account_id)
+    if membership is not None:
+        for clause in await template_list_filters(
+            db, account_id=account_id, membership=membership
+        ):
+            query = query.where(clause)
+    query = query.order_by(WhatsAppTemplate.created_at.desc())
+
+
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
@@ -77,10 +100,21 @@ async def sync_templates_from_meta(
     *,
     account_id: UUID,
     whatsapp_account_id: UUID,
+    membership=None,
 ) -> tuple[int, int]:
-    wa = await db.get(WhatsAppAccount, whatsapp_account_id)
-    if wa is None or wa.account_id != account_id:
-        raise ValueError("INVALID_WHATSAPP_ACCOUNT")
+    from app.services.membership_access import ensure_whatsapp_account_access
+
+    if membership is not None:
+        wa = await ensure_whatsapp_account_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    else:
+        wa = await db.get(WhatsAppAccount, whatsapp_account_id)
+        if wa is None or wa.account_id != account_id:
+            raise ValueError("INVALID_WHATSAPP_ACCOUNT")
 
     client = MetaWhatsAppClient(
         access_token=decrypt_secret(wa.access_token_encrypted),
@@ -142,10 +176,17 @@ async def update_template(
     account_id: UUID,
     template_id: UUID,
     payload,
+    membership=None,
 ) -> WhatsAppTemplate:
+    from app.services.membership_access import ensure_template_access
+
     template = await db.get(WhatsAppTemplate, template_id)
     if template is None or template.account_id != account_id:
         raise ValueError("TEMPLATE_NOT_FOUND")
+    if membership is not None:
+        await ensure_template_access(
+            db, account_id=account_id, membership=membership, template=template
+        )
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(template, key, value)
@@ -159,9 +200,16 @@ async def delete_template(
     *,
     account_id: UUID,
     template_id: UUID,
+    membership=None,
 ) -> None:
+    from app.services.membership_access import ensure_template_access
+
     template = await db.get(WhatsAppTemplate, template_id)
     if template is None or template.account_id != account_id:
         raise ValueError("TEMPLATE_NOT_FOUND")
+    if membership is not None:
+        await ensure_template_access(
+            db, account_id=account_id, membership=membership, template=template
+        )
     await db.delete(template)
     await db.commit()

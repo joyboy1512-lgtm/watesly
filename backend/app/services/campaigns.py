@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.campaign import Campaign, CampaignStatus
+from app.models.membership import Membership
 from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
 from app.models.contact import Contact
 from app.models.conversation import Conversation, ConversationStatus
@@ -31,11 +32,37 @@ _ARCHIVABLE_STATUSES = {
 }
 
 
-async def create_campaign(db: AsyncSession, *, account_id: UUID, user_id: UUID, payload: CampaignCreateRequest) -> Campaign:
-    wa = await db.get(WhatsAppAccount, payload.whatsapp_account_id)
+async def create_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    user_id: UUID,
+    payload: CampaignCreateRequest,
+    membership: Membership | None = None,
+) -> Campaign:
+    from app.services.membership_access import (
+        ensure_membership_organization_access,
+        ensure_whatsapp_account_access,
+    )
+
+    if membership is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=payload.organization_id,
+        )
+        wa = await ensure_whatsapp_account_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            whatsapp_account_id=payload.whatsapp_account_id,
+        )
+    else:
+        wa = await db.get(WhatsAppAccount, payload.whatsapp_account_id)
+        if wa is None or wa.account_id != account_id:
+            raise ValueError("INVALID_WHATSAPP_ACCOUNT")
     template = await db.get(WhatsAppTemplate, payload.template_id)
-    if wa is None or wa.account_id != account_id:
-        raise ValueError("INVALID_WHATSAPP_ACCOUNT")
     if wa.organization_id != payload.organization_id:
         raise ValueError("ORGANIZATION_MISMATCH")
     if template is None or template.account_id != account_id:
@@ -95,16 +122,20 @@ async def list_campaigns(
     db: AsyncSession,
     account_id: UUID,
     *,
+    membership: Membership | None = None,
     limit: int = 100,
     include_archived: bool = False,
     archived_only: bool = False,
 ) -> list[Campaign]:
-    query = (
-        select(Campaign)
-        .where(Campaign.account_id == account_id)
-        .order_by(Campaign.created_at.desc())
-        .limit(min(max(limit, 1), 200))
-    )
+    from app.services.membership_access import campaign_list_filters
+
+    query = select(Campaign).where(Campaign.account_id == account_id)
+    if membership is not None:
+        for clause in await campaign_list_filters(
+            db, account_id=account_id, membership=membership
+        ):
+            query = query.where(clause)
+    query = query.order_by(Campaign.created_at.desc()).limit(min(max(limit, 1), 200))
     if archived_only:
         query = query.where(Campaign.archived_at.is_not(None))
     elif not include_archived:
@@ -117,6 +148,7 @@ async def list_campaigns_with_reports(
     db: AsyncSession,
     account_id: UUID,
     *,
+    membership: Membership | None = None,
     limit: int = 100,
     include_archived: bool = False,
     archived_only: bool = False,
@@ -124,6 +156,7 @@ async def list_campaigns_with_reports(
     campaigns = await list_campaigns(
         db,
         account_id,
+        membership=membership,
         limit=limit,
         include_archived=include_archived,
         archived_only=archived_only,
@@ -131,7 +164,10 @@ async def list_campaigns_with_reports(
     items: list[dict] = []
     for campaign in campaigns:
         report = await get_campaign_report(
-            db, account_id=account_id, campaign_id=campaign.id
+            db,
+            account_id=account_id,
+            campaign_id=campaign.id,
+            membership=membership,
         )
         status = campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status)
         items.append({
@@ -151,10 +187,22 @@ async def list_campaigns_with_reports(
     return items
 
 
-async def get_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> Campaign:
+async def get_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
+) -> Campaign:
+    from app.services.membership_access import ensure_campaign_access
+
     campaign = await db.get(Campaign, campaign_id)
     if campaign is None or campaign.account_id != account_id:
         raise ValueError("CAMPAIGN_NOT_FOUND")
+    if membership is not None:
+        await ensure_campaign_access(
+            db, account_id=account_id, membership=membership, campaign=campaign
+        )
     return campaign
 
 
@@ -162,8 +210,17 @@ async def recipient_count(db: AsyncSession, campaign_id: UUID) -> int:
     return int((await db.scalar(select(func.count(CampaignRecipient.id)).where(CampaignRecipient.campaign_id == campaign_id))) or 0)
 
 
-async def approve_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID, user_id: UUID) -> Campaign:
-    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+async def approve_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    user_id: UUID,
+    membership: Membership | None = None,
+) -> Campaign:
+    campaign = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     if campaign.status not in {CampaignStatus.DRAFT, CampaignStatus.PAUSED}:
         raise ValueError("CAMPAIGN_CANNOT_BE_APPROVED")
     count = await recipient_count(db, campaign.id)
@@ -175,7 +232,17 @@ async def approve_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: U
     return campaign
 
 
-async def prepare_campaign_start(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> Campaign:
+async def prepare_campaign_start(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
+) -> Campaign:
+    if membership is not None:
+        await get_campaign(
+            db, account_id=account_id, campaign_id=campaign_id, membership=membership
+        )
     campaign = (await db.execute(select(Campaign).where(Campaign.id==campaign_id,Campaign.account_id==account_id).with_for_update())).scalar_one_or_none()
     if campaign is None: raise ValueError("CAMPAIGN_NOT_FOUND")
     if campaign.status not in {CampaignStatus.DRAFT, CampaignStatus.SCHEDULED, CampaignStatus.PAUSED}:
@@ -193,8 +260,16 @@ async def prepare_campaign_start(db: AsyncSession, *, account_id: UUID, campaign
     return campaign
 
 
-async def pause_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> Campaign:
-    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+async def pause_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
+) -> Campaign:
+    campaign = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     if campaign.status not in {CampaignStatus.SCHEDULED, CampaignStatus.RUNNING}:
         raise ValueError("CAMPAIGN_CANNOT_PAUSE")
     campaign.status = CampaignStatus.PAUSED
@@ -203,8 +278,17 @@ async def pause_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUI
     return campaign
 
 
-async def cancel_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID, reason: str) -> Campaign:
-    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+async def cancel_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    reason: str,
+    membership: Membership | None = None,
+) -> Campaign:
+    campaign = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     if campaign.status in {CampaignStatus.COMPLETED, CampaignStatus.CANCELLED}:
         raise ValueError("CAMPAIGN_CANNOT_CANCEL")
     campaign.status = CampaignStatus.CANCELLED
@@ -214,8 +298,16 @@ async def cancel_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UU
     return campaign
 
 
-async def archive_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> Campaign:
-    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+async def archive_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
+) -> Campaign:
+    campaign = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     if campaign.status not in _ARCHIVABLE_STATUSES:
         raise ValueError("CAMPAIGN_CANNOT_ARCHIVE")
     if campaign.archived_at is None:
@@ -233,8 +325,16 @@ async def archive_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: U
     return campaign
 
 
-async def unarchive_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> Campaign:
-    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+async def unarchive_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
+) -> Campaign:
+    campaign = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     if campaign.archived_at is None:
         raise ValueError("CAMPAIGN_NOT_ARCHIVED")
     campaign.archived_at = None
@@ -251,8 +351,16 @@ async def unarchive_campaign(db: AsyncSession, *, account_id: UUID, campaign_id:
     return campaign
 
 
-async def delete_draft_campaign(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> None:
-    campaign = await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+async def delete_draft_campaign(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
+) -> None:
+    campaign = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     if campaign.status != CampaignStatus.DRAFT:
         raise ValueError("CAMPAIGN_CANNOT_DELETE")
     sent_count = int(
@@ -290,8 +398,16 @@ async def delete_draft_campaign(db: AsyncSession, *, account_id: UUID, campaign_
     await db.commit()
 
 
-async def get_campaign_report(db: AsyncSession, *, account_id: UUID, campaign_id: UUID) -> dict:
-    await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+async def get_campaign_report(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
+) -> dict:
+    await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     result = await db.execute(select(CampaignRecipient.status, func.count(CampaignRecipient.id)).where(CampaignRecipient.campaign_id == campaign_id).group_by(CampaignRecipient.status))
     counts: dict[CampaignRecipientStatus, int] = {}
     for status, count in result.all():
@@ -302,9 +418,15 @@ async def get_campaign_report(db: AsyncSession, *, account_id: UUID, campaign_id
 
 
 async def list_campaign_recipients(
-    db: AsyncSession, *, account_id: UUID, campaign_id: UUID
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
 ) -> list[dict]:
-    await get_campaign(db, account_id=account_id, campaign_id=campaign_id)
+    await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     rows = await db.execute(
         select(CampaignRecipient, Contact)
         .join(Contact, Contact.id == CampaignRecipient.contact_id)
@@ -325,12 +447,18 @@ async def list_campaign_recipients(
 
 
 async def export_campaign_recipients_csv(
-    db: AsyncSession, *, account_id: UUID, campaign_id: UUID
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
 ) -> str:
     import csv
     import io
 
-    items = await list_campaign_recipients(db, account_id=account_id, campaign_id=campaign_id)
+    items = await list_campaign_recipients(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(["name", "phone", "status", "error"])
@@ -345,17 +473,25 @@ async def export_campaign_recipients_csv(
 
 
 async def export_campaign_recipients_xlsx(
-    db: AsyncSession, *, account_id: UUID, campaign_id: UUID
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership: Membership | None = None,
 ) -> bytes:
     import io
 
     from openpyxl import Workbook
 
-    items = await list_campaign_recipients(db, account_id=account_id, campaign_id=campaign_id)
+    items = await list_campaign_recipients(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     workbook = Workbook()
     workbook.remove(workbook.active)
 
-    summary = await get_campaign_report(db, account_id=account_id, campaign_id=campaign_id)
+    summary = await get_campaign_report(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     summary_sheet = workbook.create_sheet("ملخص")
     summary_sheet.append(["المؤشر", "القيمة"])
     for key, value in summary.items():

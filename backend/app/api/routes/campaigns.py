@@ -13,6 +13,7 @@ from app.schemas.campaign import (
     CampaignReportSummary,
     CampaignResponse,
 )
+from app.models.whatsapp_template import WhatsAppTemplate
 from app.services.whatsapp_window import campaign_audience_preflight
 from app.services.campaigns import (
     approve_campaign,
@@ -38,6 +39,8 @@ class CancelCampaignRequest(BaseModel):
 
 def _error(exc: ValueError) -> HTTPException:
     code = str(exc)
+    if code == "ACCESS_FORBIDDEN":
+        return HTTPException(status_code=403, detail=code)
     if code == "CAMPAIGN_NOT_FOUND":
         status_code = 404
     elif code in {
@@ -62,6 +65,7 @@ async def get_campaigns(
     return await list_campaigns_with_reports(
         db,
         context.account_id,
+        membership=context.membership,
         limit=limit,
         include_archived=include_archived,
         archived_only=archived_only,
@@ -74,7 +78,12 @@ async def campaign_report(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await get_campaign_report(db, account_id=context.account_id, campaign_id=campaign_id)
+        return await get_campaign_report(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
         raise _error(exc) from exc
 
@@ -85,7 +94,12 @@ async def campaign_recipients(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await list_campaign_recipients(db, account_id=context.account_id, campaign_id=campaign_id)
+        return await list_campaign_recipients(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
         raise _error(exc) from exc
 
@@ -99,7 +113,10 @@ async def export_campaign_recipients(
     try:
         if format == "csv":
             content = await export_campaign_recipients_csv(
-                db, account_id=context.account_id, campaign_id=campaign_id
+                db,
+                account_id=context.account_id,
+                campaign_id=campaign_id,
+                membership=context.membership,
             )
             return Response(
                 content=content,
@@ -107,7 +124,10 @@ async def export_campaign_recipients(
                 headers={"Content-Disposition": f'attachment; filename="campaign-{campaign_id}-recipients.csv"'},
             )
         content = await export_campaign_recipients_xlsx(
-            db, account_id=context.account_id, campaign_id=campaign_id
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
         )
         return Response(
             content=content,
@@ -120,9 +140,17 @@ async def export_campaign_recipients(
 @router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
 async def post_campaign(payload: CampaignCreateRequest, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)), db: AsyncSession = Depends(get_db)):
     try:
-        return await create_campaign(db, account_id=context.account_id, user_id=context.user.id, payload=payload)
+        return await create_campaign(
+            db,
+            account_id=context.account_id,
+            user_id=context.user.id,
+            payload=payload,
+            membership=context.membership,
+        )
     except ValueError as exc:
         code = str(exc)
+        if code == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=code) from exc
         messages = {
             "ALL_RECIPIENTS_OPTED_OUT": "كل العملاء المختارين رفضوا التسويق (opt-out).",
             "INVALID_RECIPIENT": "بعض العملاء غير صالحين لهذا الفرع — اختر الفرع والقناة ثم حمّل الجمهور من جديد.",
@@ -145,7 +173,24 @@ async def import_campaign_audience(
 ):
     content = await file.read()
     filename = file.filename or "audience.xlsx"
+    from app.services.membership_access import (
+        ensure_membership_channel_access,
+        ensure_membership_organization_access,
+    )
+
     try:
+        await ensure_membership_organization_access(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            organization_id=organization_id,
+        )
+        await ensure_membership_channel_access(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            channel_id=channel_id,
+        )
         return await import_contacts_file(
             db,
             account_id=context.account_id,
@@ -156,6 +201,8 @@ async def import_campaign_audience(
         )
     except ValueError as exc:
         code = str(exc)
+        if code in {"ACCESS_FORBIDDEN", "CONVERSATION_FORBIDDEN"}:
+            raise HTTPException(status_code=403, detail=code) from exc
         messages = {
             "UNSUPPORTED_FILE_FORMAT": "Unsupported file format. Use .xlsx or .csv",
             "FILE_TOO_LARGE": "File is too large (max 10 MB)",
@@ -169,11 +216,23 @@ async def post_campaign_preflight(
     context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.whatsapp_template import WhatsAppTemplate
+    from app.services.membership_access import ensure_whatsapp_account_access
 
     template = await db.get(WhatsAppTemplate, payload.template_id)
     if template is None or template.account_id != context.account_id:
         raise HTTPException(status_code=404, detail="Template not found")
+    try:
+        await ensure_whatsapp_account_access(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            whatsapp_account_id=payload.whatsapp_account_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=code) from exc
+        raise HTTPException(status_code=400, detail="Invalid WhatsApp account") from exc
     category = template.category.value if hasattr(template.category, "value") else str(template.category)
     return await campaign_audience_preflight(
         db,
@@ -188,12 +247,26 @@ async def post_campaign_preflight(
 
 @router.post("/{campaign_id}/approve", response_model=CampaignResponse)
 async def approve(campaign_id: UUID, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_APPROVE, write=True)), db: AsyncSession = Depends(get_db)):
-    try: return await approve_campaign(db, account_id=context.account_id, campaign_id=campaign_id, user_id=context.user.id)
-    except ValueError as exc: raise _error(exc) from exc
+    try:
+        return await approve_campaign(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            user_id=context.user.id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        raise _error(exc) from exc
 
 @router.post("/{campaign_id}/start", response_model=CampaignResponse)
 async def start(campaign_id: UUID, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)), db: AsyncSession = Depends(get_db)):
-    try: campaign = await prepare_campaign_start(db, account_id=context.account_id, campaign_id=campaign_id)
+    try:
+        campaign = await prepare_campaign_start(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
     except ValueError as exc: raise _error(exc) from exc
     from datetime import UTC, datetime
     from app.services.scheduler import schedule_job
@@ -218,12 +291,26 @@ async def start(campaign_id: UUID, context: AuthContext = Depends(require_permis
 
 @router.post("/{campaign_id}/pause", response_model=CampaignResponse)
 async def pause(campaign_id: UUID, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)), db: AsyncSession = Depends(get_db)):
-    try: return await pause_campaign(db, account_id=context.account_id, campaign_id=campaign_id)
-    except ValueError as exc: raise _error(exc) from exc
+    try:
+        return await pause_campaign(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        raise _error(exc) from exc
 
 @router.post("/{campaign_id}/cancel", response_model=CampaignResponse)
 async def cancel(campaign_id: UUID, payload: CancelCampaignRequest, context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_APPROVE, write=True)), db: AsyncSession = Depends(get_db)):
-    try: return await cancel_campaign(db, account_id=context.account_id, campaign_id=campaign_id, reason=payload.reason)
+    try:
+        return await cancel_campaign(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            reason=payload.reason,
+            membership=context.membership,
+        )
     except ValueError as exc: raise _error(exc) from exc
 
 @router.post("/{campaign_id}/archive", response_model=CampaignResponse)
@@ -233,7 +320,12 @@ async def archive(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await archive_campaign(db, account_id=context.account_id, campaign_id=campaign_id)
+        return await archive_campaign(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
         raise _error(exc) from exc
 
@@ -244,7 +336,12 @@ async def unarchive(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await unarchive_campaign(db, account_id=context.account_id, campaign_id=campaign_id)
+        return await unarchive_campaign(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
         raise _error(exc) from exc
 
@@ -255,7 +352,12 @@ async def delete_campaign(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await delete_draft_campaign(db, account_id=context.account_id, campaign_id=campaign_id)
+        await delete_draft_campaign(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
         raise _error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -281,8 +383,11 @@ async def create_follow_up(
             user_id=context.user.id,
             campaign_id=campaign_id,
             follow_up_type=payload.follow_up_type,
+            membership=context.membership,
         )
     except ValueError as exc:
         code = str(exc)
+        if code == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=code) from exc
         status_code = 404 if code == "CAMPAIGN_NOT_FOUND" else 400
         raise HTTPException(status_code=status_code, detail=code) from exc

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.campaign import Campaign, CampaignStatus
+from app.models.membership import Membership
 from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
 from app.models.contact import Contact
 from app.services.feature_flags import get_feature_flags
@@ -39,7 +40,10 @@ async def create_follow_up_campaign(
     campaign_id: UUID,
     follow_up_type: str,
     name_suffix: str | None = None,
+    membership: Membership | None = None,
 ) -> Campaign:
+    from app.services.campaigns import get_campaign
+
     flags = await get_feature_flags(db, account_id=account_id)
     if not flags.get("follow_up_campaigns"):
         raise ValueError("FOLLOW_UP_CAMPAIGNS_DISABLED")
@@ -47,9 +51,9 @@ async def create_follow_up_campaign(
     if follow_up_type not in FOLLOW_UP_TYPES:
         raise ValueError("INVALID_FOLLOW_UP_TYPE")
 
-    parent = await db.get(Campaign, campaign_id)
-    if parent is None or parent.account_id != account_id:
-        raise ValueError("CAMPAIGN_NOT_FOUND")
+    parent = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
     if parent.status not in {
         CampaignStatus.COMPLETED,
         CampaignStatus.COMPLETED_WITH_ERRORS,

@@ -32,11 +32,31 @@ def test_channel_access_enforced_on_core_routes() -> None:
     channels = read("app/api/routes/channels.py")
     whatsapp = read("app/api/routes/whatsapp.py")
     contacts = read("app/api/routes/contacts.py")
+    campaigns = read("app/api/routes/campaigns.py")
+    templates = read("app/api/routes/templates.py")
     page = read("../frontend/src/pages/TeamPage.tsx")
 
     assert "filter_organizations_for_membership" in orgs
     assert "filter_channels_for_membership" in channels
+    assert "ensure_membership_organization_access" in channels
     assert "resolve_accessible_channel_ids" in whatsapp
     assert "accessible_channel_ids" in contacts
+    assert "membership=context.membership" in campaigns
+    assert "ensure_whatsapp_account_access" in campaigns
+    assert "membership=context.membership" in templates
     assert "openAccessEditor" in page
     assert "channel_ids" in page
+
+
+def test_campaign_template_access_helpers_exist() -> None:
+    access = read("app/services/membership_access.py")
+    campaigns = read("app/services/campaigns.py")
+    templates = read("app/services/templates.py")
+
+    assert "ensure_campaign_access" in access
+    assert "ensure_template_access" in access
+    assert "campaign_list_filters" in access
+    assert "template_list_filters" in access
+    assert "campaign_list_filters" in campaigns
+    assert "template_list_filters" in templates
+    assert "membership: Membership | None = None" in campaigns

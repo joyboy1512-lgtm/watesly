@@ -10,6 +10,7 @@ from app.schemas.billing import ChannelBillingUpdateRequest
 from app.schemas.channel import ChannelCreateRequest, ChannelResponse
 from app.schemas.mac import ChannelUsageBoardResponse
 from app.services.billing_provider import update_channel_billing
+from app.services.membership_access import ensure_membership_organization_access
 from app.services.channels import create_channel, get_channel_usage_board, list_channels
 from app.services.membership_access import filter_channels_for_membership
 
@@ -45,8 +46,16 @@ async def post_channel(
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        await ensure_membership_organization_access(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            organization_id=payload.organization_id,
+        )
         return await create_channel(db, account_id=context.account_id, payload=payload)
     except ValueError as exc:
+        if str(exc) == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         messages = {
             "INVALID_ORGANIZATION": (400, "Organization is invalid"),
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
