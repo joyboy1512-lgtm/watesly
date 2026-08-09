@@ -43,6 +43,11 @@ class MacChannelStatsResponse(BaseModel):
     is_over_mac: bool = False
     over_mac_count: int = 0
     campaign_messages_sent: int = 0
+    outbound_messages_sent: int = 0
+    messaging_limit_tier: str | None = None
+    messaging_limit: int | None = None
+    quality_rating: str | None = None
+    health_synced_at: datetime | None = None
     whatsapp_status: str | None = None
     whatsapp_phone: str | None = None
     subscription_starts_at: datetime | None = None

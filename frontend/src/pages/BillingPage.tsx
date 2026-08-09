@@ -73,6 +73,12 @@ type ChannelMacStat = {
   mac_remaining: number;
   is_over_mac: boolean;
   over_mac_count: number;
+  outbound_messages_sent: number;
+  campaign_messages_sent: number;
+  messaging_limit_tier: string | null;
+  messaging_limit: number | null;
+  quality_rating: string | null;
+  health_synced_at: string | null;
   whatsapp_phone: string | null;
   subscription_starts_at: string | null;
   subscription_ends_at: string | null;
@@ -81,6 +87,22 @@ type ChannelMacStat = {
   over_mac_price_per_100: number;
   estimated_channel_over_mac_charge: number;
 };
+
+function formatMessagingTierLimit(tier: string | null, limit: number | null): string {
+  if (limit != null) return `${limit.toLocaleString("ar")}/24س`;
+  if (tier === "TIER_UNLIMITED") return "غير محدود";
+  return "—";
+}
+
+function formatQualityBadge(rating: string | null): string | null {
+  if (!rating) return null;
+  const labels: Record<string, string> = {
+    GREEN: "ممتاز",
+    YELLOW: "متوسط",
+    RED: "منخفض"
+  };
+  return labels[rating.toUpperCase()] ?? rating;
+}
 
 function formatShortDay(dateKey: string): string {
   const date = new Date(`${dateKey}T12:00:00`);
@@ -300,13 +322,18 @@ export default function BillingPage() {
       )}
 
       <section className="card admin-table-card billing-channels-table-card">
-        <div className="admin-table-header billing-table-head billing-table-head-brand">
-          <h2>فوترة القنوات</h2>
+        <div className="admin-table-header billing-table-title-brand">
+          <div>
+            <h2>فوترة القنوات</h2>
+            <small>{channels.length.toLocaleString("ar")} قناة · MAC · رسائل Meta</small>
+          </div>
+        </div>
+        <div className="billing-table-toolbar">
           <input
-            className="billing-table-search billing-table-search-light"
+            className="billing-table-search"
             value={channelSearch}
             onChange={(e) => setChannelSearch(e.target.value)}
-            placeholder="بحث…"
+            placeholder="بحث بالقناة أو الرقم…"
           />
         </div>
         <div className="admin-table-wrap">
@@ -315,6 +342,8 @@ export default function BillingPage() {
               <tr>
                 <th>القناة</th>
                 <th>MAC</th>
+                <th>الرسائل</th>
+                <th>رصيد Tier</th>
                 <th>الفترة</th>
                 <th>Over</th>
                 <th></th>
@@ -322,22 +351,24 @@ export default function BillingPage() {
             </thead>
             <tbody>
               {channelStats.isLoading && (
-                <tr><td colSpan={5} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={7} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {channelStats.isError && (
-                <tr><td colSpan={5} className="admin-table-empty">تعذر تحميل القنوات.</td></tr>
+                <tr><td colSpan={7} className="admin-table-empty">تعذر تحميل القنوات.</td></tr>
               )}
               {!channelStats.isLoading && !channelStats.isError && channels.length === 0 && (
-                <tr><td colSpan={5} className="admin-table-empty"><Link to="/channels">أضف قناة</Link></td></tr>
+                <tr><td colSpan={7} className="admin-table-empty"><Link to="/channels">أضف قناة</Link></td></tr>
               )}
               {!channelStats.isLoading && !channelStats.isError && channels.length > 0 && filteredChannels.length === 0 && (
-                <tr><td colSpan={5} className="admin-table-empty">لا نتائج.</td></tr>
+                <tr><td colSpan={7} className="admin-table-empty">لا نتائج.</td></tr>
               )}
               {filteredChannels.map((item) => {
                 const period =
                   item.billing_period_start && item.billing_period_end
                     ? formatPeriodRange(item.billing_period_start, item.billing_period_end)
                     : `${formatPlanDate(item.subscription_starts_at)} – ${formatPlanDate(item.subscription_ends_at)}`;
+                const qualityLabel = formatQualityBadge(item.quality_rating);
+                const tierLimit = formatMessagingTierLimit(item.messaging_limit_tier, item.messaging_limit);
                 return (
                   <tr key={item.channel_id}>
                     <td>
@@ -346,6 +377,7 @@ export default function BillingPage() {
                         <small>
                           <span className={channelTypeClass(item.channel_type)}>{formatChannelType(item.channel_type)}</span>
                           {item.whatsapp_phone ? ` · ${item.whatsapp_phone}` : ""}
+                          {qualityLabel ? ` · ${qualityLabel}` : ""}
                         </small>
                       </div>
                     </td>
@@ -354,6 +386,18 @@ export default function BillingPage() {
                       <small> / {item.included_mac.toLocaleString("ar")}</small>
                       {item.is_over_mac && (
                         <small className="billing-over-charge"> +{item.over_mac_count.toLocaleString("ar")}</small>
+                      )}
+                    </td>
+                    <td>
+                      <strong>{item.outbound_messages_sent.toLocaleString("ar")}</strong>
+                      {item.campaign_messages_sent > 0 && (
+                        <small> · حملات {item.campaign_messages_sent.toLocaleString("ar")}</small>
+                      )}
+                    </td>
+                    <td>
+                      <strong>{tierLimit}</strong>
+                      {item.messaging_limit_tier && (
+                        <small> · {item.messaging_limit_tier.replace("TIER_", "")}</small>
                       )}
                     </td>
                     <td><small>{period}</small></td>

@@ -12,6 +12,7 @@ from app.models.campaign import Campaign
 from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
 from app.models.channel import Channel
 from app.models.contact import Contact
+from app.models.message import Message, MessageDirection
 from app.models.monthly_active_contact import MonthlyActiveContact
 from app.models.whatsapp_account import WhatsAppAccount
 from app.services.billing_period import cycle_month_key, resolve_billing_period, resolve_channel_billing_period
@@ -366,6 +367,39 @@ async def count_campaign_messages_for_channel(
                     ),
                     CampaignRecipient.updated_at >= period_start,
                     CampaignRecipient.updated_at < period_end,
+                )
+            )
+        )
+        or 0
+    )
+
+
+async def count_outbound_messages_for_channel(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    channel_id: UUID,
+    period_start: datetime | None = None,
+    period_end: datetime | None = None,
+    cycle_month: str | None = None,
+) -> int:
+    if period_start is None or period_end is None:
+        period = await _period_for_channel(
+            db, channel_id=channel_id, cycle_month=cycle_month
+        )
+        if period is None:
+            return 0
+        period_start, period_end = period
+
+    return int(
+        (
+            await db.scalar(
+                select(func.count(Message.id)).where(
+                    Message.account_id == account_id,
+                    Message.channel_id == channel_id,
+                    Message.direction == MessageDirection.OUTBOUND,
+                    Message.created_at >= period_start,
+                    Message.created_at < period_end,
                 )
             )
         )

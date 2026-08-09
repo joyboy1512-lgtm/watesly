@@ -1,12 +1,14 @@
 from uuid import UUID
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.permissions import Permission
 from app.db.session import get_db
-from app.models.channel import Channel
+from app.models.channel import Channel, ChannelType
 from app.schemas.billing import (
     BillingProviderSettingsResponse,
     BillingProviderSettingsUpdate,
@@ -30,6 +32,7 @@ from app.services.channel_billing import channel_billing_payload
 from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
     count_mac_for_channel,
+    count_outbound_messages_for_channel,
     current_cycle_month,
     get_account_mac_summary,
     get_billing_usage as build_billing_usage,
@@ -37,8 +40,27 @@ from app.services.mac_tracking import (
     get_mac_insights,
     list_mac_contacts,
 )
+from app.services.whatsapp_health import sync_whatsapp_account_health_safe
 
 router = APIRouter()
+
+_HEALTH_STALE_HOURS = 6
+
+
+async def _maybe_refresh_whatsapp_health(
+    db: AsyncSession,
+    *,
+    whatsapp_account,
+):
+    if whatsapp_account is None:
+        return None
+    synced_at = whatsapp_account.health_synced_at
+    stale_after = datetime.now(UTC) - timedelta(hours=_HEALTH_STALE_HOURS)
+    if synced_at is None or synced_at < stale_after:
+        whatsapp_account = await sync_whatsapp_account_health_safe(
+            db, whatsapp_account=whatsapp_account
+        )
+    return whatsapp_account
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)
@@ -202,7 +224,16 @@ async def get_channels_mac_stats(
             period_start=ch_period_start,
             period_end=ch_period_end,
         )
+        outbound_msgs = await count_outbound_messages_for_channel(
+            db,
+            account_id=context.account_id,
+            channel_id=channel.id,
+            period_start=ch_period_start,
+            period_end=ch_period_end,
+        )
         wa = wa_by_channel.get(channel.id)
+        if wa is not None and channel.type == ChannelType.WHATSAPP:
+            wa = await _maybe_refresh_whatsapp_health(db, whatsapp_account=wa)
         items.append(
             MacChannelStatsResponse(
                 channel_id=channel.id,
@@ -216,6 +247,11 @@ async def get_channels_mac_stats(
                 is_over_mac=bool(billing["is_over_mac"]),
                 over_mac_count=int(billing["over_mac_count"]),
                 campaign_messages_sent=campaign_msgs,
+                outbound_messages_sent=outbound_msgs,
+                messaging_limit_tier=wa.messaging_limit_tier if wa else None,
+                messaging_limit=wa.messaging_limit if wa else None,
+                quality_rating=wa.quality_rating if wa else None,
+                health_synced_at=wa.health_synced_at if wa else None,
                 whatsapp_status=wa.status.value if wa and hasattr(wa.status, "value") else (str(wa.status) if wa else None),
                 whatsapp_phone=wa.display_phone_number if wa else None,
                 subscription_starts_at=billing["subscription_starts_at"],
