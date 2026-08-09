@@ -10,7 +10,7 @@ from app.models.conversation_event import ConversationEvent
 from app.models.conversation_read_state import ConversationReadState
 from app.models.membership import Membership
 from app.models.message import Message, MessageDirection
-from app.models.organization import Organization
+from app.models.organization import Organization, OrganizationStatus
 from app.services.notifications import create_notification
 from app.services.whatsapp_window import compute_service_window
 from app.services.membership_channels import get_accessible_channel_ids
@@ -26,7 +26,7 @@ async def _accessible_channel_ids(
     org_result = await db.execute(
         select(Organization.id).where(
             Organization.account_id == account_id,
-            Organization.deleted_at.is_(None),
+            Organization.status == OrganizationStatus.ACTIVE,
         )
     )
     organization_ids = list(org_result.scalars().all())
