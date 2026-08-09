@@ -9,6 +9,7 @@ import {
   channelsForBranch,
   employeesForBranch,
   formatStrategy,
+  STRATEGY_HINTS,
   teamsForBranch
 } from "../lib/assignmentHelpers";
 import { employeeInitials, formatRoleLabel, type Employee } from "../lib/teamHelpers";
@@ -27,6 +28,10 @@ export default function AssignmentsPage() {
   const [channelId, setChannelId] = useState("");
   const [strategy, setStrategy] = useState<AssignmentStrategy>("round_robin");
   const [rulePriority, setRulePriority] = useState(100);
+  const [ruleName, setRuleName] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  const [creatingRule, setCreatingRule] = useState(false);
   const [editingTeam, setEditingTeam] = useState<AssignmentTeam | null>(null);
   const [editMembers, setEditMembers] = useState<string[]>([]);
   const [savingTeam, setSavingTeam] = useState(false);
@@ -87,7 +92,39 @@ export default function AssignmentsPage() {
     () => employeesForBranch(employees.data ?? [], organizationId),
     [employees.data, organizationId]
   );
-  const ruleTeamOrgId = teams.data?.find((t) => t.id === teamId)?.organization_id ?? "";
+  const filteredBranchEmployees = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    if (!query) return branchEmployees;
+    return branchEmployees.filter(
+      (item) =>
+        item.full_name.toLowerCase().includes(query) ||
+        formatRoleLabel(item.role).includes(query)
+    );
+  }, [branchEmployees, memberSearch]);
+  const ruleTeams = useMemo(() => {
+    const all = teams.data ?? [];
+    if (branchFilter) return teamsForBranch(all, branchFilter);
+    return all;
+  }, [teams.data, branchFilter]);
+  const selectedTeam = useMemo(
+    () => (teams.data ?? []).find((item) => item.id === teamId) ?? null,
+    [teams.data, teamId]
+  );
+  const ruleTeamOrgId = selectedTeam?.organization_id ?? "";
+  const setupReady = useMemo(() => {
+    const activeRules = (rules.data ?? []).filter((item) => item.is_active).length;
+    const teamCount = (teams.data ?? []).length;
+    return teamCount > 0 && activeRules > 0;
+  }, [rules.data, teams.data]);
+  const duplicateRule = useMemo(() => {
+    if (!teamId) return false;
+    return (rules.data ?? []).some(
+      (item) =>
+        item.is_active &&
+        item.team_id === teamId &&
+        (item.channel_id ?? "") === (channelId || "")
+    );
+  }, [rules.data, teamId, channelId]);
 
   const stats = useMemo(() => ({
     teams: visibleTeams.length,
@@ -107,8 +144,10 @@ export default function AssignmentsPage() {
 
   async function createTeam(event: FormEvent) {
     event.preventDefault();
+    if (selectedMembers.length === 0) return;
+    setCreatingTeam(true);
     try {
-      await api.post("/assignments/teams", {
+      const response = await api.post<AssignmentTeam>("/assignments/teams", {
         organization_id: organizationId,
         name: teamName.trim(),
         description: null,
@@ -116,33 +155,57 @@ export default function AssignmentsPage() {
       });
       setTeamName("");
       setSelectedMembers([]);
+      setMemberSearch("");
+      setTeamId(response.data.id);
+      setOrganizationId(response.data.organization_id);
       await client.invalidateQueries({ queryKey: ["assignment-teams"] });
-      toastStore.getState().show("تم إنشاء الفريق.", "success");
+      toastStore.getState().show("تم إنشاء الفريق. أكمل الخطوة 2 لتفعيل التوزيع التلقائي.", "success");
     } catch {
       toastStore.getState().show("تعذر إنشاء الفريق. تأكد أن الأعضاء من نفس الفرع.", "error");
+    } finally {
+      setCreatingTeam(false);
     }
   }
 
   async function createRule(event: FormEvent) {
     event.preventDefault();
-    const team = (teams.data ?? []).find((item) => item.id === teamId);
-    if (!team) return;
+    const team = selectedTeam;
+    if (!team || team.membership_ids.length === 0) {
+      toastStore.getState().show("اختر فريقاً يحتوي على موظف واحد على الأقل.", "error");
+      return;
+    }
+    if (duplicateRule) {
+      toastStore.getState().show("توجد قاعدة نشطة مماثلة لهذا الفريق والقناة.", "error");
+      return;
+    }
+    setCreatingRule(true);
     try {
       await api.post("/assignments/rules", {
         organization_id: team.organization_id,
         channel_id: channelId || null,
         team_id: teamId,
-        name: `توزيع ${team.name}`,
+        name: ruleName.trim() || `توزيع ${team.name}`,
         strategy,
         priority: rulePriority,
         is_active: true
       });
+      setRuleName("");
       setChannelId("");
       await client.invalidateQueries({ queryKey: ["assignment-rules"] });
-      toastStore.getState().show("تم حفظ قاعدة التوزيع.", "success");
+      toastStore.getState().show("تم تفعيل قاعدة التوزيع — المحادثات الجديدة ستُوزَّع تلقائياً.", "success");
     } catch {
       toastStore.getState().show("تعذر حفظ القاعدة.", "error");
+    } finally {
+      setCreatingRule(false);
     }
+  }
+
+  function selectAllMembers() {
+    setSelectedMembers(filteredBranchEmployees.map((item) => item.membership_id));
+  }
+
+  function clearMembers() {
+    setSelectedMembers([]);
   }
 
   function openTeamEditor(team: AssignmentTeam) {
@@ -236,7 +299,14 @@ export default function AssignmentsPage() {
             <strong>تصفية حسب الفرع</strong>
             <small>اعرض فرق وقواعد فرع محدد</small>
           </div>
-          <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}>
+          <select
+            value={branchFilter}
+            onChange={(e) => {
+              const value = e.target.value;
+              setBranchFilter(value);
+              if (value) setOrganizationId(value);
+            }}
+          >
             <option value="">كل الأفرع</option>
             {(organizations.data ?? []).map((item) => (
               <option key={item.id} value={item.id}>{item.name}</option>
@@ -245,75 +315,216 @@ export default function AssignmentsPage() {
         </div>
       </section>
 
+      <section className={`assignments-setup-banner ${setupReady ? "ready" : "pending"}`}>
+        <div>
+          <strong>{setupReady ? "التوزيع التلقائي يعمل" : "لتشغيل التوزيع بانتظام"}</strong>
+          <small>
+            {setupReady
+              ? "يوجد فريق وقاعدة نشطة — المحادثات الجديدة تُوزَّع تلقائياً."
+              : "① أنشئ فريقاً بموظفي الفرع → ② فعّل قاعدة توزيع نشطة."}
+          </small>
+        </div>
+        <span className="assignments-setup-status">{setupReady ? "جاهز" : "يتطلب إعداد"}</span>
+      </section>
+
       <section className="assignments-forms-grid">
         <article className="card form-card admin-form-card assignments-form-card">
           <div className="assignments-form-head">
-            <h2>إنشاء فريق توزيع</h2>
+            <div>
+              <h2>إنشاء فريق توزيع</h2>
+              <small>الخطوة 1 — تحديد من يستقبل المحادثات</small>
+            </div>
             <span className="assignments-form-step">1</span>
           </div>
-          <p className="hint-text">اختر الفرع ثم حدّد موظفيه النشطين فقط.</p>
-          <form className="stack-form" onSubmit={createTeam}>
-            <select value={organizationId} onChange={(e) => { setOrganizationId(e.target.value); setSelectedMembers([]); }} required>
-              <option value="">اختر الفرع</option>
-              {(organizations.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-            <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="اسم الفريق (مثال: فريق المبيعات)" required />
-            <div className="contact-picker assignments-member-picker admin-permissions-list">
-              {branchEmployees.length === 0 && organizationId && (
-                <small className="hint-text">لا يوجد موظفون نشطون في هذا الفرع.</small>
-              )}
-              {branchEmployees.map((item) => (
-                <label key={item.membership_id} className="admin-permission-item">
-                  <input
-                    type="checkbox"
-                    checked={selectedMembers.includes(item.membership_id)}
-                    onChange={(e) =>
-                      setSelectedMembers((current) =>
-                        e.target.checked
-                          ? [...current, item.membership_id]
-                          : current.filter((id) => id !== item.membership_id)
-                      )
-                    }
-                  />
-                  <span>{item.full_name} · {formatRoleLabel(item.role)}</span>
-                </label>
-              ))}
+          <form className="assignments-setup-form" onSubmit={createTeam}>
+            <div className="assignments-field-grid">
+              <label className="assignments-field">
+                <span>الفرع</span>
+                <select
+                  value={organizationId}
+                  onChange={(e) => {
+                    setOrganizationId(e.target.value);
+                    setSelectedMembers([]);
+                    setMemberSearch("");
+                  }}
+                  required
+                >
+                  <option value="">اختر الفرع</option>
+                  {(organizations.data ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="assignments-field">
+                <span>اسم الفريق</span>
+                <input
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  placeholder="مثال: فريق المبيعات"
+                  required
+                />
+              </label>
             </div>
-            <button className="assignments-primary-btn" type="submit" disabled={!organizationId || selectedMembers.length === 0}>إنشاء الفريق</button>
+
+            <div className="assignments-members-box">
+              <div className="assignments-members-toolbar">
+                <label className="assignments-field assignments-field-grow">
+                  <span>أعضاء الفريق ({selectedMembers.length} محدد)</span>
+                  <input
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    placeholder="بحث بالاسم أو الدور…"
+                    disabled={!organizationId}
+                  />
+                </label>
+                <div className="assignments-members-actions">
+                  <button type="button" className="secondary-button" onClick={selectAllMembers} disabled={!organizationId || filteredBranchEmployees.length === 0}>
+                    تحديد الكل
+                  </button>
+                  <button type="button" className="secondary-button" onClick={clearMembers} disabled={selectedMembers.length === 0}>
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+              <div className="assignments-member-picker">
+                {!organizationId && <small className="hint-text">اختر الفرع أولاً لعرض الموظفين.</small>}
+                {organizationId && filteredBranchEmployees.length === 0 && (
+                  <small className="hint-text">لا يوجد موظفون نشطون في هذا الفرع.</small>
+                )}
+                {filteredBranchEmployees.map((item) => (
+                  <label key={item.membership_id} className="assignments-member-row">
+                    <input
+                      type="checkbox"
+                      checked={selectedMembers.includes(item.membership_id)}
+                      onChange={(e) =>
+                        setSelectedMembers((current) =>
+                          e.target.checked
+                            ? [...current, item.membership_id]
+                            : current.filter((id) => id !== item.membership_id)
+                        )
+                      }
+                    />
+                    <span className="assignments-member-name">{item.full_name}</span>
+                    <span className="assignments-member-role">{formatRoleLabel(item.role)}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <button
+              className="assignments-primary-btn assignments-form-submit"
+              type="submit"
+              disabled={creatingTeam || !organizationId || !teamName.trim() || selectedMembers.length === 0}
+            >
+              {creatingTeam ? "جاري الإنشاء…" : "إنشاء الفريق"}
+            </button>
           </form>
         </article>
 
-        <article className="card form-card admin-form-card assignments-form-card">
+        <article className={`card form-card admin-form-card assignments-form-card ${ruleTeams.length === 0 ? "assignments-form-disabled" : ""}`}>
           <div className="assignments-form-head">
-            <h2>قاعدة توزيع تلقائي</h2>
+            <div>
+              <h2>قاعدة توزيع تلقائي</h2>
+              <small>الخطوة 2 — تفعيل التوزيع على المحادثات الجديدة</small>
+            </div>
             <span className="assignments-form-step">2</span>
           </div>
-          <p className="hint-text">تُطبَّق على المحادثات الجديدة حسب الفرع والقناة.</p>
-          <form className="stack-form" onSubmit={createRule}>
-            <select value={teamId} onChange={(e) => setTeamId(e.target.value)} required>
-              <option value="">اختر فريق التوزيع</option>
-              {(teams.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name} ({orgMap.get(item.organization_id) ?? "—"})</option>
-              ))}
-            </select>
-            <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
-              <option value="">كل قنوات WhatsApp في الفرع</option>
-              {channelsForBranch(channels.data ?? [], ruleTeamOrgId).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-            <select value={strategy} onChange={(e) => setStrategy(e.target.value as AssignmentStrategy)}>
-              <option value="round_robin">توزيع بالتناوب</option>
-              <option value="least_open">الأقل محادثات مفتوحة (ضمن الفرع)</option>
-            </select>
-            <label className="field-label">
-              <span>الأولوية (أقل = أسبق)</span>
-              <input type="number" min={1} max={1000} value={rulePriority} onChange={(e) => setRulePriority(Number(e.target.value))} />
-            </label>
-            <button className="assignments-primary-btn" type="submit" disabled={!teamId}>حفظ القاعدة</button>
-          </form>
+          {ruleTeams.length === 0 ? (
+            <p className="hint-text assignments-form-blocked">أنشئ فريقاً في الخطوة 1 أولاً.</p>
+          ) : (
+            <form className="assignments-setup-form" onSubmit={createRule}>
+              <div className="assignments-field-grid">
+                <label className="assignments-field">
+                  <span>فريق التوزيع</span>
+                  <select
+                    value={teamId}
+                    onChange={(e) => {
+                      setTeamId(e.target.value);
+                      setChannelId("");
+                    }}
+                    required
+                  >
+                    <option value="">اختر الفريق</option>
+                    {ruleTeams.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} · {orgMap.get(item.organization_id)} · {item.membership_ids.length} عضو
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="assignments-field">
+                  <span>قناة WhatsApp</span>
+                  <select value={channelId} onChange={(e) => setChannelId(e.target.value)} disabled={!teamId}>
+                    <option value="">كل قنوات الفرع</option>
+                    {channelsForBranch(channels.data ?? [], ruleTeamOrgId).map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="assignments-field">
+                <span>اسم القاعدة (اختياري)</span>
+                <input
+                  value={ruleName}
+                  onChange={(e) => setRuleName(e.target.value)}
+                  placeholder={selectedTeam ? `توزيع ${selectedTeam.name}` : "اسم القاعدة"}
+                  disabled={!teamId}
+                />
+              </label>
+
+              <div className="assignments-strategy-grid">
+                {(["round_robin", "least_open"] as AssignmentStrategy[]).map((item) => (
+                  <label key={item} className={`assignments-strategy-card ${strategy === item ? "active" : ""}`}>
+                    <input
+                      type="radio"
+                      name="strategy"
+                      value={item}
+                      checked={strategy === item}
+                      onChange={() => setStrategy(item)}
+                      disabled={!teamId}
+                    />
+                    <strong>{formatStrategy(item)}</strong>
+                    <small>{STRATEGY_HINTS[item]}</small>
+                  </label>
+                ))}
+              </div>
+
+              <label className="assignments-field assignments-field-inline">
+                <span>الأولوية</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={rulePriority}
+                  onChange={(e) => setRulePriority(Number(e.target.value))}
+                  disabled={!teamId}
+                />
+                <small className="hint-text">رقم أقل = يُطبَّق أولاً عند وجود أكثر من قاعدة</small>
+              </label>
+
+              {duplicateRule && (
+                <p className="assignments-form-warning">توجد قاعدة نشطة مماثلة — أوقفها أو غيّر القناة قبل الحفظ.</p>
+              )}
+              {selectedTeam && selectedTeam.membership_ids.length === 0 && (
+                <p className="assignments-form-warning">الفريق المختار بلا أعضاء — أضف موظفين من جدول الفرق.</p>
+              )}
+
+              <button
+                className="assignments-primary-btn assignments-form-submit"
+                type="submit"
+                disabled={
+                  creatingRule ||
+                  !teamId ||
+                  duplicateRule ||
+                  !selectedTeam ||
+                  selectedTeam.membership_ids.length === 0
+                }
+              >
+                {creatingRule ? "جاري التفعيل…" : "تفعيل قاعدة التوزيع"}
+              </button>
+            </form>
+          )}
         </article>
       </section>
 

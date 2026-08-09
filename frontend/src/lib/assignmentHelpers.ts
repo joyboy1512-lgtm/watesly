@@ -30,6 +30,11 @@ export const STRATEGY_LABELS: Record<AssignmentStrategy, string> = {
   least_open: "الأقل محادثات مفتوحة"
 };
 
+export const STRATEGY_HINTS: Record<AssignmentStrategy, string> = {
+  round_robin: "يوزّع المحادثات بالدور على أعضاء الفريق بالتساوي.",
+  least_open: "يُرسل المحادثة للموظف الأقل حملاً ضمن نفس الفرع."
+};
+
 export function formatStrategy(strategy: string): string {
   return STRATEGY_LABELS[strategy as AssignmentStrategy] ?? strategy;
 }
