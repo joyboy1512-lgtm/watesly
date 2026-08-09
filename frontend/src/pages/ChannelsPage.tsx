@@ -283,6 +283,18 @@ export default function ChannelsPage() {
         </div>
       </header>
 
+      <section className="billing-per-channel-banner ready card">
+        <div>
+          <strong>فوترة MAC مستقلة لكل قناة</strong>
+          <small>
+            {canManageBilling
+              ? "اضغط زر تعديل الفوترة في الجدول لتغيير تاريخ الاشتراك، حصة MAC، وسعر Over لكل قnaة على حدة."
+              : "كل قnaة لها اشتراك وحصة MAC وOver MAC منفصلة. اطلب صلاحية billing.manage للتعديل."}
+          </small>
+        </div>
+        <span className="billing-per-channel-badge">مستقل</span>
+      </section>
+
       {board && (
         <section className="admin-stats-row admin-stats-row-brand">
           <article className="admin-stat-card admin-stat-card-brand">

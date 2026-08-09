@@ -312,6 +312,17 @@ export default function BillingPage() {
         </div>
       </header>
 
+      <section className="billing-per-channel-banner ready card">
+        <div>
+          <strong>فوترة MAC مستقلة لكل قناة — نشطة الآن</strong>
+          <small>
+            كل قناة لها تاريخ اشتراك وحصة MAC وسعر Over MAC ودورة فوترة خاصة.
+            نفس الجهة على قناتين = MACان. الإجمالي في الأعلى = مجموع كل القنوات.
+          </small>
+        </div>
+        <span className="billing-per-channel-badge">لكل قناة</span>
+      </section>
+
       <section className="card billing-plan-grid billing-plan-overview-card">
         <div>
           <span>الخطة</span>
@@ -330,7 +341,7 @@ export default function BillingPage() {
           <strong>{formatPlanDate(sub.ends_at)}</strong>
         </div>
         <div>
-          <span>MAC مشمول</span>
+          <span>MAC مشمول (مجمّع)</span>
           <strong>{sub.included_mac.toLocaleString("ar")}</strong>
         </div>
         <div>
@@ -440,8 +451,8 @@ export default function BillingPage() {
             <thead>
               <tr>
                 <th>القناة</th>
-                <th>MAC</th>
-                <th>الحصة</th>
+                <th>MAC مستخدم</th>
+                <th>MAC مشمول / متبقٍ</th>
                 <th>بداية الاشتراك</th>
                 <th>نهاية الاشتراك</th>
                 <th>دورة MAC</th>
@@ -477,8 +488,16 @@ export default function BillingPage() {
                         </small>
                       </div>
                     </td>
-                    <td><strong>{item.mac_count.toLocaleString("ar")}</strong></td>
-                    <td>{formatMacBalance(item.mac_count, item.included_mac)} ({usagePct}%)</td>
+                    <td>
+                      <strong>{item.mac_count.toLocaleString("ar")}</strong>
+                      {item.is_over_mac && (
+                        <small className="billing-over-charge">+{item.over_mac_count.toLocaleString("ar")} Over</small>
+                      )}
+                    </td>
+                    <td>
+                      <strong>{item.included_mac.toLocaleString("ar")}</strong>
+                      <small>{item.mac_remaining.toLocaleString("ar")} متبقٍ · {usagePct}%</small>
+                    </td>
                     <td>{item.subscription_starts_at ? formatPlanDate(item.subscription_starts_at) : "—"}</td>
                     <td>{item.subscription_ends_at ? formatPlanDate(item.subscription_ends_at) : "—"}</td>
                     <td>{periodLabel}</td>

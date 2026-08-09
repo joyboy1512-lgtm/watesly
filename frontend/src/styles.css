@@ -5128,6 +5128,37 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: rgba(37, 211, 102, 0.18);
   color: var(--primary-darker);
 }
+.channel-billing-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 140px;
+}
+.channel-billing-edit-btn {
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  white-space: nowrap;
+}
+.channel-billing-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 180px;
+}
+.channel-billing-editor label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+.channel-billing-editor input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.channel-billing-editor-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .billing-channels-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

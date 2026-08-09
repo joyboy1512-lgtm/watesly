@@ -25,6 +25,13 @@ function fromDatetimeLocal(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }
 
+function formatShortDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("ar", { day: "numeric", month: "short", year: "numeric" }).format(date);
+}
+
 export default function ChannelBillingEditor({
   channelId,
   billingStartsAt,
@@ -68,7 +75,7 @@ export default function ChannelBillingEditor({
         included_mac: parsedIncluded,
         over_mac_price_per_100: parsedPrice
       });
-      toastStore.getState().show("تم حفظ فوترة القناة");
+      toastStore.getState().show("تم حفظ إعدادات فوترة القnaة");
       setOpen(false);
       void client.invalidateQueries({ queryKey: ["channels-usage-board"] });
       void client.invalidateQueries({ queryKey: ["billing-mac-channels"] });
@@ -81,49 +88,49 @@ export default function ChannelBillingEditor({
     }
   }
 
-  if (disabled) {
+  if (open && !disabled) {
     return (
-      <div className="admin-cell-stack channel-billing-readonly">
-        <small>MAC: {includedMac.toLocaleString("ar")}</small>
-        <small>${overMacPricePer100.toFixed(2)}/100</small>
-      </div>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button type="button" className="secondary-button channel-billing-edit-btn" onClick={() => setOpen(true)}>
-        تعديل الفوترة
-      </button>
+      <form className="channel-billing-editor" onSubmit={(e) => void save(e)}>
+        <label>
+          <span>بداية</span>
+          <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+        </label>
+        <label>
+          <span>نهاية</span>
+          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+        </label>
+        <label>
+          <span>MAC مشمول</span>
+          <input type="number" min={0} value={included} onChange={(e) => setIncluded(e.target.value)} />
+        </label>
+        <label>
+          <span>Over $/100</span>
+          <input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+        </label>
+        <div className="channel-billing-editor-actions">
+          <button type="submit" className="assignments-primary-btn" disabled={saving}>
+            {saving ? "…" : "حفظ"}
+          </button>
+          <button type="button" className="secondary-button" onClick={() => setOpen(false)}>
+            إلغاء
+          </button>
+        </div>
+      </form>
     );
   }
 
   return (
-    <form className="channel-billing-editor" onSubmit={(e) => void save(e)}>
-      <label>
-        <span>بداية</span>
-        <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
-      </label>
-      <label>
-        <span>نهاية</span>
-        <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
-      </label>
-      <label>
-        <span>MAC مشمول</span>
-        <input type="number" min={0} value={included} onChange={(e) => setIncluded(e.target.value)} />
-      </label>
-      <label>
-        <span>Over $/100</span>
-        <input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
-      </label>
-      <div className="channel-billing-editor-actions">
-        <button type="submit" className="secondary-button" disabled={saving}>
-          {saving ? "…" : "حفظ"}
-        </button>
-        <button type="button" className="secondary-button" onClick={() => setOpen(false)}>
-          إلغاء
-        </button>
+    <div className="channel-billing-summary">
+      <div className="admin-cell-stack">
+        <strong>{includedMac.toLocaleString("ar")} MAC</strong>
+        <small>${overMacPricePer100.toFixed(2)}/100 Over</small>
+        <small>{formatShortDate(billingStartsAt)} – {formatShortDate(billingEndsAt)}</small>
       </div>
-    </form>
+      {!disabled && (
+        <button type="button" className="assignments-primary-btn channel-billing-edit-btn" onClick={() => setOpen(true)}>
+          تعديل الفوترة
+        </button>
+      )}
+    </div>
   );
 }
