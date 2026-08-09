@@ -155,6 +155,7 @@ async def get_channel_threads(
     db: AsyncSession = Depends(get_db),
 ) -> list[ChannelThreadResponse]:
     from app.services.contact_management import list_channel_threads_for_phone
+    from app.services.membership_access import resolve_accessible_channel_ids
 
     rows = await list_channel_threads_for_phone(
         db,
@@ -162,6 +163,12 @@ async def get_channel_threads(
         external_address=phone.strip(),
         exclude_conversation_id=conversation_id,
     )
+    accessible = await resolve_accessible_channel_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if accessible is not None:
+        allowed = {str(channel_id) for channel_id in accessible}
+        rows = [row for row in rows if row["channel_id"] in allowed]
     return [ChannelThreadResponse(**row) for row in rows]
 
 

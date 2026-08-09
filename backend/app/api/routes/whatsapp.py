@@ -109,7 +109,18 @@ async def get_whatsapp_accounts(
     context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.services.membership_access import resolve_accessible_channel_ids
+
     accounts = await list_whatsapp_accounts(db, context.account_id)
+    accessible = await resolve_accessible_channel_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if accessible is not None:
+        allowed = set(accessible)
+        accounts = [
+            row for row in accounts
+            if row[0].channel_id in allowed
+        ]
     return [
         WhatsAppAccountResponse(**_account_to_response(item, channel_name=channel_name, organization_name=organization_name))
         for item, channel_name, organization_name in accounts

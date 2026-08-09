@@ -133,6 +133,7 @@ async def create_employee_account(
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
             "FORBIDDEN": (403, "You cannot create this employee"),
             "OUT_OF_SCOPE": (403, "You can only manage employees in your branch"),
+            "INVALID_CHANNEL": (400, "One or more WhatsApp channels are invalid for the selected branches"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create employee"))
         raise HTTPException(status_code=code, detail=detail) from exc
@@ -150,7 +151,7 @@ async def get_employees(
     context: AuthContext = Depends(require_permissions(Permission.USERS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> list[EmployeeResponse]:
-    rows = await list_employees(db, context.account_id)
+    rows = await list_employees(db, context.account_id, actor_membership=context.membership)
     return [
         await _employee_response(
             db,
@@ -188,6 +189,7 @@ async def patch_employee(
             "PERMISSION_EXCEEDS_ROLE": (400, "One or more permissions exceed the employee role"),
             "PERMISSION_NOT_ASSIGNABLE": (403, "You cannot assign one or more of these permissions"),
             "INVALID_PERMISSION": (400, "One or more permissions are invalid"),
+            "INVALID_CHANNEL": (400, "One or more WhatsApp channels are invalid for the selected branches"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to update employee"))
         raise HTTPException(status_code=code, detail=detail) from exc

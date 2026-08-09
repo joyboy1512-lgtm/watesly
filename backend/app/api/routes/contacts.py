@@ -34,6 +34,10 @@ from app.services.contact_management import (
 )
 from app.services.interests import apply_contact_interests, list_contact_interests
 from app.services.contacts import create_contact, list_contacts
+from app.services.membership_access import (
+    resolve_accessible_channel_ids,
+    resolve_accessible_organization_ids,
+)
 from app.services.contact_serialization import contact_to_response
 from app.services.feature_flags import get_feature_flags
 
@@ -98,6 +102,16 @@ async def get_contacts(
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    accessible_channels = await resolve_accessible_channel_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    accessible_orgs = await resolve_accessible_organization_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if channel_id is not None and accessible_channels is not None and channel_id not in accessible_channels:
+        return []
+    if organization_id is not None and accessible_orgs is not None and organization_id not in accessible_orgs:
+        return []
     contacts = await list_contacts(
         db,
         context.account_id,
@@ -108,6 +122,8 @@ async def get_contacts(
         segment_id=segment_id,
         lifecycle_stage=lifecycle_stage,
         q=q,
+        accessible_channel_ids=accessible_channels if channel_id is None else None,
+        accessible_organization_ids=accessible_orgs if organization_id is None else None,
     )
     return await _serialize_contacts(context, db, contacts)
 

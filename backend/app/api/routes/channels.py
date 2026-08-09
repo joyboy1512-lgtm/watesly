@@ -11,6 +11,7 @@ from app.schemas.channel import ChannelCreateRequest, ChannelResponse
 from app.schemas.mac import ChannelUsageBoardResponse
 from app.services.billing_provider import update_channel_billing
 from app.services.channels import create_channel, get_channel_usage_board, list_channels
+from app.services.membership_access import filter_channels_for_membership
 
 router = APIRouter()
 
@@ -20,7 +21,13 @@ async def get_channels(
     context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_channels(db, context.account_id)
+    channels = await list_channels(db, context.account_id)
+    return await filter_channels_for_membership(
+        db,
+        account_id=context.account_id,
+        membership=context.membership,
+        channels=channels,
+    )
 
 
 @router.get("/usage-board", response_model=ChannelUsageBoardResponse)

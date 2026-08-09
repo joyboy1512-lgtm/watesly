@@ -71,13 +71,22 @@ async def get_accessible_channel_ids(
     role: MembershipRole,
     organization_ids: list[UUID],
 ) -> list[UUID] | None:
-    """Return explicit channel IDs, or None when all org channels are accessible."""
+    """Return None for all account channels (owner/admin), else allowed channel IDs."""
     if role in (MembershipRole.OWNER, MembershipRole.ADMIN):
         return None
     explicit = await list_membership_channel_ids(db, membership_id)
     if explicit:
         return explicit
-    return None
+    if not organization_ids:
+        return []
+    result = await db.execute(
+        select(Channel.id).where(
+            Channel.account_id == account_id,
+            Channel.organization_id.in_(organization_ids),
+            Channel.deleted_at.is_(None),
+        )
+    )
+    return list(result.scalars().all())
 
 
 async def filter_channels_for_membership(

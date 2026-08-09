@@ -7,6 +7,7 @@ from app.core.permissions import Permission
 from app.db.session import get_db
 from app.schemas.organization import OrganizationCreateRequest, OrganizationResponse
 from app.services.organizations import create_organization, list_organizations
+from app.services.membership_access import filter_organizations_for_membership
 
 router = APIRouter()
 
@@ -16,7 +17,13 @@ async def get_organizations(
     context: AuthContext = Depends(require_permissions(Permission.ORGANIZATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> list:
-    return await list_organizations(db, context.account_id)
+    organizations = await list_organizations(db, context.account_id)
+    return await filter_organizations_for_membership(
+        db,
+        account_id=context.account_id,
+        membership=context.membership,
+        organizations=organizations,
+    )
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)

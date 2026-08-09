@@ -10,10 +10,12 @@ from app.models.conversation_event import ConversationEvent
 from app.models.conversation_read_state import ConversationReadState
 from app.models.membership import Membership
 from app.models.message import Message, MessageDirection
-from app.models.organization import Organization, OrganizationStatus
 from app.services.notifications import create_notification
 from app.services.whatsapp_window import compute_service_window
-from app.services.membership_channels import get_accessible_channel_ids
+from app.services.membership_access import (
+    ensure_membership_channel_access,
+    resolve_accessible_channel_ids,
+)
 from app.schemas.conversation import ConversationUpdateRequest, ConversationResponse
 
 
@@ -23,19 +25,8 @@ async def _accessible_channel_ids(
     account_id: UUID,
     membership: Membership,
 ) -> list[UUID] | None:
-    org_result = await db.execute(
-        select(Organization.id).where(
-            Organization.account_id == account_id,
-            Organization.status == OrganizationStatus.ACTIVE,
-        )
-    )
-    organization_ids = list(org_result.scalars().all())
-    return await get_accessible_channel_ids(
-        db,
-        account_id=account_id,
-        membership_id=membership.id,
-        role=membership.role,
-        organization_ids=organization_ids,
+    return await resolve_accessible_channel_ids(
+        db, account_id=account_id, membership=membership
     )
 
 
@@ -46,11 +37,12 @@ async def ensure_conversation_channel_access(
     membership: Membership,
     channel_id: UUID,
 ) -> None:
-    accessible = await _accessible_channel_ids(
-        db, account_id=account_id, membership=membership
+    await ensure_membership_channel_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        channel_id=channel_id,
     )
-    if accessible is not None and channel_id not in accessible:
-        raise ValueError("CONVERSATION_FORBIDDEN")
 
 
 def build_conversation_response(

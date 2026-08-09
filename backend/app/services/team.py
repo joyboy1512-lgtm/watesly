@@ -11,6 +11,7 @@ from app.core.permissions import (
     validate_custom_permissions_for_role,
 )
 from app.core.security import create_invitation_token, decode_invitation_token, hash_password
+from app.models.invitation_channel_access import InvitationChannelAccess
 from app.models.invitation import Invitation, InvitationStatus
 from app.models.invitation_organization import InvitationOrganization
 from app.models.membership import Membership, MembershipRole, MembershipStatus
@@ -24,15 +25,56 @@ from app.schemas.team import (
     InviteEmployeeRequest,
 )
 from app.services.billing import get_active_subscription
+from app.services.membership_channels import replace_membership_channel_access, validate_channel_ids
+from app.services.membership_access import list_membership_organization_ids
 
 
 async def _membership_organization_ids(db: AsyncSession, membership_id: UUID) -> set[UUID]:
-    result = await db.execute(
-        select(OrganizationMembership.organization_id).where(
-            OrganizationMembership.membership_id == membership_id
+    return set(await list_membership_organization_ids(db, membership_id))
+
+
+async def _replace_invitation_channel_access(
+    db: AsyncSession,
+    *,
+    invitation_id: UUID,
+    channel_ids: set[UUID],
+) -> None:
+    await db.execute(
+        delete(InvitationChannelAccess).where(
+            InvitationChannelAccess.invitation_id == invitation_id
         )
     )
-    return set(result.scalars().all())
+    if channel_ids:
+        db.add_all([
+            InvitationChannelAccess(invitation_id=invitation_id, channel_id=channel_id)
+            for channel_id in channel_ids
+        ])
+
+
+async def _apply_membership_channel_access(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership_id: UUID,
+    organization_ids: set[UUID],
+    channel_ids: list[UUID] | None,
+) -> None:
+    if channel_ids is None:
+        return
+    if channel_ids:
+        valid = await validate_channel_ids(
+            db,
+            account_id=account_id,
+            organization_ids=organization_ids,
+            channel_ids=channel_ids,
+        )
+        await replace_membership_channel_access(
+            db, membership_id=membership_id, channel_ids=valid
+        )
+    else:
+        await replace_membership_channel_access(
+            db, membership_id=membership_id, channel_ids=set()
+        )
 
 
 def _assignable_permissions_for_actor(actor_role: MembershipRole):
@@ -93,6 +135,16 @@ async def create_invitation(
         InvitationOrganization(invitation_id=invitation.id, organization_id=org_id)
         for org_id in valid_ids
     ])
+    if payload.channel_ids:
+        channel_ids = await validate_channel_ids(
+            db,
+            account_id=account_id,
+            organization_ids=valid_ids,
+            channel_ids=payload.channel_ids,
+        )
+        await _replace_invitation_channel_access(
+            db, invitation_id=invitation.id, channel_ids=channel_ids
+        )
     await db.commit()
     return invitation, create_invitation_token(invitation_id=invitation.id)
 
@@ -195,6 +247,13 @@ async def create_employee(
         )
         for organization_id in valid_ids
     ])
+    await _apply_membership_channel_access(
+        db,
+        account_id=account_id,
+        membership_id=membership.id,
+        organization_ids=valid_ids,
+        channel_ids=payload.channel_ids,
+    )
     await db.commit()
     return membership, user, list(valid_ids)
 
@@ -249,6 +308,18 @@ async def accept_invitation(
             )
             for organization_id in organization_ids
         ])
+        channel_result = await db.execute(
+            select(InvitationChannelAccess.channel_id).where(
+                InvitationChannelAccess.invitation_id == invitation.id
+            )
+        )
+        invitation_channel_ids = list(channel_result.scalars().all())
+        if invitation_channel_ids:
+            await replace_membership_channel_access(
+                db,
+                membership_id=membership.id,
+                channel_ids=set(invitation_channel_ids),
+            )
         invitation.status = InvitationStatus.ACCEPTED
         invitation.accepted_at = now
 
@@ -256,13 +327,21 @@ async def accept_invitation(
     return user, membership, organization_ids
 
 
-async def list_employees(db: AsyncSession, account_id: UUID) -> list[tuple[Membership, User, list[UUID]]]:
+async def list_employees(
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    actor_membership: Membership | None = None,
+) -> list[tuple[Membership, User, list[UUID]]]:
     result = await db.execute(
         select(Membership, User)
         .join(User, User.id == Membership.user_id)
         .where(Membership.account_id == account_id)
         .order_by(Membership.created_at.asc())
     )
+    actor_org_ids: set[UUID] | None = None
+    if actor_membership is not None and actor_membership.role == MembershipRole.MANAGER:
+        actor_org_ids = await _membership_organization_ids(db, actor_membership.id)
     employees = []
     for membership, user in result.all():
         org_result = await db.execute(
@@ -270,7 +349,13 @@ async def list_employees(db: AsyncSession, account_id: UUID) -> list[tuple[Membe
                 OrganizationMembership.membership_id == membership.id
             )
         )
-        employees.append((membership, user, list(org_result.scalars().all())))
+        organization_ids = list(org_result.scalars().all())
+        if actor_org_ids is not None:
+            if membership.role in (MembershipRole.OWNER, MembershipRole.ADMIN):
+                continue
+            if not set(organization_ids) & actor_org_ids:
+                continue
+        employees.append((membership, user, organization_ids))
     return employees
 
 
@@ -337,6 +422,20 @@ async def update_employee(
             )
             for organization_id in valid_ids
         ])
+        target_org_ids = valid_ids
+    else:
+        target_org_ids = await _membership_organization_ids(db, membership.id)
+
+    if payload.channel_ids is not None:
+        if actor_membership.role == MembershipRole.MANAGER and not target_org_ids.issubset(actor_org_ids):
+            raise ValueError("OUT_OF_SCOPE")
+        await _apply_membership_channel_access(
+            db,
+            account_id=account_id,
+            membership_id=membership.id,
+            organization_ids=target_org_ids,
+            channel_ids=payload.channel_ids,
+        )
 
     if payload.permissions is not None:
         if len(payload.permissions) == 0:

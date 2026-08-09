@@ -41,7 +41,8 @@ export default function TeamPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<MembershipRole>("agent");
-  const [organizationId, setOrganizationId] = useState("");
+  const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([]);
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -52,6 +53,10 @@ export default function TeamPage() {
   const [permissionEditor, setPermissionEditor] = useState<Employee | null>(null);
   const [permissionDraft, setPermissionDraft] = useState<Set<PermissionKey>>(new Set());
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const [accessEditor, setAccessEditor] = useState<Employee | null>(null);
+  const [accessOrgDraft, setAccessOrgDraft] = useState<Set<string>>(new Set());
+  const [accessChannelDraft, setAccessChannelDraft] = useState<Set<string>>(new Set());
+  const [savingAccess, setSavingAccess] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["current-user"],
@@ -100,14 +105,77 @@ export default function TeamPage() {
   const visible = filtered.slice(0, TEAM_PAGE_SIZE);
   const stats = useMemo(() => computeTeamStats(employees), [employees]);
 
+  function toggleSelectedOrg(orgId: string) {
+    setSelectedOrgIds((current) => {
+      const next = current.includes(orgId)
+        ? current.filter((id) => id !== orgId)
+        : [...current, orgId];
+      const allowedChannels = new Set(
+        workspaces.filter((item) => next.includes(item.organization_id)).map((item) => item.channel_id)
+      );
+      setSelectedChannelIds((channels) => channels.filter((id) => allowedChannels.has(id)));
+      return next;
+    });
+  }
+
+  function toggleSelectedChannel(channelId: string) {
+    setSelectedChannelIds((current) =>
+      current.includes(channelId) ? current.filter((id) => id !== channelId) : [...current, channelId]
+    );
+  }
+
+  function renderOrgChannelPicker(
+    orgDraft: Set<string>,
+    channelDraft: Set<string>,
+    onToggleOrg: (orgId: string) => void,
+    onToggleChannel: (channelId: string) => void
+  ) {
+    return (
+      <div className="admin-access-picker">
+        {(organizationsQuery.data ?? []).map((org) => {
+          const orgWorkspaces = workspaces.filter((item) => item.organization_id === org.id);
+          const orgSelected = orgDraft.has(org.id);
+          return (
+            <section key={org.id} className="admin-access-org-block">
+              <label className="admin-permission-item">
+                <input type="checkbox" checked={orgSelected} onChange={() => onToggleOrg(org.id)} />
+                <span>{org.name}</span>
+              </label>
+              {orgSelected && orgWorkspaces.length > 0 && (
+                <div className="admin-access-channels">
+                  <small className="hint-text">بدون تحديد قناة = كل حسابات WhatsApp في هذا الفرع</small>
+                  {orgWorkspaces.map((workspace) => (
+                    <label key={workspace.channel_id} className="admin-permission-item">
+                      <input
+                        type="checkbox"
+                        checked={channelDraft.has(workspace.channel_id)}
+                        onChange={() => onToggleChannel(workspace.channel_id)}
+                      />
+                      <span>{workspaceDisplayName(workspace)}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
   async function invite(event: FormEvent) {
     event.preventDefault();
+    if (!selectedOrgIds.length) {
+      toastStore.getState().show("اختر فرعاً واحداً على الأقل.", "error");
+      return;
+    }
     setInviting(true);
     try {
       const response = await api.post<InvitationResult>("/team/invitations", {
         email: email.trim().toLowerCase(),
         role,
-        organization_ids: [organizationId]
+        organization_ids: selectedOrgIds,
+        channel_ids: selectedChannelIds
       });
       const inviteUrl = response.data.invitation_accept_url || buildInvitationAcceptUrl(response.data.invitation_token);
       const emailSent = response.data.email_sent;
@@ -141,6 +209,10 @@ export default function TeamPage() {
 
   async function createDirect(event: FormEvent) {
     event.preventDefault();
+    if (!selectedOrgIds.length) {
+      toastStore.getState().show("اختر فرعاً واحداً على الأقل.", "error");
+      return;
+    }
     if (password.length < 6) {
       toastStore.getState().show("كلمة المرور يجب أن تكون 6 أحرف على الأقل.", "error");
       return;
@@ -158,7 +230,8 @@ export default function TeamPage() {
         full_name: createdName,
         password,
         role,
-        organization_ids: [organizationId],
+        organization_ids: selectedOrgIds,
+        channel_ids: selectedChannelIds,
         preferred_language: "ar"
       });
       setEmail("");
@@ -196,6 +269,59 @@ export default function TeamPage() {
       else next.add(key);
       return next;
     });
+  }
+
+  function openAccessEditor(item: Employee) {
+    setAccessEditor(item);
+    setAccessOrgDraft(new Set(item.organization_ids));
+    setAccessChannelDraft(new Set(item.channel_ids));
+  }
+
+  function toggleAccessOrg(orgId: string) {
+    setAccessOrgDraft((current) => {
+      const next = new Set(current);
+      if (next.has(orgId)) next.delete(orgId);
+      else next.add(orgId);
+      const allowedChannels = new Set(
+        workspaces.filter((item) => next.has(item.organization_id)).map((item) => item.channel_id)
+      );
+      setAccessChannelDraft((channels) => {
+        const filtered = new Set([...channels].filter((id) => allowedChannels.has(id)));
+        return filtered;
+      });
+      return next;
+    });
+  }
+
+  function toggleAccessChannel(channelId: string) {
+    setAccessChannelDraft((current) => {
+      const next = new Set(current);
+      if (next.has(channelId)) next.delete(channelId);
+      else next.add(channelId);
+      return next;
+    });
+  }
+
+  async function saveAccess() {
+    if (!accessEditor) return;
+    if (accessOrgDraft.size === 0) {
+      toastStore.getState().show("اختر فرعاً واحداً على الأقل.", "error");
+      return;
+    }
+    setSavingAccess(true);
+    try {
+      await api.patch(`/team/employees/${accessEditor.membership_id}`, {
+        organization_ids: [...accessOrgDraft],
+        channel_ids: [...accessChannelDraft]
+      });
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      setAccessEditor(null);
+      toastStore.getState().show("تم تحديث الوصول للفروع وحسابات WhatsApp.", "success");
+    } catch {
+      toastStore.getState().show("تعذر حفظ الوصول. تحقق من الفروع والقنوات.", "error");
+    } finally {
+      setSavingAccess(false);
+    }
   }
 
   async function savePermissions() {
@@ -296,12 +422,12 @@ export default function TeamPage() {
                   <option key={item} value={item}>{formatRoleLabel(item)}</option>
                 ))}
               </select>
-              <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} required>
-                <option value="">اختر الفرع</option>
-                {(organizationsQuery.data ?? []).map((org) => (
-                  <option key={org.id} value={org.id}>{org.name}</option>
-                ))}
-              </select>
+              {renderOrgChannelPicker(
+                new Set(selectedOrgIds),
+                new Set(selectedChannelIds),
+                toggleSelectedOrg,
+                toggleSelectedChannel
+              )}
               <button type="submit" disabled={creating}>{creating ? "جاري الإنشاء…" : "إنشاء الحساب"}</button>
             </form>
           </>
@@ -317,12 +443,12 @@ export default function TeamPage() {
                   <option key={item} value={item}>{formatRoleLabel(item)}</option>
                 ))}
               </select>
-              <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} required>
-                <option value="">اختر الفرع</option>
-                {(organizationsQuery.data ?? []).map((org) => (
-                  <option key={org.id} value={org.id}>{org.name}</option>
-                ))}
-              </select>
+              {renderOrgChannelPicker(
+                new Set(selectedOrgIds),
+                new Set(selectedChannelIds),
+                toggleSelectedOrg,
+                toggleSelectedChannel
+              )}
               <button type="submit" disabled={inviting}>{inviting ? "جاري الإرسال…" : "إرسال الدعوة"}</button>
             </form>
 
@@ -425,9 +551,14 @@ export default function TeamPage() {
                   <td>
                     <div className="admin-actions">
                       {canManagePermissions && item.role !== "owner" && (
-                        <button type="button" className="secondary-button" onClick={() => openPermissionEditor(item)}>
-                          صلاحيات
-                        </button>
+                        <>
+                          <button type="button" className="secondary-button" onClick={() => openAccessEditor(item)}>
+                            الوصول
+                          </button>
+                          <button type="button" className="secondary-button" onClick={() => openPermissionEditor(item)}>
+                            صلاحيات
+                          </button>
+                        </>
                       )}
                       {item.role !== "owner" && (
                         <button type="button" className="secondary-button" onClick={() => void toggleStatus(item)}>
@@ -442,6 +573,34 @@ export default function TeamPage() {
           </table>
         </div>
       </section>
+
+      {accessEditor && (
+        <div className="modal-overlay" onClick={() => setAccessEditor(null)}>
+          <div className="modal-card admin-permissions-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="modal-header">
+              <div>
+                <h2>الوصول للفروع وحسابات WhatsApp</h2>
+                <small>{accessEditor.full_name} · {formatRoleLabel(accessEditor.role)}</small>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setAccessEditor(null)}>إغلاق</button>
+            </header>
+            <p className="hint-text">
+              حدّد الفروع التي يراها الموظف. يمكنك تقييد حسابات WhatsApp داخل الفرع — إذا لم تختر قناة، يرى كل قنوات الفرع.
+            </p>
+            {renderOrgChannelPicker(
+              accessOrgDraft,
+              accessChannelDraft,
+              toggleAccessOrg,
+              toggleAccessChannel
+            )}
+            <div className="admin-actions" style={{ marginTop: 16 }}>
+              <button type="button" disabled={savingAccess} onClick={() => void saveAccess()}>
+                {savingAccess ? "جاري الحفظ…" : "حفظ الوصول"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {permissionEditor && (
         <div className="modal-overlay" onClick={() => setPermissionEditor(null)}>

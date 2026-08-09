@@ -53,6 +53,8 @@ async def list_contacts(
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     q: str | None = None,
+    accessible_channel_ids: list[UUID] | None = None,
+    accessible_organization_ids: list[UUID] | None = None,
 ) -> list[Contact]:
     query = (
         select(Contact)
@@ -77,8 +79,16 @@ async def list_contacts(
         else:
             return []
     else:
+        if accessible_organization_ids is not None:
+            if not accessible_organization_ids:
+                return []
+            query = query.where(Contact.organization_id.in_(accessible_organization_ids))
         if channel_id is not None:
             query = query.where(Contact.channel_id == channel_id)
+        elif accessible_channel_ids is not None:
+            if not accessible_channel_ids:
+                return []
+            query = query.where(Contact.channel_id.in_(accessible_channel_ids))
         if organization_id is not None:
             query = query.where(Contact.organization_id == organization_id)
         if tag_id is not None:
