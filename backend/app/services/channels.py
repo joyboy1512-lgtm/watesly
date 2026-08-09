@@ -9,6 +9,7 @@ from app.models.whatsapp_account import WhatsAppAccount
 from app.schemas.channel import ChannelCreateRequest
 from app.schemas.mac import ChannelUsageBoardItem, ChannelUsageBoardResponse
 from app.services.billing import get_active_subscription
+from app.services.billing_limits import effective_included_mac
 from app.services.channel_billing import channel_billing_payload
 from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
@@ -44,7 +45,7 @@ async def create_channel(
     subscription_data = await get_active_subscription(db, account_id)
     if subscription_data is None:
         raise ValueError("NO_ACTIVE_SUBSCRIPTION")
-    _, plan = subscription_data
+    subscription, plan = subscription_data
 
     current_count = await db.scalar(
         select(func.count(Channel.id)).where(Channel.account_id == account_id, Channel.deleted_at.is_(None))
@@ -52,12 +53,23 @@ async def create_channel(
     if (current_count or 0) >= plan.max_channels:
         raise ValueError("CHANNEL_LIMIT_REACHED")
 
+    included = effective_included_mac(subscription=subscription, plan=plan)
+    billing_cycle = (
+        subscription.billing_cycle.value
+        if hasattr(subscription.billing_cycle, "value")
+        else str(subscription.billing_cycle)
+    )
+
     channel = Channel(
         account_id=account_id,
         organization_id=payload.organization_id,
         type=payload.type,
         name=payload.name,
         external_id=payload.external_id,
+        billing_starts_at=subscription.starts_at,
+        billing_ends_at=subscription.ends_at,
+        billing_cycle=billing_cycle,
+        included_mac=included,
     )
     db.add(channel)
     await db.commit()
@@ -92,17 +104,18 @@ async def get_channel_usage_board(
             db,
             account_id=account_id,
             channel=channel,
-            summary=summary,
-            cycle=cycle,
         )
+        ch_period_start = billing["billing_period_start"]
+        ch_period_end = billing["billing_period_end"]
         campaign_msgs = await count_campaign_messages_for_channel(
             db,
             account_id=account_id,
             channel_id=channel.id,
-            period_start=period_start,
-            period_end=period_end,
+            period_start=ch_period_start,
+            period_end=ch_period_end,
         )
         wa = wa_by_channel.get(channel.id)
+        cycle = str(billing["cycle_month"]) or cycle
         items.append(
             ChannelUsageBoardItem(
                 channel_id=channel.id,

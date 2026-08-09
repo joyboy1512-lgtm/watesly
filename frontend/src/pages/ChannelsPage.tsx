@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, formatApiError } from "../lib/api";
 import { hasNavPermission } from "../lib/navPermissions";
 import { toastStore } from "../stores/toast";
-import ChannelOverMacPriceInput from "../components/ChannelOverMacPriceInput";
+import ChannelBillingEditor from "../components/ChannelBillingEditor";
 import {
   CHANNEL_TYPE_OPTIONS,
   type BasicChannel,
@@ -254,12 +254,14 @@ export default function ChannelsPage() {
     if (!board) {
       return <span className="admin-chip admin-chip-muted">{channel.mac_count.toLocaleString("ar")} MAC</span>;
     }
-    const share = board.mac_count > 0 ? Math.round((channel.mac_count / board.mac_count) * 100) : 0;
+    const usagePct = macUsagePercent(channel.mac_count, channel.included_mac);
     return (
       <div className="admin-cell-stack channel-mac-cell">
         <strong>{channel.mac_count.toLocaleString("ar")} MAC</strong>
-        <small>إسناد · {share}% · {formatMacCycleMonth(channel.cycle_month)}</small>
-        <small>رصيد مساحة العمل {formatMacBalance(board.mac_count, board.included_mac)}</small>
+        <small>{formatMacBalance(channel.mac_count, channel.included_mac)} · {usagePct}%</small>
+        <small className={macBalanceClass(channel.is_over_mac, channel.mac_count, channel.included_mac)}>
+          {channel.is_over_mac ? `+${channel.over_mac_count.toLocaleString("ar")} Over` : "ضمن الحصة"}
+        </small>
         <Link to={`/channels/${channel.channel_id}/mac`} className="channel-mac-detail-link">
           التفاصيل →
         </Link>
@@ -288,7 +290,7 @@ export default function ChannelsPage() {
             <strong>{formatMacCycleMonth(board.cycle_month)}</strong>
           </article>
           <article className="admin-stat-card admin-stat-card-brand">
-            <span>MAC المستخدم</span>
+            <span>MAC المجمّع</span>
             <strong>{formatMacBalance(board.mac_count, board.included_mac)}</strong>
           </article>
           <article className="admin-stat-card admin-stat-card-brand">
@@ -328,10 +330,8 @@ export default function ChannelsPage() {
       {board?.is_over_mac && (
         <section className="card admin-note-card">
           <p>
-            تجاوزت حد MAC المشمول في خطتك ({board.included_mac.toLocaleString("ar")} عميل نشط شهريًا).
-            {" "}الزيادة: {board.over_mac_count.toLocaleString("ar")} MAC
+            إجمالي تجاوز MAC عبر القنوات: {board.over_mac_count.toLocaleString("ar")} MAC
             {" "}({board.over_mac_blocks} × 100) ·
-            {" "}${board.over_mac_price_per_100.toFixed(0)} لكل 100 MAC إضافية ·
             {" "}تقدير: ${board.estimated_over_mac_charge.toFixed(2)}
           </p>
         </section>
@@ -487,7 +487,7 @@ export default function ChannelsPage() {
                 <th>النوع</th>
                 <th>MAC</th>
                 <th>الاشتراك والدورة</th>
-                <th>سعر Over/100</th>
+                <th>فوترة القناة</th>
                 <th>إجمالي Over MAC</th>
                 <th>المهام والاستخدام</th>
                 <th>WhatsApp Business</th>
@@ -530,9 +530,12 @@ export default function ChannelsPage() {
                   <td>{renderMacCell(item)}</td>
                   <td>{renderBillingCell(item)}</td>
                   <td>
-                    <ChannelOverMacPriceInput
+                    <ChannelBillingEditor
                       channelId={item.channel_id}
-                      value={item.over_mac_price_per_100 ?? board?.over_mac_price_per_100 ?? 0}
+                      billingStartsAt={item.subscription_starts_at}
+                      billingEndsAt={item.subscription_ends_at}
+                      includedMac={item.included_mac}
+                      overMacPricePer100={item.over_mac_price_per_100 ?? board?.over_mac_price_per_100 ?? 0}
                       disabled={!canManageBilling}
                     />
                   </td>

@@ -1,9 +1,10 @@
-"""Billing period resolution from subscription anchor (not calendar month)."""
+"""Billing period resolution from subscription or channel anchor."""
 from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.channel import Channel
 from app.models.subscription import BillingCycle, Subscription
 
 
@@ -26,8 +27,20 @@ def add_months(dt: datetime, months: int) -> datetime:
     return dt.replace(year=year, month=month, day=day, tzinfo=UTC)
 
 
-def billing_period_for_subscription(
-    subscription: Subscription,
+def _parse_billing_cycle(value: BillingCycle | str) -> BillingCycle:
+    if isinstance(value, BillingCycle):
+        return value
+    try:
+        return BillingCycle(str(value))
+    except ValueError:
+        return BillingCycle.MONTHLY
+
+
+def billing_period_for_anchor(
+    *,
+    starts_at: datetime,
+    ends_at: datetime,
+    billing_cycle: BillingCycle | str,
     reference: datetime | None = None,
 ) -> tuple[datetime, datetime]:
     """Return (start, end) for the billing period containing reference."""
@@ -35,28 +48,38 @@ def billing_period_for_subscription(
     if ref.tzinfo is None:
         ref = ref.replace(tzinfo=UTC)
 
-    if subscription.billing_cycle == BillingCycle.TRIAL:
-        return subscription.starts_at, subscription.ends_at
+    cycle = _parse_billing_cycle(billing_cycle)
+    if cycle == BillingCycle.TRIAL:
+        return starts_at, ends_at
 
-    step_months = 12 if subscription.billing_cycle == BillingCycle.YEARLY else 1
-    anchor = subscription.starts_at
-    if ref.tzinfo is None:
-        anchor = anchor.replace(tzinfo=UTC) if anchor.tzinfo is None else anchor
+    step_months = 12 if cycle == BillingCycle.YEARLY else 1
+    anchor = starts_at if starts_at.tzinfo else starts_at.replace(tzinfo=UTC)
 
     period_start = anchor
-    while period_start < subscription.ends_at:
+    while period_start < ends_at:
         period_end = add_months(period_start, step_months)
-        if period_end > subscription.ends_at:
-            period_end = subscription.ends_at
-        if ref < period_end or period_end >= subscription.ends_at:
+        if period_end > ends_at:
+            period_end = ends_at
+        if ref < period_end or period_end >= ends_at:
             return period_start, period_end
         period_start = period_end
 
-    return subscription.starts_at, subscription.ends_at
+    return starts_at, ends_at
+
+
+def billing_period_for_subscription(
+    subscription: Subscription,
+    reference: datetime | None = None,
+) -> tuple[datetime, datetime]:
+    return billing_period_for_anchor(
+        starts_at=subscription.starts_at,
+        ends_at=subscription.ends_at,
+        billing_cycle=subscription.billing_cycle,
+        reference=reference,
+    )
 
 
 def cycle_month_key(period_start: datetime) -> str:
-    """Legacy cycle_month key derived from billing period start."""
     return period_start.strftime("%Y-%m")
 
 
@@ -76,3 +99,26 @@ async def resolve_billing_period(
         return start, end
     subscription, _plan = data
     return billing_period_for_subscription(subscription, reference)
+
+
+async def resolve_channel_billing_period(
+    db: AsyncSession,
+    *,
+    channel_id: UUID,
+    reference: datetime | None = None,
+) -> tuple[datetime, datetime] | None:
+    channel = await db.get(Channel, channel_id)
+    if channel is None or channel.deleted_at is not None:
+        return None
+
+    if channel.billing_starts_at and channel.billing_ends_at:
+        return billing_period_for_anchor(
+            starts_at=channel.billing_starts_at,
+            ends_at=channel.billing_ends_at,
+            billing_cycle=channel.billing_cycle,
+            reference=reference,
+        )
+
+    return await resolve_billing_period(
+        db, account_id=channel.account_id, reference=reference
+    )

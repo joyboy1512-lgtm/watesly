@@ -4,14 +4,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.channel import Channel
-from app.models.plan import Plan
-from app.models.subscription import Subscription
-from app.schemas.billing import BillingProviderSettingsUpdate
+from app.schemas.billing import BillingProviderSettingsUpdate, ChannelBillingUpdateRequest
 from app.services.billing import get_active_subscription
-from app.services.billing_limits import (
-    effective_included_mac,
-    effective_workspace_over_price,
-)
 from app.services.mac_tracking import get_account_mac_summary
 
 
@@ -73,17 +67,29 @@ async def update_provider_billing_settings(
     return await get_provider_billing_settings(db, account_id=account_id)
 
 
-async def update_channel_billing_price(
+async def update_channel_billing(
     db: AsyncSession,
     *,
     account_id: UUID,
     channel_id: UUID,
-    over_mac_price_per_100: float | None,
+    payload: ChannelBillingUpdateRequest,
 ) -> Channel:
     channel = await db.get(Channel, channel_id)
     if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
         raise ValueError("CHANNEL_NOT_FOUND")
-    channel.over_mac_price_per_100 = over_mac_price_per_100
+
+    data = payload.model_dump(exclude_unset=True)
+    if "billing_starts_at" in data:
+        channel.billing_starts_at = data["billing_starts_at"]
+    if "billing_ends_at" in data:
+        channel.billing_ends_at = data["billing_ends_at"]
+    if "billing_cycle" in data and data["billing_cycle"] is not None:
+        channel.billing_cycle = data["billing_cycle"]
+    if "included_mac" in data:
+        channel.included_mac = data["included_mac"]
+    if "over_mac_price_per_100" in data:
+        channel.over_mac_price_per_100 = data["over_mac_price_per_100"]
+
     await db.commit()
     await db.refresh(channel)
     return channel

@@ -5,7 +5,7 @@ Recording is handled by mac_usage.record_activity (central, idempotent service).
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.campaign import Campaign
@@ -14,7 +14,7 @@ from app.models.channel import Channel
 from app.models.contact import Contact
 from app.models.monthly_active_contact import MonthlyActiveContact
 from app.models.whatsapp_account import WhatsAppAccount
-from app.services.billing_period import cycle_month_key, resolve_billing_period
+from app.services.billing_period import cycle_month_key, resolve_billing_period, resolve_channel_billing_period
 
 # Re-export for backward compatibility
 from app.services.mac_usage import MacActivityType, record_activity, record_mac  # noqa: F401
@@ -70,6 +70,43 @@ async def _period_for_account(
     return period
 
 
+async def _period_for_channel(
+    db: AsyncSession,
+    *,
+    channel_id: UUID,
+    cycle_month: str | None = None,
+) -> tuple[datetime, datetime] | None:
+    if cycle_month:
+        year, month = map(int, cycle_month.split("-"))
+        start = datetime(year, month, 1, tzinfo=UTC)
+        if month == 12:
+            end = datetime(year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end = datetime(year, month + 1, 1, tzinfo=UTC)
+        return start, end
+    return await resolve_channel_billing_period(db, channel_id=channel_id)
+
+
+async def _channel_period_pairs(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    cycle_month: str | None = None,
+) -> list[tuple[UUID, datetime, datetime]]:
+    from app.services.channels import list_channels
+
+    pairs: list[tuple[UUID, datetime, datetime]] = []
+    for channel in await list_channels(db, account_id):
+        period = await _period_for_channel(
+            db, channel_id=channel.id, cycle_month=cycle_month
+        )
+        if period is None:
+            continue
+        period_start, period_end = period
+        pairs.append((channel.id, period_start, period_end))
+    return pairs
+
+
 async def get_account_mac_summary(
     db: AsyncSession,
     *,
@@ -77,12 +114,16 @@ async def get_account_mac_summary(
     cycle_month: str | None = None,
 ) -> dict:
     from app.services.billing import get_active_subscription
+    from app.services.billing_limits import (
+        compute_channel_over_mac_charge,
+        effective_channel_included_mac,
+        effective_channel_over_price,
+    )
+    from app.services.channels import list_channels
 
     period_start, period_end = await _period_for_account(
         db, account_id=account_id, cycle_month=cycle_month
     )
-    included_mac = 1000
-    over_mac_price_per_100 = 12.0
     mac_limit_policy = "soft"
     overage_enabled = True
     subscription_data = await get_active_subscription(db, account_id)
@@ -90,38 +131,63 @@ async def get_account_mac_summary(
     plan = None
     if subscription_data is not None:
         subscription, plan = subscription_data
-        from app.services.billing_limits import effective_included_mac, effective_workspace_over_price
-
-        included_mac = effective_included_mac(subscription=subscription, plan=plan)
-        over_mac_price_per_100 = effective_workspace_over_price(
-            subscription=subscription, plan=plan
-        )
         mac_limit_policy = getattr(plan, "mac_limit_policy", "soft") or "soft"
         overage_enabled = bool(getattr(plan, "overage_enabled", True))
 
-    mac_count = await count_mac_for_account(
-        db,
-        account_id=account_id,
-        period_start=period_start,
-    )
-    balance = compute_mac_balance(mac_count=mac_count, included_mac=included_mac)
-    over_mac_count = int(balance["over_mac_count"])
+    channels = await list_channels(db, account_id)
+    total_mac = 0
+    total_included = 0
+    total_over_count = 0
+    total_over_blocks = 0
+    total_charge = 0.0
+    avg_price = 12.0
+
+    for channel in channels:
+        period = await _period_for_channel(
+            db, channel_id=channel.id, cycle_month=cycle_month
+        )
+        if period is None:
+            continue
+        ch_start, _ch_end = period
+        channel_mac = await count_mac_for_channel(
+            db,
+            account_id=account_id,
+            channel_id=channel.id,
+            period_start=ch_start,
+        )
+        included = effective_channel_included_mac(
+            channel=channel, subscription=subscription, plan=plan
+        )
+        price = effective_channel_over_price(
+            channel=channel, subscription=subscription, plan=plan
+        )
+        over = compute_channel_over_mac_charge(
+            channel_mac=channel_mac,
+            included_mac=included,
+            price_per_100=price,
+            overage_enabled=overage_enabled,
+        )
+        total_mac += channel_mac
+        total_included += included
+        total_over_count += int(over["attributed_over_mac_count"])
+        total_over_blocks += int(over["over_mac_blocks"])
+        total_charge += float(over["estimated_channel_over_mac_charge"])
+        avg_price = price
+
+    balance = compute_mac_balance(mac_count=total_mac, included_mac=total_included)
     return {
         "cycle_month": cycle_month_key(period_start),
         "billing_period_start": period_start,
         "billing_period_end": period_end,
-        "mac_count": mac_count,
-        "included_mac": included_mac,
+        "mac_count": total_mac,
+        "included_mac": total_included,
         "mac_limit_policy": mac_limit_policy,
         "overage_enabled": overage_enabled,
-        "over_mac_price_per_100": over_mac_price_per_100,
+        "over_mac_price_per_100": avg_price,
         **balance,
-        "estimated_over_mac_charge": estimate_over_mac_charge(
-            over_mac_count=over_mac_count,
-            price_per_100=over_mac_price_per_100,
-        )
-        if overage_enabled
-        else 0.0,
+        "over_mac_count": total_over_count,
+        "over_mac_blocks": total_over_blocks,
+        "estimated_over_mac_charge": round(total_charge, 3) if overage_enabled else 0.0,
         "subscription_starts_at": subscription.starts_at if subscription else None,
         "subscription_ends_at": subscription.ends_at if subscription else None,
     }
@@ -136,7 +202,12 @@ async def count_mac_for_channel(
     period_start: datetime | None = None,
 ) -> int:
     if period_start is None:
-        period_start, _ = await _period_for_account(db, account_id=account_id, cycle_month=cycle_month)
+        period = await _period_for_channel(
+            db, channel_id=channel_id, cycle_month=cycle_month
+        )
+        if period is None:
+            return 0
+        period_start, _ = period
     return int(
         (
             await db.scalar(
@@ -158,19 +229,34 @@ async def count_mac_for_account(
     cycle_month: str | None = None,
     period_start: datetime | None = None,
 ) -> int:
-    if period_start is None:
-        period_start, _ = await _period_for_account(db, account_id=account_id, cycle_month=cycle_month)
-    return int(
-        (
-            await db.scalar(
-                select(func.count(MonthlyActiveContact.id)).where(
-                    MonthlyActiveContact.account_id == account_id,
-                    MonthlyActiveContact.billing_period_start == period_start,
+    if period_start is not None:
+        return int(
+            (
+                await db.scalar(
+                    select(func.count(MonthlyActiveContact.id)).where(
+                        MonthlyActiveContact.account_id == account_id,
+                        MonthlyActiveContact.billing_period_start == period_start,
+                    )
                 )
             )
+            or 0
         )
-        or 0
+
+    pairs = await _channel_period_pairs(
+        db, account_id=account_id, cycle_month=cycle_month
     )
+    if not pairs:
+        return 0
+
+    total = 0
+    for channel_id, ch_start, _ch_end in pairs:
+        total += await count_mac_for_channel(
+            db,
+            account_id=account_id,
+            channel_id=channel_id,
+            period_start=ch_start,
+        )
+    return total
 
 
 async def list_mac_contacts(
@@ -182,22 +268,38 @@ async def list_mac_contacts(
     limit: int = 200,
     offset: int = 0,
 ) -> list[dict]:
-    period_start, _ = await _period_for_account(db, account_id=account_id, cycle_month=cycle_month)
+    if channel_id is not None:
+        period = await _period_for_channel(
+            db, channel_id=channel_id, cycle_month=cycle_month
+        )
+        if period is None:
+            return []
+        period_start, _ = period
+        period_filters = [(channel_id, period_start)]
+    else:
+        pairs = await _channel_period_pairs(
+            db, account_id=account_id, cycle_month=cycle_month
+        )
+        period_filters = [(cid, pstart) for cid, pstart, _ in pairs]
+        if not period_filters:
+            return []
+
     query = (
         select(MonthlyActiveContact, Contact, Channel.name)
         .join(Contact, Contact.id == MonthlyActiveContact.contact_id)
         .join(Channel, Channel.id == MonthlyActiveContact.channel_id)
         .where(
             MonthlyActiveContact.account_id == account_id,
-            MonthlyActiveContact.billing_period_start == period_start,
             Contact.deleted_at.is_(None),
+            tuple_(
+                MonthlyActiveContact.channel_id,
+                MonthlyActiveContact.billing_period_start,
+            ).in_(period_filters),
         )
         .order_by(MonthlyActiveContact.first_activity_at.desc())
         .limit(min(max(limit, 1), 500))
         .offset(max(offset, 0))
     )
-    if channel_id is not None:
-        query = query.where(MonthlyActiveContact.channel_id == channel_id)
 
     rows = list((await db.execute(query)).all())
     return [
@@ -227,9 +329,12 @@ async def count_campaign_messages_for_channel(
     cycle_month: str | None = None,
 ) -> int:
     if period_start is None or period_end is None:
-        period_start, period_end = await _period_for_account(
-            db, account_id=account_id, cycle_month=cycle_month
+        period = await _period_for_channel(
+            db, channel_id=channel_id, cycle_month=cycle_month
         )
+        if period is None:
+            return 0
+        period_start, period_end = period
 
     wa_ids = list(
         (
@@ -274,41 +379,19 @@ async def count_campaign_messages_for_account(
     account_id: UUID,
     cycle_month: str | None = None,
 ) -> int:
-    period_start, period_end = await _period_for_account(
+    pairs = await _channel_period_pairs(
         db, account_id=account_id, cycle_month=cycle_month
     )
-    wa_ids = list(
-        (
-            await db.execute(
-                select(WhatsAppAccount.id).where(WhatsAppAccount.account_id == account_id)
-            )
-        ).scalars().all()
-    )
-    if not wa_ids:
-        return 0
-
-    return int(
-        (
-            await db.scalar(
-                select(func.count(CampaignRecipient.id))
-                .join(Campaign, Campaign.id == CampaignRecipient.campaign_id)
-                .where(
-                    Campaign.account_id == account_id,
-                    Campaign.whatsapp_account_id.in_(wa_ids),
-                    CampaignRecipient.status.in_(
-                        [
-                            CampaignRecipientStatus.SENT,
-                            CampaignRecipientStatus.DELIVERED,
-                            CampaignRecipientStatus.READ,
-                        ]
-                    ),
-                    CampaignRecipient.updated_at >= period_start,
-                    CampaignRecipient.updated_at < period_end,
-                )
-            )
+    total = 0
+    for channel_id, period_start, period_end in pairs:
+        total += await count_campaign_messages_for_channel(
+            db,
+            account_id=account_id,
+            channel_id=channel_id,
+            period_start=period_start,
+            period_end=period_end,
         )
-        or 0
-    )
+    return total
 
 
 async def get_mac_insights(
@@ -318,18 +401,45 @@ async def get_mac_insights(
     cycle_month: str | None = None,
 ) -> dict:
     from app.services.billing import get_active_subscription
+    from app.services.billing_limits import effective_channel_included_mac
     from app.services.channels import list_channels
 
     period_start, period_end = await _period_for_account(
         db, account_id=account_id, cycle_month=cycle_month
     )
-    included_mac = 1000
     subscription_data = await get_active_subscription(db, account_id)
-    if subscription_data is not None:
-        _, plan = subscription_data
-        included_mac = plan.included_mac
+    subscription = subscription_data[0] if subscription_data else None
+    plan = subscription_data[1] if subscription_data else None
 
-    channel_count = len(await list_channels(db, account_id))
+    channels = await list_channels(db, account_id)
+    included_mac = 0
+    for channel in channels:
+        included_mac += effective_channel_included_mac(
+            channel=channel, subscription=subscription, plan=plan
+        )
+
+    pairs = await _channel_period_pairs(
+        db, account_id=account_id, cycle_month=cycle_month
+    )
+    period_filters = [(cid, pstart) for cid, pstart, _ in pairs]
+
+    if not period_filters:
+        return {
+            "cycle_month": cycle_month_key(period_start),
+            "billing_period_start": period_start,
+            "billing_period_end": period_end,
+            "included_mac": included_mac,
+            "channel_count": len(channels),
+            "trigger_breakdown": [],
+            "channel_breakdown": [],
+            "daily_trend": [],
+            "campaign_messages_sent": 0,
+        }
+
+    period_clause = tuple_(
+        MonthlyActiveContact.channel_id,
+        MonthlyActiveContact.billing_period_start,
+    ).in_(period_filters)
 
     trigger_rows = list(
         (
@@ -337,7 +447,7 @@ async def get_mac_insights(
                 select(MonthlyActiveContact.trigger_source, func.count(MonthlyActiveContact.id))
                 .where(
                     MonthlyActiveContact.account_id == account_id,
-                    MonthlyActiveContact.billing_period_start == period_start,
+                    period_clause,
                 )
                 .group_by(MonthlyActiveContact.trigger_source)
                 .order_by(func.count(MonthlyActiveContact.id).desc())
@@ -352,7 +462,7 @@ async def get_mac_insights(
                 .join(Channel, Channel.id == MonthlyActiveContact.channel_id)
                 .where(
                     MonthlyActiveContact.account_id == account_id,
-                    MonthlyActiveContact.billing_period_start == period_start,
+                    period_clause,
                 )
                 .group_by(Channel.name, Channel.type)
                 .order_by(func.count(MonthlyActiveContact.id).desc())
@@ -367,7 +477,7 @@ async def get_mac_insights(
                 select(day_bucket, func.count(MonthlyActiveContact.id))
                 .where(
                     MonthlyActiveContact.account_id == account_id,
-                    MonthlyActiveContact.billing_period_start == period_start,
+                    period_clause,
                 )
                 .group_by(day_bucket)
                 .order_by(day_bucket.asc())
@@ -384,7 +494,7 @@ async def get_mac_insights(
         "billing_period_start": period_start,
         "billing_period_end": period_end,
         "included_mac": included_mac,
-        "channel_count": channel_count,
+        "channel_count": len(channels),
         "trigger_breakdown": [
             {"source": str(source), "count": int(count)} for source, count in trigger_rows
         ],
@@ -450,29 +560,42 @@ async def get_channel_mac_usage(
     channel_id: UUID,
     cycle_month: str | None = None,
 ) -> dict:
-    """Per-channel MAC drill-down: assigned contacts, trends, workspace overage context."""
+    """Per-channel MAC drill-down with independent billing period and overage."""
     from app.services.billing import get_active_subscription
+    from app.services.channel_billing import channel_billing_payload
 
     channel = await db.get(Channel, channel_id)
     if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
         raise ValueError("CHANNEL_NOT_FOUND")
 
-    summary = await get_account_mac_summary(db, account_id=account_id, cycle_month=cycle_month)
-    period_start = summary["billing_period_start"]
-    period_end = summary["billing_period_end"]
-
     subscription_data = await get_active_subscription(db, account_id)
-    plan_name = "—"
-    if subscription_data is not None:
-        _, plan = subscription_data
-        plan_name = plan.name
+    subscription = subscription_data[0] if subscription_data else None
+    plan = subscription_data[1] if subscription_data else None
+    plan_name = plan.name if plan else "—"
+    overage_enabled = bool(getattr(plan, "overage_enabled", True)) if plan else True
+    mac_limit_policy = getattr(plan, "mac_limit_policy", "soft") if plan else "soft"
 
-    channel_mac = await count_mac_for_channel(
-        db, account_id=account_id, channel_id=channel_id, period_start=period_start
+    billing = await channel_billing_payload(
+        db,
+        account_id=account_id,
+        channel=channel,
+        overage_enabled=overage_enabled,
     )
-    workspace_used = int(summary["mac_count"])
-    workspace_included = int(summary["included_mac"])
+    period_start = billing["billing_period_start"]
+    period_end = billing["billing_period_end"]
+    channel_mac = int(billing["mac_count"])
+    included = int(billing["included_mac"])
+    remaining = int(billing["mac_remaining"])
+
+    workspace_summary = await get_account_mac_summary(
+        db, account_id=account_id, cycle_month=cycle_month
+    )
+    workspace_used = int(workspace_summary["mac_count"])
     share = round((channel_mac / workspace_used) * 100, 1) if workspace_used > 0 else 0.0
+    usage_percent = round((channel_mac / included) * 100, 1) if included > 0 else (100.0 if channel_mac > 0 else 0.0)
+
+    if period_start is None:
+        raise ValueError("NO_BILLING_PERIOD")
 
     trigger_rows = list(
         (
@@ -517,39 +640,46 @@ async def get_channel_mac_usage(
         channel.status.value if hasattr(channel.status, "value") else str(channel.status)
     )
     channel_type = channel.type.value if hasattr(channel.type, "value") else str(channel.type)
+    over_count = int(billing["attributed_over_mac_count"])
+    over_blocks = (over_count + 99) // 100 if over_count > 0 else 0
+    over_charge = float(billing["estimated_channel_over_mac_charge"])
+    over_price = float(billing["over_mac_price_per_100"])
 
     return {
         "channel_id": channel_id,
         "channel_name": channel.name,
         "channel_type": channel_type,
         "channel_status": channel_status,
-        "cycle_month": str(summary["cycle_month"]),
+        "cycle_month": str(billing["cycle_month"]),
         "billing_period": {
             "start": period_start,
             "end": period_end,
         },
         "mac": {
             "channel_count": channel_mac,
+            "channel_included": included,
+            "channel_remaining": remaining,
+            "usage_percent": usage_percent,
             "workspace_used": workspace_used,
-            "workspace_included": workspace_included,
-            "workspace_remaining": int(summary["mac_remaining"]),
+            "workspace_included": int(workspace_summary["included_mac"]),
+            "workspace_remaining": int(workspace_summary["mac_remaining"]),
             "share_percent": share,
         },
         "overage": {
-            "enabled": bool(summary.get("overage_enabled", True)),
-            "is_over": bool(summary["is_over_mac"]),
-            "count": int(summary["over_mac_count"]),
-            "blocks": int(summary["over_mac_blocks"]),
-            "estimated_charge": float(summary["estimated_over_mac_charge"]),
-            "price_per_100": float(summary["over_mac_price_per_100"]),
+            "enabled": overage_enabled,
+            "is_over": bool(billing["is_over_mac"]),
+            "count": over_count,
+            "blocks": over_blocks,
+            "estimated_charge": over_charge,
+            "price_per_100": over_price,
         },
         "pricing": {
             "plan_name": plan_name,
-            "included_mac": workspace_included,
-            "over_mac_price_per_100": float(summary["over_mac_price_per_100"]),
+            "included_mac": included,
+            "over_mac_price_per_100": over_price,
         },
         "policy": {
-            "limit_policy": str(summary.get("mac_limit_policy", "soft")),
+            "limit_policy": str(mac_limit_policy or "soft"),
         },
         "breakdown_by_activity": [
             {"source": str(source), "count": int(count)} for source, count in trigger_rows

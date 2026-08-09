@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.contact import Contact
 from app.models.mac_activation_audit import MacActivationAudit
 from app.models.monthly_active_contact import MacTriggerSource, MonthlyActiveContact
-from app.services.billing_period import cycle_month_key, resolve_billing_period
+from app.services.billing_period import cycle_month_key, resolve_channel_billing_period
 
 
 class MacActivityType(StrEnum):
@@ -77,7 +77,7 @@ async def record_activity(
         return MacActivityResult(created=False, reason="activity_not_counted")
 
     at = activity_at or datetime.now(UTC)
-    period = await resolve_billing_period(db, account_id=account_id, reference=at)
+    period = await resolve_channel_billing_period(db, channel_id=channel_id, reference=at)
     if period is None:
         return MacActivityResult(created=False, reason="no_billing_period")
     period_start, period_end = period
@@ -114,7 +114,7 @@ async def record_activity(
             last_active_at=at,
             source_event_id=source_event_id,
         )
-        .on_conflict_do_nothing(constraint="uq_mac_account_contact_billing_period")
+        .on_conflict_do_nothing(constraint="uq_mac_account_channel_contact_billing_period")
     )
     result = await db.execute(stmt)
     created = result.rowcount > 0
@@ -124,6 +124,7 @@ async def record_activity(
             update(MonthlyActiveContact)
             .where(
                 MonthlyActiveContact.account_id == account_id,
+                MonthlyActiveContact.channel_id == channel_id,
                 MonthlyActiveContact.contact_id == contact_id,
                 MonthlyActiveContact.billing_period_start == period_start,
             )
@@ -132,6 +133,7 @@ async def record_activity(
         existing_mac = await db.scalar(
             select(MonthlyActiveContact.id).where(
                 MonthlyActiveContact.account_id == account_id,
+                MonthlyActiveContact.channel_id == channel_id,
                 MonthlyActiveContact.contact_id == contact_id,
                 MonthlyActiveContact.billing_period_start == period_start,
             )

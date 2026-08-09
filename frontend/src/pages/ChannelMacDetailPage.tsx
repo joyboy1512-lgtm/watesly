@@ -36,6 +36,9 @@ type ChannelMacUsage = {
   billing_period: { start: string; end: string };
   mac: {
     channel_count: number;
+    channel_included: number;
+    channel_remaining: number;
+    usage_percent: number;
     workspace_used: number;
     workspace_included: number;
     workspace_remaining: number;
@@ -109,13 +112,15 @@ export default function ChannelMacDetailPage() {
 
   const channelChart = useMemo(() => {
     if (!u) return [];
+    if (u.overage.is_over) {
+      return [
+        { name: "ضمن الحصة", value: u.mac.channel_included, color: CHART_COLORS[0] },
+        { name: "تجاوز", value: u.overage.count, color: "#ef4444" }
+      ].filter((item) => item.value > 0);
+    }
     return [
-      { name: "هذه القناة", value: u.mac.channel_count, color: CHART_COLORS[0] },
-      {
-        name: "قنوات أخرى",
-        value: Math.max(0, u.mac.workspace_used - u.mac.channel_count),
-        color: "#bbf7d0"
-      }
+      { name: "مستخدم", value: u.mac.channel_count, color: CHART_COLORS[0] },
+      { name: "متبقٍ", value: u.mac.channel_remaining, color: "#bbf7d0" }
     ].filter((item) => item.value > 0);
   }, [u]);
 
@@ -164,8 +169,8 @@ export default function ChannelMacDetailPage() {
           <span className="billing-eyebrow">MAC · {formatChannelType(u.channel_type)}</span>
           <h1>{u.channel_name}</h1>
           <p>
-            {u.mac.channel_count.toLocaleString("ar")} MAC مُسنَد ·{" "}
-            {u.mac.share_percent}% من {u.mac.workspace_used.toLocaleString("ar")} ·{" "}
+            {u.mac.channel_count.toLocaleString("ar")} / {u.mac.channel_included.toLocaleString("ar")} MAC ·{" "}
+            {formatMacBalance(u.mac.channel_count, u.mac.channel_included)} ·{" "}
             {formatPeriodRange(u.billing_period.start, u.billing_period.end)}
           </p>
         </div>
@@ -177,22 +182,24 @@ export default function ChannelMacDetailPage() {
 
       <section className="admin-stats-row admin-stats-row-brand">
         <article className="admin-stat-card admin-stat-card-brand">
-          <span>MAC القناة</span>
-          <strong>{u.mac.channel_count.toLocaleString("ar")}</strong>
+          <span>MAC مشمول</span>
+          <strong>{u.mac.channel_included.toLocaleString("ar")}</strong>
         </article>
         <article className="admin-stat-card admin-stat-card-brand">
-          <span>نسبة من الإجمالي</span>
-          <strong>{u.mac.share_percent}%</strong>
+          <span>الاستخدام</span>
+          <strong>{u.mac.usage_percent}%</strong>
         </article>
         <article className="admin-stat-card admin-stat-card-brand">
-          <span>رصيد مساحة العمل</span>
-          <strong>{formatMacBalance(u.mac.workspace_used, u.mac.workspace_included)}</strong>
+          <span>رصيد القناة</span>
+          <strong className={macBalanceClass(u.overage.is_over, u.mac.channel_count, u.mac.channel_included)}>
+            {formatMacBalance(u.mac.channel_count, u.mac.channel_included)}
+          </strong>
         </article>
         <article className="admin-stat-card admin-stat-card-brand">
-          <span>{u.overage.is_over ? "Over MAC" : "التسعير"}</span>
-          <strong className={macBalanceClass(u.overage.is_over, u.mac.workspace_used, u.mac.workspace_included)}>
+          <span>{u.overage.is_over ? "Over MAC" : "Over $/100"}</span>
+          <strong className={macBalanceClass(u.overage.is_over, u.mac.channel_count, u.mac.channel_included)}>
             {u.overage.is_over
-              ? `+$${u.overage.estimated_charge.toFixed(0)}`
+              ? `+$${u.overage.estimated_charge.toFixed(2)}`
               : `$${u.pricing.over_mac_price_per_100}/100`}
           </strong>
         </article>
@@ -228,21 +235,21 @@ export default function ChannelMacDetailPage() {
       {u.overage.is_over && (
         <section className="card admin-note-card">
           <p>
-            مساحة العمل تجاوزت {u.mac.workspace_included.toLocaleString("ar")} MAC ·
-            +{u.overage.count.toLocaleString("ar")} ({u.overage.blocks} × 100) ·
-            تقدير ${u.overage.estimated_charge.toFixed(2)} ·
-            هذه القناة تُسهم بـ {u.mac.channel_count.toLocaleString("ar")} MAC ({u.mac.share_percent}%)
+            تجاوزت هذه القناة {u.mac.channel_included.toLocaleString("ar")} MAC ·
+            +{u.overage.count.toLocaleString("ar")} ({u.overage.blocks} × 100 @ ${u.overage.price_per_100}/100) ·
+            تقدير ${u.overage.estimated_charge.toFixed(2)}
           </p>
         </section>
       )}
 
       <section className="billing-per-channel-banner ready">
         <div>
-          <strong>إسناد MAC — أول تفاعل عبر هذه القناة</strong>
+          <strong>فوترة مستقلة لهذه القناة</strong>
           <small>
-            الرصيد والتجاوز على مستوى مساحة العمل. {u.campaign_messages_sent > 0
-              ? `${u.campaign_messages_sent.toLocaleString("ar")} رسالة حملة (لا تُحسب MAC).`
-              : "Broadcast لا يُحسب MAC."}
+            MAC و Over MAC ودورة الاشتراك خاصة بهذه القناة.
+            {u.campaign_messages_sent > 0
+              ? ` ${u.campaign_messages_sent.toLocaleString("ar")} رسالة حملة (لا تُحسب MAC).`
+              : " Broadcast لا يُحسب MAC."}
           </small>
         </div>
         <span className={channelTypeClass(u.channel_type)}>{formatChannelType(u.channel_type)}</span>
@@ -251,8 +258,8 @@ export default function ChannelMacDetailPage() {
       <section className="billing-charts-grid">
         <article className="card billing-chart-card">
           <div className="billing-chart-head">
-            <h2>حصة القناة من MAC</h2>
-            <span>{u.mac.channel_count} / {u.mac.workspace_used}</span>
+            <h2>رصيد MAC — هذه القناة</h2>
+            <span>{u.mac.channel_count} / {u.mac.channel_included}</span>
           </div>
           <div className="billing-chart-wrap billing-chart-donut">
             {channelChart.length === 0 ? (

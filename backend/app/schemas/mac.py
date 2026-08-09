@@ -163,6 +163,9 @@ class BillingUsageResponse(BaseModel):
 
 class ChannelMacUsageMacDTO(BaseModel):
     channel_count: int
+    channel_included: int = 0
+    channel_remaining: int = 0
+    usage_percent: float = 0
     workspace_used: int
     workspace_included: int
     workspace_remaining: int

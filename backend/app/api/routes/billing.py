@@ -191,15 +191,16 @@ async def get_channels_mac_stats(
             db,
             account_id=context.account_id,
             channel=channel,
-            summary=summary,
-            cycle=cycle,
         )
+        ch_period_start = billing["billing_period_start"]
+        ch_period_end = billing["billing_period_end"]
+        cycle = str(billing["cycle_month"]) or cycle
         campaign_msgs = await count_campaign_messages_for_channel(
             db,
             account_id=context.account_id,
             channel_id=channel.id,
-            period_start=period_start,
-            period_end=summary["billing_period_end"],
+            period_start=ch_period_start,
+            period_end=ch_period_end,
         )
         wa = wa_by_channel.get(channel.id)
         items.append(

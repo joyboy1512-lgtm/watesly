@@ -102,7 +102,14 @@ type ChannelMacStat = {
 type ChannelMacUsage = {
   channel_id: string;
   channel_name: string;
-  mac: { channel_count: number; workspace_used: number; share_percent: number };
+  mac: {
+    channel_count: number;
+    channel_included?: number;
+    channel_remaining?: number;
+    usage_percent?: number;
+    workspace_used: number;
+    share_percent: number;
+  };
   breakdown_by_activity: Array<{ source: string; count: number }>;
   daily_trend: Array<{ date: string; count: number }>;
 };
@@ -395,7 +402,10 @@ export default function BillingPage() {
         {selectedChannel && channelView && (
           <div className="billing-channel-active-filter">
             <strong>{selectedChannel.channel_name}</strong>
-            <span>{channelView.mac.channel_count.toLocaleString("ar")} MAC · {channelView.mac.share_percent}% من الإجمالي</span>
+            <span>
+              {channelView.mac.channel_count.toLocaleString("ar")} / {selectedChannel.included_mac.toLocaleString("ar")} MAC
+              {" "}· {formatMacBalance(channelView.mac.channel_count, selectedChannel.included_mac)}
+            </span>
             <span className={channelTypeClass(selectedChannel.channel_type)}>{formatChannelType(selectedChannel.channel_type)}</span>
           </div>
         )}
@@ -415,7 +425,7 @@ export default function BillingPage() {
         <div className="admin-table-header">
           <div>
             <h2>MAC حسب القناة</h2>
-            <small>إسناد أول تفاعل · الرصيد والتجاوز على مستوى مساحة العمل</small>
+            <small>فوترة مستقلة لكل قناة — MAC و Over MAC ودورة اشتراك منفصلة</small>
           </div>
         </div>
         <div className="billing-table-toolbar">
@@ -448,7 +458,9 @@ export default function BillingPage() {
                 <tr><td colSpan={9} className="admin-table-empty">لا قنوات مطابقة.</td></tr>
               )}
               {filteredChannels.map((item) => {
-                const share = workspaceMac > 0 ? Math.round((item.mac_count / workspaceMac) * 100) : 0;
+                const usagePct = item.included_mac > 0
+                  ? Math.round((item.mac_count / item.included_mac) * 100)
+                  : 0;
                 const isSelected = item.channel_id === selectedChannelId;
                 const periodLabel =
                   item.billing_period_start && item.billing_period_end
@@ -466,7 +478,7 @@ export default function BillingPage() {
                       </div>
                     </td>
                     <td><strong>{item.mac_count.toLocaleString("ar")}</strong></td>
-                    <td>{share}%</td>
+                    <td>{formatMacBalance(item.mac_count, item.included_mac)} ({usagePct}%)</td>
                     <td>{item.subscription_starts_at ? formatPlanDate(item.subscription_starts_at) : "—"}</td>
                     <td>{item.subscription_ends_at ? formatPlanDate(item.subscription_ends_at) : "—"}</td>
                     <td>{periodLabel}</td>
@@ -506,7 +518,7 @@ export default function BillingPage() {
       <section className="billing-charts-grid">
         <article className="card billing-chart-card">
           <div className="billing-chart-head">
-            <h2>{selectedChannelId ? "رصيد مساحة العمل" : "Monthly Active Contacts"}</h2>
+            <h2>{selectedChannelId ? "رصيد القناة" : "MAC المجمّع (كل القنوات)"}</h2>
             <span>{u?.mac.used ?? 0} / {u?.mac.included ?? sub.included_mac}</span>
           </div>
           <div className="billing-chart-wrap billing-chart-donut">
@@ -552,7 +564,7 @@ export default function BillingPage() {
         <article className="card billing-chart-card billing-chart-wide">
           <div className="billing-chart-head">
             <h2>MAC حسب القناة</h2>
-            <small>إسناد أول تفاعل — لا يُضاعَف</small>
+            <small>MAC مستقل لكل قناة — نفس الجهة على قناتين = MACان</small>
           </div>
           <div className="billing-chart-wrap">
             {channelChart.length === 0 ? (
@@ -642,11 +654,11 @@ export default function BillingPage() {
       <details className="card billing-policy-details">
         <summary>سياسة MAC والتسعير</summary>
         <ul className="mac-policy-list">
-          <li>MAC = Contact فريد تفاعل خلال دورة الفوترة (ليس عدد الرسائل).</li>
+          <li>MAC = Contact فريد تفاعل خلال دورة فوترة القناة (ليس عدد الرسائل).</li>
           <li>Broadcast/حملات جماعية لا تُحسب MAC.</li>
-          <li>إسناد القناة = أول تفاعل — الرصيد والتجاوز على مستوى مساحة العمل.</li>
-          <li>Over MAC: ${sub.over_mac_price_per_100} لكل 100 MAC (ceil).</li>
-          <li>دورة الاشتراك: {formatPlanDate(sub.starts_at)} – {formatPlanDate(sub.ends_at)}.</li>
+          <li>كل قناة لها دورة اشتراك، حصة MAC، وسعر Over MAC مستقل.</li>
+          <li>نفس الجهة على قناتين مختلفتين في نفس الدورة = MACان.</li>
+          <li>Over MAC: يُحسب لكل قناة على حدة (ceil لكل 100).</li>
         </ul>
       </details>
     </main>

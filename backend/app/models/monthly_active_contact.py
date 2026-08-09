@@ -1,9 +1,9 @@
 """Monthly Active Contact (MAC) billing records.
 
 Commercial policy (Watesly):
-- MAC counts a unique contact once per billing period per account (tenant).
-- Triggers MAC: inbound, outbound inbox/staff/AI, calls — not broadcast/campaigns.
-- Same contact across channels in one period counts once (account-wide dedup).
+- MAC counts a unique contact once per billing period **per channel**.
+- Triggers MAC: inbound, outbound inbox/staff/AI — not broadcast/campaigns.
+- Same contact on two channels in one period = two MAC (independent channel billing).
 """
 from datetime import datetime
 from enum import StrEnum
@@ -27,9 +27,10 @@ class MonthlyActiveContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint(
             "account_id",
+            "channel_id",
             "contact_id",
             "billing_period_start",
-            name="uq_mac_account_contact_billing_period",
+            name="uq_mac_account_channel_contact_billing_period",
         ),
     )
 

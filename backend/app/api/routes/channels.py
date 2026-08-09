@@ -9,7 +9,7 @@ from app.core.permissions import Permission
 from app.schemas.billing import ChannelBillingUpdateRequest
 from app.schemas.channel import ChannelCreateRequest, ChannelResponse
 from app.schemas.mac import ChannelUsageBoardResponse
-from app.services.billing_provider import update_channel_billing_price
+from app.services.billing_provider import update_channel_billing
 from app.services.channels import create_channel, get_channel_usage_board, list_channels
 
 router = APIRouter()
@@ -57,11 +57,11 @@ async def patch_channel_billing(
     db: AsyncSession = Depends(get_db),
 ) -> ChannelUsageBoardResponse:
     try:
-        await update_channel_billing_price(
+        await update_channel_billing(
             db,
             account_id=context.account_id,
             channel_id=channel_id,
-            over_mac_price_per_100=payload.over_mac_price_per_100,
+            payload=payload,
         )
     except ValueError as exc:
         if str(exc) == "CHANNEL_NOT_FOUND":

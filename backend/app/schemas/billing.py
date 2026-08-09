@@ -54,6 +54,10 @@ class BillingProviderSettingsUpdate(BaseModel):
 
 
 class ChannelBillingUpdateRequest(BaseModel):
+    billing_starts_at: datetime | None = None
+    billing_ends_at: datetime | None = None
+    billing_cycle: str | None = None
+    included_mac: int | None = None
     over_mac_price_per_100: float | None = None
 
 
