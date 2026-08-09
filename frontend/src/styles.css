@@ -5105,6 +5105,98 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: grid;
   gap: 4px;
 }
+.billing-kpi-card-brand {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
+  border: none;
+  box-shadow: 0 8px 22px rgba(7, 94, 84, 0.22);
+}
+.billing-kpi-card-brand span {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+}
+.billing-kpi-card-brand strong {
+  color: #fff;
+  font-size: 22px;
+}
+.billing-kpi-card-brand small {
+  color: rgba(255, 255, 255, 0.78);
+}
+.billing-kpi-over {
+  color: #fecaca !important;
+}
+.billing-section-head-brand {
+  padding: 14px 18px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
+  border-radius: 14px 14px 0 0;
+  margin: -1px -1px 0;
+}
+.billing-section-head-brand h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 16px;
+}
+.billing-create-mac-card {
+  padding: 0 0 16px;
+  overflow: hidden;
+}
+.billing-create-mac-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  padding: 16px 18px 0;
+  align-items: end;
+}
+.billing-create-mac-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.billing-create-mac-form input,
+.billing-create-mac-form select {
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(7, 94, 84, 0.14);
+  font-size: 13px;
+  background: #fff;
+}
+.billing-create-mac-btn {
+  min-height: 42px;
+}
+.billing-create-mac-loading {
+  padding: 16px 18px;
+}
+.billing-table-head-brand {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
+  margin: 0;
+  padding: 14px 18px;
+  border-radius: 14px 14px 0 0;
+}
+.billing-table-head-brand h2 {
+  color: #fff;
+  margin: 0;
+}
+.billing-table-search-light {
+  background: #fff !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  color: var(--text);
+}
+.billing-channels-thead-brand tr {
+  background: linear-gradient(135deg, rgba(18, 140, 126, 0.95) 0%, rgba(7, 94, 84, 0.98) 100%);
+}
+.billing-channels-thead-brand th {
+  color: #fff;
+  font-weight: 700;
+  border-bottom: none;
+}
+.billing-channels-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+.billing-channels-table-card .admin-table-wrap {
+  padding: 0 12px 12px;
+}
 .billing-kpi-card span {
   font-size: 12px;
   color: var(--muted);
