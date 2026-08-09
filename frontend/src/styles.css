@@ -4213,6 +4213,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .composer-meta .link-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .whatsapp-connect-page { display: grid; gap: 18px; }
+.whatsapp-replace-warning {
+  border: 1px solid #fedf89;
+  background: #fffaeb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+.whatsapp-replace-warning strong { color: #b54708; }
 .whatsapp-page-tabs {
   display: flex;
   flex-wrap: wrap;

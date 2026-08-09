@@ -127,6 +127,61 @@ async def _get_or_create_contact_and_conversation(
             )
     return contact, conversation, created_conversation
 
+
+async def _get_whatsapp_account_for_channel(
+    db: AsyncSession, channel_id: UUID
+) -> WhatsAppAccount | None:
+    result = await db.execute(
+        select(WhatsAppAccount).where(WhatsAppAccount.channel_id == channel_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _assert_phone_number_available(
+    db: AsyncSession,
+    *,
+    phone_number_id: str,
+    except_account_id: UUID | None = None,
+) -> None:
+    result = await db.execute(
+        select(WhatsAppAccount).where(WhatsAppAccount.phone_number_id == phone_number_id)
+    )
+    existing = result.scalar_one_or_none()
+    if existing is None:
+        return
+    if except_account_id is not None and existing.id == except_account_id:
+        return
+    raise ValueError("PHONE_NUMBER_ALREADY_CONNECTED")
+
+
+async def _finalize_whatsapp_connection(
+    db: AsyncSession,
+    *,
+    channel: Channel,
+    whatsapp_account: WhatsAppAccount,
+    access_token: str,
+    waba_id: str,
+) -> WhatsAppAccount:
+    from app.services.whatsapp_health import sync_whatsapp_account_health_safe
+
+    channel.external_id = whatsapp_account.phone_number_id
+    channel.status = ChannelStatus.ACTIVE
+    await db.commit()
+    await db.refresh(whatsapp_account)
+    await sync_whatsapp_account_health_safe(db, whatsapp_account=whatsapp_account)
+    await db.refresh(whatsapp_account)
+    try:
+        from app.services.meta_setup import ensure_waba_webhook_subscription
+
+        await ensure_waba_webhook_subscription(
+            access_token=access_token,
+            waba_id=waba_id,
+        )
+    except MetaAPIError:
+        pass
+    return whatsapp_account
+
+
 async def create_whatsapp_account(
     db: AsyncSession,
     *,
@@ -139,28 +194,15 @@ async def create_whatsapp_account(
     if channel.type != ChannelType.WHATSAPP:
         raise ValueError("CHANNEL_NOT_WHATSAPP")
 
-    existing = await db.execute(
-        select(WhatsAppAccount).where(
-            WhatsAppAccount.phone_number_id == payload.phone_number_id
-        )
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise ValueError("PHONE_NUMBER_ALREADY_CONNECTED")
-
-    from app.services.whatsapp_health import parse_phone_health, sync_whatsapp_account_health_safe
-
-    whatsapp_account = WhatsAppAccount(
-        account_id=account_id,
-        organization_id=channel.organization_id,
-        channel_id=channel.id,
-        waba_id=payload.waba_id,
+    channel_account = await _get_whatsapp_account_for_channel(db, channel.id)
+    await _assert_phone_number_available(
+        db,
         phone_number_id=payload.phone_number_id,
-        display_phone_number=payload.display_phone_number,
-        verified_name=payload.verified_name,
-        access_token_encrypted=encrypt_secret(payload.access_token),
-        status=WhatsAppAccountStatus.ACTIVE,
-        connection_method=WhatsAppConnectionMethod.MANUAL,
+        except_account_id=channel_account.id if channel_account else None,
     )
+
+    from app.services.whatsapp_health import parse_phone_health
+
     client = MetaWhatsAppClient(
         access_token=payload.access_token,
         phone_number_id=payload.phone_number_id,
@@ -172,6 +214,30 @@ async def create_whatsapp_account(
     finally:
         await client.aclose()
 
+    if channel_account is not None:
+        whatsapp_account = channel_account
+        whatsapp_account.waba_id = payload.waba_id
+        whatsapp_account.phone_number_id = payload.phone_number_id
+        whatsapp_account.display_phone_number = payload.display_phone_number
+        whatsapp_account.verified_name = payload.verified_name
+        whatsapp_account.access_token_encrypted = encrypt_secret(payload.access_token)
+        whatsapp_account.status = WhatsAppAccountStatus.ACTIVE
+        whatsapp_account.connection_method = WhatsAppConnectionMethod.MANUAL
+    else:
+        whatsapp_account = WhatsAppAccount(
+            account_id=account_id,
+            organization_id=channel.organization_id,
+            channel_id=channel.id,
+            waba_id=payload.waba_id,
+            phone_number_id=payload.phone_number_id,
+            display_phone_number=payload.display_phone_number,
+            verified_name=payload.verified_name,
+            access_token_encrypted=encrypt_secret(payload.access_token),
+            status=WhatsAppAccountStatus.ACTIVE,
+            connection_method=WhatsAppConnectionMethod.MANUAL,
+        )
+        db.add(whatsapp_account)
+
     if health.get("display_phone_number"):
         whatsapp_account.display_phone_number = health["display_phone_number"]
     if health.get("verified_name"):
@@ -179,23 +245,13 @@ async def create_whatsapp_account(
     whatsapp_account.quality_rating = health.get("quality_rating")
     whatsapp_account.messaging_limit_tier = health.get("messaging_limit_tier")
     whatsapp_account.messaging_limit = health.get("messaging_limit")
-    channel.external_id = payload.phone_number_id
-    channel.status = ChannelStatus.ACTIVE
-    db.add(whatsapp_account)
-    await db.commit()
-    await db.refresh(whatsapp_account)
-    await sync_whatsapp_account_health_safe(db, whatsapp_account=whatsapp_account)
-    await db.refresh(whatsapp_account)
-    try:
-        from app.services.meta_setup import ensure_waba_webhook_subscription
-
-        await ensure_waba_webhook_subscription(
-            access_token=payload.access_token,
-            waba_id=payload.waba_id,
-        )
-    except MetaAPIError:
-        pass
-    return whatsapp_account
+    return await _finalize_whatsapp_connection(
+        db,
+        channel=channel,
+        whatsapp_account=whatsapp_account,
+        access_token=payload.access_token,
+        waba_id=payload.waba_id,
+    )
 
 
 async def update_whatsapp_access_token(
@@ -280,13 +336,12 @@ async def create_whatsapp_account_from_embedded(
     if channel.type != ChannelType.WHATSAPP:
         raise ValueError("CHANNEL_NOT_WHATSAPP")
 
-    existing = await db.execute(
-        select(WhatsAppAccount).where(
-            WhatsAppAccount.phone_number_id == payload.phone_number_id
-        )
+    channel_account = await _get_whatsapp_account_for_channel(db, channel.id)
+    await _assert_phone_number_available(
+        db,
+        phone_number_id=payload.phone_number_id,
+        except_account_id=channel_account.id if channel_account else None,
     )
-    if existing.scalar_one_or_none() is not None:
-        raise ValueError("PHONE_NUMBER_ALREADY_CONNECTED")
 
     access_token = payload.access_token
     if payload.code:
@@ -308,38 +363,43 @@ async def create_whatsapp_account_from_embedded(
         or health.get("display_phone_number")
         or payload.phone_number_id
     )
-    whatsapp_account = WhatsAppAccount(
-        account_id=account_id,
-        organization_id=channel.organization_id,
-        channel_id=channel.id,
-        waba_id=payload.waba_id,
-        phone_number_id=payload.phone_number_id,
-        display_phone_number=display_phone,
-        verified_name=payload.verified_name or health.get("verified_name"),
-        access_token_encrypted=encrypt_secret(access_token),
-        status=WhatsAppAccountStatus.ACTIVE,
-        connection_method=WhatsAppConnectionMethod.EMBEDDED,
-        quality_rating=health.get("quality_rating"),
-        messaging_limit_tier=health.get("messaging_limit_tier"),
-        messaging_limit=health.get("messaging_limit"),
-    )
-    channel.external_id = payload.phone_number_id
-    channel.status = ChannelStatus.ACTIVE
-    db.add(whatsapp_account)
-    await db.commit()
-    await db.refresh(whatsapp_account)
-    await sync_whatsapp_account_health_safe(db, whatsapp_account=whatsapp_account)
-    await db.refresh(whatsapp_account)
-    try:
-        from app.services.meta_setup import ensure_waba_webhook_subscription
-
-        await ensure_waba_webhook_subscription(
-            access_token=access_token,
+    if channel_account is not None:
+        whatsapp_account = channel_account
+        whatsapp_account.waba_id = payload.waba_id
+        whatsapp_account.phone_number_id = payload.phone_number_id
+        whatsapp_account.display_phone_number = display_phone
+        whatsapp_account.verified_name = payload.verified_name or health.get("verified_name")
+        whatsapp_account.access_token_encrypted = encrypt_secret(access_token)
+        whatsapp_account.status = WhatsAppAccountStatus.ACTIVE
+        whatsapp_account.connection_method = WhatsAppConnectionMethod.EMBEDDED
+        whatsapp_account.quality_rating = health.get("quality_rating")
+        whatsapp_account.messaging_limit_tier = health.get("messaging_limit_tier")
+        whatsapp_account.messaging_limit = health.get("messaging_limit")
+    else:
+        whatsapp_account = WhatsAppAccount(
+            account_id=account_id,
+            organization_id=channel.organization_id,
+            channel_id=channel.id,
             waba_id=payload.waba_id,
+            phone_number_id=payload.phone_number_id,
+            display_phone_number=display_phone,
+            verified_name=payload.verified_name or health.get("verified_name"),
+            access_token_encrypted=encrypt_secret(access_token),
+            status=WhatsAppAccountStatus.ACTIVE,
+            connection_method=WhatsAppConnectionMethod.EMBEDDED,
+            quality_rating=health.get("quality_rating"),
+            messaging_limit_tier=health.get("messaging_limit_tier"),
+            messaging_limit=health.get("messaging_limit"),
         )
-    except MetaAPIError:
-        pass
-    return whatsapp_account
+        db.add(whatsapp_account)
+
+    return await _finalize_whatsapp_connection(
+        db,
+        channel=channel,
+        whatsapp_account=whatsapp_account,
+        access_token=access_token,
+        waba_id=payload.waba_id,
+    )
 
 
 async def list_whatsapp_accounts(
