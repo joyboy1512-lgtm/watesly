@@ -328,9 +328,9 @@ export default function AssignmentsPage() {
           <table className="admin-erp-table assignments-erp-table">
             <thead>
               <tr>
-                <th className="th-brand">الموظف</th>
+                <th>الموظف</th>
                 <th>الدور</th>
-                <th className="th-brand">محادثات مفتوحة</th>
+                <th>محادثات مفتوحة</th>
               </tr>
             </thead>
             <tbody>
@@ -369,9 +369,9 @@ export default function AssignmentsPage() {
           <table className="admin-erp-table assignments-erp-table">
             <thead>
               <tr>
-                <th className="th-brand">الفريق</th>
+                <th>الفريق</th>
                 <th>الفرع</th>
-                <th className="th-brand">الأعضاء</th>
+                <th>الأعضاء</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
@@ -408,12 +408,12 @@ export default function AssignmentsPage() {
           <table className="admin-erp-table assignments-erp-table">
             <thead>
               <tr>
-                <th className="th-brand">الاسم</th>
-                <th className="th-brand">الفريق</th>
+                <th>الاسم</th>
+                <th>الفريق</th>
                 <th>القناة</th>
-                <th className="th-brand">الاستراتيجية</th>
+                <th>الاستراتيجية</th>
                 <th>الأولوية</th>
-                <th className="th-brand">الحالة</th>
+                <th>الحالة</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
