@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import {
   CONTACTS_LIST_LIMIT,
   CONTACTS_PAGE_SIZE,
+  buildSegmentFilterJson,
   contactDisplayLabel,
   contactInitials,
   downloadContactsExport,
@@ -22,6 +23,7 @@ import {
   type Tag
 } from "../lib/contactHelpers";
 import Icon from "../components/Icon";
+import ContactsSegmentsModal from "../components/ContactsSegmentsModal";
 import { toastStore } from "../stores/toast";
 
 type Segment = { id: string; name: string; filter_json: Record<string, unknown> };
@@ -45,6 +47,7 @@ export default function ContactsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [segmentsModalOpen, setSegmentsModalOpen] = useState(false);
   const [segmentName, setSegmentName] = useState("");
   const [fieldKey, setFieldKey] = useState("");
   const [fieldLabel, setFieldLabel] = useState("");
@@ -264,7 +267,13 @@ export default function ContactsPage() {
     event.preventDefault();
     await api.post("/platform/segments", {
       name: segmentName,
-      filter_json: { search: debouncedSearch || undefined }
+      filter_json: buildSegmentFilterJson({
+        search: debouncedSearch,
+        organization_id: organizationFilter,
+        channel_id: channelFilter,
+        tag_id: tagFilter,
+        lifecycle_stage: lifecycleFilter
+      })
     });
     setSegmentName("");
     await client.invalidateQueries({ queryKey: ["segments"] });
@@ -319,6 +328,9 @@ export default function ContactsPage() {
             <Link to="/contacts/import" className="contacts-erp-btn">
               رفع Excel
             </Link>
+            <button type="button" className="contacts-erp-btn" onClick={() => setSegmentsModalOpen(true)}>
+              الشرائح
+            </button>
             <button
               type="button"
               className="contacts-erp-btn"
@@ -526,6 +538,24 @@ export default function ContactsPage() {
           )}
         </div>
       </section>
+
+      <ContactsSegmentsModal
+        open={segmentsModalOpen}
+        onClose={() => setSegmentsModalOpen(false)}
+        segments={segments.data ?? []}
+        segmentCounts={segmentCounts.data}
+        organizations={organizations.data ?? []}
+        channels={channels.data ?? []}
+        tags={tags.data ?? []}
+        activeFilters={{
+          search: debouncedSearch,
+          organization_id: organizationFilter || undefined,
+          channel_id: channelFilter || undefined,
+          tag_id: tagFilter || undefined,
+          lifecycle_stage: lifecycleFilter || undefined
+        }}
+        onApplySegment={(segmentId) => onSegmentFilterChange(segmentId)}
+      />
 
       <details
         className="contacts-advanced-accordion"

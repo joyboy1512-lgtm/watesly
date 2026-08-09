@@ -109,6 +109,33 @@ async def delete_contact(db: AsyncSession, *, account_id: UUID, contact_id: UUID
     await db.commit()
 
 
+async def apply_contact_tags(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_id: UUID,
+    tag_ids: list[UUID],
+) -> None:
+    if not tag_ids:
+        return
+    contact = await db.get(Contact, contact_id)
+    if contact is None or contact.account_id != account_id:
+        raise ValueError("CONTACT_NOT_FOUND")
+    result = await db.execute(select(Tag.id).where(Tag.account_id == account_id, Tag.id.in_(tag_ids)))
+    valid_ids = set(result.scalars().all())
+    if valid_ids != set(tag_ids):
+        raise ValueError("INVALID_TAG")
+    existing = (
+        await db.execute(
+            select(ContactTag.tag_id).where(ContactTag.contact_id == contact_id, ContactTag.tag_id.in_(valid_ids))
+        )
+    ).scalars().all()
+    existing_ids = set(existing)
+    for tag_id in valid_ids:
+        if tag_id not in existing_ids:
+            db.add(ContactTag(contact_id=contact_id, tag_id=tag_id))
+
+
 async def add_contact_tag(db: AsyncSession, *, account_id: UUID, contact_id: UUID, tag_id: UUID) -> None:
     contact = await db.get(Contact, contact_id)
     tag = await db.get(Tag, tag_id)
