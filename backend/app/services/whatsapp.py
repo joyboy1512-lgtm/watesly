@@ -568,7 +568,8 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                             message.status = MessageStatus(status_value)
                         except ValueError:
                             pass
-                        message.provider_payload = status_item
+                        existing = message.provider_payload if isinstance(message.provider_payload, dict) else {}
+                        message.provider_payload = {**existing, "delivery_status": status_item}
                         conversation = await db.get(Conversation, message.conversation_id)
                         if conversation is not None:
                             conversation.last_message_at = datetime.now(UTC)

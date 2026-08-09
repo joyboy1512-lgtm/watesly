@@ -124,7 +124,7 @@ async def get_conversation_messages(
         )
         raise HTTPException(status_code=403 if "FORBIDDEN" in str(exc) else 404, detail=detail) from exc
 
-    from app.services.message_media import extract_message_media
+    from app.services.message_media import enrich_message_media
     from app.services.template_display import extract_template_fields
 
     items: list[MessageResponse] = []
@@ -141,7 +141,7 @@ async def get_conversation_messages(
                 text_body=item.text_body,
                 status=item.status,
                 created_at=item.created_at,
-                **extract_message_media(item),
+                **await enrich_message_media(db, item),
                 **template_fields,
             )
         )
@@ -239,6 +239,10 @@ async def send_conversation_text(
     if contact is None:
         raise HTTPException(status_code=404, detail="Contact not found")
 
+    from app.services.variables import build_contact_context, render_template
+
+    rendered_text = render_template(payload.text, build_contact_context(contact))
+
     last_inbound = await get_last_inbound_for_conversation(db, conversation_id)
     window = compute_service_window(last_inbound)
     if window["requires_template"]:
@@ -254,7 +258,7 @@ async def send_conversation_text(
             whatsapp_account_id=wa.id,
             payload=SendTextMessageRequest(
                 to=contact.external_address,
-                text=payload.text,
+                text=rendered_text,
             ),
             record_mac=True,
         )
