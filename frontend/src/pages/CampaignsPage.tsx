@@ -31,15 +31,22 @@ import {
 
 type Organization = { id: string; name: string };
 type Channel = { id: string; name: string; type: string; organization_id: string };
-type WhatsAppAccount = { id: string; display_phone_number: string; verified_name: string | null };
+type WhatsAppAccount = {
+  id: string;
+  channel_id: string;
+  display_phone_number: string;
+  verified_name: string | null;
+  channel_name?: string | null;
+};
 type Template = {
   id: string;
   name: string;
   status: string;
   body_text: string | null;
   components: TemplateComponent[] | null;
+  whatsapp_account_id: string;
 };
-type Contact = { id: string; display_name: string | null; external_address: string };
+type Contact = { id: string; display_name: string | null; external_address: string; channel_id: string };
 type Segment = { id: string; name: string };
 type CampaignPreflight = {
   total: number;
@@ -257,9 +264,13 @@ export default function CampaignsPage() {
 
   const orgChannels = (channels.data ?? []).filter((item) => !organizationId || item.organization_id === organizationId);
   const approvedTemplates = (templates.data ?? []).filter((item) => item.status === "approved");
+  const accountTemplates = useMemo(
+    () => approvedTemplates.filter((item) => !accountId || item.whatsapp_account_id === accountId),
+    [approvedTemplates, accountId]
+  );
   const selectedTemplate = useMemo(
-    () => approvedTemplates.find((item) => item.id === templateId) ?? null,
-    [approvedTemplates, templateId]
+    () => accountTemplates.find((item) => item.id === templateId) ?? null,
+    [accountTemplates, templateId]
   );
   const templateHeader = useMemo(
     () => getTemplateHeaderInfo(selectedTemplate?.components),
@@ -269,7 +280,9 @@ export default function CampaignsPage() {
     () => (accounts.data ?? []).find((item) => item.id === accountId) ?? null,
     [accounts.data, accountId]
   );
+  const selectedAccountChannelId = selectedAccount?.channel_id ?? "";
   const filteredContacts = (contacts.data ?? []).filter((item) => {
+    if (selectedAccountChannelId && item.channel_id !== selectedAccountChannelId) return false;
     if (!contactSearch.trim()) return true;
     const term = contactSearch.trim().toLowerCase();
     return (
@@ -277,6 +290,19 @@ export default function CampaignsPage() {
       (item.display_name ?? "").toLowerCase().includes(term)
     );
   });
+
+  useEffect(() => {
+    if (!accountId) return;
+    const account = (accounts.data ?? []).find((item) => item.id === accountId);
+    if (account?.channel_id) setChannelId(account.channel_id);
+    if (templateId) {
+      const template = approvedTemplates.find((item) => item.id === templateId);
+      if (template && template.whatsapp_account_id !== accountId) {
+        setTemplateId("");
+        setCampaignMediaOverride(null);
+      }
+    }
+  }, [accountId, accounts.data, approvedTemplates, templateId]);
 
   useEffect(() => {
     if (!templateId || !selectedContacts.length) {
@@ -641,10 +667,20 @@ export default function CampaignsPage() {
               </label>
               <label className="field-label">
                 <span>حساب WhatsApp</span>
-                <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+                <select
+                  value={accountId}
+                  onChange={(e) => {
+                    setAccountId(e.target.value);
+                    setTemplateId("");
+                    setCampaignMediaOverride(null);
+                    setPreflight(null);
+                  }}
+                  required
+                >
                   <option value="">اختر الحساب</option>
                   {(accounts.data ?? []).map((item) => (
                     <option key={item.id} value={item.id}>
+                      {item.channel_name ? `${item.channel_name} · ` : ""}
                       {item.verified_name || item.display_phone_number}
                     </option>
                   ))}
@@ -659,13 +695,28 @@ export default function CampaignsPage() {
                     setCampaignMediaOverride(null);
                   }}
                   required
+                  disabled={!accountId}
                 >
-                  <option value="">اختر القالب</option>
-                  {approvedTemplates.map((item) => (
+                  <option value="">
+                    {accountId ? "اختر القالب" : "اختر حساب WhatsApp أولاً"}
+                  </option>
+                  {accountTemplates.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>
               </label>
+              {accountId && accountTemplates.length === 0 && (
+                <p className="hint-text campaign-warning">
+                  لا توجد قوالب معتمدة لهذا الحساب. افتح{" "}
+                  <Link to="/templates">صفحة القوالب</Link>
+                  {" "}→ تبويب «مزامنة من Meta» → اختر نفس الحساب → Sync.
+                </p>
+              )}
+              {accountId && templateId && selectedAccount && selectedTemplate && selectedTemplate.whatsapp_account_id !== accountId && (
+                <p className="hint-text campaign-warning">
+                  هذا القالب لا ينتمي للحساب المختار — اختر قالباً من نفس القناة.
+                </p>
+              )}
               {templateHeader && (
                 <div className="campaign-template-media">
                   <p className="hint-text">
