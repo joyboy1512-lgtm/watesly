@@ -2390,17 +2390,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-bottom: 1px solid rgba(37, 211, 102, 0.2);
 }
 .assignments-table-title h2 { color: var(--primary-darker); }
-.assignments-erp-table thead th.th-brand,
-.admin-erp-table.assignments-erp-table thead th.th-brand {
+.assignments-erp-table thead th {
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
   color: #fff;
   font-weight: 700;
   border-inline-end-color: rgba(255, 255, 255, 0.12);
-}
-.assignments-erp-table thead th:not(.th-brand) {
-  background: rgba(37, 211, 102, 0.1);
-  color: var(--primary-darker);
-  font-weight: 600;
 }
 .assignments-load-badge {
   display: inline-flex;
