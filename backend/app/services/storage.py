@@ -134,6 +134,13 @@ class ObjectStorage:
     def delete_object(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
+    def download_bytes(self, key: str) -> bytes:
+        response = self.client.get_object(Bucket=self.bucket, Key=key)
+        body = response["Body"].read()
+        if not body:
+            raise ValueError("EMPTY_OBJECT")
+        return body
+
     def upload_platform_fileobj(
         self,
         *,

@@ -89,11 +89,8 @@ async def _fetch_header_media(media_url: str, file_name: str, header_format: str
             content = storage.download_bytes(object_key)
             return content, _MIME_BY_FORMAT.get(header_format, "application/octet-stream")
         except Exception as exc:
-            raise MetaAPIError(
-                "Unable to read header media from storage",
-                status_code=502,
-                response_data={"key": object_key, "error": str(exc)},
-            ) from exc
+            # Fall back to public URL fetch when direct storage read fails.
+            pass
 
     async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as http:
         try:
