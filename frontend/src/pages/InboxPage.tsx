@@ -1035,14 +1035,19 @@ export default function InboxPage() {
               <div className="chat-date-pill">اليوم</div>
               <div className="chat-idle-samples">
                 <div className="message incoming">
-                  <div className="message-text">مرحباً، كيف يمكننا مساعدتك؟</div>
+                  <div className="message-text">السلام عليكم، كم سعر الباقة؟</div>
                 </div>
                 <div className="message outgoing">
-                  <div className="message-text">اختر محادثة من القائمة لبدء الرد</div>
+                  <div className="message-text">أهلاً! الباقة 25 د.ك — تشمل 500 رسالة.</div>
+                </div>
+                <div className="chat-idle-deal-card">
+                  <span>صفقة CRM</span>
+                  <strong>باقة WhatsApp — 25 د.ك</strong>
+                  <em>من المحادثة</em>
                 </div>
               </div>
               <h3>المحادثات</h3>
-              <p>اختر محادثة من القائمة — الخلفية والألوان كما في WhatsApp.</p>
+              <p>اختر محادثة من القائمة لبدء الرد — نفس شكل الواجهة التعريفية.</p>
             </div>
           )}
           {selectedId && !messagesQuery.isLoading && !messagesQuery.isError && (messagesQuery.data ?? []).length === 0 && <div className="empty-conversation"><h3>بداية محادثة جديدة</h3><p>أرسل أول رسالة من مربع الكتابة.</p></div>}
