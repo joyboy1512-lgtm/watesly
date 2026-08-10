@@ -18,6 +18,7 @@ from app.schemas.whatsapp import (
     WhatsAppEmbeddedSignupRequest,
     WhatsAppTokenStatusResponse,
     WhatsAppTokenUpdateRequest,
+    WhatsAppWebhookStatusResponse,
 )
 from app.schemas.whatsapp_media import (
     MediaSendResponse,
@@ -45,6 +46,7 @@ from app.services.catalog_commerce import (
     commerce_readiness,
     update_whatsapp_commerce_settings,
 )
+from app.services.meta_setup import ensure_whatsapp_account_webhook, get_waba_webhook_status
 
 router = APIRouter()
 
@@ -213,6 +215,40 @@ async def get_whatsapp_token_status(
         phone_number_id=item.phone_number_id,
     )
     return WhatsAppTokenStatusResponse(**result)
+
+
+@router.get("/accounts/{whatsapp_account_id}/webhook-status", response_model=WhatsAppWebhookStatusResponse)
+async def get_whatsapp_webhook_status(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.whatsapp_account import WhatsAppAccount
+
+    item = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if item is None or item.account_id != context.account_id:
+        raise HTTPException(status_code=404, detail="WhatsApp account not found")
+    status = await get_waba_webhook_status(whatsapp_account=item)
+    return WhatsAppWebhookStatusResponse(
+        subscribed=bool(status.get("subscribed")),
+        callback_url=str(status.get("callback_url") or ""),
+        error=status.get("error"),
+    )
+
+
+@router.post("/accounts/{whatsapp_account_id}/ensure-webhook", response_model=WhatsAppWebhookStatusResponse)
+async def post_ensure_whatsapp_webhook(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.whatsapp_account import WhatsAppAccount
+
+    item = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if item is None or item.account_id != context.account_id:
+        raise HTTPException(status_code=404, detail="WhatsApp account not found")
+    result = await ensure_whatsapp_account_webhook(whatsapp_account=item)
+    return WhatsAppWebhookStatusResponse(**result)
 
 
 @router.post("/accounts/{whatsapp_account_id}/sync-health", response_model=WhatsAppAccountResponse)

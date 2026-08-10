@@ -192,8 +192,10 @@ async def create_whatsapp_account(
             access_token=payload.access_token,
             waba_id=payload.waba_id,
         )
-    except MetaAPIError:
-        pass
+    except MetaAPIError as exc:
+        logger.warning("Webhook auto-subscribe failed during connect waba_id=%s: %s", payload.waba_id, exc)
+    except Exception:
+        logger.exception("Unexpected webhook auto-subscribe failure during connect waba_id=%s", payload.waba_id)
     return whatsapp_account
 
 
@@ -336,8 +338,10 @@ async def create_whatsapp_account_from_embedded(
             access_token=access_token,
             waba_id=payload.waba_id,
         )
-    except MetaAPIError:
-        pass
+    except MetaAPIError as exc:
+        logger.warning("Webhook auto-subscribe failed during embedded connect waba_id=%s: %s", payload.waba_id, exc)
+    except Exception:
+        logger.exception("Unexpected webhook auto-subscribe failure during embedded connect waba_id=%s", payload.waba_id)
     return whatsapp_account
 
 

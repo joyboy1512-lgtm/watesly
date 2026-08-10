@@ -62,6 +62,8 @@ export default function WhatsAppConnectPage() {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [tokenDrafts, setTokenDrafts] = useState<Record<string, string>>({});
   const [tokenStatus, setTokenStatus] = useState<Record<string, { valid: boolean; error?: string | null }>>({});
+  const [webhookStatus, setWebhookStatus] = useState<Record<string, { subscribed: boolean; callback_url: string; error?: string | null }>>({});
+  const [ensuringWebhookId, setEnsuringWebhookId] = useState<string | null>(null);
   const [updatingTokenId, setUpdatingTokenId] = useState<string | null>(null);
   const [commerceDrafts, setCommerceDrafts] = useState<Record<string, { meta_catalog_id: string; commerce_enabled: boolean }>>({});
 
@@ -276,6 +278,39 @@ export default function WhatsAppConnectPage() {
     }
   }
 
+  async function checkWebhookStatus(accountId: string) {
+    try {
+      const result = await api.get<{ subscribed: boolean; callback_url: string; error?: string | null }>(
+        `/whatsapp/accounts/${accountId}/webhook-status`
+      );
+      setWebhookStatus((current) => ({ ...current, [accountId]: result.data }));
+      toastStore.getState().show(
+        result.data.subscribed ? "Webhook Meta مربوط." : "Webhook Meta غير مربوط — اضغط تأكيد الربط.",
+        result.data.subscribed ? "success" : "error"
+      );
+    } catch {
+      toastStore.getState().show("تعذر التحقق من Webhook Meta.", "error");
+    }
+  }
+
+  async function ensureWebhook(accountId: string) {
+    setEnsuringWebhookId(accountId);
+    try {
+      const result = await api.post<{ subscribed: boolean; callback_url: string; error?: string | null }>(
+        `/whatsapp/accounts/${accountId}/ensure-webhook`
+      );
+      setWebhookStatus((current) => ({ ...current, [accountId]: result.data }));
+      toastStore.getState().show(
+        result.data.subscribed ? "تم تأكيد ربط Webhook Meta." : (result.data.error ?? "تعذر ربط Webhook Meta."),
+        result.data.subscribed ? "success" : "error"
+      );
+    } catch {
+      toastStore.getState().show("تعذر ربط Webhook Meta.", "error");
+    } finally {
+      setEnsuringWebhookId(null);
+    }
+  }
+
   async function checkTokenStatus(accountId: string) {
     try {
       const result = await api.get<{ valid: boolean; error?: string | null }>(`/whatsapp/accounts/${accountId}/token-status`);
@@ -381,6 +416,30 @@ export default function WhatsAppConnectPage() {
                   onClick={() => void updateToken(account.id)}
                 >
                   {updatingTokenId === account.id ? "جاري الحفظ…" : "تحديث الرمز"}
+                </button>
+              </div>
+            </article>
+            <article className="whatsapp-expand-panel">
+              <h3>Webhook Meta</h3>
+              <p className="hint-text">
+                {webhookStatus[account.id]?.subscribed
+                  ? "الاستقبال والحملات وتحديث القوالب مربوطة بـ Meta."
+                  : webhookStatus[account.id]?.error ?? "تحقق من الربط أو اضغط تأكيد الربط."}
+              </p>
+              {webhookStatus[account.id]?.callback_url && (
+                <code dir="ltr" className="hint-text">{webhookStatus[account.id]?.callback_url}</code>
+              )}
+              <div className="admin-actions">
+                <button type="button" className="secondary-button" onClick={() => void checkWebhookStatus(account.id)}>
+                  فحص Webhook
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={ensuringWebhookId === account.id}
+                  onClick={() => void ensureWebhook(account.id)}
+                >
+                  {ensuringWebhookId === account.id ? "جاري الربط…" : "تأكيد الربط"}
                 </button>
               </div>
             </article>

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.core.config import settings
 from app.models.whatsapp_account import WhatsAppAccount
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
+
+logger = logging.getLogger(__name__)
 
 
 def whatsapp_webhook_callback_url() -> str:
@@ -109,3 +113,32 @@ async def get_waba_webhook_status(*, whatsapp_account: WhatsAppAccount) -> dict:
         return {"subscribed": False, "callback_url": whatsapp_webhook_callback_url(), "error": str(exc)}
     finally:
         await client.aclose()
+
+
+async def ensure_whatsapp_account_webhook(*, whatsapp_account: WhatsAppAccount) -> dict:
+    from app.core.encryption import decrypt_secret
+
+    callback_url = whatsapp_webhook_callback_url()
+    try:
+        await ensure_waba_webhook_subscription(
+            access_token=decrypt_secret(whatsapp_account.access_token_encrypted),
+            waba_id=whatsapp_account.waba_id,
+        )
+    except MetaAPIError as exc:
+        logger.warning(
+            "Meta webhook subscription failed for waba_id=%s: %s",
+            whatsapp_account.waba_id,
+            exc,
+        )
+        return {
+            "subscribed": False,
+            "callback_url": callback_url,
+            "error": str(exc),
+        }
+
+    status = await get_waba_webhook_status(whatsapp_account=whatsapp_account)
+    return {
+        "subscribed": bool(status.get("subscribed")),
+        "callback_url": callback_url,
+        "error": status.get("error"),
+    }

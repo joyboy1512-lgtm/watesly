@@ -16,6 +16,12 @@ class WhatsAppTokenStatusResponse(BaseModel):
     auth_error: bool = False
 
 
+class WhatsAppWebhookStatusResponse(BaseModel):
+    subscribed: bool
+    callback_url: str
+    error: str | None = None
+
+
 class WhatsAppAccountCreateRequest(BaseModel):
     channel_id: UUID
     waba_id: str = Field(min_length=2, max_length=80)
