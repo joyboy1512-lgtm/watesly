@@ -15,6 +15,7 @@ export type SiteDisplay = {
   show_api: boolean;
   show_cta: boolean;
   show_stats: boolean;
+  show_clients?: boolean;
 };
 
 export type SiteLocaleContent = {
@@ -33,6 +34,7 @@ export type SiteLocaleContent = {
     checklist: string[];
     code_sample: string;
   };
+  clients: Array<{ name: string; industry: string; icon?: string }>;
 };
 
 export type PublicSiteContent = {
@@ -46,6 +48,7 @@ export type PublicSiteContent = {
   steps: SiteLocaleContent["steps"];
   mockup: SiteLocaleContent["mockup"];
   api: SiteLocaleContent["api"];
+  clients: SiteLocaleContent["clients"];
   published: boolean;
 };
 

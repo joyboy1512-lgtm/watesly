@@ -81,6 +81,7 @@ def build_public_site_content(config: PlatformSiteConfig, *, locale: str) -> dic
         "stats": content.get("stats", []),
         "features": content.get("features", []),
         "steps": content.get("steps", []),
+        "clients": content.get("clients", []),
         "mockup": content.get("mockup", {}),
         "api": content.get("api", {}),
         "published": bool(config.is_published),

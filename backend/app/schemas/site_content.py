@@ -22,6 +22,7 @@ class SiteDisplay(BaseModel):
     show_api: bool = True
     show_cta: bool = True
     show_stats: bool = True
+    show_clients: bool = True
 
 
 class SiteContentUpdateRequest(BaseModel):
@@ -40,6 +41,7 @@ class PublicSiteContentResponse(BaseModel):
     stats: list[dict[str, str]]
     features: list[dict[str, str]]
     steps: list[dict[str, str]]
+    clients: list[dict[str, str]] = Field(default_factory=list)
     mockup: dict[str, Any]
     api: dict[str, Any]
     published: bool
