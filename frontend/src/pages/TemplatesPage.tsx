@@ -39,6 +39,7 @@ type Template = {
   status: string;
   body_text: string | null;
   components: TemplateComponent[] | null;
+  meta_status_detail?: string | null;
 };
 
 type PageTab = "list" | "create" | "sync";
@@ -53,7 +54,7 @@ export default function TemplatesPage() {
   const [bodyText, setBodyText] = useState("");
   const [language, setLanguage] = useState("ar");
   const [category, setCategory] = useState("marketing");
-  const [templateStatus, setTemplateStatus] = useState("draft");
+  const [submitting, setSubmitting] = useState(false);
   const [headerType, setHeaderType] = useState<TemplateHeaderFormat | "">("");
   const [headerFile, setHeaderFile] = useState<UploadedFile | null>(null);
   const [uploadingHeader, setUploadingHeader] = useState(false);
@@ -70,7 +71,11 @@ export default function TemplatesPage() {
   });
   const templates = useQuery({
     queryKey: ["templates"],
-    queryFn: async () => (await api.get<Template[]>("/templates")).data
+    queryFn: async () => (await api.get<Template[]>("/templates")).data,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      return rows.some((item) => item.status === "pending") ? 30_000 : false;
+    }
   });
 
   const accountMap = useMemo(
@@ -131,14 +136,14 @@ export default function TemplatesPage() {
       toastStore.getState().show("ارفع ملفاً للرأس (صورة / فيديو / PDF).", "error");
       return;
     }
+    setSubmitting(true);
     try {
       const components = buildStoredComponents(bodyText, headerFile, headerType || null);
-      await api.post("/templates", {
+      const response = await api.post<Template>("/templates", {
         whatsapp_account_id: accountId,
         name,
         language,
         category,
-        status: templateStatus,
         body_text: bodyText || null,
         components
       });
@@ -148,9 +153,41 @@ export default function TemplatesPage() {
       setHeaderFile(null);
       await client.invalidateQueries({ queryKey: ["templates"] });
       setActiveTab("list");
-      toastStore.getState().show("تم حفظ القالب.", "success");
+      if (response.data.status === "approved") {
+        toastStore.getState().show("تم إرسال القالب إلى Meta واعتماده.", "success");
+      } else if (response.data.status === "pending") {
+        toastStore.getState().show("تم إرسال القالب إلى Meta — قيد المراجعة.", "success");
+      } else if (response.data.status === "rejected") {
+        toastStore.getState().show(
+          response.data.meta_status_detail ?? "رفض Meta القالب. راجع التفاصيل في الجدول.",
+          "error"
+        );
+      } else {
+        toastStore.getState().show("تم حفظ القالب.", "success");
+      }
     } catch {
-      toastStore.getState().show("تعذر حفظ القالب.", "error");
+      toastStore.getState().show("تعذر إنشاء القالب أو إرساله إلى Meta.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function resubmitTemplate(id: string) {
+    try {
+      const response = await api.post<Template>(`/templates/${id}/submit`);
+      await client.invalidateQueries({ queryKey: ["templates"] });
+      if (response.data.status === "pending") {
+        toastStore.getState().show("أُعيد إرسال القالب إلى Meta — قيد المراجعة.", "success");
+      } else if (response.data.status === "rejected") {
+        toastStore.getState().show(
+          response.data.meta_status_detail ?? "رفض Meta القالب.",
+          "error"
+        );
+      } else {
+        toastStore.getState().show("تم تحديث حالة القالب.", "success");
+      }
+    } catch {
+      toastStore.getState().show("تعذر إعادة إرسال القالب إلى Meta.", "error");
     }
   }
 
@@ -191,7 +228,7 @@ export default function TemplatesPage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">WhatsApp Business API</span>
           <h1>قوالب WhatsApp</h1>
-          <p>جدول موحّد لكل قالب — الحالة، الفئة، الحساب، والمعاينة في صف واحد.</p>
+          <p>جدول موحّد لكل قالب — يُرسل تلقائياً إلى Meta وتُحدَّث الحالة من Meta.</p>
         </div>
         <Link to="/campaigns" className="secondary-button">الحملات ←</Link>
       </header>
@@ -324,6 +361,9 @@ export default function TemplatesPage() {
                             <span className={templateStatusBadgeClass(item.status)}>
                               {formatTemplateStatus(item.status)}
                             </span>
+                            {item.meta_status_detail && (
+                              <small className="hint-text template-meta-reason">{item.meta_status_detail}</small>
+                            )}
                           </td>
                           <td>{formatTemplateHeader(item.components)}</td>
                           <td className="template-body-cell">{truncateTemplateBody(item.body_text)}</td>
@@ -334,8 +374,10 @@ export default function TemplatesPage() {
                                   ? `${item.meta_template_id.slice(0, 10)}…`
                                   : item.meta_template_id}
                               </code>
+                            ) : item.status === "pending" ? (
+                              <span className="admin-chip admin-chip-muted">Meta · مراجعة</span>
                             ) : (
-                              <span className="admin-chip admin-chip-muted">محلي</span>
+                              <span className="admin-chip admin-chip-muted">لم يُرسل</span>
                             )}
                           </td>
                           <td>
@@ -354,6 +396,15 @@ export default function TemplatesPage() {
                               >
                                 نافذة
                               </button>
+                              {(item.status === "rejected" || item.status === "draft") && (
+                                <button
+                                  type="button"
+                                  className="secondary-button compact"
+                                  onClick={() => void resubmitTemplate(item.id)}
+                                >
+                                  إعادة إرسال
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="secondary-button compact"
@@ -393,7 +444,7 @@ export default function TemplatesPage() {
           <div className="admin-table-header">
             <div>
               <h2>إنشاء قالب</h2>
-              <small>للاختبار المحلي — القوالب الحقيقية تُعتمد من Meta ثم تُزامَن</small>
+              <small>يُرسل تلقائياً إلى Meta — الحالة تتحدّث من Meta مباشرة</small>
             </div>
           </div>
 
@@ -420,6 +471,7 @@ export default function TemplatesPage() {
                   dir="ltr"
                   required
                 />
+                <p className="hint-text">استخدم حروفاً إنجليزية وأرقاماً و _ فقط — يُحوَّل الاسم تلقائياً لصيغة Meta.</p>
               </label>
 
               <div className="templates-fields-row">
@@ -436,14 +488,6 @@ export default function TemplatesPage() {
                     <option value="marketing">تسويق</option>
                     <option value="utility">خدمات</option>
                     <option value="authentication">تحقق</option>
-                  </select>
-                </label>
-                <label className="field-label">
-                  <span>الحالة</span>
-                  <select value={templateStatus} onChange={(e) => setTemplateStatus(e.target.value)}>
-                    <option value="draft">مسودة</option>
-                    <option value="approved">معتمد (محلي)</option>
-                    <option value="pending">قيد المراجعة</option>
                   </select>
                 </label>
               </div>
@@ -489,8 +533,8 @@ export default function TemplatesPage() {
                 </label>
               )}
 
-              <button type="submit" className="whatsapp-button" disabled={uploadingHeader}>
-                حفظ القالب
+              <button type="submit" className="whatsapp-button" disabled={uploadingHeader || submitting}>
+                {submitting ? "جاري الإرسال إلى Meta…" : "إنشاء وإرسال إلى Meta"}
               </button>
             </form>
 

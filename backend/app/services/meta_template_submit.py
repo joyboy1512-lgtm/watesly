@@ -207,6 +207,7 @@ async def submit_template_to_meta(
         template.status = TemplateStatus(raw_status)
     except ValueError:
         template.status = TemplateStatus.PENDING
+    template.meta_status_detail = None
     await db.commit()
     await db.refresh(template)
     return template

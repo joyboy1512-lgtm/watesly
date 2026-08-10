@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies.auth import AuthContext, require_permissions
 from app.db.session import get_db
 from app.core.permissions import Permission
+from app.models.whatsapp_template import WhatsAppTemplate
 from app.schemas.template import TemplateCreateRequest, TemplateResponse, TemplateUpdateRequest
 from app.services.templates import (
     create_template,
     delete_template,
     list_templates,
+    resubmit_template_to_meta,
     sync_templates_from_meta,
     update_template,
 )
@@ -40,6 +42,32 @@ async def post_template(
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=409, detail="Template already exists") from exc
+
+
+@router.post("/{template_id}/submit", response_model=TemplateResponse)
+async def submit_template(
+    template_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await resubmit_template_to_meta(
+            db,
+            account_id=context.account_id,
+            template_id=template_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "TEMPLATE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Template not found") from exc
+        if code == "TEMPLATE_ALREADY_APPROVED":
+            raise HTTPException(status_code=409, detail="Template is already approved") from exc
+        if code == "META_SUBMIT_FAILED":
+            template = await db.get(WhatsAppTemplate, template_id)
+            if template is not None and template.account_id == context.account_id:
+                return template
+            raise HTTPException(status_code=502, detail="Meta rejected the template submission") from exc
+        raise HTTPException(status_code=400, detail=code) from exc
 
 
 @router.post("/sync/{whatsapp_account_id}")

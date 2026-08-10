@@ -452,7 +452,47 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
     entries = payload.get("entry", [])
     for entry in entries:
         for change in entry.get("changes", []):
-            value = change.get("value", {})
+            field = change.get("field")
+            value = change.get("value", {}) or {}
+
+            if field == "message_template_status_update":
+                waba_id = str(entry.get("id", ""))
+                wa_for_event = None
+                if waba_id:
+                    wa_result = await db.execute(
+                        select(WhatsAppAccount).where(WhatsAppAccount.waba_id == waba_id)
+                    )
+                    wa_for_event = wa_result.scalars().first()
+
+                event = WebhookEvent(
+                    provider="meta_whatsapp",
+                    account_id=wa_for_event.account_id if wa_for_event else None,
+                    channel_id=wa_for_event.channel_id if wa_for_event else None,
+                    event_type="message_template_status_update",
+                    payload={"entry": entry, "change": change},
+                    status=WebhookEventStatus.RECEIVED if wa_for_event else WebhookEventStatus.IGNORED,
+                )
+                db.add(event)
+                await db.flush()
+
+                if waba_id:
+                    from app.services.template_status_webhook import process_template_status_update
+
+                    if await process_template_status_update(db, waba_id=waba_id, value=value):
+                        processed_count += 1
+                        event.status = WebhookEventStatus.PROCESSED
+                        event.processed_at = datetime.now(UTC)
+                        if wa_for_event:
+                            await publish_event(
+                                wa_for_event.account_id,
+                                {
+                                    "type": "template.status_updated",
+                                    "name": value.get("message_template_name"),
+                                    "status": value.get("event"),
+                                },
+                            )
+                continue
+
             metadata = value.get("metadata", {})
             phone_number_id = metadata.get("phone_number_id")
             event_type = _extract_event_type(value)

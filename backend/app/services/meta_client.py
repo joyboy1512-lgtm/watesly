@@ -420,6 +420,96 @@ class MetaWhatsAppClient:
             )
         return response.content, mime_type, None
 
+    async def upload_template_sample(
+        self,
+        *,
+        file_name: str,
+        file_bytes: bytes,
+        mime_type: str,
+    ) -> str:
+        if not settings.meta_app_id:
+            raise MetaAPIError("Meta App ID is not configured", status_code=400)
+
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        app_id = settings.meta_app_id
+        file_length = len(file_bytes)
+        client = self._get_client()
+
+        session_url = f"{base}/{version}/{app_id}/uploads"
+        session_response = await client.post(
+            session_url,
+            params={
+                "file_name": file_name,
+                "file_length": file_length,
+                "file_type": mime_type,
+                "access_token": self.access_token,
+            },
+        )
+        session_data = await self._parse_graph_response(
+            session_response,
+            default_message="Unable to start Meta template media upload",
+        )
+        session_id = session_data.get("id")
+        if not session_id:
+            raise MetaAPIError(
+                "Meta upload session id missing",
+                status_code=502,
+                response_data=session_data,
+            )
+
+        upload_url = f"{base}/{version}/{session_id}"
+        upload_response = await client.post(
+            upload_url,
+            headers={
+                "Authorization": f"OAuth {self.access_token}",
+                "file_offset": "0",
+                "Content-Type": "application/octet-stream",
+            },
+            content=file_bytes,
+        )
+        handle_data = await self._parse_graph_response(
+            upload_response,
+            default_message="Unable to upload template media sample to Meta",
+        )
+        handle = handle_data.get("h")
+        if not handle:
+            raise MetaAPIError(
+                "Meta template media handle missing",
+                status_code=502,
+                response_data=handle_data,
+            )
+        return str(handle)
+
+    async def create_message_template(
+        self,
+        *,
+        waba_id: str,
+        name: str,
+        language: str,
+        category: str,
+        components: list[dict],
+    ) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}/message_templates"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "name": name,
+            "language": language,
+            "category": category.upper(),
+            "components": components,
+        }
+        client = self._get_client()
+        response = await client.post(url, headers=headers, json=payload)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to create WhatsApp template in Meta",
+        )
+
     async def debug_access_token(self) -> dict:
         base = settings.meta_graph_api_base_url.rstrip("/")
         version = settings.meta_graph_api_version.strip("/")

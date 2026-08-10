@@ -52,3 +52,4 @@ class WhatsAppTemplate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     body_text: Mapped[str | None] = mapped_column(Text)
     components: Mapped[list | None] = mapped_column(JSON)
+    meta_status_detail: Mapped[str | None] = mapped_column(Text, nullable=True)

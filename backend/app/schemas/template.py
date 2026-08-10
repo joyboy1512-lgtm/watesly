@@ -11,7 +11,6 @@ class TemplateCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=512)
     language: str = Field(min_length=2, max_length=20)
     category: TemplateCategory
-    status: TemplateStatus = TemplateStatus.DRAFT
     body_text: str | None = Field(default=None, max_length=4096)
     components: list[dict] = Field(default_factory=list)
 
@@ -37,3 +36,4 @@ class TemplateResponse(BaseModel):
     status: TemplateStatus
     body_text: str | None
     components: list | None
+    meta_status_detail: str | None = None
