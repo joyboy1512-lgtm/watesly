@@ -223,7 +223,16 @@ const resources = {
         step2Title: "أضف منتجاتك",
         step2Desc: "دليل منتجات، ردود سريعة، وقاعدة معرفة.",
         step3Title: "بيع وتابع",
-        step3Desc: "ردود، حملات، إدارة علاقات العملاء، وتحليلات في مكان واحد."
+        step3Desc: "ردود، حملات، إدارة علاقات العملاء، وتحليلات في مكان واحد.",
+        showcaseEyebrow: "تجربة المنصة",
+        showcaseTitle: "منصة احترافية — بمظهر عصري وفخم",
+        showcaseSubtitle: "صندوق وارد، حملات، وتحليلات في واجهة واحدة أنيقة وسهلة الاستخدام.",
+        showcaseInboxTitle: "صندوق وارد موحّد",
+        showcaseInboxDesc: "محادثات، صفقات، وردود ذكية في مكان واحد.",
+        showcaseCampaignsTitle: "حملات ذكية",
+        showcaseCampaignsDesc: "إرسال جماعي، تقارير تسليم، وشرائح عملاء.",
+        showcaseAnalyticsTitle: "تحليلات حية",
+        showcaseAnalyticsDesc: "أداء الفريق، عائد الحملات، ومؤشرات النمو."
       },
       pages: {
         dashboard: "لوحة التحكم",
@@ -516,7 +525,16 @@ const resources = {
         step2Title: "Add your products",
         step2Desc: "Catalog, quick replies, and knowledge base.",
         step3Title: "Sell and follow up",
-        step3Desc: "Replies, campaigns, CRM, and analytics in one place."
+        step3Desc: "Replies, campaigns, CRM, and analytics in one place.",
+        showcaseEyebrow: "Platform experience",
+        showcaseTitle: "A premium platform — modern and polished",
+        showcaseSubtitle: "Inbox, campaigns, and analytics in one elegant, easy-to-use interface.",
+        showcaseInboxTitle: "Unified inbox",
+        showcaseInboxDesc: "Conversations, deals, and smart replies in one place.",
+        showcaseCampaignsTitle: "Smart campaigns",
+        showcaseCampaignsDesc: "Bulk sends, delivery reports, and customer segments.",
+        showcaseAnalyticsTitle: "Live analytics",
+        showcaseAnalyticsDesc: "Team performance, campaign ROI, and growth metrics."
       },
       pages: {
         dashboard: "Dashboard",

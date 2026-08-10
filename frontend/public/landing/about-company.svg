@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 480" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="560" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e8fff5"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="building" x1="80" y1="120" x2="480" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#075e54"/>
+      <stop offset="1" stop-color="#128c7e"/>
+    </linearGradient>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#075e54" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="560" height="480" rx="28" fill="url(#sky)"/>
+  <ellipse cx="280" cy="430" rx="220" ry="28" fill="#075e54" opacity="0.08"/>
+  <g filter="url(#soft)">
+    <rect x="120" y="96" width="320" height="280" rx="20" fill="url(#building)"/>
+    <rect x="152" y="136" width="72" height="56" rx="8" fill="#ffffff" opacity="0.22"/>
+    <rect x="244" y="136" width="72" height="56" rx="8" fill="#ffffff" opacity="0.22"/>
+    <rect x="336" y="136" width="72" height="56" rx="8" fill="#ffffff" opacity="0.22"/>
+    <rect x="152" y="208" width="72" height="56" rx="8" fill="#ffffff" opacity="0.18"/>
+    <rect x="244" y="208" width="72" height="56" rx="8" fill="#25d366" opacity="0.55"/>
+    <rect x="336" y="208" width="72" height="56" rx="8" fill="#ffffff" opacity="0.18"/>
+    <rect x="196" y="292" width="168" height="84" rx="12" fill="#ffffff" opacity="0.95"/>
+    <rect x="220" y="316" width="120" height="12" rx="6" fill="#075e54"/>
+    <rect x="220" y="340" width="88" height="10" rx="5" fill="#667781" opacity="0.55"/>
+  </g>
+  <rect x="176" y="388" width="208" height="44" rx="22" fill="#25d366"/>
+  <rect x="204" y="402" width="152" height="14" rx="7" fill="#ffffff" opacity="0.92"/>
+</svg>

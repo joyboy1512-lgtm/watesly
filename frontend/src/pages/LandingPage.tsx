@@ -67,8 +67,40 @@ export default function LandingPage() {
   const txt = (key: string, fallbackKey: string) =>
     pickSiteText(site, "landing", key, t(fallbackKey));
 
+  const showcaseItems = [
+    {
+      image: "/landing/showcase-inbox.svg",
+      title: txt("showcaseInboxTitle", "landing.showcaseInboxTitle"),
+      desc: txt("showcaseInboxDesc", "landing.showcaseInboxDesc"),
+    },
+    {
+      image: "/landing/showcase-campaigns.svg",
+      title: txt("showcaseCampaignsTitle", "landing.showcaseCampaignsTitle"),
+      desc: txt("showcaseCampaignsDesc", "landing.showcaseCampaignsDesc"),
+    },
+    {
+      image: "/landing/showcase-analytics.svg",
+      title: txt("showcaseAnalyticsTitle", "landing.showcaseAnalyticsTitle"),
+      desc: txt("showcaseAnalyticsDesc", "landing.showcaseAnalyticsDesc"),
+    },
+  ];
+
+  const clientThemes = [
+    "landing-client-theme-travel",
+    "landing-client-theme-retail",
+    "landing-client-theme-beauty",
+    "landing-client-theme-grocery",
+    "landing-client-theme-travel",
+  ];
+
   return (
     <div className="landing-page" style={landingStyle}>
+      <div className="landing-page-bg" aria-hidden="true">
+        <span className="landing-blob landing-blob-a" />
+        <span className="landing-blob landing-blob-b" />
+        <span className="landing-blob landing-blob-c" />
+      </div>
+
       <header className="landing-nav">
         <Link to="/" className="landing-logo">
           <BrandLogo tone="dark" size="lg" src={branding?.logo_dark_url} alt={branding?.app_name} />
@@ -88,55 +120,81 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <section className="landing-hero">
-        <div className="landing-hero-copy">
-          <p className="landing-eyebrow">{txt("heroEyebrow", "landing.heroEyebrow")}</p>
-          <h1>
-            {txt("heroTitle", "landing.heroTitle")}
-            <span>{txt("heroTitleAccent", "landing.heroTitleAccent")}</span>
-          </h1>
-          <p className="landing-lead">{txt("heroLead", "landing.heroLead")}</p>
-          <div className="landing-hero-actions">
-            <Link to="/register" className="landing-btn-primary landing-btn-lg">{txt("tryPlatform", "landing.tryPlatform")}</Link>
-            <a href="#features" className="landing-btn-ghost landing-btn-lg">{txt("exploreFeatures", "landing.exploreFeatures")}</a>
-          </div>
-          {(display?.show_stats ?? true) && (
-            <div className="landing-trust-row">
-              {stats.map((item) => (
-                <div key={item.label}>
-                  <strong>{item.value}</strong>
-                  <span>{item.label}</span>
-                </div>
-              ))}
+      <section className="landing-hero-shell">
+        <section className="landing-hero">
+          <div className="landing-hero-copy">
+            <p className="landing-eyebrow">{txt("heroEyebrow", "landing.heroEyebrow")}</p>
+            <h1>
+              {txt("heroTitle", "landing.heroTitle")}
+              <span>{txt("heroTitleAccent", "landing.heroTitleAccent")}</span>
+            </h1>
+            <p className="landing-lead">{txt("heroLead", "landing.heroLead")}</p>
+            <div className="landing-hero-actions">
+              <Link to="/register" className="landing-btn-primary landing-btn-lg">{txt("tryPlatform", "landing.tryPlatform")}</Link>
+              <a href="#features" className="landing-btn-ghost landing-btn-lg">{txt("exploreFeatures", "landing.exploreFeatures")}</a>
             </div>
-          )}
-        </div>
-        {(display?.show_hero_mockup ?? true) && (
-          <div className="landing-hero-visual">
-            {branding?.hero_image_url ? (
-              <img src={branding.hero_image_url} alt="" className="landing-hero-image" />
-            ) : (
-              <div className="landing-mockup">
-                <div className="landing-mockup-header">
-                  <span>{mockup?.title ?? t("landing.mockupTitle")}</span>
-                  <span className="landing-pill">{mockup?.pill ?? t("landing.mockupPill")}</span>
-                </div>
-                <div className="landing-mockup-body">
-                  {(mockup?.messages ?? []).map((msg, index) => (
-                    <div key={index} className={`landing-chat ${msg.role}`}>{msg.text}</div>
-                  ))}
-                  {mockup?.deal_card && (
-                    <div className="landing-deal-card">
-                      <span>{mockup.deal_card.label}</span>
-                      <strong>{mockup.deal_card.title}</strong>
-                      <em>{mockup.deal_card.note}</em>
-                    </div>
-                  )}
-                </div>
+            {(display?.show_stats ?? true) && (
+              <div className="landing-trust-row">
+                {stats.map((item) => (
+                  <div key={item.label} className="landing-trust-card">
+                    <strong>{item.value}</strong>
+                    <span>{item.label}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        )}
+          {(display?.show_hero_mockup ?? true) && (
+            <div className="landing-hero-visual">
+              <div className="landing-mockup-glow" aria-hidden="true" />
+              {branding?.hero_image_url ? (
+                <img src={branding.hero_image_url} alt="" className="landing-hero-image" />
+              ) : (
+                <div className="landing-mockup-frame">
+                  <div className="landing-mockup">
+                    <div className="landing-mockup-header">
+                      <span>{mockup?.title ?? t("landing.mockupTitle")}</span>
+                      <span className="landing-pill">{mockup?.pill ?? t("landing.mockupPill")}</span>
+                    </div>
+                    <div className="landing-mockup-body">
+                      {(mockup?.messages ?? []).map((msg, index) => (
+                        <div key={index} className={`landing-chat ${msg.role}`}>{msg.text}</div>
+                      ))}
+                      {mockup?.deal_card && (
+                        <div className="landing-deal-card">
+                          <span>{mockup.deal_card.label}</span>
+                          <strong>{mockup.deal_card.title}</strong>
+                          <em>{mockup.deal_card.note}</em>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </section>
+
+      <section className="landing-showcase landing-section-alt">
+        <div className="landing-section-head">
+          <p className="landing-eyebrow">{txt("showcaseEyebrow", "landing.showcaseEyebrow")}</p>
+          <h2>{txt("showcaseTitle", "landing.showcaseTitle")}</h2>
+          <p>{txt("showcaseSubtitle", "landing.showcaseSubtitle")}</p>
+        </div>
+        <div className="landing-showcase-grid">
+          {showcaseItems.map((item) => (
+            <article key={item.title} className="landing-showcase-card">
+              <div className="landing-showcase-image-wrap">
+                <img src={item.image} alt="" className="landing-showcase-image" loading="lazy" />
+              </div>
+              <div className="landing-showcase-copy">
+                <h3>{item.title}</h3>
+                <p>{item.desc}</p>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       {(display?.show_features ?? true) && (
@@ -147,8 +205,8 @@ export default function LandingPage() {
             <p>{txt("featuresSubtitle", "landing.featuresSubtitle")}</p>
           </div>
           <div className="landing-features-grid">
-            {features.map((f) => (
-              <article key={f.title} className="landing-feature-card">
+            {features.map((f, index) => (
+              <article key={f.title} className="landing-feature-card" style={{ animationDelay: `${index * 60}ms` }}>
                 <span className="landing-feature-icon">{f.icon}</span>
                 <h3>{f.title}</h3>
                 <p>{f.desc}</p>
@@ -178,6 +236,9 @@ export default function LandingPage() {
 
       <section id="about" className="landing-section landing-about">
         <div className="landing-about-grid">
+          <div className="landing-about-visual">
+            <img src="/landing/about-company.svg" alt="" className="landing-about-image" loading="lazy" />
+          </div>
           <div className="landing-about-copy">
             <p className="landing-eyebrow">{txt("aboutEyebrow", "landing.aboutEyebrow")}</p>
             <h2>{txt("aboutTitle", "landing.aboutTitle")}</h2>
@@ -217,9 +278,14 @@ export default function LandingPage() {
             <p>{txt("clientsSubtitle", "landing.clientsSubtitle")}</p>
           </div>
           <div className="landing-clients-grid">
-            {clients.map((client) => (
-              <article key={client.name} className="landing-client-card">
-                <span className="landing-client-icon">{client.icon ?? "🏢"}</span>
+            {clients.map((client, index) => (
+              <article
+                key={client.name}
+                className={`landing-client-card ${clientThemes[index % clientThemes.length]}`}
+              >
+                <div className="landing-client-banner">
+                  <span className="landing-client-icon">{client.icon ?? "🏢"}</span>
+                </div>
                 <h3>{client.name}</h3>
                 <p>{client.industry}</p>
               </article>
@@ -255,9 +321,11 @@ export default function LandingPage() {
 
       {(display?.show_cta ?? true) && (
         <section className="landing-cta">
-          <h2>{txt("ctaTitle", "landing.ctaTitle")}</h2>
-          <p>{txt("ctaBody", "landing.ctaBody")}</p>
-          <Link to="/register" className="landing-btn-primary landing-btn-lg landing-btn-light">{txt("enterPlatform", "landing.enterPlatform")}</Link>
+          <div className="landing-cta-inner">
+            <h2>{txt("ctaTitle", "landing.ctaTitle")}</h2>
+            <p>{txt("ctaBody", "landing.ctaBody")}</p>
+            <Link to="/register" className="landing-btn-primary landing-btn-lg landing-btn-light">{txt("enterPlatform", "landing.enterPlatform")}</Link>
+          </div>
         </section>
       )}
 
