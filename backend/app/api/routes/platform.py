@@ -471,6 +471,7 @@ async def get_deals(
     return await list_deals(
         db,
         context.account_id,
+        membership=context.membership,
         q=q,
         stage=stage,
         pipeline=pipeline,
@@ -486,7 +487,7 @@ async def get_crm_stats(
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await crm_stats(db, account_id=context.account_id)
+    return await crm_stats(db, account_id=context.account_id, membership=context.membership)
 
 
 @router.get("/crm/report")
@@ -494,7 +495,7 @@ async def get_crm_report(
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await crm_report(db, account_id=context.account_id)
+    return await crm_report(db, account_id=context.account_id, membership=context.membership)
 
 
 @router.get("/crm/deals/export")

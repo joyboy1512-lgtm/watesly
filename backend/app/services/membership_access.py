@@ -248,3 +248,50 @@ async def template_list_filters(
         )
         filters.append(WhatsAppTemplate.whatsapp_account_id.in_(wa_ids))
     return filters
+
+
+async def organization_scope_clauses(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+    organization_column,
+) -> list:
+    """Return SQLAlchemy filters limiting rows to accessible organizations."""
+    org_ids = await resolve_accessible_organization_ids(
+        db, account_id=account_id, membership=membership
+    )
+    if org_ids is None:
+        return []
+    if not org_ids:
+        return [organization_column.is_(None)]
+    return [organization_column.in_(org_ids)]
+
+
+async def resolve_membership_organizations(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+) -> list[Organization]:
+    result = await db.execute(
+        select(Organization).where(
+            Organization.account_id == account_id,
+            Organization.status == OrganizationStatus.ACTIVE,
+        ).order_by(Organization.name.asc())
+    )
+    organizations = list(result.scalars().all())
+    return await filter_organizations_for_membership(
+        db,
+        account_id=account_id,
+        membership=membership,
+        organizations=organizations,
+    )
+
+
+def branch_display_name(organizations: list[Organization]) -> str | None:
+    if not organizations:
+        return None
+    if len(organizations) == 1:
+        return organizations[0].name
+    return " · ".join(item.name for item in organizations[:3])

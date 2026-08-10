@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 class MembershipRole(StrEnum):
     OWNER = "owner"
     ADMIN = "admin"
+    BRANCH_ADMIN = "branch_admin"
     MANAGER = "manager"
     AGENT = "agent"
     VIEWER = "viewer"

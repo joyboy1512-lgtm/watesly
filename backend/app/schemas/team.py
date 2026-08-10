@@ -25,6 +25,7 @@ class CreateEmployeeRequest(BaseModel):
     organization_ids: list[UUID] = Field(min_length=1)
     channel_ids: list[UUID] = Field(default_factory=list)
     preferred_language: str = Field(default="ar", pattern=r"^(ar|en)$")
+    permissions: list[str] | None = None
 
     @field_validator("email")
     @classmethod

@@ -52,7 +52,7 @@ async def get_automations(
     context: AuthContext = Depends(require_permissions(Permission.AUTOMATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_automations(db, context.account_id)
+    return await list_automations(db, context.account_id, membership=context.membership)
 
 
 @router.post("", response_model=AutomationResponse, status_code=status.HTTP_201_CREATED)
@@ -67,6 +67,7 @@ async def post_automation(
             account_id=context.account_id,
             user_id=context.user.id,
             payload=payload,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc
@@ -86,6 +87,7 @@ async def get_automation_by_id(
             db,
             account_id=context.account_id,
             automation_id=automation_id,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc
@@ -104,6 +106,7 @@ async def patch_automation(
             account_id=context.account_id,
             automation_id=automation_id,
             payload=payload,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc
@@ -120,6 +123,7 @@ async def publish(
             db,
             account_id=context.account_id,
             automation_id=automation_id,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc
@@ -137,6 +141,7 @@ async def pause(
             db,
             account_id=context.account_id,
             automation_id=automation_id,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc
@@ -156,6 +161,7 @@ async def test_automation(
             account_id=context.account_id,
             automation_id=automation_id,
             trigger_payload=payload.trigger_payload,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc
@@ -175,6 +181,7 @@ async def automation_stats(
             db,
             account_id=context.account_id,
             automation_id=automation_id,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc
@@ -191,6 +198,7 @@ async def get_runs(
             db,
             account_id=context.account_id,
             automation_id=automation_id,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise _automation_error(exc) from exc

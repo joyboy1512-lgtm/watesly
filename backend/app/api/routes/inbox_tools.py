@@ -54,7 +54,7 @@ async def get_tags(
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_tags(db, context.account_id)
+    return await list_tags(db, context.account_id, membership=context.membership)
 
 
 @router.post("/tags", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
@@ -144,6 +144,7 @@ async def get_quick_replies(
     return await list_quick_replies(
         db,
         context.account_id,
+        membership=context.membership,
         organization_id=organization_id,
         channel_id=channel_id,
         category=category,
@@ -270,6 +271,7 @@ async def post_quick_reply(
             account_id=context.account_id,
             user_id=context.user.id,
             payload=payload,
+            membership=context.membership,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid organization") from exc
@@ -291,6 +293,7 @@ async def patch_quick_reply(
             account_id=context.account_id,
             reply_id=reply_id,
             payload=payload,
+            membership=context.membership,
         )
     except ValueError as exc:
         detail = str(exc)
@@ -309,7 +312,12 @@ async def delete_quick_reply(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await archive_quick_reply(db, account_id=context.account_id, reply_id=reply_id)
+        return await archive_quick_reply(
+            db,
+            account_id=context.account_id,
+            reply_id=reply_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Quick reply not found") from exc
 

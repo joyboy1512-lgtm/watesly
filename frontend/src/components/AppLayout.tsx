@@ -13,8 +13,18 @@ import BrandLogo from "./BrandLogo";
 import RequirePermission from "./RequirePermission";
 
 import { filterNavItems, hasNavPermission } from "../lib/navPermissions";
+import { formatRoleLabel, type MembershipRole } from "../lib/teamHelpers";
 
-type CurrentUser = { full_name: string; email: string; is_super_admin: boolean; role?: string; permissions?: string[] };
+type CurrentUser = {
+  full_name: string;
+  email: string;
+  is_super_admin: boolean;
+  role?: string;
+  permissions?: string[];
+  branch_name?: string | null;
+  account_name?: string | null;
+  organizations?: Array<{ id: string; name: string }>;
+};
 
 export default function AppLayout() {
   const { t } = useTranslation();
@@ -25,6 +35,12 @@ export default function AppLayout() {
     queryFn: async () => (await api.get<CurrentUser>("/auth/me")).data
   });
   const displayName = profile.data?.full_name ?? "Watesly User";
+  const branchSubtitle = profile.data?.branch_name?.trim() || t("shell.brandTagline");
+  const roleSubtitle = profile.data?.is_super_admin
+    ? t("shell.superAdmin")
+    : profile.data?.role
+      ? formatRoleLabel(profile.data.role as MembershipRole)
+      : t("shell.member");
   const initials = displayName
     .split(/\s+/)
     .filter(Boolean)
@@ -82,7 +98,7 @@ export default function AppLayout() {
         <div className="sidebar-top">
           <div className="brand-lockup sidebar-brand">
             <BrandLogo tone="light" size="md" />
-            <small>{t("shell.brandTagline")}</small>
+            <small>{branchSubtitle}</small>
           </div>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)}>
             <Icon name="close" />
@@ -150,7 +166,7 @@ export default function AppLayout() {
               <div className="avatar">{initials}</div>
               <div className="user-copy">
                 <strong>{displayName}</strong>
-                <small>{profile.data?.is_super_admin ? t("shell.superAdmin") : t("shell.owner")}</small>
+                <small>{roleSubtitle}</small>
               </div>
             </div>
           </div>

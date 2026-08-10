@@ -41,6 +41,7 @@ async def create_deal(
     db: AsyncSession,
     *,
     account_id: UUID,
+    membership=None,
     title: str,
     contact_id: UUID | None = None,
     stage: str = "lead",
@@ -54,6 +55,17 @@ async def create_deal(
     source: str | None = "manual",
     expected_close_date: datetime | None = None,
 ) -> Deal:
+    from app.services.membership_access import ensure_membership_organization_access
+
+    if membership is not None:
+        if organization_id is None:
+            raise ValueError("ORGANIZATION_REQUIRED")
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=organization_id,
+        )
     item = Deal(
         account_id=account_id,
         contact_id=contact_id,
@@ -86,6 +98,7 @@ async def list_deals(
     db: AsyncSession,
     account_id: UUID,
     *,
+    membership=None,
     q: str | None = None,
     stage: str | None = None,
     pipeline: str | None = None,
@@ -94,6 +107,8 @@ async def list_deals(
     assigned_membership_id: UUID | None = None,
     limit: int = 500,
 ) -> list[dict]:
+    from app.services.membership_access import organization_scope_clauses
+
     stmt = (
         select(Deal, Contact.display_name, Contact.external_address)
         .outerjoin(Contact, Contact.id == Deal.contact_id)
@@ -101,6 +116,14 @@ async def list_deals(
         .order_by(Deal.updated_at.desc())
         .limit(limit)
     )
+    if membership is not None:
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=Deal.organization_id,
+        ):
+            stmt = stmt.where(clause)
     if stage:
         stmt = stmt.where(Deal.stage == stage)
     if pipeline:
@@ -122,7 +145,15 @@ async def list_deals(
     ]
 
 
-async def get_deal(db: AsyncSession, *, account_id: UUID, deal_id: UUID) -> dict:
+async def get_deal(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    deal_id: UUID,
+    membership=None,
+) -> dict:
+    from app.services.membership_access import ensure_membership_organization_access
+
     row = (
         await db.execute(
             select(Deal, Contact.display_name, Contact.external_address, Organization.name)
@@ -134,6 +165,15 @@ async def get_deal(db: AsyncSession, *, account_id: UUID, deal_id: UUID) -> dict
     if row is None:
         raise ValueError("DEAL_NOT_FOUND")
     deal, display_name, external_phone, org_name = row
+    if membership is not None and deal.organization_id is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=deal.organization_id,
+        )
+    elif membership is not None and deal.organization_id is None:
+        raise ValueError("ACCESS_FORBIDDEN")
     data = deal_to_dict(deal, contact_name=display_name, contact_phone=external_phone)
     data["organization_name"] = org_name
     return data
@@ -144,11 +184,23 @@ async def update_deal(
     *,
     account_id: UUID,
     deal_id: UUID,
+    membership=None,
     **fields,
 ) -> Deal:
     deal = await db.get(Deal, deal_id)
     if deal is None or deal.account_id != account_id:
         raise ValueError("DEAL_NOT_FOUND")
+    if membership is not None and deal.organization_id is not None:
+        from app.services.membership_access import ensure_membership_organization_access
+
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=deal.organization_id,
+        )
+    elif membership is not None:
+        raise ValueError("ACCESS_FORBIDDEN")
     old_stage = deal.stage
     for key, value in fields.items():
         if hasattr(deal, key):
@@ -185,10 +237,23 @@ async def update_deal_stage(db: AsyncSession, *, account_id: UUID, deal_id: UUID
     return await update_deal(db, account_id=account_id, deal_id=deal_id, stage=stage)
 
 
-async def delete_deal(db: AsyncSession, *, account_id: UUID, deal_id: UUID) -> None:
+async def delete_deal(
+    db: AsyncSession, *, account_id: UUID, deal_id: UUID, membership=None
+) -> None:
     deal = await db.get(Deal, deal_id)
     if deal is None or deal.account_id != account_id:
         raise ValueError("DEAL_NOT_FOUND")
+    if membership is not None and deal.organization_id is not None:
+        from app.services.membership_access import ensure_membership_organization_access
+
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=deal.organization_id,
+        )
+    elif membership is not None:
+        raise ValueError("ACCESS_FORBIDDEN")
     await db.delete(deal)
     await db.commit()
 
@@ -224,11 +289,20 @@ async def list_deal_activities(db: AsyncSession, deal_id: UUID) -> list[dict]:
     ]
 
 
-async def crm_stats(db: AsyncSession, *, account_id: UUID) -> dict:
+async def crm_stats(db: AsyncSession, *, account_id: UUID, membership=None) -> dict:
+    from app.services.membership_access import organization_scope_clauses
+
     since = datetime.now(UTC) - timedelta(days=30)
-    deals = list(
-        (await db.execute(select(Deal).where(Deal.account_id == account_id))).scalars().all()
-    )
+    query = select(Deal).where(Deal.account_id == account_id)
+    if membership is not None:
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=Deal.organization_id,
+        ):
+            query = query.where(clause)
+    deals = list((await db.execute(query)).scalars().all())
     open_deals = [d for d in deals if d.stage not in ("won", "lost")]
     won_recent = [d for d in deals if d.stage == "won" and d.updated_at and d.updated_at >= since]
     pipeline_value = sum(float(d.amount or 0) for d in open_deals)
@@ -344,9 +418,9 @@ async def create_deal_from_conversation(
     )
 
 
-async def crm_report(db: AsyncSession, *, account_id: UUID) -> dict:
-    stats = await crm_stats(db, account_id=account_id)
-    deals = await list_deals(db, account_id, limit=500)
+async def crm_report(db: AsyncSession, *, account_id: UUID, membership=None) -> dict:
+    stats = await crm_stats(db, account_id=account_id, membership=membership)
+    deals = await list_deals(db, account_id, membership=membership, limit=500)
     top_open = [d for d in deals if d["stage"] not in ("won", "lost")][:20]
     recent_won = [d for d in deals if d["stage"] == "won"][:20]
     return {

@@ -60,6 +60,7 @@ async def invite_employee(
             db,
             account_id=context.account_id,
             invited_by_user_id=context.user.id,
+            actor_membership=context.membership,
             payload=payload,
         )
     except ValueError as exc:
@@ -69,6 +70,8 @@ async def invite_employee(
             "ALREADY_MEMBER": (409, "This user is already a member of the account"),
             "USER_LIMIT_REACHED": (403, "User limit reached for this plan"),
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
+            "FORBIDDEN": (403, "You cannot invite this role"),
+            "OUT_OF_SCOPE": (403, "You can only invite employees to your branch"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create invitation"))
         raise HTTPException(status_code=code, detail=detail) from exc

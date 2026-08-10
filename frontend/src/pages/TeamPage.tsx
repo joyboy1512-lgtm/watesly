@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
   INVITABLE_ROLES,
+  inviteableRolesForActor,
   PERMISSION_GROUPS,
   ROLE_DESCRIPTIONS,
   TEAM_PAGE_SIZE,
@@ -64,6 +65,10 @@ export default function TeamPage() {
   });
   const actorPermissions = (profileQuery.data?.permissions ?? []) as PermissionKey[];
   const canManagePermissions = canAssignPermissions(actorPermissions);
+  const inviteableRoles = useMemo(
+    () => inviteableRolesForActor(profileQuery.data?.role),
+    [profileQuery.data?.role]
+  );
 
   const employeesQuery = useQuery({
     queryKey: ["employees"],
@@ -418,7 +423,7 @@ export default function TeamPage() {
               <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
               <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="تأكيد كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
               <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
-                {INVITABLE_ROLES.map((item) => (
+                {inviteableRoles.map((item) => (
                   <option key={item} value={item}>{formatRoleLabel(item)}</option>
                 ))}
               </select>
@@ -439,7 +444,7 @@ export default function TeamPage() {
             <form className="inline-form" onSubmit={invite}>
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" required type="email" />
               <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
-                {INVITABLE_ROLES.map((item) => (
+                {inviteableRoles.map((item) => (
                   <option key={item} value={item}>{formatRoleLabel(item)}</option>
                 ))}
               </select>
