@@ -36,6 +36,9 @@ class WebhookProcessingError(RuntimeError):
 
 
 logger = logging.getLogger(__name__)
+
+
+async def _record_mac_for_contact(
     db: AsyncSession,
     *,
     account_id: UUID,
