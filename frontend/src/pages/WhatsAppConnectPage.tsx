@@ -151,6 +151,14 @@ export default function WhatsAppConnectPage() {
     () => (accounts.data ?? []).find((item) => item.id === entryAccountId) ?? (accounts.data ?? [])[0] ?? null,
     [accounts.data, entryAccountId]
   );
+  const embeddedChannelAccount = useMemo(
+    () => (embeddedChannelId ? accountByChannel.get(embeddedChannelId) ?? null : null),
+    [embeddedChannelId, accountByChannel]
+  );
+  const manualChannelAccount = useMemo(
+    () => (channelId ? accountByChannel.get(channelId) ?? null : null),
+    [channelId, accountByChannel]
+  );
   const waMeLink = entryAccount
     ? buildWaMeLink(entryAccount.display_phone_number, prefilledMessage)
     : "";
@@ -206,7 +214,10 @@ export default function WhatsAppConnectPage() {
       setEmbeddedSession(null);
       setOauthCode(null);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم ربط الحساب عبر Embedded Signup.", "success");
+      toastStore.getState().show(
+        embeddedChannelAccount ? "تم استبدال رقم WhatsApp على هذه القناة." : "تم ربط الحساب عبر Embedded Signup.",
+        "success"
+      );
       setActiveTab("accounts");
     } catch {
       toastStore.getState().show("تعذر إكمال Embedded Signup.", "error");
@@ -232,7 +243,10 @@ export default function WhatsAppConnectPage() {
       setVerifiedName("");
       setAccessToken("");
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم ربط حساب WhatsApp.", "success");
+      toastStore.getState().show(
+        manualChannelAccount ? "تم استبدال رقم WhatsApp على هذه القناة." : "تم ربط حساب WhatsApp.",
+        "success"
+      );
       setActiveTab("accounts");
     } catch {
       toastStore.getState().show("تعذر الربط. تحقق من البيانات ورمز الوصول.", "error");
@@ -372,6 +386,19 @@ export default function WhatsAppConnectPage() {
     setEmbeddedChannelId(channelIdValue);
     setActiveTab("connect");
     setSearchParams({ channel: channelIdValue });
+  }
+
+  function renderReplaceWarning(account: WhatsAppAccountRow) {
+    return (
+      <div className="whatsapp-replace-warning" role="alert">
+        <strong>هذه القناة مربوطة بالفعل.</strong>
+        <p className="hint-text">
+          ربط رقم جديد سيستبدل{" "}
+          <span dir="ltr">{account.display_phone_number}</span>
+          {" "}— الرقم القديم يبقى في Meta ولن يُحذف.
+        </p>
+      </div>
+    );
   }
 
   function renderTokenBadge(accountId: string) {
@@ -663,6 +690,13 @@ export default function WhatsAppConnectPage() {
                             <Link to={`/inbox`} className="secondary-button compact">Inbox</Link>
                             <button
                               type="button"
+                              className="secondary-button compact"
+                              onClick={() => openConnectForChannel(row.channel.id)}
+                            >
+                              استبدال
+                            </button>
+                            <button
+                              type="button"
                               className="secondary-button compact danger-text"
                               onClick={() => void disconnectAccount(account.id)}
                             >
@@ -697,6 +731,7 @@ export default function WhatsAppConnectPage() {
                     ))}
                   </select>
                 </label>
+                {embeddedChannelAccount && renderReplaceWarning(embeddedChannelAccount)}
                 {embeddedSession && (
                   <p className="hint-text">
                     WABA: {embeddedSession.waba_id} · Phone ID: {embeddedSession.phone_number_id}
@@ -708,7 +743,11 @@ export default function WhatsAppConnectPage() {
                   disabled={!embeddedChannelId || launchingEmbedded}
                   onClick={() => void launchEmbedded()}
                 >
-                  {launchingEmbedded ? "جاري الربط…" : "بدء Embedded Signup"}
+                  {launchingEmbedded
+                    ? "جاري الربط…"
+                    : embeddedChannelAccount
+                      ? "استبدال الرقم عبر Embedded Signup"
+                      : "بدء Embedded Signup"}
                 </button>
               </div>
             </section>
@@ -734,6 +773,7 @@ export default function WhatsAppConnectPage() {
                   ))}
                 </select>
               </label>
+              {manualChannelAccount && renderReplaceWarning(manualChannelAccount)}
               <div className="whatsapp-fields-row">
                 <label className="field-label">
                   <span>WABA ID</span>
@@ -759,7 +799,7 @@ export default function WhatsAppConnectPage() {
                 <textarea value={accessToken} onChange={(e) => setAccessToken(e.target.value)} dir="ltr" rows={4} required />
               </label>
               <button type="submit" className="whatsapp-button" disabled={!whatsappChannels.length}>
-                ربط الحساب
+                {manualChannelAccount ? "استبدال الرقم" : "ربط الحساب"}
               </button>
             </form>
           </section>

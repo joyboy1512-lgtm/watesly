@@ -118,10 +118,20 @@ async def create_automation(
     account_id: UUID,
     user_id: UUID,
     payload: AutomationCreateRequest,
+    membership=None,
 ) -> Automation:
+    from app.services.membership_access import ensure_membership_organization_access
+
     organization = await db.get(Organization, payload.organization_id)
     if organization is None or organization.account_id != account_id:
         raise ValueError("INVALID_ORGANIZATION")
+    if membership is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=payload.organization_id,
+        )
 
     item = Automation(
         account_id=account_id,
@@ -142,12 +152,25 @@ async def create_automation(
     return item
 
 
-async def list_automations(db: AsyncSession, account_id: UUID) -> list[Automation]:
-    result = await db.execute(
-        select(Automation)
-        .where(Automation.account_id == account_id)
-        .order_by(Automation.updated_at.desc())
-    )
+async def list_automations(
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    membership=None,
+) -> list[Automation]:
+    from app.services.membership_access import organization_scope_clauses
+
+    query = select(Automation).where(Automation.account_id == account_id)
+    if membership is not None:
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=Automation.organization_id,
+        ):
+            query = query.where(clause)
+    query = query.order_by(Automation.updated_at.desc())
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
@@ -156,10 +179,20 @@ async def get_automation(
     *,
     account_id: UUID,
     automation_id: UUID,
+    membership=None,
 ) -> Automation:
+    from app.services.membership_access import ensure_membership_organization_access
+
     item = await db.get(Automation, automation_id)
     if item is None or item.account_id != account_id:
         raise ValueError("AUTOMATION_NOT_FOUND")
+    if membership is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=item.organization_id,
+        )
     return item
 
 
@@ -169,11 +202,13 @@ async def update_automation(
     account_id: UUID,
     automation_id: UUID,
     payload: AutomationUpdateRequest,
+    membership=None,
 ) -> Automation:
     item = await get_automation(
         db,
         account_id=account_id,
         automation_id=automation_id,
+        membership=membership,
     )
     changes = payload.model_dump(exclude_unset=True)
     graph = changes.pop("graph", None)
@@ -194,11 +229,13 @@ async def publish_automation(
     *,
     account_id: UUID,
     automation_id: UUID,
+    membership=None,
 ) -> Automation:
     item = await get_automation(
         db,
         account_id=account_id,
         automation_id=automation_id,
+        membership=membership,
     )
     validate_publishable_graph(item.graph)
     item.status = AutomationStatus.ACTIVE
@@ -214,11 +251,13 @@ async def pause_automation(
     *,
     account_id: UUID,
     automation_id: UUID,
+    membership=None,
 ) -> Automation:
     item = await get_automation(
         db,
         account_id=account_id,
         automation_id=automation_id,
+        membership=membership,
     )
     item.status = AutomationStatus.PAUSED
     await db.commit()
@@ -232,11 +271,13 @@ async def create_test_run(
     account_id: UUID,
     automation_id: UUID,
     trigger_payload: dict,
+    membership=None,
 ) -> AutomationRun:
     item = await get_automation(
         db,
         account_id=account_id,
         automation_id=automation_id,
+        membership=membership,
     )
     validate_publishable_graph(item.graph)
     run = AutomationRun(
@@ -261,11 +302,13 @@ async def list_runs(
     *,
     account_id: UUID,
     automation_id: UUID,
+    membership=None,
 ) -> list[AutomationRun]:
     await get_automation(
         db,
         account_id=account_id,
         automation_id=automation_id,
+        membership=membership,
     )
     result = await db.execute(
         select(AutomationRun)
@@ -281,10 +324,13 @@ async def get_automation_stats(
     *,
     account_id: UUID,
     automation_id: UUID,
+    membership=None,
 ) -> dict:
     from sqlalchemy import func
 
-    await get_automation(db, account_id=account_id, automation_id=automation_id)
+    await get_automation(
+        db, account_id=account_id, automation_id=automation_id, membership=membership
+    )
     rows = await db.execute(
         select(AutomationRun.status, func.count(AutomationRun.id))
         .where(AutomationRun.automation_id == automation_id)

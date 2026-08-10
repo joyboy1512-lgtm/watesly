@@ -71,6 +71,13 @@ export function getCampaignResultLabel(
           detail: "انتظر ثوانٍ حتى تظهر نتيجة الإرسال"
         };
       }
+      if (failed > 0) {
+        return {
+          label: "تمت بأخطاء",
+          tone: "warning" as const,
+          detail: `${failed} فشل · ${sentCount}/${total} مرسل`
+        };
+      }
       return { label: "تمت بنجاح", tone: "success" as const, detail: `${sentCount}/${total} تم الإرسال` };
     case "completed_with_errors":
       return { label: "تمت بأخطاء", tone: "warning" as const, detail: `${failed} فشل · ${sentCount}/${total} مرسل` };

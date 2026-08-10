@@ -8,6 +8,7 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.permissions import Permission
 from app.db.session import get_db
 from app.schemas.conversation import (
+    ChannelThreadResponse,
     ConversationResponse,
     ConversationUpdateRequest,
     ConversationSendTextRequest,
@@ -16,6 +17,8 @@ from app.schemas.conversation import (
     ConversationSendProductListRequest,
     ConversationRenderTextRequest,
     ConversationContextResponse,
+    StartConversationRequest,
+    StartConversationResponse,
 )
 from app.schemas.growth import ConversationRatingRequest
 from app.services.whatsapp_window import (
@@ -76,6 +79,7 @@ async def get_conversations(
     limit: int = Query(100, ge=1, le=200),
     starred: bool = Query(False),
     archived: bool = Query(False),
+    channel_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConversationResponse]:
@@ -87,6 +91,7 @@ async def get_conversations(
         include_archived=archived,
         archived_only=archived,
         starred_only=starred,
+        channel_id=channel_id,
     )
     conversation_ids = [row[0].id for row in rows]
     last_inbound_map = await get_last_inbound_by_conversation(db, conversation_ids)
@@ -101,6 +106,70 @@ async def get_conversations(
         for conversation, contact, message, unread in rows
     ]
     return await _mask_conversation_list(db, context, items)
+
+
+@router.post("/start", response_model=StartConversationResponse, status_code=201)
+async def post_start_conversation(
+    payload: StartConversationRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> StartConversationResponse:
+    from app.services.contact_management import start_conversation_on_channel
+
+    try:
+        await ensure_conversation_channel_access(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            channel_id=payload.channel_id,
+        )
+        conversation, contact, created = await start_conversation_on_channel(
+            db,
+            account_id=context.account_id,
+            channel_id=payload.channel_id,
+            external_address=payload.external_address,
+            display_name=payload.display_name,
+        )
+    except ValueError as exc:
+        messages = {
+            "INVALID_CHANNEL": (400, "Channel is invalid"),
+            "INVALID_PHONE": (400, "Phone number is invalid"),
+            "CONVERSATION_FORBIDDEN": (403, "You cannot access this channel"),
+        }
+        code, detail = messages.get(str(exc), (400, "Unable to start conversation"))
+        raise HTTPException(status_code=code, detail=detail) from exc
+
+    return StartConversationResponse(
+        conversation_id=conversation.id,
+        contact_id=contact.id,
+        channel_id=conversation.channel_id,
+        created=created,
+    )
+
+
+@router.get("/channel-threads", response_model=list[ChannelThreadResponse])
+async def get_channel_threads(
+    phone: str = Query(..., min_length=3, max_length=120),
+    conversation_id: UUID | None = None,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+) -> list[ChannelThreadResponse]:
+    from app.services.contact_management import list_channel_threads_for_phone
+    from app.services.membership_access import resolve_accessible_channel_ids
+
+    rows = await list_channel_threads_for_phone(
+        db,
+        account_id=context.account_id,
+        external_address=phone.strip(),
+        exclude_conversation_id=conversation_id,
+    )
+    accessible = await resolve_accessible_channel_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if accessible is not None:
+        allowed = {str(channel_id) for channel_id in accessible}
+        rows = [row for row in rows if row["channel_id"] in allowed]
+    return [ChannelThreadResponse(**row) for row in rows]
 
 
 @router.get("/{conversation_id}/messages", response_model=list[MessageResponse])
@@ -124,7 +193,7 @@ async def get_conversation_messages(
         )
         raise HTTPException(status_code=403 if "FORBIDDEN" in str(exc) else 404, detail=detail) from exc
 
-    from app.services.message_media import extract_message_media
+    from app.services.message_media import enrich_message_media
     from app.services.template_display import extract_template_fields
 
     items: list[MessageResponse] = []
@@ -141,7 +210,7 @@ async def get_conversation_messages(
                 text_body=item.text_body,
                 status=item.status,
                 created_at=item.created_at,
-                **extract_message_media(item),
+                **await enrich_message_media(db, item),
                 **template_fields,
             )
         )
@@ -239,6 +308,10 @@ async def send_conversation_text(
     if contact is None:
         raise HTTPException(status_code=404, detail="Contact not found")
 
+    from app.services.variables import build_contact_context, render_template
+
+    rendered_text = render_template(payload.text, build_contact_context(contact))
+
     last_inbound = await get_last_inbound_for_conversation(db, conversation_id)
     window = compute_service_window(last_inbound)
     if window["requires_template"]:
@@ -254,7 +327,7 @@ async def send_conversation_text(
             whatsapp_account_id=wa.id,
             payload=SendTextMessageRequest(
                 to=contact.external_address,
-                text=payload.text,
+                text=rendered_text,
             ),
             record_mac=True,
         )

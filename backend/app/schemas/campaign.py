@@ -18,12 +18,15 @@ class CampaignCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     scheduled_at: datetime | None = None
     recipients: list[CampaignRecipientInput] = Field(min_length=1, max_length=10000)
+    include_opt_out_option: bool = True
+    exclude_marketing_opt_out: bool = True
 
 
 class CampaignPreflightRequest(BaseModel):
     template_id: UUID
     contact_ids: list[UUID] = Field(min_length=1, max_length=10000)
     whatsapp_account_id: UUID | None = None
+    include_opt_out_option: bool = True
 
 
 class CampaignResponse(BaseModel):
@@ -38,6 +41,8 @@ class CampaignResponse(BaseModel):
     scheduled_at: datetime | None
     started_at: datetime | None
     completed_at: datetime | None
+    include_opt_out_option: bool = True
+    archived_at: datetime | None = None
 
 
 class CampaignReportSummary(BaseModel):

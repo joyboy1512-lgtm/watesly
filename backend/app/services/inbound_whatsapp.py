@@ -57,16 +57,19 @@ async def _get_or_create_contact_and_conversation(
     display_name: str | None,
 ) -> tuple[Contact, Conversation, bool]:
     from app.services.assignments import auto_assign_conversation
+    from app.services.contacts import find_contact_on_channel_by_phone
+    from app.services.phone_normalize import normalize_whatsapp_phone
 
-    result = await db.execute(
-        select(Contact).where(
-            Contact.organization_id == whatsapp_account.organization_id,
-            Contact.channel_id == whatsapp_account.channel_id,
-            Contact.external_address == sender,
-            Contact.deleted_at.is_(None),
-        )
+    sender = normalize_whatsapp_phone(sender)
+    if not sender:
+        raise ValueError("INVALID_SENDER")
+
+    contact = await find_contact_on_channel_by_phone(
+        db,
+        organization_id=whatsapp_account.organization_id,
+        channel_id=whatsapp_account.channel_id,
+        external_address=sender,
     )
-    contact = result.scalar_one_or_none()
     if contact is None:
         contact = Contact(
             account_id=whatsapp_account.account_id,
@@ -79,6 +82,8 @@ async def _get_or_create_contact_and_conversation(
         await db.flush()
     elif display_name and not contact.display_name:
         contact.display_name = display_name
+    elif contact.external_address != sender:
+        contact.external_address = sender
 
     conv_result = await db.execute(
         select(Conversation).where(
@@ -286,6 +291,20 @@ async def process_inbound_side_effects(
         )
     except Exception:
         logger.exception("Auto tags failed for contact_id=%s", contact.id)
+
+    try:
+        from app.services.marketing_compliance import maybe_handle_marketing_opt_out
+
+        await maybe_handle_marketing_opt_out(
+            db,
+            whatsapp_account=whatsapp_account,
+            contact=contact,
+            conversation=conversation,
+            text_body=text_body,
+            interactive_reply=interactive_reply,
+        )
+    except Exception:
+        logger.exception("Marketing opt-out handling failed for contact_id=%s", contact.id)
 
     if text_body:
         try:

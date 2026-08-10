@@ -18,6 +18,7 @@ celery_app = Celery(
         "app.workers.whatsapp_health_tasks",
         "app.workers.sla_tasks",
         "app.workers.template_sync_tasks",
+        "app.workers.reliability_tasks",
     ],
 )
 
@@ -62,5 +63,17 @@ celery_app.conf.beat_schedule = {
     "sync-pending-templates-every-5-minutes": {
         "task": "watesly.templates.sync_pending",
         "schedule": 300.0,
+    },
+    "recover-stuck-campaigns-every-5-minutes": {
+        "task": "watesly.reliability.recover_stuck_campaigns",
+        "schedule": 300.0,
+    },
+    "retry-failed-webhooks-every-2-minutes": {
+        "task": "watesly.reliability.retry_failed_webhooks",
+        "schedule": 120.0,
+    },
+    "retry-failed-inbound-media-every-10-minutes": {
+        "task": "watesly.reliability.retry_failed_inbound_media",
+        "schedule": 600.0,
     },
 }

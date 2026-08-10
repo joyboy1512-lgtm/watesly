@@ -5,6 +5,14 @@ from __future__ import annotations
 from urllib.parse import quote, urlparse, urlunparse
 
 HEADER_FORMATS = {"IMAGE", "VIDEO", "DOCUMENT", "CAROUSEL"}
+EPHEMERAL_MEDIA_HOSTS = ("scontent.whatsapp.net", "fbcdn.net")
+
+
+def is_ephemeral_meta_media_url(url: str | None) -> bool:
+    if not url:
+        return False
+    host = (urlparse(str(url).strip()).hostname or "").lower()
+    return any(host == item or host.endswith(f".{item}") for item in EPHEMERAL_MEDIA_HOSTS)
 
 
 def meta_safe_media_url(url: str) -> str:
@@ -71,13 +79,16 @@ def get_template_header_info(components: list | None) -> dict | None:
                 "media_url": None,
             }
         media_url = component.get("media_url") or component.get("url")
-        if not media_url and component.get("example"):
+        if (not media_url or is_ephemeral_meta_media_url(str(media_url))) and component.get("example"):
             example = component["example"]
             if isinstance(example, dict):
                 handles = example.get("header_url") or example.get("header_handle") or []
-                if handles:
-                    media_url = handles[0]
-        if media_url:
+                for handle in handles:
+                    candidate = str(handle)
+                    if candidate and not is_ephemeral_meta_media_url(candidate):
+                        media_url = candidate
+                        break
+        if media_url and not is_ephemeral_meta_media_url(str(media_url)):
             return {
                 "format": header_format,
                 "media_url": str(media_url),
@@ -145,6 +156,25 @@ def build_send_components(
     return [{"type": "header", "parameters": [parameter]}]
 
 
+def _recipient_uses_ephemeral_header_media(recipient_parameters: list | None) -> bool:
+    if not recipient_parameters:
+        return False
+    for component in recipient_parameters:
+        if str(component.get("type", "")).lower() != "header":
+            continue
+        params = component.get("parameters")
+        if not isinstance(params, list):
+            continue
+        for param in params:
+            if not isinstance(param, dict):
+                continue
+            for media_key in ("image", "video", "document"):
+                media = param.get(media_key)
+                if isinstance(media, dict) and is_ephemeral_meta_media_url(str(media.get("link"))):
+                    return True
+    return False
+
+
 def resolve_send_components(
     stored_components: list | None,
     recipient_parameters: list | None,
@@ -152,6 +182,10 @@ def resolve_send_components(
     media_url: str | None = None,
     filename: str | None = None,
 ) -> list[dict]:
-    if recipient_parameters:
-        return _encode_component_media_links(recipient_parameters)
-    return build_send_components(stored_components, media_url=media_url, filename=filename)
+    fallback = build_send_components(stored_components, media_url=media_url, filename=filename)
+    if not recipient_parameters:
+        return fallback
+    if _recipient_uses_ephemeral_header_media(recipient_parameters):
+        return fallback or _encode_component_media_links(recipient_parameters)
+    encoded = _encode_component_media_links(recipient_parameters)
+    return encoded or fallback

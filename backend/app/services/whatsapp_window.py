@@ -92,9 +92,43 @@ async def campaign_audience_preflight(
     template_category: str | None = None,
     whatsapp_account_id: UUID | None = None,
     template_components: list | None = None,
+    include_opt_out_option: bool = True,
 ) -> dict:
+    from app.models.contact import Contact
     from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.marketing_compliance import (
+        template_has_opt_out_button,
+        template_has_opt_out_footer,
+    )
     from app.services.whatsapp_health import format_tier_hint
+
+    marketing_opt_in = int(
+        (
+            await db.scalar(
+                select(func.count(Contact.id)).where(
+                    Contact.account_id == account_id,
+                    Contact.id.in_(contact_ids),
+                    Contact.deleted_at.is_(None),
+                    Contact.marketing_opt_in.is_(True),
+                )
+            )
+        )
+        or 0
+    )
+    marketing_opt_out = int(
+        (
+            await db.scalar(
+                select(func.count(Contact.id)).where(
+                    Contact.account_id == account_id,
+                    Contact.id.in_(contact_ids),
+                    Contact.deleted_at.is_(None),
+                    Contact.marketing_opt_in.is_(False),
+                )
+            )
+        )
+        or 0
+    )
+    eligible_recipients = marketing_opt_in
 
     last_inbound = await get_last_inbound_by_contact(db, account_id=account_id, contact_ids=contact_ids)
     never_messaged = 0
@@ -119,6 +153,24 @@ async def campaign_audience_preflight(
         )
     if never_messaged == len(contact_ids):
         warnings.append("كل المستلمين بلا محادثة سابقة — مناسب لقالب تسويقي فقط مع موافقة Meta.")
+    if marketing_opt_out:
+        warnings.append(
+            f"{marketing_opt_out} عميل اختار «عدم الإزعاج» — سيتم استبعادهم تلقائياً من الإرسال."
+        )
+    if eligible_recipients == 0:
+        warnings.append("لا يوجد مستلمون مؤهلون — كل الجمهور المختار رفض التسويق.")
+
+    has_opt_out_button = template_has_opt_out_button(template_components)
+    has_opt_out_footer = template_has_opt_out_footer(template_components)
+    if include_opt_out_option and category == "marketing":
+        if has_opt_out_button:
+            warnings.append("القالب يتضمن زر «عدم الإزعاج» — سيتم احترام اختيار العميل تلقائياً.")
+        else:
+            warnings.append(
+                "القالب لا يتضمن زر إيقاف التسويق — أضف زر QUICK_REPLY «عدم الإزعاج» أو فعّل الخيار عند إنشاء القالب."
+            )
+        if not has_opt_out_footer:
+            warnings.append("يُفضّل إضافة تذييل: «أرسل إيقاف لإلغاء الاشتراك».")
 
     tier_hint = format_tier_hint(None, None)
     quality_rating = None
@@ -144,6 +196,12 @@ async def campaign_audience_preflight(
         "never_messaged": never_messaged,
         "window_open": window_open,
         "window_closed": window_closed,
+        "marketing_opt_in": marketing_opt_in,
+        "marketing_opt_out": marketing_opt_out,
+        "eligible_recipients": eligible_recipients,
+        "template_has_opt_out_button": has_opt_out_button,
+        "template_has_opt_out_footer": has_opt_out_footer,
+        "include_opt_out_option": include_opt_out_option,
         "template_required_all": True,
         "warnings": warnings,
         "checks": _build_preflight_checks(
@@ -155,6 +213,10 @@ async def campaign_audience_preflight(
             quality_rating=quality_rating,
             messaging_limit=messaging_limit,
             template_components=template_components,
+            marketing_opt_out=marketing_opt_out,
+            eligible_recipients=eligible_recipients,
+            include_opt_out_option=include_opt_out_option,
+            template_has_opt_out_button=has_opt_out_button,
         ),
         "messaging_tier_hint": tier_hint,
         "quality_rating": quality_rating,
@@ -172,11 +234,47 @@ def _build_preflight_checks(
     quality_rating: str | None,
     messaging_limit: int | None,
     template_components: list | None = None,
+    marketing_opt_out: int = 0,
+    eligible_recipients: int | None = None,
+    include_opt_out_option: bool = True,
+    template_has_opt_out_button: bool = False,
 ) -> list[dict]:
     checks: list[dict] = []
     total = len(contact_ids)
     if total == 0:
         checks.append({"level": "error", "code": "empty_audience", "message": "لا يوجد مستلمون."})
+    if eligible_recipients == 0:
+        checks.append(
+            {
+                "level": "error",
+                "code": "all_opted_out",
+                "message": "كل المستلمين اختاروا عدم الإزعاج — لا يمكن إطلاق الحملة.",
+            }
+        )
+    elif marketing_opt_out:
+        checks.append(
+            {
+                "level": "warning",
+                "code": "marketing_opt_out",
+                "message": f"{marketing_opt_out} عميل مستبعد لاختيار «عدم الإزعاج».",
+            }
+        )
+    if include_opt_out_option and category == "marketing" and not template_has_opt_out_button:
+        checks.append(
+            {
+                "level": "warning",
+                "code": "missing_opt_out_button",
+                "message": "أضف زر «عدم الإزعاج» في القالب ليظهر للعملاء.",
+            }
+        )
+    elif include_opt_out_option and category == "marketing" and template_has_opt_out_button:
+        checks.append(
+            {
+                "level": "info",
+                "code": "opt_out_enabled",
+                "message": "سيظهر للعملاء زر إيقاف التسويق داخل رسالة الحملة.",
+            }
+        )
     if never_messaged and category == "marketing":
         checks.append(
             {
@@ -230,3 +328,34 @@ def _build_preflight_checks(
             }
         )
     return checks
+
+
+async def enforce_campaign_tier_limit(
+    db: AsyncSession,
+    *,
+    campaign,
+) -> None:
+    from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
+    from app.models.whatsapp_account import WhatsAppAccount
+
+    wa = await db.get(WhatsAppAccount, campaign.whatsapp_account_id)
+    if wa is None or not wa.messaging_limit:
+        return
+    if wa.quality_rating == "RED":
+        raise ValueError("QUALITY_RED")
+
+    result = await db.execute(
+        select(func.count(CampaignRecipient.id)).where(
+            CampaignRecipient.campaign_id == campaign.id,
+            CampaignRecipient.status.in_(
+                [
+                    CampaignRecipientStatus.PENDING,
+                    CampaignRecipientStatus.QUEUED,
+                    CampaignRecipientStatus.SENDING,
+                ]
+            ),
+        )
+    )
+    pending = int(result.scalar_one_or_none() or 0)
+    if pending > wa.messaging_limit:
+        raise ValueError("TIER_LIMIT_EXCEEDED")

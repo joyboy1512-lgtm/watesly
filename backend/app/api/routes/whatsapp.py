@@ -87,6 +87,7 @@ async def verify_webhook(request: Request) -> Response:
 @router.post("/webhook", include_in_schema=False)
 async def receive_webhook(
     request: Request,
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     raw_body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
@@ -100,10 +101,12 @@ async def receive_webhook(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
+    from app.services.webhook_ingress import persist_whatsapp_webhook
     from app.workers.webhook_tasks import process_whatsapp_webhook
 
-    process_whatsapp_webhook.delay(payload)
-    return {"status": "accepted"}
+    webhook_event_id = await persist_whatsapp_webhook(db, payload)
+    process_whatsapp_webhook.delay(str(webhook_event_id))
+    return {"status": "accepted", "webhook_event_id": str(webhook_event_id)}
 
 
 @router.get("/accounts", response_model=list[WhatsAppAccountResponse])
@@ -111,7 +114,18 @@ async def get_whatsapp_accounts(
     context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.services.membership_access import resolve_accessible_channel_ids
+
     accounts = await list_whatsapp_accounts(db, context.account_id)
+    accessible = await resolve_accessible_channel_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if accessible is not None:
+        allowed = set(accessible)
+        accounts = [
+            row for row in accounts
+            if row[0].channel_id in allowed
+        ]
     return [
         WhatsAppAccountResponse(**_account_to_response(item, channel_name=channel_name, organization_name=organization_name))
         for item, channel_name, organization_name in accounts

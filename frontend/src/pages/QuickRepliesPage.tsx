@@ -20,11 +20,13 @@ import {
 import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
 import Icon from "../components/Icon";
 import { toastStore } from "../stores/toast";
+import { useHasPermission } from "../hooks/usePermissions";
 
 type ListTab = "active" | "archived";
 
 export default function QuickRepliesPage() {
   const client = useQueryClient();
+  const canViewReports = useHasPermission("reports.view");
   const [listTab, setListTab] = useState<ListTab>("active");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -55,6 +57,7 @@ export default function QuickRepliesPage() {
   });
   const analytics = useQuery({
     queryKey: ["quick-replies-analytics"],
+    enabled: canViewReports,
     queryFn: async () => (await api.get<QuickReplyAnalytics>("/inbox-tools/quick-replies/analytics")).data
   });
 

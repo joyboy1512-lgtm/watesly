@@ -14,13 +14,24 @@ async def list_catalog_products(
     db: AsyncSession,
     account_id: UUID,
     *,
+    membership=None,
     active_only: bool = True,
     organization_id: UUID | None = None,
     category: str | None = None,
 ) -> list[CatalogProduct]:
+    from app.services.membership_access import organization_scope_clauses
+
     query = select(CatalogProduct).where(CatalogProduct.account_id == account_id)
     if active_only:
         query = query.where(CatalogProduct.is_active.is_(True))
+    if membership is not None:
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=CatalogProduct.organization_id,
+        ):
+            query = query.where(clause)
     if organization_id is not None:
         query = query.where(CatalogProduct.organization_id == organization_id)
     if category:
@@ -29,14 +40,49 @@ async def list_catalog_products(
     return list((await db.execute(query)).scalars().all())
 
 
-async def get_catalog_product(db: AsyncSession, *, account_id: UUID, product_id: UUID) -> CatalogProduct:
+async def get_catalog_product(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product_id: UUID,
+    membership=None,
+) -> CatalogProduct:
+    from app.services.membership_access import ensure_membership_organization_access
+
     item = await db.get(CatalogProduct, product_id)
     if item is None or item.account_id != account_id:
         raise ValueError("PRODUCT_NOT_FOUND")
+    if membership is not None and item.organization_id is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=item.organization_id,
+        )
+    elif membership is not None and item.organization_id is None:
+        raise ValueError("ACCESS_FORBIDDEN")
     return item
 
 
-async def create_catalog_product(db: AsyncSession, *, account_id: UUID, **fields) -> CatalogProduct:
+async def create_catalog_product(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership=None,
+    **fields,
+) -> CatalogProduct:
+    from app.services.membership_access import ensure_membership_organization_access
+
+    org_id = fields.get("organization_id")
+    if membership is not None:
+        if org_id is None:
+            raise ValueError("ORGANIZATION_REQUIRED")
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=org_id,
+        )
     item = CatalogProduct(account_id=account_id, **fields)
     db.add(item)
     await db.commit()
@@ -45,9 +91,11 @@ async def create_catalog_product(db: AsyncSession, *, account_id: UUID, **fields
 
 
 async def update_catalog_product(
-    db: AsyncSession, *, account_id: UUID, product_id: UUID, **fields
+    db: AsyncSession, *, account_id: UUID, product_id: UUID, membership=None, **fields
 ) -> CatalogProduct:
-    item = await get_catalog_product(db, account_id=account_id, product_id=product_id)
+    item = await get_catalog_product(
+        db, account_id=account_id, product_id=product_id, membership=membership
+    )
     for key, value in fields.items():
         if value is not None and hasattr(item, key):
             setattr(item, key, value)
@@ -56,8 +104,12 @@ async def update_catalog_product(
     return item
 
 
-async def delete_catalog_product(db: AsyncSession, *, account_id: UUID, product_id: UUID) -> None:
-    item = await get_catalog_product(db, account_id=account_id, product_id=product_id)
+async def delete_catalog_product(
+    db: AsyncSession, *, account_id: UUID, product_id: UUID, membership=None
+) -> None:
+    item = await get_catalog_product(
+        db, account_id=account_id, product_id=product_id, membership=membership
+    )
     item.is_active = False
     await db.commit()
 
@@ -71,12 +123,14 @@ async def search_catalog_products(
     active_only: bool = True,
     organization_id: UUID | None = None,
     category: str | None = None,
+    membership=None,
 ) -> list[CatalogProduct]:
     term = f"%{query.strip()}%"
     if not query.strip():
         return await list_catalog_products(
             db,
             account_id,
+            membership=membership,
             active_only=active_only,
             organization_id=organization_id,
             category=category,
@@ -97,6 +151,16 @@ async def search_catalog_products(
         filters.append(CatalogProduct.organization_id == organization_id)
     if category:
         filters.append(CatalogProduct.category == category)
+    if membership is not None:
+        from app.services.membership_access import organization_scope_clauses
+
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=CatalogProduct.organization_id,
+        ):
+            filters.append(clause)
 
     result = await db.execute(
         select(CatalogProduct)
@@ -107,7 +171,14 @@ async def search_catalog_products(
     items = list(result.scalars().all())
     if items:
         return items
-    return (await list_catalog_products(db, account_id, active_only=active_only))[:limit]
+    return (
+        await list_catalog_products(
+            db,
+            account_id,
+            membership=membership,
+            active_only=active_only,
+        )
+    )[:limit]
 
 
 def format_price(product: CatalogProduct) -> str:

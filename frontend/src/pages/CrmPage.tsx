@@ -17,11 +17,13 @@ import {
 import { contactDisplayLabel, type Organization } from "../lib/contactHelpers";
 import Icon from "../components/Icon";
 import { toastStore } from "../stores/toast";
+import { useHasPermission } from "../hooks/usePermissions";
 
 type ViewMode = "kanban" | "list";
 
 export default function CrmPage() {
   const { t } = useTranslation();
+  const canViewUsers = useHasPermission("users.view");
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
@@ -59,6 +61,7 @@ export default function CrmPage() {
 
   const employees = useQuery({
     queryKey: ["employees"],
+    enabled: canViewUsers,
     queryFn: async () => (await api.get<{ membership_id: string; full_name: string }[]>("/team/employees")).data
   });
 

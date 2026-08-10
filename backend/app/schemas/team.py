@@ -9,6 +9,7 @@ class InviteEmployeeRequest(BaseModel):
     email: EmailStr
     role: MembershipRole
     organization_ids: list[UUID] = Field(min_length=1)
+    channel_ids: list[UUID] = Field(default_factory=list)
 
     @field_validator("email")
     @classmethod
@@ -22,7 +23,9 @@ class CreateEmployeeRequest(BaseModel):
     password: str = Field(min_length=6, max_length=128)
     role: MembershipRole
     organization_ids: list[UUID] = Field(min_length=1)
+    channel_ids: list[UUID] = Field(default_factory=list)
     preferred_language: str = Field(default="ar", pattern=r"^(ar|en)$")
+    permissions: list[str] | None = None
 
     @field_validator("email")
     @classmethod
@@ -49,6 +52,7 @@ class EmployeeUpdateRequest(BaseModel):
     role: MembershipRole | None = None
     status: MembershipStatus | None = None
     organization_ids: list[UUID] | None = None
+    channel_ids: list[UUID] | None = None
     permissions: list[str] | None = None
 
 

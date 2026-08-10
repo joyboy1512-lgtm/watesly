@@ -5,9 +5,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, silentRequest } from "../lib/api";
 import { authStore } from "../stores/auth";
 import { toastStore } from "../stores/toast";
+import { useHasPermission } from "../hooks/usePermissions";
 import { uploadFile } from "../lib/uploads";
 import { formatWindowExpiry } from "../lib/serviceWindow";
-import { formatWaitingMinutes, snoozeUntilTomorrowMorning } from "../lib/inboxHelpers";
+import { formatWaitingMinutes, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
 import { formatAppTime } from "../lib/language";
 import { insertReplyVariable, REPLY_VARIABLES, type ConversationContext } from "../lib/replyVariables";
 import {
@@ -33,11 +34,15 @@ import type { Tag, Note } from "../types/inbox";
 import Icon from "../components/Icon";
 
 type InboxFilter = "all" | "unread" | "waiting" | "mine" | "starred" | "archived";
-type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null };
+type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
+type ChannelOption = { id: string; name: string; phone: string | null };
+type WhatsAppAccountRow = { id: string; channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
+type ChannelThread = { conversation_id: string; channel_id: string; channel_name: string; display_phone_number: string | null; status: string };
 const priorityLabels: Record<string, string> = { low: "منخفضة", normal: "عادية", high: "مرتفعة", urgent: "عاجلة" };
 
 export default function InboxPage() {
   const { t } = useTranslation();
+  const canViewUsers = useHasPermission("users.view");
   const statusLabels: Record<string, string> = useMemo(() => ({
     open: t("inbox.statusOpen"),
     pending: t("inbox.statusPending"),
@@ -54,7 +59,8 @@ export default function InboxPage() {
     "combined+llm": `${t("inbox.sourceCombined")} + LLM`
   }), [t]);
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const channelFilter = searchParams.get("channel_id") ?? "";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -78,29 +84,73 @@ export default function InboxPage() {
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [suggestedReplies, setSuggestedReplies] = useState<QuickReply[]>([]);
   const [slashHint, setSlashHint] = useState<QuickReply | null>(null);
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const [newConversationChannelId, setNewConversationChannelId] = useState("");
+  const [newConversationPhone, setNewConversationPhone] = useState("");
+  const [newConversationName, setNewConversationName] = useState("");
+  const [startingConversation, setStartingConversation] = useState(false);
+  const [switchingChannelId, setSwitchingChannelId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageSearchRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<number | null>(null);
 
   const showArchived = filter === "archived";
   const conversationsQuery = useQuery({
-    queryKey: ["conversations", showArchived],
-    queryFn: async ({ signal }) => (
-      await api.get<Conversation[]>("/conversations", {
-        params: { archived: showArchived },
-        signal,
-        ...silentRequest
-      })
-    ).data,
+    queryKey: ["conversations", showArchived, channelFilter],
+    queryFn: async ({ signal }) => {
+      const params: Record<string, string | boolean> = { archived: showArchived };
+      if (channelFilter) params.channel_id = channelFilter;
+      return (
+        await api.get<Conversation[]>("/conversations", {
+          params,
+          signal,
+          ...silentRequest
+        })
+      ).data;
+    },
     refetchInterval: 30_000
   });
+  const channelsQuery = useQuery({
+    queryKey: ["channels"],
+    queryFn: async () => (await api.get<Array<{ id: string; name: string; type: string }>>("/channels")).data
+  });
+  const whatsappAccountsQuery = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
+  });
   const conversations = conversationsQuery.data ?? [];
+  const channelOptions = useMemo<ChannelOption[]>(() => {
+    const accountByChannel = new Map(
+      (whatsappAccountsQuery.data ?? []).map((item) => [item.channel_id, item])
+    );
+    return (channelsQuery.data ?? [])
+      .filter((item) => item.type === "whatsapp")
+      .map((item) => {
+        const account = accountByChannel.get(item.id);
+        return {
+          id: item.id,
+          name: account?.channel_name ?? item.name,
+          phone: account?.display_phone_number ?? null
+        };
+      });
+  }, [channelsQuery.data, whatsappAccountsQuery.data]);
+  const channelLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of channelOptions) {
+      map.set(item.id, item.phone ? `${item.name} · ${item.phone}` : item.name);
+    }
+    return map;
+  }, [channelOptions]);
+  const channelScopedConversations = useMemo(
+    () => conversations.filter((item) => !channelFilter || item.channel_id === channelFilter),
+    [conversations, channelFilter]
+  );
   const waitingCount = useMemo(
-    () => conversations.filter((item) => item.needs_reply).length,
-    [conversations]
+    () => channelScopedConversations.filter((item) => item.needs_reply).length,
+    [channelScopedConversations]
   );
   const requestedConversationId = searchParams.get("conversation");
-  const filtered = useMemo(() => conversations.filter((item) => {
+  const filtered = useMemo(() => channelScopedConversations.filter((item) => {
     const haystack = `${item.contact_name ?? ""} ${item.contact_address} ${item.last_message_text ?? ""}`.toLowerCase();
     const matchesSearch = haystack.includes(search.trim().toLowerCase());
     const matchesFilter = filter === "all" || filter === "archived"
@@ -109,12 +159,129 @@ export default function InboxPage() {
       || (filter === "mine" && Boolean(item.assigned_membership_id))
       || (filter === "starred" && item.is_starred);
     return matchesSearch && matchesFilter;
-  }), [conversations, filter, search]);
+  }), [channelScopedConversations, filter, search]);
 
   useEffect(() => {
-    if (requestedConversationId && conversations.some((item) => item.id === requestedConversationId)) setSelectedId(requestedConversationId);
-    else if (!selectedId && conversations.length > 0) setSelectedId(conversations[0].id);
-  }, [conversations, requestedConversationId, selectedId]);
+    if (!requestedConversationId) return;
+    const match = conversations.find((item) => item.id === requestedConversationId);
+    if (match) {
+      setSelectedId(match.id);
+      if (match.channel_id && match.channel_id !== channelFilter) {
+        setChannelFilter(match.channel_id);
+      }
+    }
+  }, [requestedConversationId, conversations, channelFilter]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const selected = conversations.find((item) => item.id === selectedId);
+    if (!selected?.channel_id) return;
+    if (channelFilter && selected.channel_id !== channelFilter) {
+      setChannelFilter(selected.channel_id);
+    }
+  }, [selectedId, conversations, channelFilter]);
+
+  function setChannelFilter(value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("channel_id", value);
+    else next.delete("channel_id");
+    setSearchParams(next, { replace: true });
+  }
+
+  function openConversation(conversation: Conversation) {
+    setSelectedId(conversation.id);
+    const next = new URLSearchParams(searchParams);
+    next.set("conversation", conversation.id);
+    next.set("channel_id", conversation.channel_id);
+    setSearchParams(next, { replace: true });
+  }
+
+  async function openConversationOnChannel(targetChannelId: string) {
+    if (!selectedConversation) return;
+    const existing = conversations.find(
+      (item) =>
+        item.channel_id === targetChannelId &&
+        phonesMatch(item.contact_address, selectedConversation.contact_address) &&
+        !item.archived_at
+    );
+    if (existing) {
+      openConversation(existing);
+      return;
+    }
+
+    setSwitchingChannelId(targetChannelId);
+    try {
+      const threads = await api.get<ChannelThread[]>("/conversations/channel-threads", {
+        params: {
+          phone: selectedConversation.contact_address,
+          conversation_id: selectedConversation.id
+        },
+        ...silentRequest
+      });
+      const thread = threads.data.find((item) => item.channel_id === targetChannelId);
+      if (thread) {
+        await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        setSelectedId(thread.conversation_id);
+        const next = new URLSearchParams(searchParams);
+        next.set("conversation", thread.conversation_id);
+        next.set("channel_id", thread.channel_id);
+        setSearchParams(next, { replace: true });
+        toastStore.getState().show("تم فتح المحادثة على هذه القناة.", "success");
+        return;
+      }
+
+      const result = await startConversationOnChannel({
+        channel_id: targetChannelId,
+        external_address: normalizeWhatsAppPhone(selectedConversation.contact_address),
+        display_name: selectedConversation.contact_name
+      });
+      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      setSelectedId(result.conversation_id);
+      const next = new URLSearchParams(searchParams);
+      next.set("conversation", result.conversation_id);
+      next.set("channel_id", result.channel_id);
+      setSearchParams(next, { replace: true });
+      toastStore.getState().show(
+        result.created ? "تم فتح محادثة جديدة على هذه القناة." : "تم فتح المحادثة على هذه القناة.",
+        "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذر فتح المحادثة على هذه القناة.", "error");
+    } finally {
+      setSwitchingChannelId(null);
+    }
+  }
+
+  async function handleStartNewConversation(event: FormEvent) {
+    event.preventDefault();
+    const phone = newConversationPhone.trim();
+    if (!newConversationChannelId || !phone) {
+      toastStore.getState().show("اختر القناة وأدخل رقم WhatsApp.", "error");
+      return;
+    }
+    setStartingConversation(true);
+    try {
+      const result = await startConversationOnChannel({
+        channel_id: newConversationChannelId,
+        external_address: normalizeWhatsAppPhone(phone),
+        display_name: newConversationName.trim() || null
+      });
+      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      setNewConversationOpen(false);
+      setNewConversationPhone("");
+      setNewConversationName("");
+      setSelectedId(result.conversation_id);
+      const next = new URLSearchParams(searchParams);
+      next.set("conversation", result.conversation_id);
+      next.set("channel_id", result.channel_id);
+      setSearchParams(next, { replace: true });
+      toastStore.getState().show("تم فتح المحادثة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر بدء المحادثة.", "error");
+    } finally {
+      setStartingConversation(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedId) return;
@@ -181,7 +348,11 @@ export default function InboxPage() {
   const allTagsQuery = useQuery({ queryKey: ["tags"], queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data });
   const conversationTagsQuery = useQuery({ queryKey: ["conversation-tags", selectedId], enabled: Boolean(selectedId), queryFn: async () => (await api.get<Tag[]>(`/inbox-tools/conversations/${selectedId}/tags`)).data });
   const notesQuery = useQuery({ queryKey: ["conversation-notes", selectedId], enabled: Boolean(selectedId), queryFn: async () => (await api.get<Note[]>(`/inbox-tools/conversations/${selectedId}/notes`)).data });
-  const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: async () => (await api.get("/team/employees")).data });
+  const employeesQuery = useQuery({
+    queryKey: ["employees"],
+    enabled: canViewUsers,
+    queryFn: async () => (await api.get("/team/employees")).data
+  });
   const selectedConversation = useMemo(() => conversations.find((item) => item.id === selectedId) ?? null, [conversations, selectedId]);
   const quickRepliesQuery = useQuery({
     queryKey: ["quick-replies", selectedConversation?.organization_id, selectedConversation?.channel_id],
@@ -197,9 +368,19 @@ export default function InboxPage() {
     queryKey: ["templates"],
     queryFn: async () => (await api.get<TemplateOption[]>("/templates")).data
   });
+  const selectedChannelAccountId = useMemo(() => {
+    if (!selectedConversation?.channel_id) return null;
+    return (whatsappAccountsQuery.data ?? []).find(
+      (item) => item.channel_id === selectedConversation.channel_id
+    )?.id ?? null;
+  }, [selectedConversation?.channel_id, whatsappAccountsQuery.data]);
   const approvedTemplates = useMemo(
-    () => (templatesQuery.data ?? []).filter((item) => item.status === "approved"),
-    [templatesQuery.data]
+    () => (templatesQuery.data ?? []).filter((item) => {
+      if (item.status !== "approved") return false;
+      if (!selectedChannelAccountId) return true;
+      return item.whatsapp_account_id === selectedChannelAccountId;
+    }),
+    [templatesQuery.data, selectedChannelAccountId]
   );
   const selectedTemplate = useMemo(
     () => approvedTemplates.find((item) => item.id === templateId) ?? null,
@@ -299,6 +480,8 @@ export default function InboxPage() {
           }
           const refreshMessages =
             payload.type === "message.received" ||
+            payload.type === "message.sent" ||
+            payload.type === "conversation.updated" ||
             payload.type === "whatsapp.updated" ||
             !payload.type;
           if (refreshMessages) {
@@ -630,8 +813,83 @@ export default function InboxPage() {
   return (
     <main className={`inbox-workspace ${detailsOpen ? "details-open" : ""}`}>
       <aside className={`conversation-column ${selectedId ? "has-selection" : ""}`}>
-        <div className="conversation-column-header"><div><span className="eyebrow">{t("eyebrow.unifiedInbox")}</span><h2>{t("pages.inbox")}</h2></div><span className="count-badge">{conversations.length}</span></div>
+        <div className="conversation-column-header">
+          <div><span className="eyebrow">{t("eyebrow.unifiedInbox")}</span><h2>{t("pages.inbox")}</h2></div>
+          <div className="inbox-column-actions">
+            <button
+              type="button"
+              className="secondary-button compact inbox-new-conversation-button"
+              onClick={() => {
+                setNewConversationOpen((value) => !value);
+                if (!newConversationChannelId && channelOptions[0]) {
+                  setNewConversationChannelId(channelFilter || channelOptions[0].id);
+                }
+              }}
+            >
+              + محادثة
+            </button>
+            <span className="count-badge">{channelScopedConversations.length}</span>
+          </div>
+        </div>
+        {newConversationOpen && (
+          <form className="inbox-new-conversation-panel" onSubmit={handleStartNewConversation}>
+            <label className="field-label">
+              <span>القناة</span>
+              <select
+                value={newConversationChannelId}
+                onChange={(e) => setNewConversationChannelId(e.target.value)}
+                required
+              >
+                <option value="">اختر القناة</option>
+                {channelOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              <span>رقم WhatsApp</span>
+              <input
+                dir="ltr"
+                value={newConversationPhone}
+                onChange={(e) => setNewConversationPhone(e.target.value)}
+                placeholder="+965..."
+                required
+              />
+            </label>
+            <label className="field-label">
+              <span>اسم العميل (اختياري)</span>
+              <input value={newConversationName} onChange={(e) => setNewConversationName(e.target.value)} />
+            </label>
+            <div className="admin-actions">
+              <button type="submit" className="whatsapp-button compact" disabled={startingConversation}>
+                {startingConversation ? "جاري الفتح…" : "بدء المحادثة"}
+              </button>
+              <button type="button" className="secondary-button compact" onClick={() => setNewConversationOpen(false)}>
+                إلغاء
+              </button>
+            </div>
+          </form>
+        )}
         <div className="conversation-search"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم، رقم أو نص رسالة" aria-label="بحث في المحادثات" /></div>
+        {channelOptions.length > 1 && (
+          <div className="inbox-channel-filter">
+            <select
+              id="inbox-channel-filter"
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value)}
+              aria-label="فلتر القناة"
+            >
+              <option value="">كل القنوات ({conversations.length})</option>
+              {channelOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="filter-pills" role="tablist">
           {(["all", "waiting", "unread", "mine", "starred", "archived"] as InboxFilter[]).map((value) => (
             <button
@@ -649,13 +907,16 @@ export default function InboxPage() {
           {conversationsQuery.isError && <div className="inbox-state error"><strong>تعذر تحميل المحادثات</strong><button onClick={() => conversationsQuery.refetch()}>إعادة المحاولة</button></div>}
           {!conversationsQuery.isLoading && filtered.length === 0 && <div className="inbox-state"><strong>لا توجد نتائج</strong><span>جرّب تغيير البحث أو الفلتر.</span></div>}
           {filtered.map((item) => (
-            <button className={`conversation-row ${selectedId === item.id ? "active" : ""}${item.needs_reply ? " needs-reply" : ""}`} key={item.id} onClick={() => setSelectedId(item.id)}>
+            <button className={`conversation-row ${selectedId === item.id ? "active" : ""}${item.needs_reply ? " needs-reply" : ""}`} key={item.id} onClick={() => openConversation(item)}>
             <div className="avatar avatar-soft">{(item.contact_name || item.contact_address).slice(0, 2).toUpperCase()}</div>
             <div className="conversation-copy">
               <div className="conversation-title-line">
                 <strong>{item.contact_name || item.contact_address}</strong>
                 <time>{item.last_message_at ? formatAppTime(item.last_message_at) : ""}</time>
               </div>
+              {channelOptions.length > 1 && !channelFilter && (
+                <small className="inbox-channel-badge">{channelLabelById.get(item.channel_id) ?? "WhatsApp"}</small>
+              )}
               <div className="conversation-preview">
                 <span>{item.last_message_text || "رسالة غير نصية"}</span>
                 {item.needs_reply && item.waiting_minutes != null && (
@@ -682,12 +943,44 @@ export default function InboxPage() {
             <div>
               <h2>{selectedConversation?.contact_name || selectedConversation?.contact_address || t("inbox.selectConversation")}</h2>
               <span>
-                WhatsApp · {statusLabels[selectedConversation?.status ?? ""] ?? ""}
+                WhatsApp
+                {selectedConversation?.channel_id && channelLabelById.get(selectedConversation.channel_id)
+                  ? ` · ${channelLabelById.get(selectedConversation.channel_id)}`
+                  : ""}
+                {" · "}{statusLabels[selectedConversation?.status ?? ""] ?? ""}
                 {isArchived ? " · مؤرشفة" : ""}
                 {selectedConversation?.service_window_open
                   ? ` · نافذة نشطة (${formatWindowExpiry(selectedConversation.service_window_expires_at)})`
                   : selectedConversation ? " · يتطلب قالب" : ""}
               </span>
+              {selectedConversation && channelOptions.length > 1 && (
+                <div className="inbox-channel-switcher">
+                  {channelOptions.map((item) => {
+                    const isActive = item.id === selectedConversation.channel_id;
+                    const hasThread = conversations.some(
+                      (row) =>
+                        row.channel_id === item.id &&
+                        phonesMatch(row.contact_address, selectedConversation.contact_address) &&
+                        !row.archived_at
+                    );
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={isActive ? "inbox-channel-pill active" : "inbox-channel-pill"}
+                        disabled={switchingChannelId === item.id}
+                        onClick={() => {
+                          if (!isActive) void openConversationOnChannel(item.id);
+                        }}
+                        title={item.phone ?? item.name}
+                      >
+                        {switchingChannelId === item.id ? "…" : item.name}
+                        {!isActive && !hasThread ? " +" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
           <div className="chat-header-actions">

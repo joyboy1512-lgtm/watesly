@@ -58,6 +58,11 @@ class RegistrationResponse(TokenResponse):
     organization_id: UUID
 
 
+class OrganizationSummary(BaseModel):
+    id: UUID
+    name: str
+
+
 class CurrentUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -68,6 +73,9 @@ class CurrentUserResponse(BaseModel):
     is_super_admin: bool
     role: str | None = None
     permissions: list[str] = Field(default_factory=list)
+    account_name: str | None = None
+    branch_name: str | None = None
+    organizations: list[OrganizationSummary] = Field(default_factory=list)
 
 
 class AccountChoice(BaseModel):

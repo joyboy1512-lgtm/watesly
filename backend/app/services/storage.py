@@ -65,6 +65,19 @@ class ObjectStorage:
             return ""
         return f"{base}/{key.lstrip('/')}"
 
+    def key_from_public_url(self, url: str) -> str | None:
+        if not url:
+            return None
+        public_base = settings.s3_public_base_url.strip().rstrip("/")
+        normalized = url.strip()
+        if public_base and normalized.startswith(f"{public_base}/"):
+            return normalized[len(public_base) + 1 :]
+        parsed = urlparse(normalized)
+        bucket_prefix = f"/{self.bucket}/"
+        if parsed.path.startswith(bucket_prefix):
+            return parsed.path[len(bucket_prefix) :]
+        return None
+
     def create_presigned_download_url(self, key: str, expires_seconds: int = 900) -> str:
         return self.client.generate_presigned_url(
             "get_object",

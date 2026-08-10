@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, formatApiError } from "../lib/api";
 import { computeCampaignStats } from "../lib/campaignHelpers";
 import { type PreflightCheck } from "../lib/growthFeatures";
 import {
@@ -31,21 +31,33 @@ import {
 
 type Organization = { id: string; name: string };
 type Channel = { id: string; name: string; type: string; organization_id: string };
-type WhatsAppAccount = { id: string; display_phone_number: string; verified_name: string | null };
+type WhatsAppAccount = {
+  id: string;
+  channel_id: string;
+  display_phone_number: string;
+  verified_name: string | null;
+  channel_name?: string | null;
+};
 type Template = {
   id: string;
   name: string;
   status: string;
   body_text: string | null;
   components: TemplateComponent[] | null;
+  whatsapp_account_id: string;
 };
-type Contact = { id: string; display_name: string | null; external_address: string };
+type Contact = { id: string; display_name: string | null; external_address: string; channel_id: string };
 type Segment = { id: string; name: string };
 type CampaignPreflight = {
   total: number;
   never_messaged: number;
   window_open: number;
   window_closed: number;
+  marketing_opt_in?: number;
+  marketing_opt_out?: number;
+  eligible_recipients?: number;
+  template_has_opt_out_button?: boolean;
+  include_opt_out_option?: boolean;
   warnings: string[];
   messaging_tier_hint: string;
   quality_rating?: string | null;
@@ -61,8 +73,10 @@ type CampaignListItem = {
   scheduled_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+  archived_at: string | null;
   report: CampaignReport & { pending: number; queued: number; skipped: number };
 };
+type ArchiveFilter = "active" | "archived";
 type CatalogProductOption = { id: string; name: string; image_url: string | null };
 type TrackedLink = {
   id: string;
@@ -110,11 +124,12 @@ export default function CampaignsPage() {
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const createRef = useRef<HTMLElement | null>(null);
-  const { pauseCampaign, cancelCampaign } = useCampaignActions();
+  const { pauseCampaign, cancelCampaign, archiveCampaign, unarchiveCampaign, deleteDraftCampaign } = useCampaignActions();
 
   const [activeTab, setActiveTab] = useState<PageTab>("list");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("active");
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -133,6 +148,7 @@ export default function CampaignsPage() {
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
   const [audienceLifecycle, setAudienceLifecycle] = useState("");
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
+  const [includeOptOutOption, setIncludeOptOutOption] = useState(true);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
   const [linkCampaignId, setLinkCampaignId] = useState("");
@@ -152,8 +168,11 @@ export default function CampaignsPage() {
   });
 
   const campaigns = useQuery({
-    queryKey: ["campaigns"],
-    queryFn: async () => (await api.get<CampaignListItem[]>("/campaigns")).data,
+    queryKey: ["campaigns", archiveFilter],
+    queryFn: async () => {
+      const params = archiveFilter === "archived" ? { archived_only: true } : {};
+      return (await api.get<CampaignListItem[]>("/campaigns", { params })).data;
+    },
     refetchInterval: (query) => {
       const rows = query.state.data ?? [];
       if (rows.some((item) => isActiveCampaignStatus(item.status))) return 3000;
@@ -202,6 +221,7 @@ export default function CampaignsPage() {
       scheduled_at: campaign.scheduled_at,
       started_at: campaign.started_at,
       completed_at: campaign.completed_at,
+      archived_at: campaign.archived_at,
       template_name: templateMap.get(campaign.template_id) ?? null,
       account_label: accountMap.get(campaign.whatsapp_account_id) ?? null,
       total: campaign.report.total,
@@ -240,6 +260,13 @@ export default function CampaignsPage() {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
+    const orgs = organizations.data ?? [];
+    if (!organizationId && orgs.length === 1) {
+      setOrganizationId(orgs[0].id);
+    }
+  }, [organizations.data, organizationId]);
+
+  useEffect(() => {
     const idsParam = searchParams.get("contact_ids");
     if (!idsParam) return;
     const ids = idsParam.split(",").map((item) => item.trim()).filter(Boolean);
@@ -251,9 +278,13 @@ export default function CampaignsPage() {
 
   const orgChannels = (channels.data ?? []).filter((item) => !organizationId || item.organization_id === organizationId);
   const approvedTemplates = (templates.data ?? []).filter((item) => item.status === "approved");
+  const accountTemplates = useMemo(
+    () => approvedTemplates.filter((item) => !accountId || item.whatsapp_account_id === accountId),
+    [approvedTemplates, accountId]
+  );
   const selectedTemplate = useMemo(
-    () => approvedTemplates.find((item) => item.id === templateId) ?? null,
-    [approvedTemplates, templateId]
+    () => accountTemplates.find((item) => item.id === templateId) ?? null,
+    [accountTemplates, templateId]
   );
   const templateHeader = useMemo(
     () => getTemplateHeaderInfo(selectedTemplate?.components),
@@ -263,7 +294,9 @@ export default function CampaignsPage() {
     () => (accounts.data ?? []).find((item) => item.id === accountId) ?? null,
     [accounts.data, accountId]
   );
+  const selectedAccountChannelId = selectedAccount?.channel_id ?? "";
   const filteredContacts = (contacts.data ?? []).filter((item) => {
+    if (selectedAccountChannelId && item.channel_id !== selectedAccountChannelId) return false;
     if (!contactSearch.trim()) return true;
     const term = contactSearch.trim().toLowerCase();
     return (
@@ -271,6 +304,19 @@ export default function CampaignsPage() {
       (item.display_name ?? "").toLowerCase().includes(term)
     );
   });
+
+  useEffect(() => {
+    if (!accountId) return;
+    const account = (accounts.data ?? []).find((item) => item.id === accountId);
+    if (account?.channel_id) setChannelId(account.channel_id);
+    if (templateId) {
+      const template = approvedTemplates.find((item) => item.id === templateId);
+      if (template && template.whatsapp_account_id !== accountId) {
+        setTemplateId("");
+        setCampaignMediaOverride(null);
+      }
+    }
+  }, [accountId, accounts.data, approvedTemplates, templateId]);
 
   useEffect(() => {
     if (!templateId || !selectedContacts.length) {
@@ -281,11 +327,12 @@ export default function CampaignsPage() {
       .post("/campaigns/preflight", {
         template_id: templateId,
         contact_ids: selectedContacts,
-        whatsapp_account_id: accountId || null
+        whatsapp_account_id: accountId || null,
+        include_opt_out_option: includeOptOutOption
       })
       .then((res) => setPreflight(res.data as CampaignPreflight))
       .catch(() => setPreflight(null));
-  }, [templateId, selectedContacts, accountId]);
+  }, [templateId, selectedContacts, accountId, includeOptOutOption]);
 
   function onOrganizationChange(value: string) {
     setOrganizationId(value);
@@ -340,6 +387,24 @@ export default function CampaignsPage() {
   async function handleCancel(campaignId: string) {
     setActionBusyId(campaignId);
     await cancelCampaign(campaignId);
+    setActionBusyId(null);
+  }
+
+  async function handleArchive(campaignId: string) {
+    setActionBusyId(campaignId);
+    await archiveCampaign(campaignId);
+    setActionBusyId(null);
+  }
+
+  async function handleUnarchive(campaignId: string) {
+    setActionBusyId(campaignId);
+    await unarchiveCampaign(campaignId);
+    setActionBusyId(null);
+  }
+
+  async function handleDeleteDraft(campaignId: string) {
+    setActionBusyId(campaignId);
+    await deleteDraftCampaign(campaignId);
     setActionBusyId(null);
   }
 
@@ -406,6 +471,14 @@ export default function CampaignsPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
+    if (!organizationId) {
+      toastStore.getState().show("اختر الفرع أولاً.", "error");
+      return;
+    }
+    if (!accountId || !templateId) {
+      toastStore.getState().show("اختر حساب WhatsApp والقالب المعتمد.", "error");
+      return;
+    }
     if (!selectedContacts.length) {
       toastStore.getState().show("اختر عملاء للحملة أو ارفع Excel.", "error");
       return;
@@ -414,6 +487,7 @@ export default function CampaignsPage() {
       toastStore.getState().show("القالب يتطلب وسائط في الرأس — ارفع صورة أو فيديو أو PDF.", "error");
       return;
     }
+    const requestOptions = { skipGlobalErrorToast: true } as const;
     try {
       const templateParameters = buildSendComponents(selectedTemplate?.components, campaignMediaOverride
         ? { mediaUrl: campaignMediaOverride.public_url, filename: campaignMediaOverride.filename }
@@ -424,14 +498,16 @@ export default function CampaignsPage() {
         template_id: templateId,
         name,
         scheduled_at: null,
+        include_opt_out_option: includeOptOutOption,
+        exclude_marketing_opt_out: true,
         recipients: selectedContacts.map((contact_id) => ({
           contact_id,
           template_parameters: templateParameters
         }))
-      });
+      }, requestOptions);
       const campaignId = response.data.id as string;
-      await api.post(`/campaigns/${campaignId}/approve`);
-      await api.post(`/campaigns/${campaignId}/start`);
+      await api.post(`/campaigns/${campaignId}/approve`, undefined, requestOptions);
+      await api.post(`/campaigns/${campaignId}/start`, undefined, requestOptions);
       setName("");
       setSelectedContacts([]);
       setCampaignMediaOverride(null);
@@ -440,8 +516,11 @@ export default function CampaignsPage() {
       setActiveTab("list");
       await waitForCampaignReport(client, campaignId);
       toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول.", "success");
-    } catch {
-      toastStore.getState().show("تعذر إنشاء الحملة. تحقق من القالب المعتمد والحساب.", "error");
+    } catch (error) {
+      toastStore.getState().show(
+        formatApiError(error, "تعذر إنشاء الحملة. تحقق من القالب المعتمد، أو أن الجمهور لم يرفض التسويق."),
+        "error"
+      );
     }
   }
 
@@ -525,9 +604,31 @@ export default function CampaignsPage() {
         <section className={`card admin-table-card${highlightCampaignId ? " campaigns-list-highlight" : ""}`}>
           <div className="admin-table-header">
             <div>
-              <h2>جدول الحملات</h2>
-              <small>{filteredRows.length} حملة · نتائج وتقارير</small>
+              <h2>{archiveFilter === "archived" ? "أرشيف الحملات" : "جدول الحملات"}</h2>
+              <small>
+                {filteredRows.length} حملة ·{" "}
+                {archiveFilter === "archived"
+                  ? "حملات مؤرشفة — اضغط «استعادة» لإرجاعها للقائمة النشطة"
+                  : "الحملات المنتهية يمكن أرشفتها من عمود الإجراءات أو من التقرير"}
+              </small>
             </div>
+          </div>
+
+          <div className="inline-actions" style={{ padding: "12px 16px 0" }}>
+            <button
+              type="button"
+              className={archiveFilter === "active" ? "whatsapp-button compact" : "secondary-button compact"}
+              onClick={() => setArchiveFilter("active")}
+            >
+              الحملات النشطة
+            </button>
+            <button
+              type="button"
+              className={archiveFilter === "archived" ? "whatsapp-button compact" : "secondary-button compact"}
+              onClick={() => setArchiveFilter("archived")}
+            >
+              الأرشيف
+            </button>
           </div>
 
           <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
@@ -557,11 +658,19 @@ export default function CampaignsPage() {
               expandedCampaignId={expandedCampaignId}
               onToggleExpanded={(id) => setExpandedCampaignId((current) => (current === id ? null : id))}
               autoRefresh
-              emptyLabel="لا توجد حملات بعد. أنشئ حملة من تبويب «إنشاء حملة»."
+              emptyLabel={
+                archiveFilter === "archived"
+                  ? "لا توجد حملات مؤرشفة."
+                  : "لا توجد حملات بعد. أنشئ حملة من تبويب «إنشاء حملة»."
+              }
               actions={{
-                onFollowUp: createFollowUp,
+                onFollowUp: archiveFilter === "active" ? createFollowUp : undefined,
                 onPause: handlePause,
                 onCancel: handleCancel,
+                onArchive: handleArchive,
+                onUnarchive: handleUnarchive,
+                onDeleteDraft: handleDeleteDraft,
+                showArchived: archiveFilter === "archived",
                 actionBusyId
               }}
             />
@@ -632,10 +741,20 @@ export default function CampaignsPage() {
               </label>
               <label className="field-label">
                 <span>حساب WhatsApp</span>
-                <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+                <select
+                  value={accountId}
+                  onChange={(e) => {
+                    setAccountId(e.target.value);
+                    setTemplateId("");
+                    setCampaignMediaOverride(null);
+                    setPreflight(null);
+                  }}
+                  required
+                >
                   <option value="">اختر الحساب</option>
                   {(accounts.data ?? []).map((item) => (
                     <option key={item.id} value={item.id}>
+                      {item.channel_name ? `${item.channel_name} · ` : ""}
                       {item.verified_name || item.display_phone_number}
                     </option>
                   ))}
@@ -650,13 +769,28 @@ export default function CampaignsPage() {
                     setCampaignMediaOverride(null);
                   }}
                   required
+                  disabled={!accountId}
                 >
-                  <option value="">اختر القالب</option>
-                  {approvedTemplates.map((item) => (
+                  <option value="">
+                    {accountId ? "اختر القالب" : "اختر حساب WhatsApp أولاً"}
+                  </option>
+                  {accountTemplates.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>
               </label>
+              {accountId && accountTemplates.length === 0 && (
+                <p className="hint-text campaign-warning">
+                  لا توجد قوالب معتمدة لهذا الحساب. افتح{" "}
+                  <Link to="/templates">صفحة القوالب</Link>
+                  {" "}→ تبويب «مزامنة من Meta» → اختر نفس الحساب → Sync.
+                </p>
+              )}
+              {accountId && templateId && selectedAccount && selectedTemplate && selectedTemplate.whatsapp_account_id !== accountId && (
+                <p className="hint-text campaign-warning">
+                  هذا القالب لا ينتمي للحساب المختار — اختر قالباً من نفس القناة.
+                </p>
+              )}
               {templateHeader && (
                 <div className="campaign-template-media">
                   <p className="hint-text">
@@ -732,6 +866,8 @@ export default function CampaignsPage() {
                   <strong>فحص الجمهور قبل الإرسال</strong>
                   <div className="campaign-preflight-stats">
                     <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
+                    <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
+                    <div><strong>{preflight.marketing_opt_out ?? 0}</strong><span>عدم الإزعاج</span></div>
                     <div><strong>{preflight.never_messaged}</strong><span>بدون محادثة</span></div>
                     <div><strong>{preflight.window_open}</strong><span>نافذة نشطة</span></div>
                     <div><strong>{preflight.window_closed}</strong><span>نافذة منتهية</span></div>
@@ -762,8 +898,20 @@ export default function CampaignsPage() {
               {!approvedTemplates.length && (
                 <p className="hint-text">لا توجد قوالب معتمدة — أضف من صفحة القوالب أو زامِن من Meta.</p>
               )}
-              <button type="submit" className="whatsapp-button" disabled={!selectedContacts.length}>
-                إنشاء وبدء الحملة ({selectedContacts.length})
+              <label className="field-label checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={includeOptOutOption}
+                  onChange={(event) => setIncludeOptOutOption(event.target.checked)}
+                />
+                <span>إظهار خيار «عدم الإزعاج» للعملاء واستبعاد من اختاروه تلقائياً</span>
+              </label>
+              <button
+                type="submit"
+                className="whatsapp-button"
+                disabled={!selectedContacts.length || preflight?.eligible_recipients === 0}
+              >
+                إنشاء وبدء الحملة ({preflight?.eligible_recipients ?? selectedContacts.length})
               </button>
             </form>
           </div>

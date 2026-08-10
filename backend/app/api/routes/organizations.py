@@ -2,21 +2,27 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.auth import AuthContext, require_permissions
+from app.api.dependencies.auth import AuthContext, get_auth_context, require_permissions
 from app.core.permissions import Permission
 from app.db.session import get_db
 from app.schemas.organization import OrganizationCreateRequest, OrganizationResponse
-from app.services.organizations import create_organization, list_organizations
+from app.services.organizations import create_organization
+from app.services.membership_access import resolve_membership_organizations
 
 router = APIRouter()
 
 
 @router.get("", response_model=list[OrganizationResponse])
 async def get_organizations(
-    context: AuthContext = Depends(require_permissions(Permission.ORGANIZATIONS_VIEW)),
+    context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> list:
-    return await list_organizations(db, context.account_id)
+    """Return organizations visible to the current membership (branch-scoped when applicable)."""
+    return await resolve_membership_organizations(
+        db,
+        account_id=context.account_id,
+        membership=context.membership,
+    )
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)

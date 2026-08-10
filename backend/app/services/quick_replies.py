@@ -109,16 +109,29 @@ async def list_quick_replies(
     db: AsyncSession,
     account_id: UUID,
     *,
+    membership=None,
     organization_id: UUID | None = None,
     channel_id: UUID | None = None,
     category: str | None = None,
     q: str | None = None,
     active_only: bool = True,
 ) -> list[QuickReply]:
+    from app.services.membership_access import organization_scope_clauses
+
     query = select(QuickReply).where(QuickReply.account_id == account_id)
     if active_only:
         query = query.where(QuickReply.is_active.is_(True))
-    if organization_id:
+    if membership is not None:
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=QuickReply.organization_id,
+        ):
+            query = query.where(clause)
+        if organization_id is not None:
+            query = query.where(QuickReply.organization_id == organization_id)
+    elif organization_id:
         query = query.where(
             or_(QuickReply.organization_id == organization_id, QuickReply.is_shared.is_(True))
         )
@@ -162,10 +175,20 @@ async def create_quick_reply(
     account_id: UUID,
     user_id: UUID,
     payload: QuickReplyCreateRequest,
+    membership=None,
 ) -> QuickReply:
+    from app.services.membership_access import ensure_membership_organization_access
+
     organization = await db.get(Organization, payload.organization_id)
     if organization is None or organization.account_id != account_id:
         raise ValueError("INVALID_ORGANIZATION")
+    if membership is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=payload.organization_id,
+        )
     data = payload.model_dump()
     data["tags"] = _normalize_tags(data.get("tags"))
     item = QuickReply(
@@ -185,10 +208,20 @@ async def update_quick_reply(
     account_id: UUID,
     reply_id: UUID,
     payload: QuickReplyUpdateRequest,
+    membership=None,
 ) -> QuickReply:
+    from app.services.membership_access import ensure_membership_organization_access
+
     item = await _get_reply(db, account_id, reply_id)
     if item is None:
         raise ValueError("NOT_FOUND")
+    if membership is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=item.organization_id,
+        )
     updates = payload.model_dump(exclude_unset=True)
     if "organization_id" in updates:
         organization = await db.get(Organization, updates["organization_id"])
@@ -203,10 +236,25 @@ async def update_quick_reply(
     return item
 
 
-async def archive_quick_reply(db: AsyncSession, *, account_id: UUID, reply_id: UUID) -> QuickReply:
+async def archive_quick_reply(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    reply_id: UUID,
+    membership=None,
+) -> QuickReply:
+    from app.services.membership_access import ensure_membership_organization_access
+
     item = await _get_reply(db, account_id, reply_id)
     if item is None:
         raise ValueError("NOT_FOUND")
+    if membership is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=item.organization_id,
+        )
     item.is_active = False
     await db.commit()
     await db.refresh(item)

@@ -3,6 +3,7 @@ from app.services.template_media import (
     build_stored_components,
     content_type_to_header_format,
     get_template_header_info,
+    is_ephemeral_meta_media_url,
     meta_safe_media_url,
     resolve_send_components,
 )
@@ -59,3 +60,33 @@ def test_get_template_header_info_from_meta_example() -> None:
     ])
     assert info is not None
     assert info["format"] == "IMAGE"
+
+
+def test_get_template_header_info_skips_ephemeral_meta_cdn() -> None:
+    info = get_template_header_info([
+        {
+            "type": "HEADER",
+            "format": "VIDEO",
+            "example": {"header_handle": ["https://scontent.whatsapp.net/video.mp4"]},
+        }
+    ])
+    assert info is None
+
+
+def test_resolve_send_components_ignores_ephemeral_recipient_media() -> None:
+    stored = build_stored_components(
+        body_text="test",
+        header_format="VIDEO",
+        media_url="https://files.example.com/stable.mp4",
+    )
+    recipient = [{
+        "type": "header",
+        "parameters": [{"type": "video", "video": {"link": "https://scontent.whatsapp.net/expired.mp4"}}],
+    }]
+    resolved = resolve_send_components(stored, recipient)
+    assert resolved[0]["parameters"][0]["video"]["link"] == "https://files.example.com/stable.mp4"
+
+
+def test_is_ephemeral_meta_media_url() -> None:
+    assert is_ephemeral_meta_media_url("https://scontent.whatsapp.net/v.mp4") is True
+    assert is_ephemeral_meta_media_url("https://files.example.com/v.mp4") is False

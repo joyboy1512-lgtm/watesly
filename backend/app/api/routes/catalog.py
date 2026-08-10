@@ -92,6 +92,7 @@ async def get_catalog(
     return await list_catalog_products(
         db,
         context.account_id,
+        membership=context.membership,
         active_only=not include_inactive,
         organization_id=organization_id,
         category=category,
@@ -116,6 +117,7 @@ async def search_catalog(
         active_only=not include_inactive,
         organization_id=organization_id,
         category=category,
+        membership=context.membership,
     )
 
 
@@ -198,7 +200,9 @@ async def post_catalog_product(
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await create_catalog_product(db, account_id=context.account_id, **payload.model_dump())
+    return await create_catalog_product(
+        db, account_id=context.account_id, membership=context.membership, **payload.model_dump()
+    )
 
 
 @router.get("/{product_id}")
@@ -208,7 +212,9 @@ async def get_product(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await get_catalog_product(db, account_id=context.account_id, product_id=product_id)
+        return await get_catalog_product(
+            db, account_id=context.account_id, product_id=product_id, membership=context.membership
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -225,6 +231,7 @@ async def patch_product(
             db,
             account_id=context.account_id,
             product_id=product_id,
+            membership=context.membership,
             **payload.model_dump(exclude_unset=True),
         )
     except ValueError as exc:
@@ -238,7 +245,12 @@ async def remove_product(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await delete_catalog_product(db, account_id=context.account_id, product_id=product_id)
+        await delete_catalog_product(
+            db,
+            account_id=context.account_id,
+            product_id=product_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

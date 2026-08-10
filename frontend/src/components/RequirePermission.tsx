@@ -1,17 +1,11 @@
 import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { useCurrentUser } from "../hooks/usePermissions";
 import { canAccessRoute, DASHBOARD_PATH } from "../lib/navPermissions";
-
-type CurrentUser = { permissions?: string[] };
 
 export default function RequirePermission({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const profile = useQuery({
-    queryKey: ["current-user"],
-    queryFn: async () => (await api.get<CurrentUser>("/auth/me")).data
-  });
+  const profile = useCurrentUser();
 
   if (profile.isLoading) {
     return <div className="page-loading">جاري التحميل…</div>;

@@ -27,15 +27,23 @@ def test_automation_triggers_are_wired_for_inbound_messages() -> None:
 def test_webhooks_are_processed_asynchronously() -> None:
     route = read("app/api/routes/whatsapp.py")
     tasks = read("app/workers/webhook_tasks.py")
-    assert "process_whatsapp_webhook.delay(payload)" in route
+    assert "persist_whatsapp_webhook" in route
+    assert "process_whatsapp_webhook.delay(str(webhook_event_id))" in route
     assert "watesly.webhooks.process_whatsapp" in tasks
-    assert "run_async(_process(payload))" in tasks
+    assert "load_whatsapp_webhook_payload" in tasks
 
 
 def test_webhook_worker_resets_async_pools() -> None:
     runner = read("app/workers/async_runner.py")
     assert "await engine.dispose()" in runner
     assert "dispose_redis_client" in runner
+
+
+def test_campaign_worker_uses_async_runner() -> None:
+    source = read("app/workers/campaign_tasks.py")
+    assert "from app.workers.async_runner import run_async" in source
+    assert "return run_async(_run_campaign" in source
+    assert "asyncio.run(_run_campaign" not in source
 
 
 def test_automation_run_queued_dispatches_worker() -> None:

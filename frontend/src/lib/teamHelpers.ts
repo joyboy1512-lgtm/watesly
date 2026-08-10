@@ -1,4 +1,4 @@
-export type MembershipRole = "owner" | "admin" | "manager" | "agent" | "viewer";
+export type MembershipRole = "owner" | "admin" | "branch_admin" | "manager" | "agent" | "viewer";
 export type MembershipStatus = "active" | "suspended";
 
 export type Employee = {
@@ -35,11 +35,25 @@ export type TeamStats = {
 
 export const TEAM_PAGE_SIZE = 20;
 
-export const INVITABLE_ROLES: MembershipRole[] = ["admin", "manager", "agent", "viewer"];
+export const INVITABLE_ROLES: MembershipRole[] = ["admin", "branch_admin", "manager", "agent", "viewer"];
+
+export function inviteableRolesForActor(actorRole?: string | null): MembershipRole[] {
+  if (actorRole === "owner" || actorRole === "admin") {
+    return ["admin", "branch_admin", "manager", "agent", "viewer"];
+  }
+  if (actorRole === "branch_admin") {
+    return ["manager", "agent", "viewer"];
+  }
+  if (actorRole === "manager") {
+    return ["agent", "viewer"];
+  }
+  return [];
+}
 
 export const ROLE_LABELS: Record<MembershipRole, string> = {
   owner: "مالك الحساب",
   admin: "مدير النظام",
+  branch_admin: "مشرف الفرع",
   manager: "مشرف",
   agent: "موظف",
   viewer: "مشاهد"
@@ -48,6 +62,7 @@ export const ROLE_LABELS: Record<MembershipRole, string> = {
 export const ROLE_DESCRIPTIONS: Record<MembershipRole, string> = {
   owner: "صلاحيات كاملة بما فيها الفوترة وإدارة الحساب",
   admin: "صلاحيات كاملة ما عدا نقل ملكية الحساب",
+  branch_admin: "إدارة كاملة للفرع: منتجات، CRM، أتمتة، وموظفين الفرع",
   manager: "إدارة المحادثات والحملات والتقارير وعرض الموظفين",
   agent: "التعامل مع المحادثات والعملاء وإرسال الرسائل",
   viewer: "عرض البيانات والتقارير فقط بدون تعديل"
@@ -218,6 +233,35 @@ const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.permissions.m
 export const ROLE_PERMISSIONS: Record<MembershipRole, ReadonlySet<PermissionKey>> = {
   owner: new Set(ALL_PERMISSIONS),
   admin: new Set(ALL_PERMISSIONS),
+  branch_admin: new Set([
+    "conversations.view",
+    "conversations.assign",
+    "messages.send",
+    "contacts.view",
+    "contacts.edit",
+    "channels.view",
+    "channels.manage",
+    "templates.view",
+    "templates.manage",
+    "campaigns.view",
+    "campaigns.create",
+    "campaigns.approve",
+    "automations.view",
+    "automations.edit",
+    "automations.publish",
+    "users.view",
+    "users.manage",
+    "organizations.view",
+    "organizations.manage",
+    "reports.view",
+    "reports.export",
+    "files.upload",
+    "files.view",
+    "trust.view",
+    "trust.manage",
+    "operations.view",
+    "operations.manage"
+  ]),
   manager: new Set([
     "conversations.view",
     "conversations.assign",
@@ -328,6 +372,8 @@ export function roleBadgeClass(role: MembershipRole): string {
       return "team-role-badge team-role-owner";
     case "admin":
       return "team-role-badge team-role-admin";
+    case "branch_admin":
+      return "team-role-badge team-role-branch-admin";
     case "manager":
       return "team-role-badge team-role-manager";
     case "agent":
@@ -357,6 +403,9 @@ export function canAssignPermissions(actorPermissions: ReadonlySet<PermissionKey
 export function assignablePermissionsForActor(actorPermissions: ReadonlySet<PermissionKey> | PermissionKey[]): ReadonlySet<PermissionKey> {
   const granted = actorPermissions instanceof Set ? actorPermissions : new Set(actorPermissions);
   if (granted.has("billing.manage")) return new Set(ALL_PERMISSIONS);
+  if (granted.has("organizations.manage") && granted.has("users.manage")) {
+    return granted;
+  }
   return granted;
 }
 
@@ -373,6 +422,7 @@ export function permissionSummary(role: MembershipRole): string {
   const summaries: Record<MembershipRole, string> = {
     owner: "صلاحيات كاملة · فوترة · إدارة الحساب",
     admin: "صلاحيات كاملة · قنوات · حملات · فريق",
+    branch_admin: "مشرف الفرع · منتجات · CRM · أتمتة · فريق",
     manager: "محادثات · حملات · تقارير · قوالب",
     agent: "محادثات · عملاء · إرسال رسائل",
     viewer: "عرض فقط · تقارير · بدون تعديل"
@@ -403,7 +453,7 @@ export function computeTeamStats(employees: Employee[]): TeamStats {
     total: employees.length,
     active: employees.filter((item) => item.status === "active").length,
     suspended: employees.filter((item) => item.status === "suspended").length,
-    admins: employees.filter((item) => item.role === "owner" || item.role === "admin").length,
+    admins: employees.filter((item) => item.role === "owner" || item.role === "admin" || item.role === "branch_admin").length,
     agents: employees.filter((item) => item.role === "agent").length
   };
 }

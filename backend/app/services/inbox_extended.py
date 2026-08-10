@@ -41,6 +41,13 @@ async def compute_unread_count(db: AsyncSession, *, conversation_id: UUID, membe
 async def mark_conversation_read(
     db: AsyncSession, *, account_id: UUID, conversation_id: UUID, membership: Membership
 ) -> ConversationReadState:
+    from sqlalchemy import desc
+
+    from app.core.encryption import decrypt_secret
+    from app.models.message import Message, MessageDirection
+    from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
+
     conversation = await db.get(Conversation, conversation_id)
     if conversation is None or conversation.account_id != account_id:
         raise ValueError("CONVERSATION_NOT_FOUND")
@@ -48,6 +55,33 @@ async def mark_conversation_read(
     state.last_read_at = datetime.now(UTC)
     state.unread_count = 0
     await db.commit()
+
+    last_inbound = await db.scalar(
+        select(Message.external_message_id)
+        .where(
+            Message.conversation_id == conversation_id,
+            Message.direction == MessageDirection.INBOUND,
+            Message.external_message_id.is_not(None),
+        )
+        .order_by(desc(Message.created_at))
+        .limit(1)
+    )
+    if last_inbound:
+        wa = await db.scalar(
+            select(WhatsAppAccount).where(WhatsAppAccount.channel_id == conversation.channel_id)
+        )
+        if wa is not None:
+            client = MetaWhatsAppClient(
+                access_token=decrypt_secret(wa.access_token_encrypted),
+                phone_number_id=wa.phone_number_id,
+            )
+            try:
+                await client.mark_message_read(message_id=str(last_inbound))
+            except MetaAPIError:
+                pass
+            finally:
+                await client.aclose()
+
     await db.refresh(state)
     return state
 

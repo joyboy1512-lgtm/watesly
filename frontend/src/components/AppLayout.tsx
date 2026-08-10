@@ -1,30 +1,30 @@
 import { useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { authStore } from "../stores/auth";
 import { themeStore } from "../stores/theme";
 import { useTheme } from "../hooks/useTheme";
-import { api } from "../lib/api";
+import { useCurrentUser } from "../hooks/usePermissions";
 import Icon from "./Icon";
 import NotificationMenu from "./NotificationMenu";
 import LanguageSwitcher from "./LanguageSwitcher";
 import BrandLogo from "./BrandLogo";
 import RequirePermission from "./RequirePermission";
-
 import { filterNavItems, hasNavPermission } from "../lib/navPermissions";
-
-type CurrentUser = { full_name: string; email: string; is_super_admin: boolean; role?: string; permissions?: string[] };
+import { formatRoleLabel, type MembershipRole } from "../lib/teamHelpers";
 
 export default function AppLayout() {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const profile = useQuery({
-    queryKey: ["current-user"],
-    queryFn: async () => (await api.get<CurrentUser>("/auth/me")).data
-  });
+  const profile = useCurrentUser();
   const displayName = profile.data?.full_name ?? "Watesly User";
+  const branchSubtitle = profile.data?.branch_name?.trim() || t("shell.brandTagline");
+  const roleSubtitle = profile.data?.is_super_admin
+    ? t("shell.superAdmin")
+    : profile.data?.role
+      ? formatRoleLabel(profile.data.role as MembershipRole)
+      : t("shell.member");
   const initials = displayName
     .split(/\s+/)
     .filter(Boolean)
@@ -82,7 +82,7 @@ export default function AppLayout() {
         <div className="sidebar-top">
           <div className="brand-lockup sidebar-brand">
             <BrandLogo tone="light" size="md" />
-            <small>{t("shell.brandTagline")}</small>
+            <small>{branchSubtitle}</small>
           </div>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)}>
             <Icon name="close" />
@@ -150,7 +150,7 @@ export default function AppLayout() {
               <div className="avatar">{initials}</div>
               <div className="user-copy">
                 <strong>{displayName}</strong>
-                <small>{profile.data?.is_super_admin ? t("shell.superAdmin") : t("shell.owner")}</small>
+                <small>{roleSubtitle}</small>
               </div>
             </div>
           </div>

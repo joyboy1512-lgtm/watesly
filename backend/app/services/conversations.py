@@ -12,7 +12,37 @@ from app.models.membership import Membership
 from app.models.message import Message, MessageDirection
 from app.services.notifications import create_notification
 from app.services.whatsapp_window import compute_service_window
+from app.services.membership_access import (
+    ensure_membership_channel_access,
+    resolve_accessible_channel_ids,
+)
 from app.schemas.conversation import ConversationUpdateRequest, ConversationResponse
+
+
+async def _accessible_channel_ids(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+) -> list[UUID] | None:
+    return await resolve_accessible_channel_ids(
+        db, account_id=account_id, membership=membership
+    )
+
+
+async def ensure_conversation_channel_access(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+    channel_id: UUID,
+) -> None:
+    await ensure_membership_channel_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        channel_id=channel_id,
+    )
 
 
 def build_conversation_response(
@@ -85,6 +115,7 @@ async def list_conversations(
     include_archived: bool = False,
     archived_only: bool = False,
     starred_only: bool = False,
+    channel_id: UUID | None = None,
 ) -> list[tuple[Conversation, Contact, Message | None, int]]:
     latest_message_id = (
         select(Message.id)
@@ -119,6 +150,13 @@ async def list_conversations(
     query = query.where((Conversation.snoozed_until.is_(None)) | (Conversation.snoozed_until <= now))
     if starred_only:
         query = query.where(Conversation.is_starred.is_(True))
+    accessible = await _accessible_channel_ids(db, account_id=account_id, membership=membership)
+    if accessible is not None:
+        query = query.where(Conversation.channel_id.in_(accessible))
+    if channel_id is not None:
+        if accessible is not None and channel_id not in accessible:
+            return []
+        query = query.where(Conversation.channel_id == channel_id)
     if membership.role.value in {"agent", "viewer"}:
         query = query.where(Conversation.assigned_membership_id == membership.id)
     rows = list((await db.execute(query)).all())
@@ -141,6 +179,12 @@ async def list_messages(
     if membership.role.value in {"agent", "viewer"}:
         if conversation.assigned_membership_id != membership.id:
             raise ValueError("CONVERSATION_FORBIDDEN")
+    await ensure_conversation_channel_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        channel_id=conversation.channel_id,
+    )
 
     result = await db.execute(
         select(Message)
@@ -252,4 +296,10 @@ async def get_conversation_for_send(
     if membership.role.value in {"agent", "viewer"}:
         if conversation.assigned_membership_id != membership.id:
             raise ValueError("CONVERSATION_FORBIDDEN")
+    await ensure_conversation_channel_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        channel_id=conversation.channel_id,
+    )
     return conversation

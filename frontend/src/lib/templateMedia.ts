@@ -2,13 +2,25 @@ import type { UploadedFile } from "./uploads";
 
 export type TemplateHeaderFormat = "IMAGE" | "VIDEO" | "DOCUMENT";
 
+const EPHEMERAL_MEDIA_HOSTS = ["scontent.whatsapp.net", "fbcdn.net"];
+
+function isEphemeralMetaMediaUrl(url: string | null | undefined) {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return EPHEMERAL_MEDIA_HOSTS.some((item) => host === item || host.endsWith(`.${item}`));
+  } catch {
+    return false;
+  }
+}
+
 export type TemplateComponent = {
   type: string;
   format?: string;
   text?: string;
   media_url?: string;
   filename?: string;
-  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }>;
+  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; id?: string; marketing_opt_out?: boolean }>;
   example?: { header_url?: string[]; header_handle?: string[] };
 };
 
@@ -36,11 +48,15 @@ export function getTemplateHeaderInfo(components: TemplateComponent[] | null | u
     if (component.type?.toUpperCase() !== "HEADER") continue;
     const format = (component.format ?? "").toUpperCase() as TemplateHeaderFormat;
     if (!["IMAGE", "VIDEO", "DOCUMENT"].includes(format)) continue;
-    const mediaUrl =
-      component.media_url ||
-      component.example?.header_url?.[0] ||
-      component.example?.header_handle?.[0];
-    if (mediaUrl) {
+    let mediaUrl = component.media_url || null;
+    if ((!mediaUrl || isEphemeralMetaMediaUrl(mediaUrl)) && component.example) {
+      const candidates = [
+        ...(component.example.header_url ?? []),
+        ...(component.example.header_handle ?? [])
+      ];
+      mediaUrl = candidates.find((item) => item && !isEphemeralMetaMediaUrl(item)) ?? null;
+    }
+    if (mediaUrl && !isEphemeralMetaMediaUrl(mediaUrl)) {
       return { format, mediaUrl, filename: component.filename ?? null };
     }
   }
@@ -50,7 +66,8 @@ export function getTemplateHeaderInfo(components: TemplateComponent[] | null | u
 export function buildStoredComponents(
   bodyText: string | null,
   uploaded: UploadedFile | null,
-  headerFormat: TemplateHeaderFormat | null
+  headerFormat: TemplateHeaderFormat | null,
+  options?: { includeMarketingOptOut?: boolean; category?: string | null }
 ): TemplateComponent[] {
   const components: TemplateComponent[] = [];
   if (uploaded && headerFormat) {
@@ -63,6 +80,13 @@ export function buildStoredComponents(
   }
   if (bodyText?.trim()) {
     components.push({ type: "BODY", text: bodyText.trim() });
+  }
+  if (options?.includeMarketingOptOut && (options.category ?? "marketing") === "marketing") {
+    components.push({
+      type: "BUTTONS",
+      buttons: [{ type: "QUICK_REPLY", text: "عدم الإزعاج", id: "watesly_marketing_opt_out", marketing_opt_out: true }]
+    });
+    components.push({ type: "FOOTER", text: "أرسل «إيقاف» لإلغاء الاشتراك" });
   }
   return components;
 }

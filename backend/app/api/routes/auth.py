@@ -98,7 +98,10 @@ async def logout(payload: LogoutRequest, response: Response, cookie_token: str |
 
 
 @router.get("/me", response_model=CurrentUserResponse)
-async def me(context: AuthContext = Depends(get_auth_context)) -> CurrentUserResponse:
+async def me(
+    context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> CurrentUserResponse:
     membership = context.membership
     role = membership.role.value if hasattr(membership, "role") else None
     permissions = (
@@ -106,6 +109,22 @@ async def me(context: AuthContext = Depends(get_auth_context)) -> CurrentUserRes
         if isinstance(membership, Membership)
         else sorted(item.value for item in role_permissions(membership.role))
     )
+    organizations: list = []
+    branch_name: str | None = None
+    if isinstance(membership, Membership):
+        from app.services.membership_access import (
+            branch_display_name,
+            resolve_membership_organizations,
+        )
+
+        org_rows = await resolve_membership_organizations(
+            db, account_id=context.account_id, membership=membership
+        )
+        organizations = [
+            {"id": item.id, "name": item.name}
+            for item in org_rows
+        ]
+        branch_name = branch_display_name(org_rows)
     return CurrentUserResponse(
         id=context.user.id,
         email=context.user.email,
@@ -114,6 +133,9 @@ async def me(context: AuthContext = Depends(get_auth_context)) -> CurrentUserRes
         is_super_admin=context.user.is_super_admin,
         role=role,
         permissions=permissions,
+        account_name=context.account.name if context.account else None,
+        branch_name=branch_name,
+        organizations=organizations,
     )
 
 

@@ -120,7 +120,7 @@ async def external_send_message(
     from app.models.whatsapp_account import WhatsAppAccount
     from app.schemas.whatsapp import SendTextMessageRequest
     from app.services.conversations import get_last_inbound_for_conversation
-    from app.services.service_window import compute_service_window
+    from app.services.whatsapp_window import compute_service_window
     from app.services.whatsapp import send_text_message
     from app.services.webhook_dispatch import dispatch_account_webhook
     from sqlalchemy import select

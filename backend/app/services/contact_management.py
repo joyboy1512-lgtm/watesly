@@ -651,6 +651,101 @@ async def get_or_create_conversation_for_contact(
     return conversation, True
 
 
+async def start_conversation_on_channel(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    channel_id: UUID,
+    external_address: str,
+    display_name: str | None = None,
+) -> tuple[Conversation, Contact, bool]:
+    from app.services.contacts import create_contact
+
+    channel = await db.get(Channel, channel_id)
+    if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
+        raise ValueError("INVALID_CHANNEL")
+
+    phone = normalize_whatsapp_phone(external_address.strip())
+    if len(phone) < 3:
+        raise ValueError("INVALID_PHONE")
+
+    contact = await create_contact(
+        db,
+        account_id=account_id,
+        payload=ContactCreateRequest(
+            organization_id=channel.organization_id,
+            channel_id=channel.id,
+            external_address=phone,
+            display_name=display_name,
+        ),
+    )
+    conversation, created = await get_or_create_conversation_for_contact(
+        db,
+        account_id=account_id,
+        contact_id=contact.id,
+    )
+    return conversation, contact, created
+
+
+async def list_channel_threads_for_phone(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    external_address: str,
+    exclude_conversation_id: UUID | None = None,
+) -> list[dict]:
+    from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.phone_normalize import normalize_whatsapp_phone, phones_match
+
+    target = normalize_whatsapp_phone(external_address.strip())
+    if not target:
+        return []
+
+    contact_rows = await db.execute(
+        select(Contact, Channel.name, WhatsAppAccount.display_phone_number)
+        .join(Channel, Contact.channel_id == Channel.id)
+        .outerjoin(WhatsAppAccount, WhatsAppAccount.channel_id == Channel.id)
+        .where(
+            Contact.account_id == account_id,
+            Contact.deleted_at.is_(None),
+            Channel.deleted_at.is_(None),
+        )
+        .order_by(Channel.name.asc())
+    )
+
+    threads: list[dict] = []
+    for contact, channel_name, display_phone in contact_rows.all():
+        if not phones_match(contact.external_address, target):
+            continue
+        conv_result = await db.execute(
+            select(Conversation)
+            .where(
+                Conversation.contact_id == contact.id,
+                Conversation.channel_id == contact.channel_id,
+                Conversation.deleted_at.is_(None),
+                Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+            )
+            .order_by(Conversation.last_message_at.desc().nullslast(), Conversation.created_at.desc())
+            .limit(1)
+        )
+        conversation = conv_result.scalars().first()
+        if conversation is None:
+            continue
+        if exclude_conversation_id is not None and conversation.id == exclude_conversation_id:
+            continue
+        threads.append(
+            {
+                "conversation_id": str(conversation.id),
+                "contact_id": str(contact.id),
+                "channel_id": str(contact.channel_id),
+                "channel_name": channel_name,
+                "display_phone_number": display_phone,
+                "status": conversation.status.value if hasattr(conversation.status, "value") else str(conversation.status),
+            }
+        )
+    return threads
+
+
 async def export_contact_gdpr_json(
     db: AsyncSession,
     *,

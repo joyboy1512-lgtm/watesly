@@ -58,6 +58,7 @@ export default function TemplatesPage() {
   const [headerType, setHeaderType] = useState<TemplateHeaderFormat | "">("");
   const [headerFile, setHeaderFile] = useState<UploadedFile | null>(null);
   const [uploadingHeader, setUploadingHeader] = useState(false);
+  const [includeMarketingOptOut, setIncludeMarketingOptOut] = useState(true);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -102,8 +103,11 @@ export default function TemplatesPage() {
   const stats = useMemo(() => computeTemplateStats(templates.data ?? []), [templates.data]);
 
   const previewComponents = useMemo(
-    () => buildStoredComponents(bodyText, headerFile, headerType || null),
-    [bodyText, headerFile, headerType]
+    () => buildStoredComponents(bodyText, headerFile, headerType || null, {
+      includeMarketingOptOut,
+      category
+    }),
+    [bodyText, headerFile, headerType, includeMarketingOptOut, category]
   );
 
   function accountDisplayName(accountIdValue: string) {
@@ -138,7 +142,10 @@ export default function TemplatesPage() {
     }
     setSubmitting(true);
     try {
-      const components = buildStoredComponents(bodyText, headerFile, headerType || null);
+      const components = buildStoredComponents(bodyText, headerFile, headerType || null, {
+        includeMarketingOptOut,
+        category
+      });
       const response = await api.post<Template>("/templates", {
         whatsapp_account_id: accountId,
         name,
@@ -502,6 +509,17 @@ export default function TemplatesPage() {
                 />
               </label>
               <p className="hint-text">استخدم {"{{1}}"}، {"{{2}}"} للمتغيرات كما في Meta.</p>
+
+              {category === "marketing" && (
+                <label className="field-label checkbox-inline">
+                  <input
+                    type="checkbox"
+                    checked={includeMarketingOptOut}
+                    onChange={(event) => setIncludeMarketingOptOut(event.target.checked)}
+                  />
+                  <span>إضافة زر «عدم الإزعاج» وتذييل إلغاء الاشتراك</span>
+                </label>
+              )}
 
               <label className="field-label">
                 <span>رأس القالب (وسائط — اختياري)</span>

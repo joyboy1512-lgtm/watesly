@@ -26,7 +26,7 @@ async def get_templates(
     context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_templates(db, context.account_id)
+    return await list_templates(db, context.account_id, membership=context.membership)
 
 
 @router.post("", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
@@ -36,8 +36,15 @@ async def post_template(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await create_template(db, account_id=context.account_id, payload=payload)
+        return await create_template(
+            db,
+            account_id=context.account_id,
+            payload=payload,
+            membership=context.membership,
+        )
     except ValueError as exc:
+        if str(exc) == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         raise HTTPException(status_code=400, detail="Invalid WhatsApp account") from exc
     except IntegrityError as exc:
         await db.rollback()
@@ -81,8 +88,11 @@ async def sync_templates(
             db,
             account_id=context.account_id,
             whatsapp_account_id=whatsapp_account_id,
+            membership=context.membership,
         )
     except ValueError as exc:
+        if str(exc) == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         raise HTTPException(status_code=404, detail="WhatsApp account not found") from exc
     return {"created": created, "updated": updated}
 
@@ -96,9 +106,15 @@ async def patch_template(
 ):
     try:
         return await update_template(
-            db, account_id=context.account_id, template_id=template_id, payload=payload
+            db,
+            account_id=context.account_id,
+            template_id=template_id,
+            payload=payload,
+            membership=context.membership,
         )
     except ValueError as exc:
+        if str(exc) == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         raise HTTPException(status_code=404, detail="Template not found") from exc
 
 
@@ -109,6 +125,13 @@ async def remove_template(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await delete_template(db, account_id=context.account_id, template_id=template_id)
+        await delete_template(
+            db,
+            account_id=context.account_id,
+            template_id=template_id,
+            membership=context.membership,
+        )
     except ValueError as exc:
+        if str(exc) == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         raise HTTPException(status_code=404, detail="Template not found") from exc

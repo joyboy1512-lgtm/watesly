@@ -35,19 +35,28 @@ class Permission(StrEnum):
     OPERATIONS_MANAGE = "operations.manage"
 
 
+_BRANCH_OPS = frozenset({
+    Permission.CONVERSATIONS_VIEW, Permission.CONVERSATIONS_ASSIGN,
+    Permission.MESSAGES_SEND, Permission.CONTACTS_VIEW, Permission.CONTACTS_EDIT,
+    Permission.CHANNELS_VIEW, Permission.TEMPLATES_VIEW, Permission.TEMPLATES_MANAGE,
+    Permission.CAMPAIGNS_VIEW, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_APPROVE,
+    Permission.AUTOMATIONS_VIEW, Permission.AUTOMATIONS_EDIT, Permission.AUTOMATIONS_PUBLISH,
+    Permission.USERS_VIEW, Permission.USERS_MANAGE, Permission.ORGANIZATIONS_VIEW,
+    Permission.REPORTS_VIEW, Permission.REPORTS_EXPORT,
+    Permission.FILES_UPLOAD, Permission.FILES_VIEW, Permission.TRUST_VIEW,
+})
+
 ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
     MembershipRole.OWNER: frozenset(Permission),
     MembershipRole.ADMIN: frozenset(Permission),
-    MembershipRole.MANAGER: frozenset({
-        Permission.CONVERSATIONS_VIEW, Permission.CONVERSATIONS_ASSIGN,
-        Permission.MESSAGES_SEND, Permission.CONTACTS_VIEW, Permission.CONTACTS_EDIT,
-        Permission.CHANNELS_VIEW, Permission.TEMPLATES_VIEW, Permission.TEMPLATES_MANAGE,
-        Permission.CAMPAIGNS_VIEW, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_APPROVE,
-        Permission.AUTOMATIONS_VIEW, Permission.AUTOMATIONS_EDIT, Permission.AUTOMATIONS_PUBLISH,
-        Permission.USERS_VIEW, Permission.USERS_MANAGE, Permission.ORGANIZATIONS_VIEW,
-        Permission.REPORTS_VIEW, Permission.REPORTS_EXPORT,
-        Permission.FILES_UPLOAD, Permission.FILES_VIEW, Permission.TRUST_VIEW,
+    MembershipRole.BRANCH_ADMIN: _BRANCH_OPS | frozenset({
+        Permission.CHANNELS_MANAGE,
+        Permission.ORGANIZATIONS_MANAGE,
+        Permission.TRUST_MANAGE,
+        Permission.OPERATIONS_VIEW,
+        Permission.OPERATIONS_MANAGE,
     }),
+    MembershipRole.MANAGER: frozenset(_BRANCH_OPS),
     MembershipRole.AGENT: frozenset({
         Permission.CONVERSATIONS_VIEW, Permission.MESSAGES_SEND,
         Permission.CONTACTS_VIEW, Permission.CONTACTS_EDIT,
@@ -65,13 +74,20 @@ ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
 }
 
 MANAGER_ASSIGNABLE_PERMISSIONS = frozenset(ROLE_PERMISSIONS[MembershipRole.MANAGER])
+BRANCH_ADMIN_ASSIGNABLE_PERMISSIONS = frozenset(ROLE_PERMISSIONS[MembershipRole.BRANCH_ADMIN])
+
+BRANCH_SCOPED_ROLES = frozenset({
+    MembershipRole.MANAGER,
+    MembershipRole.BRANCH_ADMIN,
+})
 
 ROLE_RANK: dict[MembershipRole, int] = {
     MembershipRole.VIEWER: 1,
     MembershipRole.AGENT: 2,
     MembershipRole.MANAGER: 3,
-    MembershipRole.ADMIN: 4,
-    MembershipRole.OWNER: 5,
+    MembershipRole.BRANCH_ADMIN: 4,
+    MembershipRole.ADMIN: 5,
+    MembershipRole.OWNER: 6,
 }
 
 

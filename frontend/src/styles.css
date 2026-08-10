@@ -814,6 +814,76 @@ select, input, textarea {
   border-color: transparent;
 }
 
+.inbox-channel-filter {
+  padding: 0 14px 10px;
+}
+
+.inbox-channel-filter select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.inbox-channel-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-teal) 12%, transparent);
+  color: var(--primary-darker);
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-column-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inbox-new-conversation-button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.inbox-new-conversation-panel {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-channel-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.inbox-channel-pill {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.inbox-channel-pill.active {
+  background: color-mix(in srgb, var(--accent-teal) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent-teal) 35%, var(--line));
+  color: var(--primary-darker);
+  font-weight: 700;
+}
+
 .conversation-scroll {
   flex: 1;
   min-height: 0;
@@ -4213,6 +4283,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .composer-meta .link-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .whatsapp-connect-page { display: grid; gap: 18px; }
+.whatsapp-replace-warning {
+  border: 1px solid #fedf89;
+  background: #fffaeb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+.whatsapp-replace-warning strong { color: #b54708; }
 .whatsapp-page-tabs {
   display: flex;
   flex-wrap: wrap;

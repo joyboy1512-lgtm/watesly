@@ -26,10 +26,20 @@ async def create_tag(db: AsyncSession, account_id: UUID, payload: TagCreateReque
     return tag
 
 
-async def list_tags(db: AsyncSession, account_id: UUID) -> list[Tag]:
-    result = await db.execute(
-        select(Tag).where(Tag.account_id == account_id).order_by(Tag.name.asc())
-    )
+async def list_tags(db: AsyncSession, account_id: UUID, *, membership=None) -> list[Tag]:
+    from app.services.membership_access import organization_scope_clauses
+
+    query = select(Tag).where(Tag.account_id == account_id)
+    if membership is not None:
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=Tag.organization_id,
+        ):
+            query = query.where(clause)
+    query = query.order_by(Tag.name.asc())
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 

@@ -37,28 +37,41 @@ class MetaWhatsAppClient:
 
 
     async def list_templates(self, *, waba_id: str, limit: int = 100) -> dict:
+        items = await self.list_all_templates(waba_id=waba_id, page_size=min(max(limit, 1), 100))
+        return {"data": items[:limit]}
+
+    async def list_all_templates(self, *, waba_id: str, page_size: int = 100) -> list[dict]:
         base = settings.meta_graph_api_base_url.rstrip("/")
         version = settings.meta_graph_api_version.strip("/")
         url = f"{base}/{version}/{waba_id}/message_templates"
         headers = {"Authorization": f"Bearer {self.access_token}"}
-        params = {"limit": limit}
-
         client = self._get_client()
-        response = await client.get(url, headers=headers, params=params)
-
-        try:
-            data = response.json()
-        except ValueError:
-            data = {"raw": response.text}
-
-        if response.is_error:
-            error = data.get("error", {}) if isinstance(data, dict) else {}
-            raise MetaAPIError(
-                error.get("message", "Unable to fetch WhatsApp templates"),
-                status_code=response.status_code,
-                response_data=data,
-            )
-        return data
+        collected: list[dict] = []
+        after: str | None = None
+        while True:
+            params: dict = {"limit": min(max(page_size, 1), 100)}
+            if after:
+                params["after"] = after
+            response = await client.get(url, headers=headers, params=params)
+            try:
+                data = response.json()
+            except ValueError:
+                data = {"raw": response.text}
+            if response.is_error:
+                error = data.get("error", {}) if isinstance(data, dict) else {}
+                raise MetaAPIError(
+                    error.get("message", "Unable to fetch WhatsApp templates"),
+                    status_code=response.status_code,
+                    response_data=data,
+                )
+            rows = data.get("data", []) if isinstance(data, dict) else []
+            collected.extend(row for row in rows if isinstance(row, dict))
+            paging = data.get("paging", {}) if isinstance(data, dict) else {}
+            cursors = paging.get("cursors", {}) if isinstance(paging, dict) else {}
+            after = cursors.get("after") if isinstance(cursors, dict) else None
+            if not after or not paging.get("next"):
+                break
+        return collected
 
     async def get_phone_number_health(self) -> dict:
         base = settings.meta_graph_api_base_url.rstrip("/")
@@ -508,6 +521,28 @@ class MetaWhatsAppClient:
         return await self._parse_graph_response(
             response,
             default_message="Unable to create WhatsApp template in Meta",
+        )
+
+    async def mark_message_read(self, *, message_id: str) -> dict:
+        return await self._send_payload(
+            {
+                "messaging_product": "whatsapp",
+                "status": "read",
+                "message_id": message_id,
+            }
+        )
+
+    async def delete_message_template(self, *, waba_id: str, template_name: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}/message_templates"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {"name": template_name}
+        client = self._get_client()
+        response = await client.delete(url, headers=headers, params=params)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to delete WhatsApp template in Meta",
         )
 
     async def debug_access_token(self) -> dict:

@@ -39,6 +39,7 @@ const resources = {
         darkMode: "الوضع الداكن",
         owner: "مالك",
         superAdmin: "سوبر أدمن",
+        member: "عضو",
         catalogShortcut: "المنتجات والخدمات"
       },
       eyebrow: {
@@ -311,6 +312,7 @@ const resources = {
         darkMode: "Dark Mode",
         owner: "Owner",
         superAdmin: "Super Admin",
+        member: "Member",
         catalogShortcut: "Products & Services"
       },
       eyebrow: {

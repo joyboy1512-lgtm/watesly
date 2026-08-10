@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.conversation import ConversationPriority, ConversationStatus
 
@@ -97,3 +97,32 @@ class ConversationContextResponse(BaseModel):
     viewers: list[ConversationPresenceAgent]
     typing: list[ConversationPresenceAgent]
     suggested_query: str | None = None
+
+
+class StartConversationRequest(BaseModel):
+    channel_id: UUID
+    external_address: str = Field(min_length=3, max_length=120)
+    display_name: str | None = Field(default=None, max_length=160)
+
+    @field_validator("external_address", "display_name", mode="before")
+    @classmethod
+    def strip_strings(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class StartConversationResponse(BaseModel):
+    conversation_id: UUID
+    contact_id: UUID
+    channel_id: UUID
+    created: bool
+
+
+class ChannelThreadResponse(BaseModel):
+    conversation_id: UUID
+    contact_id: UUID
+    channel_id: UUID
+    channel_name: str
+    display_phone_number: str | None = None
+    status: ConversationStatus
