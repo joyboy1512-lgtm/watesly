@@ -14,13 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
-from app.db.session import async_session_factory
+from app.db.session import AsyncSessionFactory
 from app.models.platform_site_config import PlatformSiteConfig
 
 
 async def restore(path: Path) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
-    async with async_session_factory() as db:
+    async with AsyncSessionFactory() as db:
         result = await db.execute(select(PlatformSiteConfig).limit(1))
         item = result.scalar_one_or_none()
         if item is None:
