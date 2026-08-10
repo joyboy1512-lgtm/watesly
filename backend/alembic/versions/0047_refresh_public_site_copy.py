@@ -6,8 +6,8 @@ import json
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0044"
-down_revision: str | None = "0043"
+revision: str = "0047"
+down_revision: str | None = "0046"
 branch_labels = None
 depends_on = None
 

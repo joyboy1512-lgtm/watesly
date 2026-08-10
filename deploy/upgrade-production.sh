@@ -9,10 +9,11 @@ COMPOSE="docker compose -f compose.prod.yaml"
 echo "=== Watesly production upgrade ==="
 cd "$APP_DIR"
 
-echo ">> Pull latest main..."
-git fetch origin main
-git checkout main
-git pull origin main
+echo ">> Pull latest production branch..."
+PROD_BRANCH="${PROD_BRANCH:-cursor/production-unified-813f}"
+git fetch origin "$PROD_BRANCH"
+git checkout "$PROD_BRANCH"
+git pull origin "$PROD_BRANCH"
 
 cd "$APP_DIR/backend"
 

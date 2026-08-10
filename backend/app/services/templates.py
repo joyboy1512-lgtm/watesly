@@ -201,7 +201,9 @@ async def refresh_pending_template_statuses(
                 new_status = TemplateStatus(raw_status)
             except ValueError:
                 continue
-            if new_status == template.status or _status_str(new_status) == _status_str(template.status):
+            if (
+                new_status == template.status or _status_str(new_status) == _status_str(template.status)
+            ) and template.meta_template_id:
                 continue
             template.status = new_status
             if meta_item.get("id"):
