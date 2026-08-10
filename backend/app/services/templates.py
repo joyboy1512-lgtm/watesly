@@ -140,6 +140,10 @@ async def list_templates(db: AsyncSession, account_id: UUID) -> list[WhatsAppTem
     return templates
 
 
+def _status_str(status: TemplateStatus | str) -> str:
+    return status.value if isinstance(status, TemplateStatus) else str(status)
+
+
 async def refresh_pending_template_statuses(
     db: AsyncSession,
     *,
@@ -192,12 +196,12 @@ async def refresh_pending_template_statuses(
             meta_item = meta_index.get(key)
             if meta_item is None:
                 continue
-            raw_status = str(meta_item.get("status", template.status.value)).lower()
+            raw_status = str(meta_item.get("status", _status_str(template.status))).lower()
             try:
                 new_status = TemplateStatus(raw_status)
             except ValueError:
                 continue
-            if new_status == template.status and template.meta_template_id:
+            if new_status == template.status or _status_str(new_status) == _status_str(template.status):
                 continue
             template.status = new_status
             if meta_item.get("id"):
