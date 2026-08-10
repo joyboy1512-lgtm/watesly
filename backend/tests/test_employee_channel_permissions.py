@@ -55,7 +55,7 @@ def test_channel_access_enforced_on_core_routes() -> None:
     page = read("../frontend/src/pages/TeamPage.tsx")
     layout = read("../frontend/src/components/AppLayout.tsx")
 
-    assert "filter_organizations_for_membership" in orgs
+    assert "resolve_membership_organizations" in orgs
     assert "filter_channels_for_membership" in channels
     assert "resolve_accessible_channel_ids" in whatsapp
     assert "accessible_channel_ids" in contacts

@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, silentRequest } from "../lib/api";
 import Icon from "../components/Icon";
 import MacWorkspaceBalance from "../components/MacWorkspaceBalance";
 import { formatMacUsagePercent } from "../lib/macHelpers";
-
-type CurrentUser = { full_name: string };
+import { useCurrentUser, useHasPermission } from "../hooks/usePermissions";
 
 type WaitingConversation = {
   id: string;
@@ -88,26 +87,27 @@ function formatTime(value: string | null) {
 
 export default function DashboardPage() {
   const { t } = useTranslation();
-  const profile = useQuery({
-    queryKey: ["current-user"],
-    queryFn: async () => (await api.get<CurrentUser>("/auth/me")).data
-  });
+  const profile = useCurrentUser();
+  const canViewReports = useHasPermission("reports.view");
+  const canViewBilling = useHasPermission("billing.view");
 
   const summary = useQuery({
     queryKey: ["dashboard-summary"],
+    enabled: canViewReports,
     queryFn: async () => (await api.get<DashboardSummary>("/dashboard/summary")).data,
-    refetchInterval: 60_000
+    refetchInterval: canViewReports ? 60_000 : false
   });
 
   const subscription = useQuery({
     queryKey: ["subscription"],
+    enabled: canViewBilling,
     queryFn: async () => {
       try {
-        return (await api.get("/billing/subscription")).data;
+        return (await api.get("/billing/subscription", silentRequest)).data;
       } catch (error) {
         if (error && typeof error === "object" && "response" in error) {
           const status = (error as { response?: { status?: number } }).response?.status;
-          if (status === 404) return null;
+          if (status === 404 || status === 403) return null;
         }
         throw error;
       }

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, silentRequest } from "../lib/api";
 import { authStore } from "../stores/auth";
 import { toastStore } from "../stores/toast";
+import { useHasPermission } from "../hooks/usePermissions";
 import { uploadFile } from "../lib/uploads";
 import { formatWindowExpiry } from "../lib/serviceWindow";
 import { formatWaitingMinutes, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
@@ -41,6 +42,7 @@ const priorityLabels: Record<string, string> = { low: "منخفضة", normal: "�
 
 export default function InboxPage() {
   const { t } = useTranslation();
+  const canViewUsers = useHasPermission("users.view");
   const statusLabels: Record<string, string> = useMemo(() => ({
     open: t("inbox.statusOpen"),
     pending: t("inbox.statusPending"),
@@ -346,7 +348,11 @@ export default function InboxPage() {
   const allTagsQuery = useQuery({ queryKey: ["tags"], queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data });
   const conversationTagsQuery = useQuery({ queryKey: ["conversation-tags", selectedId], enabled: Boolean(selectedId), queryFn: async () => (await api.get<Tag[]>(`/inbox-tools/conversations/${selectedId}/tags`)).data });
   const notesQuery = useQuery({ queryKey: ["conversation-notes", selectedId], enabled: Boolean(selectedId), queryFn: async () => (await api.get<Note[]>(`/inbox-tools/conversations/${selectedId}/notes`)).data });
-  const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: async () => (await api.get("/team/employees")).data });
+  const employeesQuery = useQuery({
+    queryKey: ["employees"],
+    enabled: canViewUsers,
+    queryFn: async () => (await api.get("/team/employees")).data
+  });
   const selectedConversation = useMemo(() => conversations.find((item) => item.id === selectedId) ?? null, [conversations, selectedId]);
   const quickRepliesQuery = useQuery({
     queryKey: ["quick-replies", selectedConversation?.organization_id, selectedConversation?.channel_id],

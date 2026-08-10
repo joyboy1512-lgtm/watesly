@@ -81,9 +81,23 @@ export function formatApiError(error: unknown, fallback = "تعذر إكمال �
     if (messages.length) return messages.join(" · ");
   }
   if (detail && typeof detail === "object" && "code" in detail) {
-    return String((detail as { code?: string }).code);
+    const code = String((detail as { code?: string }).code ?? "");
+    if (code === "MISSING_PERMISSION") {
+      return "لا تملك صلاحية تنفيذ هذا الإجراء.";
+    }
+    return code;
   }
   return fallback;
+}
+
+function isMissingPermissionError(error: AxiosError): boolean {
+  const detail = parseResponseDetail(error.response?.data);
+  return Boolean(
+    detail &&
+      typeof detail === "object" &&
+      "code" in detail &&
+      (detail as { code?: string }).code === "MISSING_PERMISSION"
+  );
 }
 
 api.interceptors.request.use((config) => {
@@ -97,7 +111,15 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const original = error.config as RetriableRequest | undefined;
-    const skipToast = Boolean(original?.skipGlobalErrorToast) || isRequestCanceled(error);
+    let skipToast = Boolean(original?.skipGlobalErrorToast) || isRequestCanceled(error);
+    if (
+      !skipToast &&
+      error.response?.status === 403 &&
+      isMissingPermissionError(error) &&
+      original?.method?.toUpperCase() === "GET"
+    ) {
+      skipToast = true;
+    }
     if (error.response?.status !== 401 || original?._retry) {
       if (!skipToast) {
         const status = error.response?.status;

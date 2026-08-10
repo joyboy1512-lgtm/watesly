@@ -1,39 +1,23 @@
 import { useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { authStore } from "../stores/auth";
 import { themeStore } from "../stores/theme";
 import { useTheme } from "../hooks/useTheme";
-import { api } from "../lib/api";
+import { useCurrentUser } from "../hooks/usePermissions";
 import Icon from "./Icon";
 import NotificationMenu from "./NotificationMenu";
 import LanguageSwitcher from "./LanguageSwitcher";
 import BrandLogo from "./BrandLogo";
 import RequirePermission from "./RequirePermission";
-
 import { filterNavItems, hasNavPermission } from "../lib/navPermissions";
 import { formatRoleLabel, type MembershipRole } from "../lib/teamHelpers";
-
-type CurrentUser = {
-  full_name: string;
-  email: string;
-  is_super_admin: boolean;
-  role?: string;
-  permissions?: string[];
-  branch_name?: string | null;
-  account_name?: string | null;
-  organizations?: Array<{ id: string; name: string }>;
-};
 
 export default function AppLayout() {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const profile = useQuery({
-    queryKey: ["current-user"],
-    queryFn: async () => (await api.get<CurrentUser>("/auth/me")).data
-  });
+  const profile = useCurrentUser();
   const displayName = profile.data?.full_name ?? "Watesly User";
   const branchSubtitle = profile.data?.branch_name?.trim() || t("shell.brandTagline");
   const roleSubtitle = profile.data?.is_super_admin
