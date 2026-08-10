@@ -679,12 +679,5 @@ export default function TeamPage() {
 }
 
 function getRolePermissionsLabel(role: MembershipRole): string {
-  const counts: Record<MembershipRole, number> = {
-    owner: 28,
-    admin: 28,
-    manager: 19,
-    agent: 10,
-    viewer: 10
-  };
-  return `${counts[role] ?? 0} صلاحية مفعّلة`;
+  return `${getRolePermissions(role).size} صلاحية مفعّلة`;
 }
