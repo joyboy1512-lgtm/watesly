@@ -311,3 +311,182 @@ export async function downloadCatalogExport(options: CatalogExportOptions = {}) 
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+export type MetaVariantFormState = {
+  clientKey: string;
+  id: string;
+  sku: string;
+  metaRetailerId: string;
+  variantSize: string;
+  variantColor: string;
+  variantAttributes: Record<string, string>;
+  price: string;
+  imageUrl: string;
+  sortOrder: string;
+};
+
+export type MetaGroupFormState = {
+  metaItemGroupId: string;
+  baseName: string;
+  organizationId: string;
+  category: string;
+  description: string;
+  productType: "product" | "service";
+  currency: string;
+  priceType: "fixed" | "from" | "quote";
+  metaSyncEnabled: boolean;
+  variants: MetaVariantFormState[];
+};
+
+export type MetaGroupResponse = {
+  meta_item_group_id: string;
+  base_name: string;
+  organization_id: string | null;
+  category: string | null;
+  description: string | null;
+  product_type: string;
+  currency: string;
+  price_type: string;
+  meta_sync_enabled: boolean;
+  variants: Array<{
+    id: string;
+    name: string;
+    sku: string | null;
+    meta_retailer_id: string | null;
+    variant_size: string | null;
+    variant_color: string | null;
+    variant_attributes: Record<string, string>;
+    price: string | null;
+    image_url: string | null;
+    sort_order: number;
+    meta_sync_status: string | null;
+    meta_review_status: string | null;
+  }>;
+};
+
+let metaVariantKeyCounter = 0;
+
+export function newMetaVariantKey() {
+  metaVariantKeyCounter += 1;
+  return `variant-${metaVariantKeyCounter}`;
+}
+
+export function emptyMetaVariant(index = 0): MetaVariantFormState {
+  return {
+    clientKey: newMetaVariantKey(),
+    id: "",
+    sku: "",
+    metaRetailerId: "",
+    variantSize: "",
+    variantColor: "",
+    variantAttributes: {},
+    price: "",
+    imageUrl: "",
+    sortOrder: String(index)
+  };
+}
+
+export function emptyMetaGroupForm(): MetaGroupFormState {
+  return {
+    metaItemGroupId: "",
+    baseName: "",
+    organizationId: "",
+    category: "",
+    description: "",
+    productType: "product",
+    currency: "KWD",
+    priceType: "fixed",
+    metaSyncEnabled: true,
+    variants: [emptyMetaVariant(0)]
+  };
+}
+
+export function slugifyMetaGroupId(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+}
+
+export function metaGroupFormFromResponse(group: MetaGroupResponse): MetaGroupFormState {
+  return {
+    metaItemGroupId: group.meta_item_group_id,
+    baseName: group.base_name,
+    organizationId: group.organization_id ?? "",
+    category: group.category ?? "",
+    description: group.description ?? "",
+    productType: group.product_type === "service" ? "service" : "product",
+    currency: group.currency || "KWD",
+    priceType: (group.price_type as MetaGroupFormState["priceType"]) || "fixed",
+    metaSyncEnabled: group.meta_sync_enabled !== false,
+    variants: group.variants.map((variant, index) => ({
+      clientKey: newMetaVariantKey(),
+      id: variant.id,
+      sku: variant.sku ?? "",
+      metaRetailerId: variant.meta_retailer_id ?? "",
+      variantSize: variant.variant_size ?? "",
+      variantColor: variant.variant_color ?? "",
+      variantAttributes: { ...(variant.variant_attributes ?? {}) },
+      price: variant.price ?? "",
+      imageUrl: variant.image_url ?? "",
+      sortOrder: String(variant.sort_order ?? index)
+    }))
+  };
+}
+
+export function buildMetaGroupPayload(form: MetaGroupFormState) {
+  return {
+    meta_item_group_id: form.metaItemGroupId.trim(),
+    base_name: form.baseName.trim(),
+    organization_id: form.organizationId || null,
+    category: form.category.trim() || null,
+    description: form.description.trim() || null,
+    product_type: form.productType,
+    currency: form.currency.trim() || "KWD",
+    price_type: form.priceType,
+    meta_sync_enabled: form.metaSyncEnabled,
+    variants: form.variants.map((variant, index) => ({
+      ...(variant.id ? { id: variant.id } : {}),
+      sku: variant.sku.trim() || null,
+      meta_retailer_id: variant.metaRetailerId.trim() || null,
+      variant_size: variant.variantSize.trim() || null,
+      variant_color: variant.variantColor.trim() || null,
+      variant_attributes: variant.variantAttributes,
+      price: form.priceType === "quote" ? null : variant.price.trim() ? Number(variant.price) : null,
+      image_url: variant.imageUrl.trim() || null,
+      sort_order: Number(variant.sortOrder) || index
+    }))
+  };
+}
+
+export function metaGroupReady(form: MetaGroupFormState) {
+  if (!form.baseName.trim() || !form.metaItemGroupId.trim()) return false;
+  if (!form.variants.length) return false;
+  if (form.priceType !== "quote") {
+    return form.variants.every((variant) => variant.price.trim());
+  }
+  return true;
+}
+
+export function metaGroupSyncMessages(group: MetaGroupResponse): string[] {
+  const messages: string[] = [];
+  for (const variant of group.variants) {
+    const product = {
+      meta_sync_enabled: group.meta_sync_enabled,
+      meta_sync_status: variant.meta_sync_status,
+      meta_review_status: variant.meta_review_status,
+      meta_sync_error: null,
+      meta_review_detail: null,
+      external_id: variant.meta_sync_status === "synced" ? "1" : null
+    } as CatalogProduct;
+    const message = catalogMetaAutoSyncMessage(product);
+    if (message && !messages.includes(message)) {
+      messages.push(message);
+    }
+  }
+  return messages;
+}

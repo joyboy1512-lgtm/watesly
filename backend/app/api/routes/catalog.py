@@ -26,6 +26,11 @@ from app.services.catalog_commerce import (
     list_catalog_variant_groups,
     prepare_catalog_commerce_ids,
 )
+from app.services.catalog_meta_group import (
+    create_catalog_meta_group,
+    get_catalog_meta_group,
+    update_catalog_meta_group,
+)
 from app.services.knowledge_base import suggest_smart_reply
 
 router = APIRouter()
@@ -95,6 +100,46 @@ class CatalogPreviewRequest(BaseModel):
     product_ids: list[UUID] = Field(default_factory=list)
 
 
+class MetaGroupVariantPayload(BaseModel):
+    id: UUID | None = None
+    name: str | None = None
+    sku: str | None = None
+    meta_retailer_id: str | None = None
+    variant_size: str | None = None
+    variant_color: str | None = None
+    variant_attributes: dict = Field(default_factory=dict)
+    price: Decimal | None = None
+    image_url: str | None = None
+    sort_order: int | None = None
+
+
+class MetaGroupPayload(BaseModel):
+    meta_item_group_id: str = Field(min_length=1, max_length=80)
+    base_name: str = Field(min_length=1, max_length=200)
+    organization_id: UUID | None = None
+    category: str | None = None
+    description: str | None = None
+    product_type: str = Field(default="product", pattern=r"^(product|service)$")
+    currency: str = "KWD"
+    price_type: str = Field(default="fixed", pattern=r"^(fixed|from|quote)$")
+    meta_sync_enabled: bool = True
+    variants: list[MetaGroupVariantPayload] = Field(min_length=1)
+
+
+_META_GROUP_ERRORS = {
+    "GROUP_ID_REQUIRED": "أدخل معرّف مجموعة المنتج (item_group_id).",
+    "VARIANTS_REQUIRED": "أضف نسخة واحدة على الأقل.",
+    "GROUP_NOT_FOUND": "مجموعة المنتج غير موجودة.",
+    "ORGANIZATION_REQUIRED": "اختر الفرع قبل حفظ المنتج",
+    "ACCESS_FORBIDDEN": "لا تملك صلاحية على هذا الفرع",
+}
+
+
+def _meta_group_http_error(exc: ValueError) -> HTTPException:
+    code = str(exc)
+    return HTTPException(status_code=400 if code in _META_GROUP_ERRORS else 404, detail=_META_GROUP_ERRORS.get(code, code))
+
+
 @router.get("")
 async def get_catalog(
     include_inactive: bool = Query(False),
@@ -149,6 +194,79 @@ async def get_catalog_variant_groups(
     db: AsyncSession = Depends(get_db),
 ):
     return await list_catalog_variant_groups(db, context.account_id)
+
+
+@router.get("/meta-group/{group_id}")
+async def get_meta_group(
+    group_id: str,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await get_catalog_meta_group(
+            db,
+            account_id=context.account_id,
+            meta_item_group_id=group_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        raise _meta_group_http_error(exc) from exc
+
+
+@router.post("/meta-group", status_code=status.HTTP_201_CREATED)
+async def post_meta_group(
+    payload: MetaGroupPayload,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await create_catalog_meta_group(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            meta_item_group_id=payload.meta_item_group_id,
+            base_name=payload.base_name,
+            organization_id=payload.organization_id,
+            category=payload.category,
+            description=payload.description,
+            product_type=payload.product_type,
+            currency=payload.currency,
+            price_type=payload.price_type,
+            meta_sync_enabled=payload.meta_sync_enabled,
+            variants=[variant.model_dump() for variant in payload.variants],
+        )
+    except ValueError as exc:
+        raise _meta_group_http_error(exc) from exc
+
+
+@router.put("/meta-group/{group_id}")
+async def put_meta_group(
+    group_id: str,
+    payload: MetaGroupPayload,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    normalized = payload.meta_item_group_id.strip()
+    if normalized != group_id.strip():
+        raise HTTPException(status_code=400, detail="معرّف المجموعة في الرابط لا يطابق البيانات.")
+    try:
+        return await update_catalog_meta_group(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            meta_item_group_id=group_id,
+            base_name=payload.base_name,
+            organization_id=payload.organization_id,
+            category=payload.category,
+            description=payload.description,
+            product_type=payload.product_type,
+            currency=payload.currency,
+            price_type=payload.price_type,
+            meta_sync_enabled=payload.meta_sync_enabled,
+            variants=[variant.model_dump() for variant in payload.variants],
+        )
+    except ValueError as exc:
+        raise _meta_group_http_error(exc) from exc
 
 
 @router.post("/prepare-commerce")

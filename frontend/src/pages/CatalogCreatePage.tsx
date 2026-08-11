@@ -2,25 +2,34 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import CatalogMetaProductWizard from "../components/CatalogMetaProductWizard";
 import CatalogProductFormFields from "../components/CatalogProductFormFields";
 import {
+  buildMetaGroupPayload,
   buildProductPayload,
   catalogMetaAutoSyncMessage,
+  emptyMetaGroupForm,
   emptyProductForm,
-  type CatalogProduct,
+  metaGroupReady,
+  metaGroupSyncMessages,
+  slugifyMetaGroupId,
+  type MetaGroupResponse,
   type ProductFormState
 } from "../lib/catalogHelpers";
 import { uploadFile } from "../lib/uploads";
 import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
+type CreateMode = "meta" | "single";
 
 export default function CatalogCreatePage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<CreateMode>("meta");
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<ProductFormState>(emptyProductForm);
+  const [metaForm, setMetaForm] = useState(emptyMetaGroupForm);
+  const [singleForm, setSingleForm] = useState<ProductFormState>(emptyProductForm);
   const [specKey, setSpecKey] = useState("");
   const [specValue, setSpecValue] = useState("");
   const [variantSpecKey, setVariantSpecKey] = useState("");
@@ -46,18 +55,28 @@ export default function CatalogCreatePage() {
   useEffect(() => {
     const presetCategory = searchParams.get("category")?.trim();
     if (!presetCategory) return;
-    setForm((current) => ({ ...current, category: presetCategory }));
+    setMetaForm((current) => ({ ...current, category: presetCategory }));
+    setSingleForm((current) => ({ ...current, category: presetCategory }));
   }, [searchParams]);
 
   useEffect(() => {
     const orgs = organizations.data ?? [];
     if (orgs.length !== 1) return;
-    setForm((current) => (current.organizationId ? current : { ...current, organizationId: orgs[0].id }));
+    setMetaForm((current) => (current.organizationId ? current : { ...current, organizationId: orgs[0].id }));
+    setSingleForm((current) => (current.organizationId ? current : { ...current, organizationId: orgs[0].id }));
   }, [organizations.data]);
+
+  useEffect(() => {
+    if (mode !== "meta") return;
+    if (metaForm.metaItemGroupId.trim()) return;
+    const slug = slugifyMetaGroupId(metaForm.baseName);
+    if (!slug) return;
+    setMetaForm((current) => ({ ...current, metaItemGroupId: slug }));
+  }, [metaForm.baseName, metaForm.metaItemGroupId, mode]);
 
   function addSpec() {
     if (!specKey.trim()) return;
-    setForm((current) => ({
+    setSingleForm((current) => ({
       ...current,
       specs: { ...current.specs, [specKey.trim()]: specValue.trim() }
     }));
@@ -66,7 +85,7 @@ export default function CatalogCreatePage() {
   }
 
   function removeSpec(key: string) {
-    setForm((current) => {
+    setSingleForm((current) => {
       const next = { ...current.specs };
       delete next[key];
       return { ...current, specs: next };
@@ -75,7 +94,7 @@ export default function CatalogCreatePage() {
 
   function addVariantSpec() {
     if (!variantSpecKey.trim()) return;
-    setForm((current) => ({
+    setSingleForm((current) => ({
       ...current,
       variantAttributes: {
         ...current.variantAttributes,
@@ -87,7 +106,7 @@ export default function CatalogCreatePage() {
   }
 
   function removeVariantSpec(key: string) {
-    setForm((current) => {
+    setSingleForm((current) => {
       const next = { ...current.variantAttributes };
       delete next[key];
       return { ...current, variantAttributes: next };
@@ -102,7 +121,7 @@ export default function CatalogCreatePage() {
     setUploadingImage(true);
     try {
       const uploaded = await uploadFile(file);
-      setForm((current) => ({ ...current, imageUrl: uploaded.public_url }));
+      setSingleForm((current) => ({ ...current, imageUrl: uploaded.public_url }));
       toastStore.getState().show("تم رفع الصورة.", "success");
     } catch {
       toastStore.getState().show("تعذر رفع الصورة.", "error");
@@ -111,11 +130,41 @@ export default function CatalogCreatePage() {
     }
   }
 
-  async function createProduct(event: FormEvent) {
+  async function saveMetaGroup() {
+    if (!metaGroupReady(metaForm)) {
+      toastStore.getState().show("أكمل الحقول المطلوبة لكل النسخ.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await api.post<MetaGroupResponse>("/catalog/meta-group", buildMetaGroupPayload(metaForm));
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      await client.invalidateQueries({ queryKey: ["catalog-categories"] });
+      await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
+      toastStore.getState().show(`تم حفظ ${response.data.variants.length} نسخة في المجموعة.`, "success");
+      for (const message of metaGroupSyncMessages(response.data)) {
+        toastStore.getState().show(message, message.includes("رفض") || message.includes("تعذر") ? "error" : "success");
+      }
+      navigate("/catalog", { replace: true });
+    } catch (error: unknown) {
+      const detail =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response: { data: { detail: string } } }).response.data.detail
+          : null;
+      toastStore.getState().show(detail ?? "تعذر حفظ المجموعة.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createSingleProduct(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     try {
-      const response = await api.post<CatalogProduct>("/catalog", buildProductPayload(form));
+      const response = await api.post("/catalog", buildProductPayload(singleForm));
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
       await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
@@ -163,7 +212,8 @@ export default function CatalogCreatePage() {
     }
   }
 
-  const ready = Boolean(form.name.trim()) && (form.priceType === "quote" || form.price.trim());
+  const singleReady = Boolean(singleForm.name.trim()) && (singleForm.priceType === "quote" || singleForm.price.trim());
+  const metaReady = metaGroupReady(metaForm);
 
   return (
     <main className="page catalog-page contacts-erp-page">
@@ -171,41 +221,80 @@ export default function CatalogCreatePage() {
         <header className="contacts-form-topbar">
           <div className="contacts-erp-title-block">
             <Link to="/catalog" className="contacts-back-link">← المنتجات والخدمات</Link>
-            <h1>إنشاء منتج أو خدمة</h1>
+            <h1>إنشاء منتج Meta</h1>
           </div>
           <div className="contacts-form-topbar-actions">
-            <button type="submit" form="catalog-create-form" className="contacts-erp-btn contacts-erp-btn-primary" disabled={!ready || saving}>
-              {saving ? "جاري الحفظ…" : "حفظ"}
-            </button>
+            {mode === "meta" ? (
+              <button
+                type="button"
+                className="contacts-erp-btn contacts-erp-btn-primary"
+                disabled={!metaReady || saving}
+                onClick={() => void saveMetaGroup()}
+              >
+                {saving ? "جاري الحفظ…" : "حفظ المجموعة"}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                form="catalog-single-form"
+                className="contacts-erp-btn contacts-erp-btn-primary"
+                disabled={!singleReady || saving}
+              >
+                {saving ? "جاري الحفظ…" : "حفظ"}
+              </button>
+            )}
             <Link to="/catalog" className="contacts-erp-btn">إلغاء</Link>
           </div>
         </header>
 
+        <div className="catalog-create-mode-tabs">
+          <button type="button" className={mode === "meta" ? "active" : ""} onClick={() => setMode("meta")}>
+            Meta — نسخ متعددة
+          </button>
+          <button type="button" className={mode === "single" ? "active" : ""} onClick={() => setMode("single")}>
+            منتج واحد
+          </button>
+        </div>
+
         <div className="catalog-create-layout">
-          <form id="catalog-create-form" className="catalog-panel stack-form" onSubmit={(e) => void createProduct(e)}>
-            <h2 className="section-title-sm">بيانات المنتج</h2>
-            <CatalogProductFormFields
-              form={form}
-              setForm={setForm}
-              organizations={organizations.data ?? []}
-              categories={categories.data ?? []}
-              variantGroups={variantGroups.data ?? []}
-              specKey={specKey}
-              setSpecKey={setSpecKey}
-              specValue={specValue}
-              setSpecValue={setSpecValue}
-              onAddSpec={addSpec}
-              onRemoveSpec={removeSpec}
-              variantSpecKey={variantSpecKey}
-              setVariantSpecKey={setVariantSpecKey}
-              variantSpecValue={variantSpecValue}
-              setVariantSpecValue={setVariantSpecValue}
-              onAddVariantSpec={addVariantSpec}
-              onRemoveVariantSpec={removeVariantSpec}
-              uploadingImage={uploadingImage}
-              onUploadImage={(file) => void uploadProductImage(file)}
-            />
-          </form>
+          {mode === "meta" ? (
+            <div className="catalog-panel catalog-meta-wizard-panel">
+              <CatalogMetaProductWizard
+                form={metaForm}
+                setForm={setMetaForm}
+                organizations={organizations.data ?? []}
+                categories={categories.data ?? []}
+                variantGroups={variantGroups.data ?? []}
+                onSubmit={() => void saveMetaGroup()}
+                saving={saving}
+              />
+            </div>
+          ) : (
+            <form id="catalog-single-form" className="catalog-panel stack-form" onSubmit={(e) => void createSingleProduct(e)}>
+              <h2 className="section-title-sm">منتج أو خدمة واحدة</h2>
+              <CatalogProductFormFields
+                form={singleForm}
+                setForm={setSingleForm}
+                organizations={organizations.data ?? []}
+                categories={categories.data ?? []}
+                variantGroups={variantGroups.data ?? []}
+                specKey={specKey}
+                setSpecKey={setSpecKey}
+                specValue={specValue}
+                setSpecValue={setSpecValue}
+                onAddSpec={addSpec}
+                onRemoveSpec={removeSpec}
+                variantSpecKey={variantSpecKey}
+                setVariantSpecKey={setVariantSpecKey}
+                variantSpecValue={variantSpecValue}
+                setVariantSpecValue={setVariantSpecValue}
+                onAddVariantSpec={addVariantSpec}
+                onRemoveVariantSpec={removeVariantSpec}
+                uploadingImage={uploadingImage}
+                onUploadImage={(file) => void uploadProductImage(file)}
+              />
+            </form>
+          )}
 
           <form className="catalog-panel stack-form" onSubmit={(e) => void importCatalog(e)}>
             <h2 className="section-title-sm">استيراد من Excel</h2>
@@ -224,7 +313,7 @@ export default function CatalogCreatePage() {
               <input name="file" type="file" accept=".xlsx,.xlsm,.csv,text/csv" required />
             </label>
             <p className="hint-text">
-              الأعمدة: name · sku · price · meta_item_group_id · variant_size · variant_color · category · specs
+              الأعمدة: name · sku · price · meta_item_group_id · variant_size · variant_color · category · image_url
             </p>
             <button type="submit" className="contacts-erp-btn">استيراد المنتجات</button>
           </form>

@@ -354,7 +354,7 @@ export default function CatalogPage() {
         <div className="contacts-erp-toolbar">
           <div className="contacts-erp-actions">
             <Link to="/catalog/new" className="contacts-erp-btn contacts-erp-btn-primary">
-              إنشاء منتج
+              إنشاء منتج Meta
             </Link>
             <Link to="/catalog/category/new" className="contacts-erp-btn">
               إنشاء صنف
@@ -541,6 +541,14 @@ export default function CatalogPage() {
                     </td>
                     <td>
                       <div className="catalog-table-actions">
+                        {item.meta_item_group_id?.trim() && (
+                          <Link
+                            to={`/catalog/group/${encodeURIComponent(item.meta_item_group_id.trim())}/edit`}
+                            className="contacts-erp-btn"
+                          >
+                            تعديل المجموعة
+                          </Link>
+                        )}
                         <button type="button" className="contacts-erp-btn" onClick={() => openEdit(item)}>تعديل</button>
                         {item.is_active && item.meta_sync_enabled !== false && (
                           <button

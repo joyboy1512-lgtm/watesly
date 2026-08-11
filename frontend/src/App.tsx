@@ -24,6 +24,7 @@ import ReportsPage from "./pages/ReportsPage";
 import DeveloperPage from "./pages/DeveloperPage";
 import CatalogPage from "./pages/CatalogPage";
 import CatalogCreatePage from "./pages/CatalogCreatePage";
+import CatalogGroupEditPage from "./pages/CatalogGroupEditPage";
 import CatalogCategoryCreatePage from "./pages/CatalogCategoryCreatePage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
@@ -78,6 +79,7 @@ export default function App() {
         <Route path="/developer" element={<DeveloperPage />} />
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/catalog/new" element={<CatalogCreatePage />} />
+        <Route path="/catalog/group/:groupKey/edit" element={<CatalogGroupEditPage />} />
         <Route path="/catalog/category/new" element={<CatalogCategoryCreatePage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/assignments" element={<AssignmentsPage />} />

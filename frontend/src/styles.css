@@ -3812,6 +3812,102 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 16px;
   padding: 0 18px 18px;
 }
+.catalog-create-mode-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 18px 12px;
+}
+.catalog-create-mode-tabs button {
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.catalog-create-mode-tabs button.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.catalog-meta-wizard-panel {
+  grid-column: 1 / -1;
+}
+.catalog-meta-wizard {
+  display: grid;
+  gap: 20px;
+}
+.catalog-meta-wizard-section {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--panel);
+}
+.catalog-meta-wizard-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.catalog-meta-wizard-inline-action {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 2px;
+}
+.catalog-variant-cards {
+  display: grid;
+  gap: 14px;
+}
+.catalog-variant-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  overflow: hidden;
+}
+.catalog-variant-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(1, 126, 132, 0.06);
+}
+.catalog-variant-card-body {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px;
+}
+.catalog-variant-card-image {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.catalog-variant-card-image .catalog-form-image {
+  width: 100%;
+  max-width: 180px;
+  height: 140px;
+  object-fit: cover;
+}
+.catalog-variant-card-fields {
+  display: grid;
+  gap: 10px;
+}
+.catalog-variant-attrs {
+  display: grid;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .catalog-variant-card-body {
+    grid-template-columns: 1fr;
+  }
+}
 .catalog-erp-table code {
   font-size: 12px;
   color: var(--muted);
