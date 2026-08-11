@@ -2,11 +2,12 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import CatalogProductFormFields from "../components/CatalogProductFormFields";
+import CatalogSimpleProductForm from "../components/CatalogSimpleProductForm";
 import Icon from "../components/Icon";
 import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
 import {
   buildProductPayload,
+  buildSimpleProductPayload,
   catalogMetaAutoSyncMessage,
   catalogMetaStatusLabel,
   catalogPriceLabel,
@@ -16,6 +17,7 @@ import {
   filterCatalogByType,
   formatCatalogVariantLabel,
   productFormFromCatalog,
+  simpleProductFormReady,
   sortCatalogProducts,
   type CatalogListTab,
   type CatalogProduct,
@@ -44,10 +46,6 @@ export default function CatalogPage() {
 
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
   const [editForm, setEditForm] = useState<ProductFormState>(emptyProductForm);
-  const [editSpecKey, setEditSpecKey] = useState("");
-  const [editSpecValue, setEditSpecValue] = useState("");
-  const [editVariantSpecKey, setEditVariantSpecKey] = useState("");
-  const [editVariantSpecValue, setEditVariantSpecValue] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [refreshingMetaStatus, setRefreshingMetaStatus] = useState(false);
   const [syncingProductId, setSyncingProductId] = useState<string | null>(null);
@@ -130,50 +128,23 @@ export default function CatalogPage() {
   const pageEnd = Math.min(safePage * PAGE_SIZE, total);
   const pageRows = visibleProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  function addEditSpec() {
-    if (!editSpecKey.trim()) return;
-    setEditForm((current) => ({
-      ...current,
-      specs: { ...current.specs, [editSpecKey.trim()]: editSpecValue.trim() }
-    }));
-    setEditSpecKey("");
-    setEditSpecValue("");
-  }
-
-  function removeEditSpec(key: string) {
-    setEditForm((current) => {
-      const next = { ...current.specs };
-      delete next[key];
-      return { ...current, specs: next };
-    });
-  }
-
-  function addEditVariantSpec() {
-    if (!editVariantSpecKey.trim()) return;
-    setEditForm((current) => ({
-      ...current,
-      variantAttributes: {
-        ...current.variantAttributes,
-        [editVariantSpecKey.trim()]: editVariantSpecValue.trim()
-      }
-    }));
-    setEditVariantSpecKey("");
-    setEditVariantSpecValue("");
-  }
-
-  function removeEditVariantSpec(key: string) {
-    setEditForm((current) => {
-      const next = { ...current.variantAttributes };
-      delete next[key];
-      return { ...current, variantAttributes: next };
-    });
+  function openEdit(product: CatalogProduct) {
+    setEditingProduct(product);
+    setEditForm(productFormFromCatalog(product));
   }
 
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
     if (!editingProduct) return;
+    if (!editingProduct.meta_item_group_id?.trim() && !simpleProductFormReady(editForm)) {
+      toastStore.getState().show("أكمل: الاسم، السعر، والصورة.", "error");
+      return;
+    }
     try {
-      const response = await api.patch<CatalogProduct>(`/catalog/${editingProduct.id}`, buildProductPayload(editForm));
+      const payload = editingProduct.meta_item_group_id?.trim()
+        ? buildProductPayload(editForm)
+        : buildSimpleProductPayload(editForm);
+      const response = await api.patch<CatalogProduct>(`/catalog/${editingProduct.id}`, payload);
       setEditingProduct(null);
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
@@ -203,15 +174,6 @@ export default function CatalogPage() {
     await api.patch(`/catalog/${id}`, { is_active: true });
     await client.invalidateQueries({ queryKey: ["catalog"] });
     toastStore.getState().show("تم استرجاع المنتج.", "success");
-  }
-
-  function openEdit(product: CatalogProduct) {
-    setEditingProduct(product);
-    setEditForm(productFormFromCatalog(product));
-    setEditSpecKey("");
-    setEditSpecValue("");
-    setEditVariantSpecKey("");
-    setEditVariantSpecValue("");
   }
 
   async function uploadProductImage(file: File) {
@@ -360,7 +322,7 @@ export default function CatalogPage() {
           <div className="contacts-erp-actions">
             <Link to="/catalog/orders" className="contacts-erp-btn">طلبات الكتالوج</Link>
             <Link to="/catalog/new" className="contacts-erp-btn contacts-erp-btn-primary">
-              إنشاء منتج Meta
+              إضافة منتج
             </Link>
             <Link to="/catalog/category/new" className="contacts-erp-btn">
               إنشاء صنف
@@ -632,34 +594,35 @@ export default function CatalogPage() {
       {editingProduct && (
         <div className="catalog-edit-overlay" role="dialog" aria-modal="true">
           <button type="button" className="catalog-edit-backdrop" aria-label="إغلاق" onClick={() => setEditingProduct(null)} />
-          <form className="catalog-edit-panel stack-form" onSubmit={saveEdit}>
+          <form className="catalog-edit-panel stack-form catalog-simple-edit-panel" onSubmit={saveEdit}>
             <div className="catalog-edit-head">
               <h3>تعديل: {editingProduct.name}</h3>
               <button type="button" className="panel-close" onClick={() => setEditingProduct(null)}>×</button>
             </div>
-            <CatalogProductFormFields
-              form={editForm}
-              setForm={setEditForm}
-              organizations={organizations.data ?? []}
-              categories={categories.data ?? []}
-              variantGroups={variantGroups.data ?? []}
-              specKey={editSpecKey}
-              setSpecKey={setEditSpecKey}
-              specValue={editSpecValue}
-              setSpecValue={setEditSpecValue}
-              onAddSpec={addEditSpec}
-              onRemoveSpec={removeEditSpec}
-              variantSpecKey={editVariantSpecKey}
-              setVariantSpecKey={setEditVariantSpecKey}
-              variantSpecValue={editVariantSpecValue}
-              setVariantSpecValue={setEditVariantSpecValue}
-              onAddVariantSpec={addEditVariantSpec}
-              onRemoveVariantSpec={removeEditVariantSpec}
-              uploadingImage={uploadingImage}
-              onUploadImage={(file) => void uploadProductImage(file)}
-            />
+            {editingProduct.meta_item_group_id?.trim() ? (
+              <div className="catalog-group-edit-notice">
+                <p className="hint-text">هذا المنتج جزء من مجموعة Meta — عدّله من صفحة المجموعة.</p>
+                <Link
+                  to={`/catalog/group/${encodeURIComponent(editingProduct.meta_item_group_id.trim())}/edit`}
+                  className="contacts-erp-btn"
+                  onClick={() => setEditingProduct(null)}
+                >
+                  تعديل المجموعة
+                </Link>
+              </div>
+            ) : (
+              <CatalogSimpleProductForm
+                form={editForm}
+                setForm={setEditForm}
+                organizations={organizations.data ?? []}
+                uploadingImage={uploadingImage}
+                onUploadImage={(file) => void uploadProductImage(file)}
+              />
+            )}
             <div className="catalog-card-actions">
-              <button type="submit" className="whatsapp-button">حفظ التعديلات</button>
+              {!editingProduct.meta_item_group_id?.trim() && (
+                <button type="submit" className="whatsapp-button">حفظ التعديلات</button>
+              )}
               <button type="button" className="secondary-button" onClick={() => setEditingProduct(null)}>إلغاء</button>
             </div>
           </form>

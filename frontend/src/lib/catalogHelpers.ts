@@ -145,6 +145,41 @@ export function buildProductPayload(form: ProductFormState) {
   };
 }
 
+export function buildSimpleProductPayload(form: ProductFormState) {
+  const price = Number(form.price);
+  return {
+    organization_id: form.organizationId || null,
+    name: form.name.trim(),
+    sku: form.sku.trim() || null,
+    product_type: "product" as const,
+    description: form.description.trim() || form.name.trim(),
+    price: Number.isFinite(price) && price > 0 ? price : null,
+    currency: form.currency.trim() || "KWD",
+    price_type: "fixed" as const,
+    specs_json: {},
+    keywords: null,
+    image_url: form.imageUrl.trim() || null,
+    category: null,
+    meta_retailer_id: form.sku.trim() || null,
+    meta_item_group_id: null,
+    variant_size: null,
+    variant_color: null,
+    variant_attributes: {},
+    meta_sync_enabled: form.metaSyncEnabled,
+    sort_order: 0
+  };
+}
+
+export function simpleProductFormReady(form: ProductFormState) {
+  const price = Number(form.price);
+  return (
+    Boolean(form.name.trim()) &&
+    Boolean(form.imageUrl.trim()) &&
+    Number.isFinite(price) &&
+    price > 0
+  );
+}
+
 export function sortCatalogProducts(items: CatalogProduct[]) {
   return [...items].sort((left, right) => {
     const orderDiff = (left.sort_order ?? 0) - (right.sort_order ?? 0);

@@ -3,16 +3,17 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import CatalogMetaProductWizard from "../components/CatalogMetaProductWizard";
-import CatalogProductFormFields from "../components/CatalogProductFormFields";
+import CatalogSimpleProductForm from "../components/CatalogSimpleProductForm";
 import {
   buildMetaGroupPayload,
-  buildProductPayload,
+  buildSimpleProductPayload,
   catalogMetaAutoSyncMessage,
   emptyMetaGroupForm,
   emptyProductForm,
   metaGroupReady,
   metaGroupSyncMessages,
   slugifyMetaGroupId,
+  simpleProductFormReady,
   type MetaGroupResponse,
   type ProductFormState
 } from "../lib/catalogHelpers";
@@ -20,20 +21,16 @@ import { uploadFile } from "../lib/uploads";
 import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
-type CreateMode = "meta" | "single";
+type CreateMode = "single" | "meta";
 
 export default function CatalogCreatePage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<CreateMode>("meta");
+  const [mode, setMode] = useState<CreateMode>("single");
   const [saving, setSaving] = useState(false);
   const [metaForm, setMetaForm] = useState(emptyMetaGroupForm);
   const [singleForm, setSingleForm] = useState<ProductFormState>(emptyProductForm);
-  const [specKey, setSpecKey] = useState("");
-  const [specValue, setSpecValue] = useState("");
-  const [variantSpecKey, setVariantSpecKey] = useState("");
-  const [variantSpecValue, setVariantSpecValue] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [importOrganizationId, setImportOrganizationId] = useState("");
 
@@ -56,7 +53,6 @@ export default function CatalogCreatePage() {
     const presetCategory = searchParams.get("category")?.trim();
     if (!presetCategory) return;
     setMetaForm((current) => ({ ...current, category: presetCategory }));
-    setSingleForm((current) => ({ ...current, category: presetCategory }));
   }, [searchParams]);
 
   useEffect(() => {
@@ -73,45 +69,6 @@ export default function CatalogCreatePage() {
     if (!slug) return;
     setMetaForm((current) => ({ ...current, metaItemGroupId: slug }));
   }, [metaForm.baseName, metaForm.metaItemGroupId, mode]);
-
-  function addSpec() {
-    if (!specKey.trim()) return;
-    setSingleForm((current) => ({
-      ...current,
-      specs: { ...current.specs, [specKey.trim()]: specValue.trim() }
-    }));
-    setSpecKey("");
-    setSpecValue("");
-  }
-
-  function removeSpec(key: string) {
-    setSingleForm((current) => {
-      const next = { ...current.specs };
-      delete next[key];
-      return { ...current, specs: next };
-    });
-  }
-
-  function addVariantSpec() {
-    if (!variantSpecKey.trim()) return;
-    setSingleForm((current) => ({
-      ...current,
-      variantAttributes: {
-        ...current.variantAttributes,
-        [variantSpecKey.trim()]: variantSpecValue.trim()
-      }
-    }));
-    setVariantSpecKey("");
-    setVariantSpecValue("");
-  }
-
-  function removeVariantSpec(key: string) {
-    setSingleForm((current) => {
-      const next = { ...current.variantAttributes };
-      delete next[key];
-      return { ...current, variantAttributes: next };
-    });
-  }
 
   async function uploadProductImage(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -162,13 +119,21 @@ export default function CatalogCreatePage() {
 
   async function createSingleProduct(event: FormEvent) {
     event.preventDefault();
+    if (!simpleProductFormReady(singleForm)) {
+      toastStore.getState().show("أكمل: الاسم، السعر، والصورة.", "error");
+      return;
+    }
+    const orgs = organizations.data ?? [];
+    if (orgs.length > 1 && !singleForm.organizationId) {
+      toastStore.getState().show("اختر الفرع.", "error");
+      return;
+    }
     setSaving(true);
     try {
-      const response = await api.post("/catalog", buildProductPayload(singleForm));
+      const response = await api.post("/catalog", buildSimpleProductPayload(singleForm));
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
-      await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
-      toastStore.getState().show("تم إضافة المنتج/الخدمة.", "success");
+      toastStore.getState().show("تم إضافة المنتج.", "success");
       const metaMessage = catalogMetaAutoSyncMessage(response.data);
       if (metaMessage) {
         toastStore.getState().show(
@@ -212,8 +177,9 @@ export default function CatalogCreatePage() {
     }
   }
 
-  const singleReady = Boolean(singleForm.name.trim()) && (singleForm.priceType === "quote" || singleForm.price.trim());
+  const singleReady = simpleProductFormReady(singleForm);
   const metaReady = metaGroupReady(metaForm);
+  const pageTitle = mode === "single" ? "إضافة منتج" : "منتجات متعددة (Meta)";
 
   return (
     <main className="page catalog-page contacts-erp-page">
@@ -221,7 +187,7 @@ export default function CatalogCreatePage() {
         <header className="contacts-form-topbar">
           <div className="contacts-erp-title-block">
             <Link to="/catalog" className="contacts-back-link">← المنتجات والخدمات</Link>
-            <h1>إنشاء منتج Meta</h1>
+            <h1>{pageTitle}</h1>
           </div>
           <div className="contacts-form-topbar-actions">
             {mode === "meta" ? (
@@ -240,7 +206,7 @@ export default function CatalogCreatePage() {
                 className="contacts-erp-btn contacts-erp-btn-primary"
                 disabled={!singleReady || saving}
               >
-                {saving ? "جاري الحفظ…" : "حفظ"}
+                {saving ? "جاري الحفظ…" : "حفظ ومزامنة"}
               </button>
             )}
             <Link to="/catalog" className="contacts-erp-btn">إلغاء</Link>
@@ -248,11 +214,11 @@ export default function CatalogCreatePage() {
         </header>
 
         <div className="catalog-create-mode-tabs">
-          <button type="button" className={mode === "meta" ? "active tone-meta" : ""} onClick={() => setMode("meta")}>
-            Meta — نسخ متعددة
-          </button>
           <button type="button" className={mode === "single" ? "active tone-single" : ""} onClick={() => setMode("single")}>
             منتج واحد
+          </button>
+          <button type="button" className={mode === "meta" ? "active tone-meta" : ""} onClick={() => setMode("meta")}>
+            نسخ متعددة (Meta)
           </button>
         </div>
 
@@ -269,32 +235,18 @@ export default function CatalogCreatePage() {
                 saving={saving}
               />
             ) : (
-              <section className="catalog-wizard-section-card tone-single">
+              <section className="catalog-wizard-section-card tone-single catalog-simple-card">
                 <header className="catalog-wizard-section-header">
                   <div className="catalog-wizard-section-header-text">
-                    <h2>منتج أو خدمة واحدة</h2>
-                    <p>للمنتجات البسيطة بدون نسخ متعددة</p>
+                    <h2>بيانات Meta الأساسية</h2>
+                    <p>الصورة، الاسم، السعر، والوصف — كل ما يحتاجه كتالوج WhatsApp.</p>
                   </div>
                 </header>
-                <form id="catalog-single-form" className="catalog-wizard-section-body stack-form" onSubmit={(e) => void createSingleProduct(e)}>
-                  <CatalogProductFormFields
+                <form id="catalog-single-form" className="catalog-wizard-section-body" onSubmit={(e) => void createSingleProduct(e)}>
+                  <CatalogSimpleProductForm
                     form={singleForm}
                     setForm={setSingleForm}
                     organizations={organizations.data ?? []}
-                    categories={categories.data ?? []}
-                    variantGroups={variantGroups.data ?? []}
-                    specKey={specKey}
-                    setSpecKey={setSpecKey}
-                    specValue={specValue}
-                    setSpecValue={setSpecValue}
-                    onAddSpec={addSpec}
-                    onRemoveSpec={removeSpec}
-                    variantSpecKey={variantSpecKey}
-                    setVariantSpecKey={setVariantSpecKey}
-                    variantSpecValue={variantSpecValue}
-                    setVariantSpecValue={setVariantSpecValue}
-                    onAddVariantSpec={addVariantSpec}
-                    onRemoveVariantSpec={removeVariantSpec}
                     uploadingImage={uploadingImage}
                     onUploadImage={(file) => void uploadProductImage(file)}
                   />
@@ -303,35 +255,35 @@ export default function CatalogCreatePage() {
             )}
           </div>
 
-          <aside className="catalog-create-aside">
-            <section className="catalog-wizard-section-card tone-import">
-              <header className="catalog-wizard-section-header">
-                <div className="catalog-wizard-section-header-text">
-                  <h2>استيراد من Excel</h2>
-                  <p>إضافة عدة منتجات دفعة واحدة</p>
-                </div>
-              </header>
-              <form className="catalog-wizard-section-body stack-form" onSubmit={(e) => void importCatalog(e)}>
-                <label className="field-label">
-                  <span>الفرع (اختياري)</span>
-                  <select value={importOrganizationId} onChange={(e) => setImportOrganizationId(e.target.value)}>
-                    <option value="">كل الفروع</option>
-                    {(organizations.data ?? []).map((org) => (
-                      <option key={org.id} value={org.id}>{org.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-label">
-                  <span>ملف Excel أو CSV</span>
-                  <input name="file" type="file" accept=".xlsx,.xlsm,.csv,text/csv" required />
-                </label>
-                <p className="hint-text catalog-import-hint">
-                  الأعمدة: name · sku · price · meta_item_group_id · variant_size · variant_color · category · image_url
-                </p>
-                <button type="submit" className="contacts-erp-btn contacts-erp-btn-primary">استيراد المنتجات</button>
-              </form>
-            </section>
-          </aside>
+          {mode === "single" && (
+            <aside className="catalog-create-aside">
+              <section className="catalog-wizard-section-card tone-import">
+                <header className="catalog-wizard-section-header">
+                  <div className="catalog-wizard-section-header-text">
+                    <h2>استيراد من Excel</h2>
+                    <p>إضافة عدة منتجات دفعة واحدة</p>
+                  </div>
+                </header>
+                <form className="catalog-wizard-section-body stack-form" onSubmit={(e) => void importCatalog(e)}>
+                  <label className="field-label">
+                    <span>الفرع (اختياري)</span>
+                    <select value={importOrganizationId} onChange={(e) => setImportOrganizationId(e.target.value)}>
+                      <option value="">كل الفروع</option>
+                      {(organizations.data ?? []).map((org) => (
+                        <option key={org.id} value={org.id}>{org.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    <span>ملف Excel أو CSV</span>
+                    <input name="file" type="file" accept=".xlsx,.xlsm,.csv,text/csv" required />
+                  </label>
+                  <p className="hint-text catalog-import-hint">الأعمدة: name · price · image_url · sku</p>
+                  <button type="submit" className="contacts-erp-btn contacts-erp-btn-primary">استيراد</button>
+                </form>
+              </section>
+            </aside>
+          )}
         </div>
       </section>
     </main>
