@@ -52,6 +52,3 @@ watesly-create-super-admin = "app.cli.create_super_admin:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"app/assets/fonts/NotoSansArabic-Regular.ttf" = "app/assets/fonts/NotoSansArabic-Regular.ttf"

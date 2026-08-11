@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
+COPY app/assets/fonts/NotoSansArabic-Regular.ttf app/assets/fonts/NotoSansArabic-Regular.ttf
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
 
