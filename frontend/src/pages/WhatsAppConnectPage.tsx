@@ -443,125 +443,138 @@ export default function WhatsAppConnectPage() {
     return (
       <tr className="whatsapp-expand-row">
         <td colSpan={10}>
-          <div className="whatsapp-expand-grid">
-            <article className="whatsapp-expand-panel whatsapp-expand-commerce">
-              <h3>WhatsApp Commerce — الكتالوج</h3>
-              <p className="hint-text">
-                {commerceOn && savedCatalogId
-                  ? `Commerce مفعّل · Catalog ID: ${savedCatalogId}`
-                  : "أدخل Catalog ID من Meta Commerce Manager ثم احفظ."}
-              </p>
-              <label className="field-label">
-                <span>Meta Catalog ID</span>
+          <div className="whatsapp-expand-shell">
+            <header className="whatsapp-expand-header">
+              <div>
+                <h2>إعدادات {account.verified_name || account.display_phone_number}</h2>
+                <p className="hint-text">Commerce، الرمز، Webhook، ومعرّفات Meta لهذه القناة.</p>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setExpandedId(null)}>
+                إغلاق الإعدادات
+              </button>
+            </header>
+            <div className="whatsapp-expand-grid">
+              <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-commerce">
+                <h3>WhatsApp Commerce — الكتالوج</h3>
+                <p className="hint-text">
+                  {commerceOn && savedCatalogId
+                    ? `Commerce مفعّل · Catalog ID: ${savedCatalogId}`
+                    : "أدخل Catalog ID من Meta Commerce Manager ثم احفظ."}
+                </p>
+                <label className="field-label">
+                  <span>Meta Catalog ID</span>
+                  <input
+                    dir="ltr"
+                    value={commerceDraft?.meta_catalog_id ?? ""}
+                    onChange={(e) =>
+                      setCommerceDrafts((current) => ({
+                        ...current,
+                        [account.id]: {
+                          meta_catalog_id: e.target.value,
+                          commerce_enabled: current[account.id]?.commerce_enabled ?? false
+                        }
+                      }))
+                    }
+                    placeholder="1677372356655691"
+                  />
+                </label>
+                <label className="inline-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={commerceDraft?.commerce_enabled ?? false}
+                    onChange={(e) =>
+                      setCommerceDrafts((current) => ({
+                        ...current,
+                        [account.id]: {
+                          meta_catalog_id: current[account.id]?.meta_catalog_id ?? "",
+                          commerce_enabled: e.target.checked
+                        }
+                      }))
+                    }
+                  />
+                  <span>تفعيل Commerce</span>
+                </label>
+                <div className="admin-actions">
+                  <button type="button" className="whatsapp-button compact" onClick={() => void saveCommerce(account.id)}>
+                    حفظ Commerce
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    onClick={() => void syncCatalogToMeta(account.id)}
+                    disabled={!savedCatalogId}
+                  >
+                    مزامنة المنتجات → Meta
+                  </button>
+                </div>
+              </article>
+              <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-token">
+                <h3>رمز Meta</h3>
+                <p className="hint-text">
+                  {tokenStatus[account.id]?.valid
+                    ? "الرمز صالح حالياً."
+                    : tokenStatus[account.id]?.error ?? "تحقق من الرمز أو حدّثه عند ظهور disconnected."}
+                </p>
                 <input
+                  type="password"
                   dir="ltr"
-                  value={commerceDraft?.meta_catalog_id ?? ""}
+                  value={tokenDrafts[account.id] ?? ""}
                   onChange={(e) =>
-                    setCommerceDrafts((current) => ({
-                      ...current,
-                      [account.id]: {
-                        meta_catalog_id: e.target.value,
-                        commerce_enabled: current[account.id]?.commerce_enabled ?? false
-                      }
-                    }))
+                    setTokenDrafts((current) => ({ ...current, [account.id]: e.target.value }))
                   }
-                  placeholder="1677372356655691"
+                  placeholder="EAA..."
                 />
-              </label>
-              <label className="inline-checkbox">
-                <input
-                  type="checkbox"
-                  checked={commerceDraft?.commerce_enabled ?? false}
-                  onChange={(e) =>
-                    setCommerceDrafts((current) => ({
-                      ...current,
-                      [account.id]: {
-                        meta_catalog_id: current[account.id]?.meta_catalog_id ?? "",
-                        commerce_enabled: e.target.checked
-                      }
-                    }))
-                  }
-                />
-                <span>تفعيل Commerce</span>
-              </label>
-              <div className="admin-actions">
-                <button type="button" className="whatsapp-button compact" onClick={() => void saveCommerce(account.id)}>
-                  حفظ Commerce
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button compact"
-                  onClick={() => void syncCatalogToMeta(account.id)}
-                  disabled={!savedCatalogId}
-                >
-                  مزامنة المنتجات → Meta
-                </button>
-              </div>
-            </article>
-            <article className="whatsapp-expand-panel">
-              <h3>رمز Meta</h3>
-              <p className="hint-text">
-                {tokenStatus[account.id]?.valid
-                  ? "الرمز صالح حالياً."
-                  : tokenStatus[account.id]?.error ?? "تحقق من الرمز أو حدّثه عند ظهور disconnected."}
-              </p>
-              <input
-                type="password"
-                dir="ltr"
-                value={tokenDrafts[account.id] ?? ""}
-                onChange={(e) =>
-                  setTokenDrafts((current) => ({ ...current, [account.id]: e.target.value }))
-                }
-                placeholder="EAA..."
-              />
-              <div className="admin-actions">
-                <button type="button" className="secondary-button" onClick={() => void checkTokenStatus(account.id)}>
-                  فحص Token
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={updatingTokenId === account.id}
-                  onClick={() => void updateToken(account.id)}
-                >
-                  {updatingTokenId === account.id ? "جاري الحفظ…" : "تحديث الرمز"}
-                </button>
-              </div>
-            </article>
-            <article className="whatsapp-expand-panel">
-              <h3>Webhook Meta</h3>
-              <p className="hint-text">
-                {webhookStatus[account.id]?.subscribed
-                  ? "الاستقبال والحملات وتحديث القوالب مربوطة بـ Meta."
-                  : webhookStatus[account.id]?.error ?? "تحقق من الربط أو اضغط تأكيد الربط."}
-              </p>
-              {webhookStatus[account.id]?.callback_url && (
-                <code dir="ltr" className="hint-text">{webhookStatus[account.id]?.callback_url}</code>
-              )}
-              <div className="admin-actions">
-                <button type="button" className="secondary-button" onClick={() => void checkWebhookStatus(account.id)}>
-                  فحص Webhook
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={ensuringWebhookId === account.id}
-                  onClick={() => void ensureWebhook(account.id)}
-                >
-                  {ensuringWebhookId === account.id ? "جاري الربط…" : "تأكيد الربط"}
-                </button>
-              </div>
-            </article>
-            <article className="whatsapp-expand-panel">
-              <h3>Meta IDs</h3>
-              <div className="whatsapp-meta-id-list">
-                <div><span>WABA ID</span><code dir="ltr">{account.waba_id}</code></div>
-                <div><span>Phone Number ID</span><code dir="ltr">{account.phone_number_id}</code></div>
-              </div>
-              {account.catalog_synced_at && (
-                <p className="hint-text">Catalog sync: {formatHealthSynced(account.catalog_synced_at)}</p>
-              )}
-            </article>
+                <div className="admin-actions">
+                  <button type="button" className="secondary-button" onClick={() => void checkTokenStatus(account.id)}>
+                    فحص Token
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={updatingTokenId === account.id}
+                    onClick={() => void updateToken(account.id)}
+                  >
+                    {updatingTokenId === account.id ? "جاري الحفظ…" : "تحديث الرمز"}
+                  </button>
+                </div>
+              </article>
+              <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-split">
+                <div className="whatsapp-expand-split-col">
+                  <h3>Webhook Meta</h3>
+                  <p className="hint-text">
+                    {webhookStatus[account.id]?.subscribed
+                      ? "الاستقبال والحملات وتحديث القوالب مربوطة بـ Meta."
+                      : webhookStatus[account.id]?.error ?? "تحقق من الربط أو اضغط تأكيد الربط."}
+                  </p>
+                  {webhookStatus[account.id]?.callback_url && (
+                    <code dir="ltr" className="hint-text">{webhookStatus[account.id]?.callback_url}</code>
+                  )}
+                  <div className="admin-actions">
+                    <button type="button" className="secondary-button" onClick={() => void checkWebhookStatus(account.id)}>
+                      فحص Webhook
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={ensuringWebhookId === account.id}
+                      onClick={() => void ensureWebhook(account.id)}
+                    >
+                      {ensuringWebhookId === account.id ? "جاري الربط…" : "تأكيد الربط"}
+                    </button>
+                  </div>
+                </div>
+                <div className="whatsapp-expand-split-col">
+                  <h3>Meta IDs</h3>
+                  <div className="whatsapp-meta-id-list">
+                    <div><span>WABA ID</span><code dir="ltr">{account.waba_id}</code></div>
+                    <div><span>Phone Number ID</span><code dir="ltr">{account.phone_number_id}</code></div>
+                  </div>
+                  {account.catalog_synced_at && (
+                    <p className="hint-text">Catalog sync: {formatHealthSynced(account.catalog_synced_at)}</p>
+                  )}
+                </div>
+              </article>
+            </div>
           </div>
         </td>
       </tr>
