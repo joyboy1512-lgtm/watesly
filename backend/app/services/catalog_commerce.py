@@ -79,8 +79,9 @@ def format_meta_sync_error(message: str) -> str:
         return "Meta لم تستطع تحميل صورة المنتج — تأكد أن الرابط عام (HTTPS) وبحجم 500×500 على الأقل."
     if "permission" in lower or "does not exist" in lower or "unsupported post" in lower:
         return (
-            "Catalog ID غير صحيح أو التوكن لا يملك صلاحية الوصول إليه. "
-            "تحقق من Meta Catalog ID في إعدادات Commerce."
+            "Meta رفض الوصول إلى الكتالوج — غالباً التوكن يفتقد صلاحية catalog_management "
+            "أو Catalog ID لا يخص نفس Business. أنشئ System User Token جديداً مع catalog_management "
+            "ثم حدّث الرمز من إعدادات ربط WhatsApp."
         )
     if "duplicate" in lower and "retailer" in lower:
         return "retailer_id مكرر في الكتالوج — غيّر SKU أو Meta retailer ID للمنتج."

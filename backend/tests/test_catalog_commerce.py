@@ -49,6 +49,13 @@ def test_format_meta_sync_error_catalog_permission() -> None:
     assert "catalog_management" in message
 
 
+def test_format_meta_sync_error_catalog_not_found() -> None:
+    message = format_meta_sync_error(
+        "Unsupported post request. Object with ID '1677372356655691' does not exist"
+    )
+    assert "catalog_management" in message
+
+
 def test_validate_product_requires_organization() -> None:
     assert validate_product_for_meta_sync(_product(organization_id=None)) is not None
 
