@@ -205,6 +205,30 @@ async def sync_catalog_product_to_meta(
     )
 
 
+async def try_auto_sync_catalog_product_to_meta(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product: CatalogProduct,
+    membership=None,
+) -> None:
+    """Push a product to Meta after local save when commerce is configured."""
+    if not product.is_active or not product.meta_sync_enabled:
+        return
+    try:
+        await sync_catalog_product_to_meta(
+            db,
+            account_id=account_id,
+            product_id=product.id,
+            membership=membership,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code in {"META_CATALOG_NOT_CONFIGURED", "META_SYNC_DISABLED", "PRODUCT_NOT_ACTIVE"}:
+            return
+        raise
+
+
 async def refresh_catalog_meta_status(
     db: AsyncSession,
     *,

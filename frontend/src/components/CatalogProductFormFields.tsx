@@ -115,7 +115,7 @@ export default function CatalogProductFormFields({
               onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
             />
             <span className="hint-text catalog-meta-sync-hint">
-              {form.metaSyncEnabled ? "مفعّلة" : "موقوفة"}
+              {form.metaSyncEnabled ? "مفعّلة — تُرسل تلقائياً إلى Meta" : "موقوفة"}
             </span>
           </div>
         </label>

@@ -7,6 +7,7 @@ import Icon from "../components/Icon";
 import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
 import {
   buildProductPayload,
+  catalogMetaAutoSyncMessage,
   catalogMetaStatusLabel,
   catalogPriceLabel,
   catalogTypeLabel,
@@ -143,11 +144,20 @@ export default function CatalogPage() {
     event.preventDefault();
     if (!editingProduct) return;
     try {
-      await api.patch(`/catalog/${editingProduct.id}`, buildProductPayload(editForm));
+      const response = await api.patch<CatalogProduct>(`/catalog/${editingProduct.id}`, buildProductPayload(editForm));
       setEditingProduct(null);
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
       toastStore.getState().show("تم تحديث المنتج.", "success");
+      const metaMessage = catalogMetaAutoSyncMessage(response.data);
+      if (metaMessage) {
+        toastStore.getState().show(
+          metaMessage,
+          response.data.meta_review_status === "rejected" || response.data.meta_sync_status === "failed"
+            ? "error"
+            : "success"
+        );
+      }
     } catch {
       toastStore.getState().show("تعذر التحديث.", "error");
     }

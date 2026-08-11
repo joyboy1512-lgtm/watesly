@@ -149,6 +149,31 @@ export type CatalogMetaStatusView = {
   detail?: string | null;
 };
 
+export function catalogMetaAutoSyncMessage(product: CatalogProduct): string | null {
+  if (product.meta_sync_enabled === false) {
+    return null;
+  }
+  if (product.meta_sync_status === "failed") {
+    return product.meta_sync_error ?? "تعذر إرسال المنتج إلى Meta.";
+  }
+  if (product.meta_sync_status !== "synced" && !product.external_id) {
+    return "تم الحفظ محلياً. فعّل Commerce وCatalog ID من ربط WhatsApp للمزامنة التلقائية.";
+  }
+  switch (product.meta_review_status) {
+    case "pending":
+      return "تم إرسال المنتج إلى Meta — قيد المراجعة.";
+    case "approved":
+    case "no_review":
+      return "تم إرسال المنتج إلى Meta — معتمد.";
+    case "rejected":
+      return product.meta_review_detail
+        ? `Meta رفض المنتج: ${product.meta_review_detail}`
+        : "Meta رفض المنتج.";
+    default:
+      return product.external_id ? "تم إرسال المنتج إلى Meta." : null;
+  }
+}
+
 export function catalogMetaStatusLabel(product: CatalogProduct): CatalogMetaStatusView {
   if (product.meta_sync_enabled === false) {
     return {

@@ -5,7 +5,9 @@ import { api } from "../lib/api";
 import CatalogProductFormFields from "../components/CatalogProductFormFields";
 import {
   buildProductPayload,
+  catalogMetaAutoSyncMessage,
   emptyProductForm,
+  type CatalogProduct,
   type ProductFormState
 } from "../lib/catalogHelpers";
 import { uploadFile } from "../lib/uploads";
@@ -85,10 +87,19 @@ export default function CatalogCreatePage() {
     event.preventDefault();
     setSaving(true);
     try {
-      await api.post("/catalog", buildProductPayload(form));
+      const response = await api.post<CatalogProduct>("/catalog", buildProductPayload(form));
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
       toastStore.getState().show("تم إضافة المنتج/الخدمة.", "success");
+      const metaMessage = catalogMetaAutoSyncMessage(response.data);
+      if (metaMessage) {
+        toastStore.getState().show(
+          metaMessage,
+          response.data.meta_review_status === "rejected" || response.data.meta_sync_status === "failed"
+            ? "error"
+            : "success"
+        );
+      }
       navigate("/catalog", { replace: true });
     } catch (error: unknown) {
       const detail =

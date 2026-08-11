@@ -113,6 +113,15 @@ async def create_catalog_product(
     db.add(item)
     await db.commit()
     await db.refresh(item)
+    from app.services.meta_catalog_sync import try_auto_sync_catalog_product_to_meta
+
+    await try_auto_sync_catalog_product_to_meta(
+        db,
+        account_id=account_id,
+        product=item,
+        membership=membership,
+    )
+    await db.refresh(item)
     return item
 
 
@@ -137,6 +146,16 @@ async def update_catalog_product(
         await unpublish_catalog_product_from_meta(db, account_id=account_id, product=item)
     await db.commit()
     await db.refresh(item)
+    if item.meta_sync_enabled and not unpublish_from_meta:
+        from app.services.meta_catalog_sync import try_auto_sync_catalog_product_to_meta
+
+        await try_auto_sync_catalog_product_to_meta(
+            db,
+            account_id=account_id,
+            product=item,
+            membership=membership,
+        )
+        await db.refresh(item)
     return item
 
 
