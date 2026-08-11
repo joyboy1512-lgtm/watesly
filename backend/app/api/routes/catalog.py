@@ -1,5 +1,6 @@
 from decimal import Decimal
 from uuid import UUID
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 from fastapi.responses import PlainTextResponse, Response
@@ -488,4 +489,171 @@ async def catalog_suggest(
         query=payload.query,
         contact_name=payload.contact_name,
         mode=payload.mode,
+    )
+
+
+class CatalogOrderLineItemOut(BaseModel):
+    product_retailer_id: str
+    product_name: str
+    quantity: int
+    unit_price: str | None = None
+    currency: str
+    line_total: str | None = None
+
+
+class CatalogOrderOut(BaseModel):
+    id: UUID
+    order_number: str
+    status: str
+    currency: str
+    subtotal: Decimal
+    customer_note: str | None = None
+    meta_catalog_id: str | None = None
+    line_items: list[CatalogOrderLineItemOut]
+    contact_id: UUID
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    conversation_id: UUID | None = None
+    deal_id: UUID | None = None
+    organization_id: UUID
+    channel_id: UUID
+    message_id: UUID
+    reviewed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatalogOrderListOut(BaseModel):
+    items: list[CatalogOrderOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class CatalogOrderStatusUpdate(BaseModel):
+    status: str = Field(pattern=r"^(received|reviewed|invoiced|cancelled)$")
+
+
+def _serialize_catalog_order(order) -> CatalogOrderOut:
+    contact = getattr(order, "contact", None)
+    return CatalogOrderOut(
+        id=order.id,
+        order_number=order.order_number,
+        status=order.status,
+        currency=order.currency,
+        subtotal=order.subtotal,
+        customer_note=order.customer_note,
+        meta_catalog_id=order.meta_catalog_id,
+        line_items=[CatalogOrderLineItemOut(**item) for item in (order.line_items or [])],
+        contact_id=order.contact_id,
+        contact_name=contact.display_name if contact else None,
+        contact_phone=contact.external_address if contact else None,
+        conversation_id=order.conversation_id,
+        deal_id=order.deal_id,
+        organization_id=order.organization_id,
+        channel_id=order.channel_id,
+        message_id=order.message_id,
+        reviewed_at=order.reviewed_at,
+        created_at=order.created_at,
+        updated_at=order.updated_at,
+    )
+
+
+@router.get("/orders", response_model=CatalogOrderListOut)
+async def list_catalog_orders_route(
+    organization_id: UUID | None = None,
+    status: str | None = Query(None, pattern=r"^(received|reviewed|invoiced|cancelled)$"),
+    search: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.catalog_orders import list_catalog_orders
+
+    items, total = await list_catalog_orders(
+        db,
+        account_id=context.account_id,
+        organization_id=organization_id,
+        status=status,
+        search=search,
+        page=page,
+        page_size=page_size,
+    )
+    return CatalogOrderListOut(
+        items=[_serialize_catalog_order(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/orders/{order_id}", response_model=CatalogOrderOut)
+async def get_catalog_order_route(
+    order_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.catalog_orders import get_catalog_order
+
+    order = await get_catalog_order(db, account_id=context.account_id, order_id=order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return _serialize_catalog_order(order)
+
+
+@router.patch("/orders/{order_id}", response_model=CatalogOrderOut)
+async def update_catalog_order_route(
+    order_id: UUID,
+    payload: CatalogOrderStatusUpdate,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.catalog_orders import get_catalog_order, update_catalog_order_status
+
+    order = await get_catalog_order(db, account_id=context.account_id, order_id=order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    order = await update_catalog_order_status(
+        db,
+        order=order,
+        status=payload.status,
+        reviewed_by_user_id=context.user.id,
+    )
+    await db.commit()
+    order = await get_catalog_order(db, account_id=context.account_id, order_id=order_id)
+    return _serialize_catalog_order(order)
+
+
+@router.get("/orders/{order_id}/invoice.pdf")
+async def download_catalog_order_invoice(
+    order_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.catalog_order_pdf import generate_catalog_order_invoice_pdf
+    from app.services.catalog_orders import get_catalog_order, get_invoice_context, update_catalog_order_status
+    from app.models.catalog_order import CatalogOrderStatus
+
+    order = await get_catalog_order(db, account_id=context.account_id, order_id=order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    invoice_context = await get_invoice_context(db, account_id=context.account_id, order=order)
+    try:
+        pdf_bytes = generate_catalog_order_invoice_pdf(invoice_context)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unable to generate invoice PDF") from exc
+    if order.status == CatalogOrderStatus.RECEIVED:
+        await update_catalog_order_status(
+            db,
+            order=order,
+            status=CatalogOrderStatus.REVIEWED,
+            reviewed_by_user_id=context.user.id,
+        )
+        await db.commit()
+    filename = f"{order.order_number}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

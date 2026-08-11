@@ -353,6 +353,7 @@ export default function CatalogPage() {
 
         <div className="contacts-erp-toolbar">
           <div className="contacts-erp-actions">
+            <Link to="/catalog/orders" className="contacts-erp-btn">طلبات الكتالوج</Link>
             <Link to="/catalog/new" className="contacts-erp-btn contacts-erp-btn-primary">
               إنشاء منتج Meta
             </Link>
