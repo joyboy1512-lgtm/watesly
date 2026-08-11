@@ -15,8 +15,8 @@ def test_catalog_service_builds_price_reply() -> None:
 
 
 def test_inbound_whatsapp_publishes_catalog_ai_suggestion() -> None:
-    source = read("app/services/whatsapp.py")
-    assert "suggest_catalog_reply" in source
+    source = read("app/services/inbound_whatsapp.py")
+    assert "suggest_catalog_reply" in read("app/services/catalog.py")
     assert "ai.catalog_suggestion" in source
 
 
@@ -48,7 +48,7 @@ def test_catalog_api_routes_exist() -> None:
     assert "export_catalog_csv" in catalog
     assert "preview_catalog_reply" in catalog
     frontend = read("../frontend/src/pages/CatalogPage.tsx")
-    assert "catalog-grid" in frontend
+    assert "contacts-erp-table" in frontend
     assert "catalog/preview-reply" in frontend
     assert "prepare-commerce" in frontend
     assert "refresh-meta-status" in routes
@@ -58,7 +58,7 @@ def test_catalog_api_routes_exist() -> None:
     assert "meta_sync_enabled" in routes
     assert "catalogMetaStatusLabel" in read("../frontend/src/lib/catalogHelpers.ts")
     assert "InboxProductPicker" in read("../frontend/src/pages/InboxPage.tsx")
-    assert "catalog_first" in read("../frontend/src/pages/InboxPage.tsx")
+    assert "ai.catalog_suggestion" in read("../frontend/src/pages/InboxPage.tsx")
 
 
 def test_campaign_audience_import_route_exists() -> None:
