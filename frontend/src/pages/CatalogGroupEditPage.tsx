@@ -117,16 +117,18 @@ export default function CatalogGroupEditPage() {
         )}
 
         {group.data && (
-          <div className="catalog-panel catalog-meta-wizard-panel">
-            <CatalogMetaProductWizard
-              form={form}
-              setForm={setForm}
-              organizations={organizations.data ?? []}
-              categories={categories.data ?? []}
-              variantGroups={variantGroups.data ?? []}
-              onSubmit={() => void saveGroup()}
-              saving={saving}
-            />
+          <div className="catalog-create-shell catalog-create-shell-single">
+            <div className="catalog-create-main">
+              <CatalogMetaProductWizard
+                form={form}
+                setForm={setForm}
+                organizations={organizations.data ?? []}
+                categories={categories.data ?? []}
+                variantGroups={variantGroups.data ?? []}
+                onSubmit={() => void saveGroup()}
+                saving={saving}
+              />
+            </div>
           </div>
         )}
       </section>

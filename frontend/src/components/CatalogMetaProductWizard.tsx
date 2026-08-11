@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   emptyMetaVariant,
   slugifyMetaGroupId,
@@ -20,6 +20,39 @@ type CatalogMetaProductWizardProps = {
   onSubmit: () => void;
   saving?: boolean;
 };
+
+function WizardSectionCard({
+  tone,
+  title,
+  hint,
+  action,
+  children
+}: {
+  tone: "shared" | "variants" | "import" | "single";
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`catalog-wizard-section-card tone-${tone}`}>
+      <header className="catalog-wizard-section-header">
+        <div className="catalog-wizard-section-header-text">
+          <h2>{title}</h2>
+          {hint ? <p>{hint}</p> : null}
+        </div>
+        {action ? <div className="catalog-wizard-section-header-action">{action}</div> : null}
+      </header>
+      <div className="catalog-wizard-section-body">{children}</div>
+    </section>
+  );
+}
+
+const VARIANT_TONES = ["teal", "blue", "amber", "violet"] as const;
+
+function variantTone(index: number) {
+  return VARIANT_TONES[index % VARIANT_TONES.length];
+}
 
 function VariantAttributesEditor({
   variant,
@@ -147,15 +180,14 @@ export default function CatalogMetaProductWizard({
         onSubmit();
       }}
     >
-      <section className="catalog-meta-wizard-section">
-        <h2 className="section-title-sm">بيانات المنتج المشتركة (Meta)</h2>
-        <p className="hint-text catalog-variant-hint">
-          هذه الحقول تُشارَك بين كل النسخ (Variants) في كتالوج WhatsApp — نفس item_group_id.
-        </p>
-
-        <div className="catalog-fields-row">
-          <label className="field-label catalog-field-grow">
-            <span>اسم المنتج الأساسي</span>
+      <WizardSectionCard
+        tone="shared"
+        title="بيانات المنتج المشتركة"
+        hint="تُشارَك بين كل النسخ في كتالوج WhatsApp — نفس item_group_id"
+      >
+        <div className="catalog-fields-row catalog-fields-row-2">
+          <label className="field-label">
+            <span>اسم المنتج الأساسي *</span>
             <input
               value={form.baseName}
               onChange={(e) => setForm((current) => ({ ...current, baseName: e.target.value }))}
@@ -180,8 +212,8 @@ export default function CatalogMetaProductWizard({
           </label>
         </div>
 
-        <div className="catalog-fields-row">
-          <label className="field-label catalog-field-grow">
+        <div className="catalog-field-with-action">
+          <label className="field-label">
             <span>مجموعة المنتج (item_group_id) *</span>
             <input
               value={form.metaItemGroupId}
@@ -192,13 +224,14 @@ export default function CatalogMetaProductWizard({
               required
             />
           </label>
-          <div className="catalog-meta-wizard-inline-action">
-            <button type="button" className="contacts-erp-btn" onClick={autoGroupId}>
-              توليد من الاسم
-            </button>
-          </div>
+          <button type="button" className="contacts-erp-btn catalog-field-action-btn" onClick={autoGroupId}>
+            توليد من الاسم
+          </button>
+        </div>
+
+        <div className="catalog-fields-row catalog-fields-row-2">
           <label className="field-label">
-            <span>الفرع {organizations.length === 1 ? "" : "(مطلوب لموظفي الفرع)"}</span>
+            <span>الفرع {organizations.length === 1 ? "" : "(مطلوب)"}</span>
             <select
               value={form.organizationId}
               onChange={(e) => setForm((current) => ({ ...current, organizationId: e.target.value }))}
@@ -231,7 +264,7 @@ export default function CatalogMetaProductWizard({
           />
         </label>
 
-        <div className="catalog-fields-row">
+        <div className="catalog-fields-row catalog-fields-row-3">
           <label className="field-label">
             <span>نوع السعر</span>
             <select
@@ -273,43 +306,48 @@ export default function CatalogMetaProductWizard({
             </div>
           </label>
         </div>
-      </section>
+      </WizardSectionCard>
 
-      <section className="catalog-meta-wizard-section">
-        <div className="catalog-meta-wizard-section-head">
-          <div>
-            <h2 className="section-title-sm">النسخ (Variants)</h2>
-            <p className="hint-text catalog-variant-hint">
-              أضف نسخة لكل لون/مقاس — لكل نسخة صورة وسعر وSKU مستقل كما يتطلب Meta.
-            </p>
-          </div>
-          <button type="button" className="contacts-erp-btn contacts-erp-btn-primary" onClick={addVariant}>
+      <WizardSectionCard
+        tone="variants"
+        title="النسخ (Variants)"
+        hint="نسخة لكل لون أو مقاس — صورة وسعر وSKU مستقل لكل نسخة"
+        action={
+          <button type="button" className="contacts-erp-btn catalog-wizard-header-btn" onClick={addVariant}>
             + نسخة جديدة
           </button>
-        </div>
-
+        }
+      >
         <div className="catalog-variant-cards">
           {form.variants.map((variant, index) => (
-            <article key={variant.clientKey} className="catalog-variant-card">
+            <article key={variant.clientKey} className={`catalog-variant-card tone-${variantTone(index)}`}>
               <header className="catalog-variant-card-head">
-                <strong>النسخة {index + 1}</strong>
+                <div className="catalog-variant-card-title">
+                  <span className="catalog-variant-card-badge">{index + 1}</span>
+                  <strong>
+                    {variant.variantColor.trim() || variant.variantSize.trim()
+                      ? [variant.variantColor, variant.variantSize].filter(Boolean).join(" · ")
+                      : `النسخة ${index + 1}`}
+                  </strong>
+                </div>
                 {form.variants.length > 1 && (
                   <button
                     type="button"
-                    className="danger-link"
+                    className="catalog-variant-card-remove"
                     onClick={() => removeVariant(variant.clientKey)}
                   >
-                    حذف النسخة
+                    حذف
                   </button>
                 )}
               </header>
 
               <div className="catalog-variant-card-body">
                 <div className="catalog-variant-card-image">
+                  <span className="field-label-title">صورة النسخة</span>
                   {variant.imageUrl ? (
                     <img src={variant.imageUrl} alt={`نسخة ${index + 1}`} className="catalog-form-image" />
                   ) : (
-                    <div className="catalog-form-image placeholder">صورة النسخة</div>
+                    <div className="catalog-form-image placeholder">بدون صورة</div>
                   )}
                   <label className="secondary-button compact">
                     {uploadingKey === variant.clientKey ? "جاري الرفع…" : "رفع صورة"}
@@ -326,6 +364,7 @@ export default function CatalogMetaProductWizard({
                     />
                   </label>
                   <input
+                    className="catalog-variant-image-url"
                     value={variant.imageUrl}
                     onChange={(e) => updateVariant(variant.clientKey, { imageUrl: e.target.value })}
                     placeholder="أو الصق رابط الصورة"
@@ -334,7 +373,7 @@ export default function CatalogMetaProductWizard({
                 </div>
 
                 <div className="catalog-variant-card-fields">
-                  <div className="catalog-fields-row">
+                  <div className="catalog-fields-row catalog-fields-row-3">
                     <label className="field-label">
                       <span>اللون</span>
                       <input
@@ -367,7 +406,7 @@ export default function CatalogMetaProductWizard({
                     )}
                   </div>
 
-                  <div className="catalog-fields-row">
+                  <div className="catalog-fields-row catalog-fields-row-3">
                     <label className="field-label">
                       <span>SKU</span>
                       <input
@@ -382,7 +421,7 @@ export default function CatalogMetaProductWizard({
                       <input
                         value={variant.metaRetailerId}
                         onChange={(e) => updateVariant(variant.clientKey, { metaRetailerId: e.target.value })}
-                        placeholder="يُولَّد من SKU تلقائياً"
+                        placeholder="يُولَّد من SKU"
                         dir="ltr"
                       />
                     </label>
@@ -407,7 +446,7 @@ export default function CatalogMetaProductWizard({
             </article>
           ))}
         </div>
-      </section>
+      </WizardSectionCard>
 
       <datalist id="catalog-category-suggestions">
         {categories.map((category) => (

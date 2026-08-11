@@ -248,17 +248,17 @@ export default function CatalogCreatePage() {
         </header>
 
         <div className="catalog-create-mode-tabs">
-          <button type="button" className={mode === "meta" ? "active" : ""} onClick={() => setMode("meta")}>
+          <button type="button" className={mode === "meta" ? "active tone-meta" : ""} onClick={() => setMode("meta")}>
             Meta — نسخ متعددة
           </button>
-          <button type="button" className={mode === "single" ? "active" : ""} onClick={() => setMode("single")}>
+          <button type="button" className={mode === "single" ? "active tone-single" : ""} onClick={() => setMode("single")}>
             منتج واحد
           </button>
         </div>
 
-        <div className="catalog-create-layout">
-          {mode === "meta" ? (
-            <div className="catalog-panel catalog-meta-wizard-panel">
+        <div className="catalog-create-shell">
+          <div className="catalog-create-main">
+            {mode === "meta" ? (
               <CatalogMetaProductWizard
                 form={metaForm}
                 setForm={setMetaForm}
@@ -268,55 +268,70 @@ export default function CatalogCreatePage() {
                 onSubmit={() => void saveMetaGroup()}
                 saving={saving}
               />
-            </div>
-          ) : (
-            <form id="catalog-single-form" className="catalog-panel stack-form" onSubmit={(e) => void createSingleProduct(e)}>
-              <h2 className="section-title-sm">منتج أو خدمة واحدة</h2>
-              <CatalogProductFormFields
-                form={singleForm}
-                setForm={setSingleForm}
-                organizations={organizations.data ?? []}
-                categories={categories.data ?? []}
-                variantGroups={variantGroups.data ?? []}
-                specKey={specKey}
-                setSpecKey={setSpecKey}
-                specValue={specValue}
-                setSpecValue={setSpecValue}
-                onAddSpec={addSpec}
-                onRemoveSpec={removeSpec}
-                variantSpecKey={variantSpecKey}
-                setVariantSpecKey={setVariantSpecKey}
-                variantSpecValue={variantSpecValue}
-                setVariantSpecValue={setVariantSpecValue}
-                onAddVariantSpec={addVariantSpec}
-                onRemoveVariantSpec={removeVariantSpec}
-                uploadingImage={uploadingImage}
-                onUploadImage={(file) => void uploadProductImage(file)}
-              />
-            </form>
-          )}
+            ) : (
+              <section className="catalog-wizard-section-card tone-single">
+                <header className="catalog-wizard-section-header">
+                  <div className="catalog-wizard-section-header-text">
+                    <h2>منتج أو خدمة واحدة</h2>
+                    <p>للمنتجات البسيطة بدون نسخ متعددة</p>
+                  </div>
+                </header>
+                <form id="catalog-single-form" className="catalog-wizard-section-body stack-form" onSubmit={(e) => void createSingleProduct(e)}>
+                  <CatalogProductFormFields
+                    form={singleForm}
+                    setForm={setSingleForm}
+                    organizations={organizations.data ?? []}
+                    categories={categories.data ?? []}
+                    variantGroups={variantGroups.data ?? []}
+                    specKey={specKey}
+                    setSpecKey={setSpecKey}
+                    specValue={specValue}
+                    setSpecValue={setSpecValue}
+                    onAddSpec={addSpec}
+                    onRemoveSpec={removeSpec}
+                    variantSpecKey={variantSpecKey}
+                    setVariantSpecKey={setVariantSpecKey}
+                    variantSpecValue={variantSpecValue}
+                    setVariantSpecValue={setVariantSpecValue}
+                    onAddVariantSpec={addVariantSpec}
+                    onRemoveVariantSpec={removeVariantSpec}
+                    uploadingImage={uploadingImage}
+                    onUploadImage={(file) => void uploadProductImage(file)}
+                  />
+                </form>
+              </section>
+            )}
+          </div>
 
-          <form className="catalog-panel stack-form" onSubmit={(e) => void importCatalog(e)}>
-            <h2 className="section-title-sm">استيراد من Excel</h2>
-            <p className="hint-text">ارفع ملف Excel أو CSV لإضافة عدة منتجات دفعة واحدة.</p>
-            <label className="field-label">
-              <span>الفرع (اختياري)</span>
-              <select value={importOrganizationId} onChange={(e) => setImportOrganizationId(e.target.value)}>
-                <option value="">كل الفروع</option>
-                {(organizations.data ?? []).map((org) => (
-                  <option key={org.id} value={org.id}>{org.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field-label">
-              <span>ملف Excel أو CSV</span>
-              <input name="file" type="file" accept=".xlsx,.xlsm,.csv,text/csv" required />
-            </label>
-            <p className="hint-text">
-              الأعمدة: name · sku · price · meta_item_group_id · variant_size · variant_color · category · image_url
-            </p>
-            <button type="submit" className="contacts-erp-btn">استيراد المنتجات</button>
-          </form>
+          <aside className="catalog-create-aside">
+            <section className="catalog-wizard-section-card tone-import">
+              <header className="catalog-wizard-section-header">
+                <div className="catalog-wizard-section-header-text">
+                  <h2>استيراد من Excel</h2>
+                  <p>إضافة عدة منتجات دفعة واحدة</p>
+                </div>
+              </header>
+              <form className="catalog-wizard-section-body stack-form" onSubmit={(e) => void importCatalog(e)}>
+                <label className="field-label">
+                  <span>الفرع (اختياري)</span>
+                  <select value={importOrganizationId} onChange={(e) => setImportOrganizationId(e.target.value)}>
+                    <option value="">كل الفروع</option>
+                    {(organizations.data ?? []).map((org) => (
+                      <option key={org.id} value={org.id}>{org.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span>ملف Excel أو CSV</span>
+                  <input name="file" type="file" accept=".xlsx,.xlsm,.csv,text/csv" required />
+                </label>
+                <p className="hint-text catalog-import-hint">
+                  الأعمدة: name · sku · price · meta_item_group_id · variant_size · variant_color · category · image_url
+                </p>
+                <button type="submit" className="contacts-erp-btn contacts-erp-btn-primary">استيراد المنتجات</button>
+              </form>
+            </section>
+          </aside>
         </div>
       </section>
     </main>
