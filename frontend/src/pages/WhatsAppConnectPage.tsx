@@ -370,6 +370,19 @@ export default function WhatsAppConnectPage() {
     }
   }
 
+  async function syncCatalogToMeta(accountId: string) {
+    try {
+      const response = await api.post<{ synced: number; failed: number; total: number; errors?: string[] }>(
+        `/whatsapp/accounts/${accountId}/commerce/sync`
+      );
+      await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+      const { synced, failed, total } = response.data;
+      toastStore.getState().show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل.`, failed ? "error" : "success");
+    } catch {
+      toastStore.getState().show("تعذر مزامنة الكتالogg مع Meta.", "error");
+    }
+  }
+
   async function disconnectAccount(accountId: string) {
     try {
       await api.post(`/whatsapp/accounts/${accountId}/disconnect`);
@@ -507,6 +520,14 @@ export default function WhatsAppConnectPage() {
               </label>
               <button type="button" className="secondary-button" onClick={() => void saveCommerce(account.id)}>
                 حفظ Commerce
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void syncCatalogToMeta(account.id)}
+                disabled={!commerceDrafts[account.id]?.meta_catalog_id?.trim()}
+              >
+                مزامنة المنتجات → Meta
               </button>
             </article>
             <article className="whatsapp-expand-panel">

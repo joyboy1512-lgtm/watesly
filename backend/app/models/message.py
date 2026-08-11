@@ -31,6 +31,7 @@ class MessageType(StrEnum):
     LOCATION = "location"
     TEMPLATE = "template"
     INTERACTIVE = "interactive"
+    ORDER = "order"
     UNKNOWN = "unknown"
 
 

@@ -470,6 +470,27 @@ async def get_whatsapp_commerce_readiness(
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
 
 
+@router.post("/accounts/{whatsapp_account_id}/commerce/sync")
+async def post_whatsapp_commerce_sync(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.meta_catalog_sync import sync_catalog_to_meta
+
+    try:
+        return await sync_catalog_to_meta(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "META_CATALOG_NOT_CONFIGURED":
+            raise HTTPException(status_code=400, detail="Meta catalog ID is not configured") from exc
+        raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+
+
 @router.post("/accounts/{whatsapp_account_id}/messages/product", response_model=MediaSendResponse)
 async def post_product_message(
     whatsapp_account_id: UUID,

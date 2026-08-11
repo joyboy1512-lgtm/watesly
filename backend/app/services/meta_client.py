@@ -386,6 +386,54 @@ class MetaWhatsAppClient:
             }
         )
 
+    async def send_catalog_message(
+        self,
+        *,
+        to: str,
+        body: str,
+        footer: str | None = None,
+    ) -> dict:
+        interactive: dict = {
+            "type": "catalog_message",
+            "body": {"text": body[:1024]},
+            "action": {"name": "catalog_message"},
+        }
+        if footer:
+            interactive["footer"] = {"text": footer[:60]}
+        return await self._send_payload(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": "interactive",
+                "interactive": interactive,
+            }
+        )
+
+    async def create_catalog_product(self, *, catalog_id: str, payload: dict) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{catalog_id}/products"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.post(url, headers=headers, data=payload)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to create Meta catalog product",
+        )
+
+    async def update_catalog_product(self, *, product_id: str, payload: dict) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{product_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.post(url, headers=headers, data=payload)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to update Meta catalog product",
+        )
+
     async def get_media_metadata(self, media_id: str) -> dict:
         base = settings.meta_graph_api_base_url.rstrip("/")
         version = settings.meta_graph_api_version.strip("/")

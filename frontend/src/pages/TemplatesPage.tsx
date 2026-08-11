@@ -517,7 +517,7 @@ export default function TemplatesPage() {
                     checked={includeMarketingOptOut}
                     onChange={(event) => setIncludeMarketingOptOut(event.target.checked)}
                   />
-                  <span>إضافة زر «عدم الإزعاج» وتذييل إلغاء الاشتراك</span>
+                  <span>إضافة أزرار «مهتم» و«عدم الإزعاج» وتذييل إلغاء الاشتراك</span>
                 </label>
               )}
 

@@ -1026,6 +1026,74 @@ async def send_product_message(
     return message
 
 
+async def send_catalog_welcome_message(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    whatsapp_account_id: UUID,
+    to: str,
+    body: str,
+    footer: str | None = "اضغط الزر أدناه لفتح الكتالوج",
+    record_mac: bool = False,
+) -> Message:
+    wa = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
+        raise ValueError("WHATSAPP_ACCOUNT_NOT_AVAILABLE")
+    if not wa.commerce_enabled or not wa.meta_catalog_id:
+        raise ValueError("COMMERCE_NOT_CONFIGURED")
+
+    contact, conversation, _ = await _get_or_create_contact_and_conversation(
+        db, whatsapp_account=wa, sender=to, display_name=None
+    )
+    message = Message(
+        account_id=account_id,
+        organization_id=wa.organization_id,
+        channel_id=wa.channel_id,
+        contact_id=contact.id,
+        conversation_id=conversation.id,
+        direction=MessageDirection.OUTBOUND,
+        type=MessageType.INTERACTIVE,
+        from_address=wa.display_phone_number,
+        to_address=to,
+        text_body=body,
+        provider_payload={"interactive_type": "catalog_message"},
+        status=MessageStatus.QUEUED,
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+
+    client = MetaWhatsAppClient(
+        access_token=decrypt_secret(wa.access_token_encrypted),
+        phone_number_id=wa.phone_number_id,
+    )
+    try:
+        response = await client.send_catalog_message(to=to, body=body, footer=footer)
+    except MetaAPIError as exc:
+        message.status = MessageStatus.FAILED
+        message.provider_payload = exc.response_data
+        await db.commit()
+        raise
+
+    items = response.get("messages", [])
+    message.external_message_id = items[0].get("id") if items else None
+    message.provider_payload = response
+    message.status = MessageStatus.SENT
+    conversation.last_message_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(message)
+
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
+    return message
+
+
 async def send_product_list_message(
     db: AsyncSession,
     *,

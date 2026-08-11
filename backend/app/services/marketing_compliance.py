@@ -14,6 +14,13 @@ MARKETING_OPT_OUT_BUTTON_ID = "watesly_marketing_opt_out"
 MARKETING_OPT_OUT_BUTTON_TEXT = "عدم الإزعاج"
 MARKETING_OPT_OUT_FOOTER = "أرسل «إيقاف» لإلغاء الاشتراك"
 
+MARKETING_INTERESTED_BUTTON_ID = "watesly_interested"
+MARKETING_INTERESTED_BUTTON_TEXT = "مهتم"
+MARKETING_INTERESTED_WELCOME = (
+    "أهلاً بك! يسعدنا اهتمامك — تصفّح كتالogg منتجاتنا واختر ما يناسبك. "
+    "عند إتمام الطلب سنتواصل معك لتأكيد التفاصيل."
+)
+
 OPT_OUT_KEYWORDS = (
     "stop",
     "unsubscribe",
@@ -109,29 +116,79 @@ def template_has_opt_out_footer(components: list | None) -> bool:
     return False
 
 
+_INTERESTED_BUTTON_TEXTS = {
+    MARKETING_INTERESTED_BUTTON_ID.lower(),
+    MARKETING_INTERESTED_BUTTON_TEXT.lower(),
+    "interested",
+    "نعم مهتم",
+}
+
+
+def is_marketing_interested_request(
+    *,
+    text: str | None = None,
+    button_id: str | None = None,
+    button_title: str | None = None,
+) -> bool:
+    normalized_button_id = _normalize_text(button_id)
+    if normalized_button_id in _INTERESTED_BUTTON_TEXTS:
+        return True
+    if normalized_button_id.startswith("watesly_interested"):
+        return True
+    normalized_title = _normalize_text(button_title)
+    if normalized_title in _INTERESTED_BUTTON_TEXTS:
+        return True
+    normalized_text = _normalize_text(text)
+    return normalized_text in {"مهتم", "interested", "نعم", "yes"}
+
+
 def append_marketing_opt_out_components(components: list | None) -> list[dict]:
-    """Ensure marketing templates expose an opt-out quick reply and footer hint."""
+    """Ensure marketing templates expose interested + opt-out quick replies."""
     next_components = [dict(item) for item in (components or []) if isinstance(item, dict)]
-    if template_has_opt_out_button(next_components):
+    if template_has_opt_out_button(next_components) and _template_has_interested_button(next_components):
         return next_components
 
-    next_components.append(
-        {
-            "type": "BUTTONS",
-            "buttons": [
-                {
-                    "type": "QUICK_REPLY",
-                    "text": MARKETING_OPT_OUT_BUTTON_TEXT,
-                    "id": MARKETING_OPT_OUT_BUTTON_ID,
-                    "marketing_opt_out": True,
-                }
-            ],
-        }
-    )
+    buttons: list[dict] = []
+    if not _template_has_interested_button(next_components):
+        buttons.append(
+            {
+                "type": "QUICK_REPLY",
+                "text": MARKETING_INTERESTED_BUTTON_TEXT,
+                "id": MARKETING_INTERESTED_BUTTON_ID,
+                "marketing_interested": True,
+            }
+        )
+    if not template_has_opt_out_button(next_components):
+        buttons.append(
+            {
+                "type": "QUICK_REPLY",
+                "text": MARKETING_OPT_OUT_BUTTON_TEXT,
+                "id": MARKETING_OPT_OUT_BUTTON_ID,
+                "marketing_opt_out": True,
+            }
+        )
+    if buttons:
+        next_components.append({"type": "BUTTONS", "buttons": buttons})
 
     if not template_has_opt_out_footer(next_components):
         next_components.append({"type": "FOOTER", "text": MARKETING_OPT_OUT_FOOTER})
     return next_components
+
+
+def _template_has_interested_button(components: list | None) -> bool:
+    for component in components or []:
+        if str(component.get("type", "")).upper() != "BUTTONS":
+            continue
+        for button in component.get("buttons") or []:
+            if not isinstance(button, dict):
+                continue
+            text = _normalize_text(button.get("text"))
+            button_id = _normalize_text(button.get("id") or button.get("payload"))
+            if text in _INTERESTED_BUTTON_TEXTS or button_id in _INTERESTED_BUTTON_TEXTS:
+                return True
+            if button.get("marketing_interested") is True:
+                return True
+    return False
 
 
 async def apply_marketing_opt_out(
@@ -190,6 +247,67 @@ async def maybe_handle_marketing_opt_out(
             whatsapp_account.account_id,
             {
                 "type": "contact.marketing_opt_out",
+                "contact_id": str(contact.id),
+                "conversation_id": str(conversation.id),
+            },
+        )
+    except Exception:
+        pass
+
+    return True
+
+
+async def maybe_handle_marketing_interested(
+    db: AsyncSession,
+    *,
+    whatsapp_account,
+    contact: Contact,
+    conversation,
+    text_body: str | None,
+    interactive_reply: dict | None,
+) -> bool:
+    if not is_marketing_interested_request(
+        text=text_body,
+        button_id=(interactive_reply or {}).get("button_id"),
+        button_title=(interactive_reply or {}).get("button_title"),
+    ):
+        return False
+
+    try:
+        from app.services.whatsapp import send_catalog_welcome_message
+
+        await send_catalog_welcome_message(
+            db,
+            account_id=whatsapp_account.account_id,
+            whatsapp_account_id=whatsapp_account.id,
+            to=contact.external_address,
+            body=MARKETING_INTERESTED_WELCOME,
+        )
+    except Exception:
+        try:
+            from app.schemas.whatsapp import SendTextMessageRequest
+            from app.services.whatsapp import send_text_message
+
+            await send_text_message(
+                db,
+                account_id=whatsapp_account.account_id,
+                whatsapp_account_id=whatsapp_account.id,
+                payload=SendTextMessageRequest(
+                    to=contact.external_address,
+                    text=MARKETING_INTERESTED_WELCOME,
+                ),
+                record_mac=False,
+            )
+        except Exception:
+            pass
+
+    try:
+        from app.realtime.event_bus import publish_event
+
+        await publish_event(
+            whatsapp_account.account_id,
+            {
+                "type": "contact.marketing_interested",
                 "contact_id": str(contact.id),
                 "conversation_id": str(conversation.id),
             },

@@ -59,7 +59,7 @@ async def sync_catalog_to_meta(
                 "name": product.name[:200],
                 "description": (product.description or product.name)[:9999],
                 "retailer_id": retailer_id,
-                "price": int(float(_format_price(product)) * 100),
+                "price": str(int(float(_format_price(product)) * 100)),
                 "currency": product.currency or "KWD",
                 "availability": "in stock",
                 "condition": "new",

@@ -4,6 +4,18 @@ from __future__ import annotations
 
 
 def extract_interactive_reply(message_item: dict) -> dict | None:
+    legacy_button = message_item.get("button")
+    if isinstance(legacy_button, dict):
+        payload = str(legacy_button.get("payload") or legacy_button.get("id") or "")
+        text = str(legacy_button.get("text") or "")
+        if payload or text:
+            return {
+                "interactive_type": "button",
+                "button_id": payload,
+                "button_title": text,
+                "text": text,
+            }
+
     interactive = message_item.get("interactive")
     if not isinstance(interactive, dict):
         return None

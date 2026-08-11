@@ -40,6 +40,7 @@ class InboundMessageContext:
     sender: str
     referral_fields: dict[str, Any] | None
     external_id: str | None
+    order_data: dict[str, Any] | None = None
 
 
 async def find_duplicate_inbound(db: AsyncSession, external_id: str | None) -> bool:
@@ -155,10 +156,14 @@ async def persist_inbound_message(
                 apply_referral_to_contact(contact, referral_fields)
                 interactive_reply = extract_interactive_reply(item)
                 message_type_value = item.get("type", "unknown")
-                try:
-                    message_type = MessageType(message_type_value)
-                except ValueError:
-                    message_type = MessageType.IMAGE if message_type_value == "sticker" else MessageType.UNKNOWN
+                from app.services.inbound_commerce import (
+                    format_order_text,
+                    inbound_message_type_for_item,
+                    parse_whatsapp_order,
+                )
+
+                message_type = inbound_message_type_for_item(message_type_value)
+                order_data = parse_whatsapp_order(item) if message_type == MessageType.ORDER else None
 
                 from app.services.whatsapp_media import (
                     MEDIA_MESSAGE_TYPES,
@@ -167,11 +172,20 @@ async def persist_inbound_message(
                 )
 
                 text_body = extract_inbound_text_and_caption(item, message_type)
+                if order_data:
+                    text_body = format_order_text(order_data)
                 if interactive_reply and interactive_reply.get("text") and not text_body:
                     text_body = str(interactive_reply["text"])
                 provider_payload = dict(item)
                 if interactive_reply:
                     provider_payload["interactive_reply"] = interactive_reply
+                if order_data:
+                    provider_payload["order_parsed"] = order_data
+                from app.services.inbound_commerce import extract_referred_product
+
+                referred_product = extract_referred_product(item)
+                if referred_product:
+                    provider_payload["referred_product"] = referred_product
                 if message_type in MEDIA_MESSAGE_TYPES:
                     media_fields = await store_inbound_whatsapp_media(
                         whatsapp_account=whatsapp_account,
@@ -227,6 +241,7 @@ async def persist_inbound_message(
                     sender=sender,
                     referral_fields=referral_fields,
                     external_id=external_id,
+                    order_data=order_data,
                 )
         except IntegrityError as exc:
             last_error = exc
@@ -306,7 +321,56 @@ async def process_inbound_side_effects(
     except Exception:
         logger.exception("Marketing opt-out handling failed for contact_id=%s", contact.id)
 
-    if text_body:
+    try:
+        from app.services.marketing_compliance import maybe_handle_marketing_interested
+
+        await maybe_handle_marketing_interested(
+            db,
+            whatsapp_account=whatsapp_account,
+            contact=contact,
+            conversation=conversation,
+            text_body=text_body,
+            interactive_reply=interactive_reply,
+        )
+    except Exception:
+        logger.exception("Marketing interested handling failed for contact_id=%s", contact.id)
+
+    if ctx.order_data:
+        try:
+            from app.services.inbound_commerce import (
+                create_deal_from_whatsapp_order,
+                format_order_text,
+                resolve_order_product_names,
+            )
+
+            product_names = await resolve_order_product_names(
+                db,
+                account_id=whatsapp_account.account_id,
+                product_items=ctx.order_data.get("product_items") or [],
+            )
+            ctx.message.text_body = format_order_text(ctx.order_data, product_names=product_names)
+            deal = await create_deal_from_whatsapp_order(
+                db,
+                account_id=whatsapp_account.account_id,
+                contact_id=contact.id,
+                organization_id=whatsapp_account.organization_id,
+                order_data=ctx.order_data,
+                conversation_id=conversation.id,
+            )
+            await publish_event(
+                whatsapp_account.account_id,
+                {
+                    "type": "commerce.order_received",
+                    "deal_id": str(deal.id),
+                    "contact_id": str(contact.id),
+                    "conversation_id": str(conversation.id),
+                    "title": deal.title,
+                },
+            )
+        except Exception:
+            logger.exception("WhatsApp order deal creation failed for contact_id=%s", contact.id)
+
+    if text_body and not ctx.order_data:
         try:
             from app.services.crm import maybe_auto_create_deal_from_inbound
 

@@ -20,7 +20,7 @@ export type TemplateComponent = {
   text?: string;
   media_url?: string;
   filename?: string;
-  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; id?: string; marketing_opt_out?: boolean }>;
+  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; id?: string; marketing_opt_out?: boolean; marketing_interested?: boolean }>;
   example?: { header_url?: string[]; header_handle?: string[] };
 };
 
@@ -84,7 +84,10 @@ export function buildStoredComponents(
   if (options?.includeMarketingOptOut && (options.category ?? "marketing") === "marketing") {
     components.push({
       type: "BUTTONS",
-      buttons: [{ type: "QUICK_REPLY", text: "عدم الإزعاج", id: "watesly_marketing_opt_out", marketing_opt_out: true }]
+      buttons: [
+        { type: "QUICK_REPLY", text: "مهتم", id: "watesly_interested", marketing_interested: true },
+        { type: "QUICK_REPLY", text: "عدم الإزعاج", id: "watesly_marketing_opt_out", marketing_opt_out: true }
+      ]
     });
     components.push({ type: "FOOTER", text: "أرسل «إيقاف» لإلغاء الاشتراك" });
   }
