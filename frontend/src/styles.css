@@ -4717,6 +4717,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 14px;
   padding: 16px;
 }
+.whatsapp-connect-page .admin-table-card {
+  overflow: visible;
+}
+.whatsapp-expand-commerce {
+  grid-column: 1 / -1;
+  border-color: var(--primary);
+  background: linear-gradient(180deg, rgba(37, 211, 102, 0.08) 0%, var(--panel) 100%);
+}
+.whatsapp-expand-commerce h3 {
+  color: var(--primary-dark);
+}
 .whatsapp-expand-panel {
   display: grid;
   gap: 10px;

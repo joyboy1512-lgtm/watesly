@@ -436,10 +436,68 @@ export default function WhatsAppConnectPage() {
   }
 
   function renderExpandedPanel(account: WhatsAppAccountRow) {
+    const commerceDraft = commerceDrafts[account.id];
+    const savedCatalogId = account.meta_catalog_id?.trim() || commerceDraft?.meta_catalog_id?.trim() || "";
+    const commerceOn = account.commerce_enabled || commerceDraft?.commerce_enabled;
+
     return (
       <tr className="whatsapp-expand-row">
         <td colSpan={10}>
           <div className="whatsapp-expand-grid">
+            <article className="whatsapp-expand-panel whatsapp-expand-commerce">
+              <h3>WhatsApp Commerce — الكتالوج</h3>
+              <p className="hint-text">
+                {commerceOn && savedCatalogId
+                  ? `Commerce مفعّل · Catalog ID: ${savedCatalogId}`
+                  : "أدخل Catalog ID من Meta Commerce Manager ثم احفظ."}
+              </p>
+              <label className="field-label">
+                <span>Meta Catalog ID</span>
+                <input
+                  dir="ltr"
+                  value={commerceDraft?.meta_catalog_id ?? ""}
+                  onChange={(e) =>
+                    setCommerceDrafts((current) => ({
+                      ...current,
+                      [account.id]: {
+                        meta_catalog_id: e.target.value,
+                        commerce_enabled: current[account.id]?.commerce_enabled ?? false
+                      }
+                    }))
+                  }
+                  placeholder="1677372356655691"
+                />
+              </label>
+              <label className="inline-checkbox">
+                <input
+                  type="checkbox"
+                  checked={commerceDraft?.commerce_enabled ?? false}
+                  onChange={(e) =>
+                    setCommerceDrafts((current) => ({
+                      ...current,
+                      [account.id]: {
+                        meta_catalog_id: current[account.id]?.meta_catalog_id ?? "",
+                        commerce_enabled: e.target.checked
+                      }
+                    }))
+                  }
+                />
+                <span>تفعيل Commerce</span>
+              </label>
+              <div className="admin-actions">
+                <button type="button" className="whatsapp-button compact" onClick={() => void saveCommerce(account.id)}>
+                  حفظ Commerce
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  onClick={() => void syncCatalogToMeta(account.id)}
+                  disabled={!savedCatalogId}
+                >
+                  مزامنة المنتجات → Meta
+                </button>
+              </div>
+            </article>
             <article className="whatsapp-expand-panel">
               <h3>رمز Meta</h3>
               <p className="hint-text">
@@ -493,53 +551,6 @@ export default function WhatsAppConnectPage() {
                   {ensuringWebhookId === account.id ? "جاري الربط…" : "تأكيد الربط"}
                 </button>
               </div>
-            </article>
-            <article className="whatsapp-expand-panel">
-              <h3>WhatsApp Commerce</h3>
-              <label className="field-label">
-                <span>Meta Catalog ID</span>
-                <input
-                  dir="ltr"
-                  value={commerceDrafts[account.id]?.meta_catalog_id ?? ""}
-                  onChange={(e) =>
-                    setCommerceDrafts((current) => ({
-                      ...current,
-                      [account.id]: {
-                        meta_catalog_id: e.target.value,
-                        commerce_enabled: current[account.id]?.commerce_enabled ?? false
-                      }
-                    }))
-                  }
-                  placeholder="1234567890"
-                />
-              </label>
-              <label className="inline-checkbox">
-                <input
-                  type="checkbox"
-                  checked={commerceDrafts[account.id]?.commerce_enabled ?? false}
-                  onChange={(e) =>
-                    setCommerceDrafts((current) => ({
-                      ...current,
-                      [account.id]: {
-                        meta_catalog_id: current[account.id]?.meta_catalog_id ?? "",
-                        commerce_enabled: e.target.checked
-                      }
-                    }))
-                  }
-                />
-                <span>تفعيل Commerce</span>
-              </label>
-              <button type="button" className="secondary-button" onClick={() => void saveCommerce(account.id)}>
-                حفظ Commerce
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => void syncCatalogToMeta(account.id)}
-                disabled={!commerceDrafts[account.id]?.meta_catalog_id?.trim()}
-              >
-                مزامنة المنتجات → Meta
-              </button>
             </article>
             <article className="whatsapp-expand-panel">
               <h3>Meta IDs</h3>
