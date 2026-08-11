@@ -4711,22 +4711,62 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: color-mix(in srgb, var(--primary) 4%, var(--panel-soft));
   padding: 0;
 }
-.whatsapp-expand-grid {
+.whatsapp-expand-shell {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
   padding: 16px;
+}
+.whatsapp-expand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 2px 0;
+}
+.whatsapp-expand-header h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.whatsapp-expand-header .hint-text {
+  margin: 0;
+}
+.whatsapp-expand-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
 }
 .whatsapp-connect-page .admin-table-card {
   overflow: visible;
 }
-.whatsapp-expand-commerce {
+.whatsapp-expand-full {
   grid-column: 1 / -1;
+}
+.whatsapp-expand-commerce {
   border-color: var(--primary);
   background: linear-gradient(180deg, rgba(37, 211, 102, 0.08) 0%, var(--panel) 100%);
 }
 .whatsapp-expand-commerce h3 {
   color: var(--primary-dark);
+}
+.whatsapp-expand-token {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+  background: linear-gradient(180deg, rgba(37, 211, 102, 0.04) 0%, var(--panel) 100%);
+}
+.whatsapp-expand-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.whatsapp-expand-split-col {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.whatsapp-expand-split-col:not(:first-child) {
+  padding-inline-start: 18px;
+  border-inline-start: 1px solid var(--line);
 }
 .whatsapp-expand-panel {
   display: grid;
@@ -4739,6 +4779,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .whatsapp-expand-panel h3 {
   margin: 0;
   font-size: 15px;
+}
+@media (max-width: 760px) {
+  .whatsapp-expand-split {
+    grid-template-columns: 1fr;
+  }
+  .whatsapp-expand-split-col:not(:first-child) {
+    padding-inline-start: 0;
+    padding-top: 14px;
+    border-inline-start: none;
+    border-top: 1px solid var(--line);
+  }
 }
 .whatsapp-meta-id-list {
   display: grid;
