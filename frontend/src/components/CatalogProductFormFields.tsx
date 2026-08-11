@@ -123,19 +123,6 @@ export default function CatalogProductFormFields({
             dir="ltr"
           />
         </label>
-        <label className="field-label catalog-field-w-sync catalog-meta-sync-inline">
-          <span>مزامنة Meta</span>
-          <div className="catalog-meta-sync-toggle-row">
-            <input
-              type="checkbox"
-              checked={form.metaSyncEnabled}
-              onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
-            />
-            <span className="hint-text catalog-meta-sync-hint">
-              {form.metaSyncEnabled ? "مفعّلة — تُرسل تلقائياً" : "موقوفة"}
-            </span>
-          </div>
-        </label>
       </div>
 
       <label className="field-label">
@@ -248,6 +235,15 @@ export default function CatalogProductFormFields({
             </label>
           </>
         )}
+        <label className="catalog-meta-sync-chip">
+          <input
+            type="checkbox"
+            checked={form.metaSyncEnabled}
+            onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
+          />
+          <span>مزامنة Meta</span>
+          <span className="catalog-meta-sync-state">{form.metaSyncEnabled ? "مفعّلة" : "موقوفة"}</span>
+        </label>
       </div>
 
       <label className="field-label">
@@ -278,14 +274,16 @@ export default function CatalogProductFormFields({
         )}
       </div>
 
-      <div className="catalog-image-field">
-        <span className="field-label-title">صورة المنتج</span>
-        {form.imageUrl ? (
-          <img src={form.imageUrl} alt={form.name || "معاينة"} className="catalog-form-image" />
-        ) : (
-          <div className="catalog-form-image placeholder">بدون صورة</div>
-        )}
-        <div className="catalog-image-actions">
+      <div className="catalog-image-row">
+        <div className="catalog-image-thumb">
+          {form.imageUrl ? (
+            <img src={form.imageUrl} alt={form.name || "معاينة"} className="catalog-form-image" />
+          ) : (
+            <div className="catalog-form-image placeholder">—</div>
+          )}
+        </div>
+        <div className="catalog-image-controls">
+          <span className="field-label-title">صورة المنتج</span>
           <label className="secondary-button compact">
             {uploadingImage ? "جاري الرفع…" : "رفع صورة"}
             <input
@@ -303,7 +301,7 @@ export default function CatalogProductFormFields({
           <input
             value={form.imageUrl}
             onChange={(e) => setForm((current) => ({ ...current, imageUrl: e.target.value }))}
-            placeholder="أو الصق رابط الصورة"
+            placeholder="رابط الصورة"
             dir="ltr"
           />
         </div>
