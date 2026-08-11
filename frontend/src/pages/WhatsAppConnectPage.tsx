@@ -39,6 +39,17 @@ type TableRow = {
 
 type PageTab = "accounts" | "connect" | "entry";
 
+type CommerceReadiness = {
+  commerce_enabled: boolean;
+  meta_catalog_id: string | null;
+  account_ready: boolean;
+  token_valid: boolean | null;
+  token_scopes: string[];
+  has_catalog_management: boolean;
+  token_error: string | null;
+  products_active: number;
+};
+
 export default function WhatsAppConnectPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const client = useQueryClient();
@@ -66,6 +77,8 @@ export default function WhatsAppConnectPage() {
   const [ensuringWebhookId, setEnsuringWebhookId] = useState<string | null>(null);
   const [updatingTokenId, setUpdatingTokenId] = useState<string | null>(null);
   const [commerceDrafts, setCommerceDrafts] = useState<Record<string, { meta_catalog_id: string; commerce_enabled: boolean }>>({});
+  const [commerceReadiness, setCommerceReadiness] = useState<Record<string, CommerceReadiness | null>>({});
+  const [loadingReadinessId, setLoadingReadinessId] = useState<string | null>(null);
 
   const channels = useQuery({
     queryKey: ["channels"],
@@ -200,6 +213,19 @@ export default function WhatsAppConnectPage() {
       };
     }
     setCommerceDrafts(next);
+  }, [accounts.data]);
+
+  useEffect(() => {
+    if (!expandedId) return;
+    void loadCommerceReadiness(expandedId);
+  }, [expandedId]);
+
+  useEffect(() => {
+    for (const item of accounts.data ?? []) {
+      if (item.commerce_enabled && item.meta_catalog_id?.trim()) {
+        void loadCommerceReadiness(item.id);
+      }
+    }
   }, [accounts.data]);
 
   async function completeEmbedded(code: string, session: EmbeddedSignupSession) {
@@ -350,6 +376,7 @@ export default function WhatsAppConnectPage() {
       setTokenDrafts((current) => ({ ...current, [accountId]: "" }));
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       await checkTokenStatus(accountId);
+      await loadCommerceReadiness(accountId);
       toastStore.getState().show("تم تحديث رمز Meta.", "success");
     } catch {
       toastStore.getState().show("تعذر تحديث الرمز.", "error");
@@ -370,6 +397,18 @@ export default function WhatsAppConnectPage() {
     }
   }
 
+  async function loadCommerceReadiness(accountId: string) {
+    setLoadingReadinessId(accountId);
+    try {
+      const response = await api.get<CommerceReadiness>(`/whatsapp/accounts/${accountId}/commerce/readiness`);
+      setCommerceReadiness((current) => ({ ...current, [accountId]: response.data }));
+    } catch {
+      setCommerceReadiness((current) => ({ ...current, [accountId]: null }));
+    } finally {
+      setLoadingReadinessId(null);
+    }
+  }
+
   async function syncCatalogToMeta(accountId: string) {
     try {
       const response = await api.post<{
@@ -383,12 +422,15 @@ export default function WhatsAppConnectPage() {
       }>(`/whatsapp/accounts/${accountId}/commerce/sync`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       await client.invalidateQueries({ queryKey: ["catalog"] });
-      const { synced, failed, total, pending = 0, approved = 0, rejected = 0 } = response.data;
+      await loadCommerceReadiness(accountId);
+      const { synced, failed, total, pending = 0, approved = 0, rejected = 0, errors = [] } = response.data;
       const reviewSummary =
         synced > 0 ? ` — معتمد ${approved}، قيد المراجعة ${pending}، مرفوض ${rejected}` : "";
+      const firstError = errors[0]?.replace(/^[^:]+:\s*/, "") ?? "";
+      const detail = failed > 0 && firstError ? ` — ${firstError}` : "";
       toastStore
         .getState()
-        .show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل${reviewSummary}.`, failed ? "error" : "success");
+        .show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل${reviewSummary}${detail}.`, failed ? "error" : "success");
     } catch {
       toastStore.getState().show("تعذر مزامنة الكتالogg مع Meta.", "error");
     }
@@ -427,12 +469,64 @@ export default function WhatsAppConnectPage() {
 
   function renderTokenBadge(accountId: string) {
     const status = tokenStatus[accountId];
-    if (!status) return <span className="admin-chip admin-chip-muted">غير مفحوص</span>;
+    const readiness = commerceReadiness[accountId];
+    if (!status && !readiness) return <span className="admin-chip admin-chip-muted">غير مفحوص</span>;
+    const valid = status?.valid ?? readiness?.token_valid;
+    const missingCatalogScope =
+      readiness?.commerce_enabled && readiness.token_valid !== false && !readiness.has_catalog_management;
+    if (missingCatalogScope) {
+      return <span className="admin-status admin-status-pending">Token · بدون catalog</span>;
+    }
     return (
-      <span className={status.valid ? "admin-status admin-status-active" : "admin-status admin-status-danger"}>
-        {status.valid ? "Token ✓" : "Token ✗"}
+      <span className={valid ? "admin-status admin-status-active" : "admin-status admin-status-danger"}>
+        {valid ? "Token ✓" : "Token ✗"}
       </span>
     );
+  }
+
+  function renderCatalogScopeWarning(accountId: string, commerceOn: boolean) {
+    const readiness = commerceReadiness[accountId];
+    if (loadingReadinessId === accountId) {
+      return <p className="hint-text">جاري فحص صلاحيات التوكن…</p>;
+    }
+    if (!readiness || !commerceOn) return null;
+    if (readiness.token_valid === false) {
+      return (
+        <div className="whatsapp-replace-warning" role="alert">
+          <strong>رمز Meta غير صالح</strong>
+          <p className="hint-text">حدّث System User Token من Meta Business ثم احفظه هنا.</p>
+        </div>
+      );
+    }
+    if (!readiness.has_catalog_management) {
+      return (
+        <div className="whatsapp-replace-warning" role="alert">
+          <strong>صلاحية catalog_management مفقودة</strong>
+          <p className="hint-text">
+            التوكن الحالي لا يملك صلاحية إدارة الكتالوج — لذلك تفشل مزامنة المنتجات حتى لو كان Catalog ID
+            {" "}
+            <span dir="ltr">{readiness.meta_catalog_id ?? ""}</span>
+            {" "}
+            صحيحاً في Commerce Manager.
+          </p>
+          <p className="hint-text">
+            في Meta Business → System Users → أنشئ Token جديداً مع{" "}
+            <span dir="ltr">catalog_management</span>
+            {" "}
+            و
+            <span dir="ltr"> whatsapp_business_management</span>
+            {" "}
+            ثم الصقه في «تحديث الرمز» أدناه.
+          </p>
+          {readiness.token_scopes.length > 0 && (
+            <p className="hint-text" dir="ltr">
+              Scopes: {readiness.token_scopes.join(", ")}
+            </p>
+          )}
+        </div>
+      );
+    }
+    return null;
   }
 
   function renderExpandedPanel(account: WhatsAppAccountRow) {
@@ -461,6 +555,7 @@ export default function WhatsAppConnectPage() {
                     ? `Commerce مفعّل · Catalog ID: ${savedCatalogId}`
                     : "أدخل Catalog ID من Meta Commerce Manager ثم احفظ."}
                 </p>
+                {renderCatalogScopeWarning(account.id, Boolean(commerceOn && savedCatalogId))}
                 <label className="field-label">
                   <span>Meta Catalog ID</span>
                   <input
