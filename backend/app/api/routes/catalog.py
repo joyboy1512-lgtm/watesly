@@ -485,6 +485,13 @@ async def post_sync_catalog_product_meta(
             "META_SYNC_DISABLED": "فعّل مزامنة Meta للمنتج من إعدادات المنتج أولاً.",
             "PRODUCT_NOT_ACTIVE": "لا يمكن مزامنة منتج مؤرشف.",
             "META_CATALOG_NOT_CONFIGURED": "فعّل Commerce وأدخل Meta Catalog ID من صفحة ربط WhatsApp أولاً.",
+            "META_CATALOG_NOT_CONFIGURED_FOR_ORGANIZATION": (
+                "فرع هذا المنتج لا يملك Commerce أو Catalog ID — فعّلهما من إعدادات ربط WhatsApp لنفس الفرع."
+            ),
+            "ORGANIZATION_REQUIRED_FOR_META_SYNC": (
+                "حدّد فرع المنتج — كل فرع له رقم WhatsApp وكتالوج Meta منفصل."
+            ),
+            "ORGANIZATION_CATALOG_MISMATCH": "فرع المنتج لا يطابق كتالوج WhatsApp المحدد.",
             "PRODUCT_NOT_FOUND": "المنتج غير موجود.",
         }
         if code in messages:

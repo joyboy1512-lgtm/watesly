@@ -488,6 +488,11 @@ async def post_whatsapp_commerce_sync(
         detail = str(exc)
         if detail == "META_CATALOG_NOT_CONFIGURED":
             raise HTTPException(status_code=400, detail="Meta catalog ID is not configured") from exc
+        if detail == "META_CATALOG_NOT_CONFIGURED_FOR_ORGANIZATION":
+            raise HTTPException(
+                status_code=400,
+                detail="فرع هذا الرقم لا يملك Commerce أو Catalog ID — فعّلهما من إعدادات ربط WhatsApp.",
+            ) from exc
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
 
 

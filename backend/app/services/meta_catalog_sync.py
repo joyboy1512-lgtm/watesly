@@ -11,7 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.encryption import decrypt_secret
 from app.models.catalog_product import CatalogProduct
 from app.models.whatsapp_account import WhatsAppAccount
-from app.services.catalog_commerce import resolve_retailer_id, build_meta_catalog_product_payload
+from app.services.catalog_commerce import (
+    build_meta_catalog_product_payload,
+    format_meta_sync_error,
+    meta_sync_error_for_code,
+    product_matches_commerce_organization,
+    resolve_retailer_id,
+    validate_product_for_meta_sync,
+)
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 
 
@@ -92,33 +99,40 @@ def apply_meta_product_status(
             product.external_id = meta_id
 
 
+def _ensure_commerce_account_ready(account: WhatsAppAccount) -> None:
+    if not account.commerce_enabled or not (account.meta_catalog_id or "").strip():
+        raise ValueError("META_CATALOG_NOT_CONFIGURED")
+
+
 async def _get_commerce_whatsapp_account(
     db: AsyncSession,
     *,
     account_id: UUID,
     whatsapp_account_id: UUID | None = None,
+    organization_id: UUID | None = None,
 ) -> WhatsAppAccount:
     if whatsapp_account_id is not None:
         account = await db.get(WhatsAppAccount, whatsapp_account_id)
         if account is None or account.account_id != account_id:
             raise ValueError("WHATSAPP_ACCOUNT_NOT_AVAILABLE")
-        if not account.meta_catalog_id:
-            raise ValueError("META_CATALOG_NOT_CONFIGURED")
+        if organization_id is not None and account.organization_id != organization_id:
+            raise ValueError("ORGANIZATION_CATALOG_MISMATCH")
+        _ensure_commerce_account_ready(account)
         return account
 
-    account = (
-        await db.execute(
-            select(WhatsAppAccount)
-            .where(
-                WhatsAppAccount.account_id == account_id,
-                WhatsAppAccount.commerce_enabled.is_(True),
-                WhatsAppAccount.meta_catalog_id.is_not(None),
-                WhatsAppAccount.meta_catalog_id != "",
-            )
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    query = select(WhatsAppAccount).where(
+        WhatsAppAccount.account_id == account_id,
+        WhatsAppAccount.commerce_enabled.is_(True),
+        WhatsAppAccount.meta_catalog_id.is_not(None),
+        WhatsAppAccount.meta_catalog_id != "",
+    )
+    if organization_id is not None:
+        query = query.where(WhatsAppAccount.organization_id == organization_id)
+
+    account = (await db.execute(query.order_by(WhatsAppAccount.created_at.asc()).limit(1))).scalar_one_or_none()
     if account is None:
+        if organization_id is not None:
+            raise ValueError("META_CATALOG_NOT_CONFIGURED_FOR_ORGANIZATION")
         raise ValueError("META_CATALOG_NOT_CONFIGURED")
     return account
 
@@ -128,6 +142,12 @@ async def _build_meta_client(db: AsyncSession, account: WhatsAppAccount) -> Meta
         access_token=decrypt_secret(account.access_token_encrypted),
         phone_number_id=account.phone_number_id,
     )
+
+
+def _require_product_organization(product: CatalogProduct) -> UUID:
+    if product.organization_id is None:
+        raise ValueError("ORGANIZATION_REQUIRED_FOR_META_SYNC")
+    return product.organization_id
 
 
 async def refresh_product_meta_status(
@@ -150,7 +170,12 @@ async def unpublish_catalog_product_from_meta(
     if not product.external_id:
         return
     try:
-        account = await _get_commerce_whatsapp_account(db, account_id=account_id)
+        organization_id = _require_product_organization(product)
+        account = await _get_commerce_whatsapp_account(
+            db,
+            account_id=account_id,
+            organization_id=organization_id,
+        )
     except ValueError:
         return
     client = await _build_meta_client(db, account)
@@ -186,10 +211,12 @@ async def sync_catalog_product_to_meta(
     if not product.meta_sync_enabled:
         raise ValueError("META_SYNC_DISABLED")
 
+    organization_id = _require_product_organization(product)
     account = await _get_commerce_whatsapp_account(
         db,
         account_id=account_id,
         whatsapp_account_id=whatsapp_account_id,
+        organization_id=organization_id,
     )
     return await sync_catalog_to_meta(
         db,
@@ -197,6 +224,20 @@ async def sync_catalog_product_to_meta(
         whatsapp_account_id=account.id,
         product_ids=[product_id],
     )
+
+
+async def _mark_product_meta_sync_failed(
+    db: AsyncSession,
+    *,
+    product: CatalogProduct,
+    code: str,
+) -> None:
+    apply_meta_product_status(
+        product,
+        sync_status="failed",
+        sync_error=meta_sync_error_for_code(code),
+    )
+    await db.commit()
 
 
 async def try_auto_sync_catalog_product_to_meta(
@@ -218,7 +259,15 @@ async def try_auto_sync_catalog_product_to_meta(
         )
     except ValueError as exc:
         code = str(exc)
-        if code in {"META_CATALOG_NOT_CONFIGURED", "META_SYNC_DISABLED", "PRODUCT_NOT_ACTIVE"}:
+        if code in {"META_SYNC_DISABLED", "PRODUCT_NOT_ACTIVE"}:
+            return
+        if code in {
+            "META_CATALOG_NOT_CONFIGURED",
+            "META_CATALOG_NOT_CONFIGURED_FOR_ORGANIZATION",
+            "ORGANIZATION_REQUIRED_FOR_META_SYNC",
+            "ORGANIZATION_CATALOG_MISMATCH",
+        }:
+            await _mark_product_meta_sync_failed(db, product=product, code=code)
             return
         raise
 
@@ -238,6 +287,7 @@ async def refresh_catalog_meta_status(
     query = select(CatalogProduct).where(
         CatalogProduct.account_id == account_id,
         CatalogProduct.is_active.is_(True),
+        CatalogProduct.organization_id == account.organization_id,
         CatalogProduct.external_id.is_not(None),
         CatalogProduct.external_id != "",
     )
@@ -304,6 +354,7 @@ async def sync_catalog_to_meta(
         CatalogProduct.account_id == account_id,
         CatalogProduct.is_active.is_(True),
         CatalogProduct.meta_sync_enabled.is_(True),
+        CatalogProduct.organization_id == account.organization_id,
     )
     if product_ids:
         query = query.where(CatalogProduct.id.in_(product_ids))
@@ -312,11 +363,31 @@ async def sync_catalog_to_meta(
         return {"synced": 0, "failed": 0, "total": 0, "pending": 0, "approved": 0, "rejected": 0, "skipped": 0}
 
     client = await _build_meta_client(db, account)
-    synced = failed = pending = approved = rejected = 0
+    synced = failed = pending = approved = rejected = skipped = 0
     errors: list[str] = []
     try:
         for product in products:
             if not product.meta_sync_enabled:
+                continue
+            if not product_matches_commerce_organization(product, account):
+                skipped += 1
+                mismatch_error = meta_sync_error_for_code("ORGANIZATION_CATALOG_MISMATCH")
+                apply_meta_product_status(
+                    product,
+                    sync_status="failed",
+                    sync_error=mismatch_error,
+                )
+                errors.append(f"{product.name}: {mismatch_error}"[:500])
+                continue
+            validation_error = validate_product_for_meta_sync(product)
+            if validation_error:
+                failed += 1
+                apply_meta_product_status(
+                    product,
+                    sync_status="failed",
+                    sync_error=validation_error,
+                )
+                errors.append(f"{product.name}: {validation_error}"[:500])
                 continue
             payload = build_meta_catalog_product_payload(product)
             if not product.meta_retailer_id:
@@ -351,12 +422,13 @@ async def sync_catalog_to_meta(
                     rejected += 1
             except MetaAPIError as exc:
                 failed += 1
+                sync_error = format_meta_sync_error(str(exc))
                 apply_meta_product_status(
                     product,
                     sync_status="failed",
-                    sync_error=str(exc),
+                    sync_error=sync_error,
                 )
-                errors.append(f"{product.name}: {exc}"[:500])
+                errors.append(f"{product.name}: {sync_error}"[:500])
         account.catalog_synced_at = datetime.now(UTC)
         await db.commit()
     finally:
@@ -369,6 +441,6 @@ async def sync_catalog_to_meta(
         "pending": pending,
         "approved": approved,
         "rejected": rejected,
-        "skipped": 0,
+        "skipped": skipped,
         "errors": errors[:20],
     }

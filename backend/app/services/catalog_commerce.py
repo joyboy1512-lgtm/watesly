@@ -25,6 +25,68 @@ def product_commerce_ready(product: CatalogProduct) -> bool:
     return product.is_active and bool(resolve_retailer_id(product))
 
 
+def validate_product_for_meta_sync(product: CatalogProduct) -> str | None:
+    """Return a user-facing Arabic error message, or None if the product can sync."""
+    image_url = (product.image_url or "").strip()
+    if not image_url:
+        return "صورة المنتج مطلوبة للمزامنة مع Meta — ارفع صورة أو أدخل رابط HTTPS عام (500×500 على الأقل)."
+    if not image_url.lower().startswith(("http://", "https://")):
+        return "رابط صورة المنتج يجب أن يبدأ بـ http:// أو https://."
+    if product.price is None or product.price <= 0:
+        return "السعر مطلوب ويجب أن يكون أكبر من صفر للمزامنة مع Meta."
+    if not (product.name or "").strip():
+        return "اسم المنتج مطلوب للمزامنة مع Meta."
+    if product.organization_id is None:
+        return "حدّد فرع المنتج — كل فرع له رقم WhatsApp وكتالوج Meta منفصل."
+    return None
+
+
+def meta_sync_error_for_code(code: str) -> str:
+    messages = {
+        "ORGANIZATION_REQUIRED_FOR_META_SYNC": (
+            "حدّد فرع المنتج — كل فرع له رقم WhatsApp وكتالوج Meta منفصل."
+        ),
+        "META_CATALOG_NOT_CONFIGURED_FOR_ORGANIZATION": (
+            "فرع المنتج لا يملك Commerce أو Catalog ID — فعّلهما من إعدادات ربط WhatsApp لنفس الفرع."
+        ),
+        "ORGANIZATION_CATALOG_MISMATCH": (
+            "فرع المنتج لا يطابق كتالوج WhatsApp المحدد."
+        ),
+        "META_CATALOG_NOT_CONFIGURED": (
+            "فعّل Commerce وأدخل Meta Catalog ID من صفحة ربط WhatsApp."
+        ),
+    }
+    return messages.get(code, code)
+
+
+def product_matches_commerce_organization(product: CatalogProduct, whatsapp_account: WhatsAppAccount) -> bool:
+    return product.organization_id is not None and product.organization_id == whatsapp_account.organization_id
+
+
+def format_meta_sync_error(message: str) -> str:
+    """Translate common Meta API errors to clearer Arabic guidance."""
+    lower = message.lower()
+    if "catalog_management" in lower or "manage_catalog" in lower:
+        return (
+            "توكن Meta لا يملك صلاحية catalog_management. "
+            "أنشئ System User Token جديداً مع صلاحيات catalog_management و whatsapp_business_management."
+        )
+    if "invalid oauth access token" in lower or "session has expired" in lower:
+        return "توكن Meta منتهي أو غير صالح — حدّث التوكن من إعدادات ربط WhatsApp."
+    if "image_url" in lower and ("required" in lower or "missing" in lower):
+        return "Meta تتطلب صورة للمنتج — ارفع صورة أو أدخل رابط HTTPS عام."
+    if "image" in lower and ("fetch" in lower or "download" in lower or "invalid" in lower):
+        return "Meta لم تستطع تحميل صورة المنتج — تأكد أن الرابط عام (HTTPS) وبحجم 500×500 على الأقل."
+    if "permission" in lower or "does not exist" in lower or "unsupported post" in lower:
+        return (
+            "Catalog ID غير صحيح أو التوكن لا يملك صلاحية الوصول إليه. "
+            "تحقق من Meta Catalog ID في إعدادات Commerce."
+        )
+    if "duplicate" in lower and "retailer" in lower:
+        return "retailer_id مكرر في الكتالوج — غيّر SKU أو Meta retailer ID للمنتج."
+    return message
+
+
 def _format_meta_price(product: CatalogProduct) -> str:
     if product.price is None:
         return "0.00"
@@ -32,6 +94,7 @@ def _format_meta_price(product: CatalogProduct) -> str:
 
 
 def build_meta_catalog_product_payload(product: CatalogProduct) -> dict:
+    image_url = (product.image_url or "").strip()
     payload = {
         "name": product.name[:200],
         "description": (product.description or product.name)[:9999],
@@ -40,9 +103,8 @@ def build_meta_catalog_product_payload(product: CatalogProduct) -> dict:
         "currency": product.currency or "KWD",
         "availability": "in stock",
         "condition": "new",
+        "image_url": image_url,
     }
-    if product.image_url:
-        payload["image_url"] = product.image_url
     group_id = (product.meta_item_group_id or "").strip()
     if group_id:
         payload["item_group_id"] = group_id[:80]
@@ -127,6 +189,9 @@ async def prepare_catalog_commerce_ids(db: AsyncSession, *, account_id: UUID) ->
 
 
 async def commerce_readiness(db: AsyncSession, *, account_id: UUID, whatsapp_account_id: UUID) -> dict:
+    from app.core.encryption import decrypt_secret
+    from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
+
     account = await db.get(WhatsAppAccount, whatsapp_account_id)
     if account is None or account.account_id != account_id:
         raise ValueError("WHATSAPP_ACCOUNT_NOT_AVAILABLE")
@@ -150,6 +215,18 @@ async def commerce_readiness(db: AsyncSession, *, account_id: UUID, whatsapp_acc
             )
         )
     ).scalar_one()
+    with_image = (
+        await db.execute(
+            select(func.count())
+            .select_from(CatalogProduct)
+            .where(
+                CatalogProduct.account_id == account_id,
+                CatalogProduct.is_active.is_(True),
+                CatalogProduct.image_url.is_not(None),
+                CatalogProduct.image_url != "",
+            )
+        )
+    ).scalar_one()
     top_used = list(
         (
             await db.execute(
@@ -161,6 +238,36 @@ async def commerce_readiness(db: AsyncSession, *, account_id: UUID, whatsapp_acc
         ).scalars().all()
     )
 
+    token_scopes: list[str] = []
+    token_valid = None
+    token_error: str | None = None
+    has_catalog_management = False
+    try:
+        client = MetaWhatsAppClient(
+            access_token=decrypt_secret(account.access_token_encrypted),
+            phone_number_id=account.phone_number_id,
+        )
+        try:
+            debug = await client.debug_access_token()
+            data = debug.get("data", debug)
+            if isinstance(data, dict):
+                token_valid = data.get("is_valid")
+                scopes = data.get("scopes") or []
+                token_scopes = [str(scope) for scope in scopes if scope]
+                for scope in data.get("granular_scopes") or []:
+                    if isinstance(scope, dict) and scope.get("scope"):
+                        token_scopes.append(str(scope["scope"]))
+                token_scopes = sorted(set(token_scopes))
+                has_catalog_management = any(
+                    "catalog" in scope.lower() for scope in token_scopes
+                )
+        except MetaAPIError as exc:
+            token_error = str(exc)
+        finally:
+            await client.aclose()
+    except Exception as exc:
+        token_error = str(exc)
+
     return {
         "commerce_enabled": bool(account.commerce_enabled),
         "meta_catalog_id": account.meta_catalog_id,
@@ -168,6 +275,11 @@ async def commerce_readiness(db: AsyncSession, *, account_id: UUID, whatsapp_acc
         "account_ready": account_commerce_ready(account),
         "products_active": int(total_active or 0),
         "products_with_retailer_id": int(with_retailer or 0),
+        "products_with_image": int(with_image or 0),
+        "token_valid": token_valid,
+        "token_scopes": token_scopes,
+        "has_catalog_management": has_catalog_management,
+        "token_error": token_error,
         "top_products": [
             {
                 "id": str(item.id),

@@ -284,6 +284,7 @@ export default function CatalogProductFormFields({
         </div>
         <div className="catalog-image-controls">
           <span className="field-label-title">صورة المنتج</span>
+          <p className="hint-text">مطلوبة لمزامنة Meta — JPG/PNG، 500×500 على الأقل، رابط HTTPS عام.</p>
           <label className="secondary-button compact">
             {uploadingImage ? "جاري الرفع…" : "رفع صورة"}
             <input
