@@ -60,7 +60,13 @@ async def get_catalog_product(
             organization_id=item.organization_id,
         )
     elif membership is not None and item.organization_id is None:
-        raise ValueError("ACCESS_FORBIDDEN")
+        from app.services.membership_access import resolve_accessible_organization_ids
+
+        allowed_orgs = await resolve_accessible_organization_ids(
+            db, account_id=account_id, membership=membership
+        )
+        if allowed_orgs is not None:
+            raise ValueError("ACCESS_FORBIDDEN")
     return item
 
 
@@ -71,18 +77,38 @@ async def create_catalog_product(
     membership=None,
     **fields,
 ) -> CatalogProduct:
-    from app.services.membership_access import ensure_membership_organization_access
+    from app.services.membership_access import (
+        ensure_membership_organization_access,
+        resolve_accessible_organization_ids,
+    )
 
     org_id = fields.get("organization_id")
     if membership is not None:
-        if org_id is None:
-            raise ValueError("ORGANIZATION_REQUIRED")
-        await ensure_membership_organization_access(
-            db,
-            account_id=account_id,
-            membership=membership,
-            organization_id=org_id,
+        allowed_orgs = await resolve_accessible_organization_ids(
+            db, account_id=account_id, membership=membership
         )
+        if allowed_orgs is None:
+            # Owner/admin may save account-wide catalog entries.
+            if org_id is not None:
+                await ensure_membership_organization_access(
+                    db,
+                    account_id=account_id,
+                    membership=membership,
+                    organization_id=org_id,
+                )
+        else:
+            if org_id is None:
+                if len(allowed_orgs) == 1:
+                    org_id = allowed_orgs[0]
+                    fields["organization_id"] = org_id
+                else:
+                    raise ValueError("ORGANIZATION_REQUIRED")
+            await ensure_membership_organization_access(
+                db,
+                account_id=account_id,
+                membership=membership,
+                organization_id=org_id,
+            )
     item = CatalogProduct(account_id=account_id, **fields)
     db.add(item)
     await db.commit()

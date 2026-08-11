@@ -200,9 +200,17 @@ async def post_catalog_product(
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await create_catalog_product(
-        db, account_id=context.account_id, membership=context.membership, **payload.model_dump()
-    )
+    try:
+        return await create_catalog_product(
+            db, account_id=context.account_id, membership=context.membership, **payload.model_dump()
+        )
+    except ValueError as exc:
+        code = str(exc)
+        messages = {
+            "ORGANIZATION_REQUIRED": "اختر الفرع قبل حفظ المنتج",
+            "ACCESS_FORBIDDEN": "لا تملك صلاحية على هذا الفرع",
+        }
+        raise HTTPException(status_code=400, detail=messages.get(code, code)) from exc
 
 
 @router.get("/{product_id}")

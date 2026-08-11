@@ -40,6 +40,12 @@ export default function CatalogCreatePage() {
     setForm((current) => ({ ...current, category: presetCategory }));
   }, [searchParams]);
 
+  useEffect(() => {
+    const orgs = organizations.data ?? [];
+    if (orgs.length !== 1) return;
+    setForm((current) => (current.organizationId ? current : { ...current, organizationId: orgs[0].id }));
+  }, [organizations.data]);
+
   function addSpec() {
     if (!specKey.trim()) return;
     setForm((current) => ({
@@ -84,8 +90,15 @@ export default function CatalogCreatePage() {
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
       toastStore.getState().show("تم إضافة المنتج/الخدمة.", "success");
       navigate("/catalog", { replace: true });
-    } catch {
-      toastStore.getState().show("تعذر الحفظ.", "error");
+    } catch (error: unknown) {
+      const detail =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response: { data: { detail: string } } }).response.data.detail
+          : null;
+      toastStore.getState().show(detail ?? "تعذر الحفظ.", "error");
     } finally {
       setSaving(false);
     }

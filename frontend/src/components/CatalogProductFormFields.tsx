@@ -76,12 +76,13 @@ export default function CatalogProductFormFields({
           />
         </label>
         <label className="field-label">
-          <span>الفرع</span>
+          <span>الفرع {organizations.length === 1 ? "" : "(مطلوب لموظفي الفرع)"}</span>
           <select
             value={form.organizationId}
             onChange={(e) => setForm((current) => ({ ...current, organizationId: e.target.value }))}
+            required={organizations.length > 1}
           >
-            <option value="">كل الفروع</option>
+            <option value="">{organizations.length === 1 ? "الفرع الافتراضي" : "— اختر الفرع —"}</option>
             {organizations.map((org) => (
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
