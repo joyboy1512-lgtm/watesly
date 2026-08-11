@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -22,6 +23,60 @@ def resolve_retailer_id(product: CatalogProduct) -> str:
 
 def product_commerce_ready(product: CatalogProduct) -> bool:
     return product.is_active and bool(resolve_retailer_id(product))
+
+
+def _format_meta_price(product: CatalogProduct) -> str:
+    if product.price is None:
+        return "0.00"
+    return f"{product.price:.2f}"
+
+
+def build_meta_catalog_product_payload(product: CatalogProduct) -> dict:
+    payload = {
+        "name": product.name[:200],
+        "description": (product.description or product.name)[:9999],
+        "retailer_id": resolve_retailer_id(product),
+        "price": str(int(float(_format_meta_price(product)) * 100)),
+        "currency": product.currency or "KWD",
+        "availability": "in stock",
+        "condition": "new",
+    }
+    if product.image_url:
+        payload["image_url"] = product.image_url
+    group_id = (product.meta_item_group_id or "").strip()
+    if group_id:
+        payload["item_group_id"] = group_id[:80]
+    size = (product.variant_size or "").strip()
+    if size:
+        payload["size"] = size[:100]
+    color = (product.variant_color or "").strip()
+    if color:
+        payload["color"] = color[:100]
+    extras = {
+        str(key).strip(): str(value).strip()
+        for key, value in (product.variant_attributes or {}).items()
+        if str(key).strip() and str(value).strip()
+    }
+    if extras:
+        payload["additional_variant_attributes"] = json.dumps(extras, ensure_ascii=False)
+    return payload
+
+
+async def list_catalog_variant_groups(db: AsyncSession, account_id: UUID) -> list[str]:
+    rows = (
+        await db.execute(
+            select(CatalogProduct.meta_item_group_id)
+            .where(
+                CatalogProduct.account_id == account_id,
+                CatalogProduct.is_active.is_(True),
+                CatalogProduct.meta_item_group_id.is_not(None),
+                CatalogProduct.meta_item_group_id != "",
+            )
+            .distinct()
+            .order_by(CatalogProduct.meta_item_group_id.asc())
+        )
+    ).all()
+    return [row[0] for row in rows if row[0]]
 
 
 def account_commerce_ready(account: WhatsAppAccount) -> bool:

@@ -3842,6 +3842,28 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.catalog-table-variant {
+  display: block;
+  margin-top: 4px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.catalog-variant-block {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: var(--panel-soft);
+}
+.catalog-variant-hint {
+  margin: 0;
+}
 .catalog-table-actions {
   display: flex;
   flex-wrap: nowrap;

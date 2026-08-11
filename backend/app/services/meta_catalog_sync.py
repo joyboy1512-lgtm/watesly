@@ -11,14 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.encryption import decrypt_secret
 from app.models.catalog_product import CatalogProduct
 from app.models.whatsapp_account import WhatsAppAccount
-from app.services.catalog_commerce import resolve_retailer_id
+from app.services.catalog_commerce import resolve_retailer_id, build_meta_catalog_product_payload
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
-
-
-def _format_price(product: CatalogProduct) -> str:
-    if product.price is None:
-        return "0.00"
-    return f"{product.price:.2f}"
 
 
 def parse_meta_review_status(data: dict) -> tuple[str | None, str | None]:
@@ -324,20 +318,9 @@ async def sync_catalog_to_meta(
         for product in products:
             if not product.meta_sync_enabled:
                 continue
-            retailer_id = resolve_retailer_id(product)
+            payload = build_meta_catalog_product_payload(product)
             if not product.meta_retailer_id:
-                product.meta_retailer_id = retailer_id
-            payload = {
-                "name": product.name[:200],
-                "description": (product.description or product.name)[:9999],
-                "retailer_id": retailer_id,
-                "price": str(int(float(_format_price(product)) * 100)),
-                "currency": product.currency or "KWD",
-                "availability": "in stock",
-                "condition": "new",
-            }
-            if product.image_url:
-                payload["image_url"] = product.image_url
+                product.meta_retailer_id = payload["retailer_id"]
             try:
                 if product.external_source == "meta" and product.external_id:
                     response = await client.update_catalog_product(

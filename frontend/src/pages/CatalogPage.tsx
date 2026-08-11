@@ -14,6 +14,7 @@ import {
   downloadCatalogExport,
   emptyProductForm,
   filterCatalogByType,
+  formatCatalogVariantLabel,
   productFormFromCatalog,
   sortCatalogProducts,
   type CatalogListTab,
@@ -45,6 +46,8 @@ export default function CatalogPage() {
   const [editForm, setEditForm] = useState<ProductFormState>(emptyProductForm);
   const [editSpecKey, setEditSpecKey] = useState("");
   const [editSpecValue, setEditSpecValue] = useState("");
+  const [editVariantSpecKey, setEditVariantSpecKey] = useState("");
+  const [editVariantSpecValue, setEditVariantSpecValue] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [refreshingMetaStatus, setRefreshingMetaStatus] = useState(false);
   const [syncingProductId, setSyncingProductId] = useState<string | null>(null);
@@ -70,6 +73,11 @@ export default function CatalogPage() {
   const categories = useQuery({
     queryKey: ["catalog-categories"],
     queryFn: async () => (await api.get<string[]>("/catalog/categories")).data
+  });
+
+  const variantGroups = useQuery({
+    queryKey: ["catalog-variant-groups"],
+    queryFn: async () => (await api.get<string[]>("/catalog/variant-groups")).data
   });
 
   useEffect(() => {
@@ -140,6 +148,27 @@ export default function CatalogPage() {
     });
   }
 
+  function addEditVariantSpec() {
+    if (!editVariantSpecKey.trim()) return;
+    setEditForm((current) => ({
+      ...current,
+      variantAttributes: {
+        ...current.variantAttributes,
+        [editVariantSpecKey.trim()]: editVariantSpecValue.trim()
+      }
+    }));
+    setEditVariantSpecKey("");
+    setEditVariantSpecValue("");
+  }
+
+  function removeEditVariantSpec(key: string) {
+    setEditForm((current) => {
+      const next = { ...current.variantAttributes };
+      delete next[key];
+      return { ...current, variantAttributes: next };
+    });
+  }
+
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
     if (!editingProduct) return;
@@ -148,6 +177,7 @@ export default function CatalogPage() {
       setEditingProduct(null);
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
+      await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
       toastStore.getState().show("تم تحديث المنتج.", "success");
       const metaMessage = catalogMetaAutoSyncMessage(response.data);
       if (metaMessage) {
@@ -180,6 +210,8 @@ export default function CatalogPage() {
     setEditForm(productFormFromCatalog(product));
     setEditSpecKey("");
     setEditSpecValue("");
+    setEditVariantSpecKey("");
+    setEditVariantSpecValue("");
   }
 
   async function uploadProductImage(file: File) {
@@ -475,6 +507,9 @@ export default function CatalogPage() {
                     </td>
                     <td>
                       <strong>{item.name}</strong>
+                      {formatCatalogVariantLabel(item) && (
+                        <small className="catalog-table-variant">{formatCatalogVariantLabel(item)}</small>
+                      )}
                       {item.description && <small className="catalog-table-desc">{item.description}</small>}
                     </td>
                     <td><code>{item.sku || "—"}</code></td>
@@ -593,12 +628,19 @@ export default function CatalogPage() {
               setForm={setEditForm}
               organizations={organizations.data ?? []}
               categories={categories.data ?? []}
+              variantGroups={variantGroups.data ?? []}
               specKey={editSpecKey}
               setSpecKey={setEditSpecKey}
               specValue={editSpecValue}
               setSpecValue={setEditSpecValue}
               onAddSpec={addEditSpec}
               onRemoveSpec={removeEditSpec}
+              variantSpecKey={editVariantSpecKey}
+              setVariantSpecKey={setEditVariantSpecKey}
+              variantSpecValue={editVariantSpecValue}
+              setVariantSpecValue={setEditVariantSpecValue}
+              onAddVariantSpec={addEditVariantSpec}
+              onRemoveVariantSpec={removeEditVariantSpec}
               uploadingImage={uploadingImage}
               onUploadImage={(file) => void uploadProductImage(file)}
             />

@@ -23,6 +23,8 @@ export default function CatalogCreatePage() {
   const [form, setForm] = useState<ProductFormState>(emptyProductForm);
   const [specKey, setSpecKey] = useState("");
   const [specValue, setSpecValue] = useState("");
+  const [variantSpecKey, setVariantSpecKey] = useState("");
+  const [variantSpecValue, setVariantSpecValue] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [importOrganizationId, setImportOrganizationId] = useState("");
 
@@ -34,6 +36,11 @@ export default function CatalogCreatePage() {
   const categories = useQuery({
     queryKey: ["catalog-categories"],
     queryFn: async () => (await api.get<string[]>("/catalog/categories")).data
+  });
+
+  const variantGroups = useQuery({
+    queryKey: ["catalog-variant-groups"],
+    queryFn: async () => (await api.get<string[]>("/catalog/variant-groups")).data
   });
 
   useEffect(() => {
@@ -66,6 +73,27 @@ export default function CatalogCreatePage() {
     });
   }
 
+  function addVariantSpec() {
+    if (!variantSpecKey.trim()) return;
+    setForm((current) => ({
+      ...current,
+      variantAttributes: {
+        ...current.variantAttributes,
+        [variantSpecKey.trim()]: variantSpecValue.trim()
+      }
+    }));
+    setVariantSpecKey("");
+    setVariantSpecValue("");
+  }
+
+  function removeVariantSpec(key: string) {
+    setForm((current) => {
+      const next = { ...current.variantAttributes };
+      delete next[key];
+      return { ...current, variantAttributes: next };
+    });
+  }
+
   async function uploadProductImage(file: File) {
     if (!file.type.startsWith("image/")) {
       toastStore.getState().show("اختر صورة فقط.", "error");
@@ -90,6 +118,7 @@ export default function CatalogCreatePage() {
       const response = await api.post<CatalogProduct>("/catalog", buildProductPayload(form));
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
+      await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
       toastStore.getState().show("تم إضافة المنتج/الخدمة.", "success");
       const metaMessage = catalogMetaAutoSyncMessage(response.data);
       if (metaMessage) {
@@ -125,6 +154,7 @@ export default function CatalogCreatePage() {
       const result = await api.post("/catalog/import", payload, { headers: { "Content-Type": "multipart/form-data" } });
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-categories"] });
+      await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
       toastStore.getState().show(`تم استيراد ${result.data.created} منتج/خدمة (${result.data.skipped} تم تخطيه).`, "success");
       event.currentTarget.reset();
       navigate("/catalog", { replace: true });
@@ -159,12 +189,19 @@ export default function CatalogCreatePage() {
               setForm={setForm}
               organizations={organizations.data ?? []}
               categories={categories.data ?? []}
+              variantGroups={variantGroups.data ?? []}
               specKey={specKey}
               setSpecKey={setSpecKey}
               specValue={specValue}
               setSpecValue={setSpecValue}
               onAddSpec={addSpec}
               onRemoveSpec={removeSpec}
+              variantSpecKey={variantSpecKey}
+              setVariantSpecKey={setVariantSpecKey}
+              variantSpecValue={variantSpecValue}
+              setVariantSpecValue={setVariantSpecValue}
+              onAddVariantSpec={addVariantSpec}
+              onRemoveVariantSpec={removeVariantSpec}
               uploadingImage={uploadingImage}
               onUploadImage={(file) => void uploadProductImage(file)}
             />
@@ -187,7 +224,7 @@ export default function CatalogCreatePage() {
               <input name="file" type="file" accept=".xlsx,.xlsm,.csv,text/csv" required />
             </label>
             <p className="hint-text">
-              الأعمدة: name · sku · product_type · price · currency · description · keywords · category · specs
+              الأعمدة: name · sku · price · meta_item_group_id · variant_size · variant_color · category · specs
             </p>
             <button type="submit" className="contacts-erp-btn">استيراد المنتجات</button>
           </form>

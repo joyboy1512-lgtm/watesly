@@ -137,6 +137,8 @@ async def update_catalog_product(
         if item.meta_sync_enabled and not new_enabled and item.external_id:
             unpublish_from_meta = True
         item.meta_sync_enabled = bool(new_enabled)
+    if "variant_attributes" in fields:
+        item.variant_attributes = fields.pop("variant_attributes") or {}
     for key, value in fields.items():
         if value is not None and hasattr(item, key):
             setattr(item, key, value)
@@ -343,6 +345,9 @@ async def import_catalog_from_rows(
             price_type=price_type,
             specs_json=collect_spec_columns(row),
             keywords=get_row_value(row, "keywords") or None,
+            meta_item_group_id=get_row_value(row, "meta_item_group_id") or None,
+            variant_size=get_row_value(row, "variant_size") or None,
+            variant_color=get_row_value(row, "variant_color") or None,
         )
         created += 1
     return {"created": created, "skipped": skipped}
@@ -422,6 +427,10 @@ CATALOG_EXPORT_HEADERS = [
     "category",
     "image_url",
     "meta_retailer_id",
+    "meta_item_group_id",
+    "variant_size",
+    "variant_color",
+    "variant_attributes",
     "sort_order",
     "specs",
 ]
@@ -429,6 +438,9 @@ CATALOG_EXPORT_HEADERS = [
 
 def _catalog_export_row(item: CatalogProduct) -> list[object]:
     specs = " | ".join(f"{key}={value}" for key, value in (item.specs_json or {}).items())
+    variant_attrs = " | ".join(
+        f"{key}={value}" for key, value in (item.variant_attributes or {}).items()
+    )
     return [
         item.name,
         item.sku or "",
@@ -441,6 +453,10 @@ def _catalog_export_row(item: CatalogProduct) -> list[object]:
         item.category or "",
         item.image_url or "",
         item.meta_retailer_id or "",
+        item.meta_item_group_id or "",
+        item.variant_size or "",
+        item.variant_color or "",
+        variant_attrs,
         item.sort_order,
         specs,
     ]

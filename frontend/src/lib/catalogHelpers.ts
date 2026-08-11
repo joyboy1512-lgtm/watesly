@@ -15,6 +15,10 @@ export type CatalogProduct = {
   image_url: string | null;
   category: string | null;
   meta_retailer_id: string | null;
+  meta_item_group_id: string | null;
+  variant_size: string | null;
+  variant_color: string | null;
+  variant_attributes: Record<string, string>;
   external_source: string | null;
   external_id: string | null;
   meta_sync_status: string | null;
@@ -61,6 +65,10 @@ export type ProductFormState = {
   imageUrl: string;
   category: string;
   metaRetailerId: string;
+  metaItemGroupId: string;
+  variantSize: string;
+  variantColor: string;
+  variantAttributes: Record<string, string>;
   metaSyncEnabled: boolean;
   specs: Record<string, string>;
 };
@@ -80,6 +88,10 @@ export function emptyProductForm(): ProductFormState {
     imageUrl: "",
     category: "",
     metaRetailerId: "",
+    metaItemGroupId: "",
+    variantSize: "",
+    variantColor: "",
+    variantAttributes: {},
     metaSyncEnabled: true,
     specs: {}
   };
@@ -100,6 +112,10 @@ export function productFormFromCatalog(product: CatalogProduct): ProductFormStat
     imageUrl: product.image_url ?? "",
     category: product.category ?? "",
     metaRetailerId: product.meta_retailer_id ?? "",
+    metaItemGroupId: product.meta_item_group_id ?? "",
+    variantSize: product.variant_size ?? "",
+    variantColor: product.variant_color ?? "",
+    variantAttributes: { ...(product.variant_attributes ?? {}) },
     metaSyncEnabled: product.meta_sync_enabled !== false,
     specs: { ...(product.specs_json ?? {}) }
   };
@@ -120,6 +136,10 @@ export function buildProductPayload(form: ProductFormState) {
     image_url: form.imageUrl.trim() || null,
     category: form.category.trim() || null,
     meta_retailer_id: form.metaRetailerId.trim() || null,
+    meta_item_group_id: form.metaItemGroupId.trim() || null,
+    variant_size: form.variantSize.trim() || null,
+    variant_color: form.variantColor.trim() || null,
+    variant_attributes: form.variantAttributes,
     meta_sync_enabled: form.metaSyncEnabled,
     sort_order: Number(form.sortOrder) || 0
   };
@@ -141,6 +161,24 @@ export function catalogPriceLabel(item: Pick<CatalogProduct, "price_type" | "pri
 
 export function catalogTypeLabel(productType: string) {
   return productType === "service" ? "خدمة" : "منتج";
+}
+
+export function formatCatalogVariantLabel(
+  product: Pick<
+    CatalogProduct,
+    "meta_item_group_id" | "variant_size" | "variant_color" | "variant_attributes"
+  >
+) {
+  const parts: string[] = [];
+  if (product.variant_color?.trim()) parts.push(product.variant_color.trim());
+  if (product.variant_size?.trim()) parts.push(product.variant_size.trim());
+  for (const [key, value] of Object.entries(product.variant_attributes ?? {})) {
+    if (key.trim() && value.trim()) parts.push(`${key.trim()}: ${value.trim()}`);
+  }
+  if (!parts.length && product.meta_item_group_id?.trim()) {
+    return product.meta_item_group_id.trim();
+  }
+  return parts.length ? parts.join(" · ") : "";
 }
 
 export type CatalogMetaStatusView = {

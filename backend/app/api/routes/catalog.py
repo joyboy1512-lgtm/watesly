@@ -21,7 +21,11 @@ from app.services.catalog import (
     search_catalog_products,
     update_catalog_product,
 )
-from app.services.catalog_commerce import list_catalog_categories, prepare_catalog_commerce_ids
+from app.services.catalog_commerce import (
+    list_catalog_categories,
+    list_catalog_variant_groups,
+    prepare_catalog_commerce_ids,
+)
 from app.services.knowledge_base import suggest_smart_reply
 
 router = APIRouter()
@@ -43,6 +47,10 @@ class CatalogProductCreate(BaseModel):
     image_url: str | None = None
     category: str | None = None
     meta_retailer_id: str | None = None
+    meta_item_group_id: str | None = None
+    variant_size: str | None = None
+    variant_color: str | None = None
+    variant_attributes: dict = Field(default_factory=dict)
     external_source: str | None = None
     external_id: str | None = None
     meta_sync_enabled: bool = True
@@ -64,6 +72,10 @@ class CatalogProductUpdate(BaseModel):
     image_url: str | None = None
     category: str | None = None
     meta_retailer_id: str | None = None
+    meta_item_group_id: str | None = None
+    variant_size: str | None = None
+    variant_color: str | None = None
+    variant_attributes: dict | None = None
     external_source: str | None = None
     external_id: str | None = None
     meta_sync_enabled: bool | None = None
@@ -129,6 +141,14 @@ async def get_catalog_categories(
     db: AsyncSession = Depends(get_db),
 ):
     return await list_catalog_categories(db, context.account_id)
+
+
+@router.get("/variant-groups")
+async def get_catalog_variant_groups(
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_catalog_variant_groups(db, context.account_id)
 
 
 @router.post("/prepare-commerce")

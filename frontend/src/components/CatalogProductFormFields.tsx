@@ -7,12 +7,19 @@ type CatalogProductFormFieldsProps = {
   setForm: (updater: (current: ProductFormState) => ProductFormState) => void;
   organizations: Organization[];
   categories: string[];
+  variantGroups: string[];
   specKey: string;
   setSpecKey: (value: string) => void;
   specValue: string;
   setSpecValue: (value: string) => void;
   onAddSpec: () => void;
   onRemoveSpec: (key: string) => void;
+  variantSpecKey: string;
+  setVariantSpecKey: (value: string) => void;
+  variantSpecValue: string;
+  setVariantSpecValue: (value: string) => void;
+  onAddVariantSpec: () => void;
+  onRemoveVariantSpec: (key: string) => void;
   uploadingImage: boolean;
   onUploadImage: (file: File) => void;
 };
@@ -22,12 +29,19 @@ export default function CatalogProductFormFields({
   setForm,
   organizations,
   categories,
+  variantGroups,
   specKey,
   setSpecKey,
   specValue,
   setSpecValue,
   onAddSpec,
   onRemoveSpec,
+  variantSpecKey,
+  setVariantSpecKey,
+  variantSpecValue,
+  setVariantSpecValue,
+  onAddVariantSpec,
+  onRemoveVariantSpec,
   uploadingImage,
   onUploadImage
 }: CatalogProductFormFieldsProps) {
@@ -131,6 +145,69 @@ export default function CatalogProductFormFields({
         />
       </label>
 
+      <div className="catalog-variant-block">
+        <span className="field-label-title">أشكال Meta المتنوعة (Variants)</span>
+        <p className="hint-text catalog-variant-hint">
+          استخدم نفس «مجموعة المنتج» للون/مقاس/نكهة مختلفة — يظهرون كمنتج واحد في كتالogg WhatsApp.
+        </p>
+        <div className="catalog-fields-row">
+          <label className="field-label catalog-field-grow">
+            <span>مجموعة المنتج (item_group_id)</span>
+            <input
+              value={form.metaItemGroupId}
+              onChange={(e) => setForm((current) => ({ ...current, metaItemGroupId: e.target.value }))}
+              placeholder="shower-gel-dovey"
+              dir="ltr"
+              list="catalog-variant-group-suggestions"
+            />
+          </label>
+          <label className="field-label">
+            <span>المقاس</span>
+            <input
+              value={form.variantSize}
+              onChange={(e) => setForm((current) => ({ ...current, variantSize: e.target.value }))}
+              placeholder="400ml"
+            />
+          </label>
+          <label className="field-label">
+            <span>اللون</span>
+            <input
+              value={form.variantColor}
+              onChange={(e) => setForm((current) => ({ ...current, variantColor: e.target.value }))}
+              placeholder="أبيض"
+            />
+          </label>
+        </div>
+        <div className="catalog-specs-block">
+          <span className="field-label-title">صفات إضافية للنسخة</span>
+          <div className="spec-builder">
+            <input
+              value={variantSpecKey}
+              onChange={(e) => setVariantSpecKey(e.target.value)}
+              placeholder="الصفة (النكهة)"
+            />
+            <input
+              value={variantSpecValue}
+              onChange={(e) => setVariantSpecValue(e.target.value)}
+              placeholder="القيمة (فراولة)"
+            />
+            <button type="button" onClick={onAddVariantSpec}>+ إضافة</button>
+          </div>
+          {Object.keys(form.variantAttributes).length > 0 && (
+            <ul className="spec-list">
+              {Object.entries(form.variantAttributes).map(([key, value]) => (
+                <li key={key}>
+                  <strong>{key}:</strong> {value}
+                  <button type="button" className="danger-link" onClick={() => onRemoveVariantSpec(key)}>
+                    حذف
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       <div className="catalog-fields-row">
         <label className="field-label">
           <span>نوع السعر</span>
@@ -232,6 +309,11 @@ export default function CatalogProductFormFields({
       <datalist id="catalog-category-suggestions">
         {categories.map((category) => (
           <option key={category} value={category} />
+        ))}
+      </datalist>
+      <datalist id="catalog-variant-group-suggestions">
+        {variantGroups.map((group) => (
+          <option key={group} value={group} />
         ))}
       </datalist>
     </>
