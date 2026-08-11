@@ -479,12 +479,12 @@ export default function CatalogPage() {
                         const metaStatus = catalogMetaStatusLabel(item);
                         return (
                           <div className="catalog-meta-status-cell">
-                            <span className={`catalog-meta-status-pill ${metaStatus.className}`}>
+                            <span
+                              className={`catalog-meta-status-pill ${metaStatus.className}`}
+                              title={metaStatus.detail ?? undefined}
+                            >
                               {metaStatus.label}
                             </span>
-                            {metaStatus.detail && (
-                              <small className="hint-text catalog-meta-status-detail">{metaStatus.detail}</small>
-                            )}
                           </div>
                         );
                       })()}
