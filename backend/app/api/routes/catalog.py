@@ -45,6 +45,7 @@ class CatalogProductCreate(BaseModel):
     meta_retailer_id: str | None = None
     external_source: str | None = None
     external_id: str | None = None
+    meta_sync_enabled: bool = True
     is_active: bool = True
     sort_order: int = 0
 
@@ -65,6 +66,7 @@ class CatalogProductUpdate(BaseModel):
     meta_retailer_id: str | None = None
     external_source: str | None = None
     external_id: str | None = None
+    meta_sync_enabled: bool | None = None
     is_active: bool | None = None
     sort_order: int | None = None
 
@@ -154,6 +156,34 @@ async def post_refresh_catalog_meta_status(
                 detail="فعّل Commerce وأدخل Meta Catalog ID من صفحة ربط WhatsApp أولاً.",
             ) from exc
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+
+
+@router.post("/{product_id}/sync-meta")
+async def post_sync_catalog_product_meta(
+    product_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.meta_catalog_sync import sync_catalog_product_to_meta
+
+    try:
+        return await sync_catalog_product_to_meta(
+            db,
+            account_id=context.account_id,
+            product_id=product_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        messages = {
+            "META_SYNC_DISABLED": "فعّل مزامنة Meta للمنتج من إعدادات المنتج أولاً.",
+            "PRODUCT_NOT_ACTIVE": "لا يمكن مزامنة منتج مؤرشف.",
+            "META_CATALOG_NOT_CONFIGURED": "فعّل Commerce وأدخل Meta Catalog ID من صفحة ربط WhatsApp أولاً.",
+            "PRODUCT_NOT_FOUND": "المنتج غير موجود.",
+        }
+        if code in messages:
+            raise HTTPException(status_code=400, detail=messages[code]) from exc
+        raise HTTPException(status_code=404, detail=messages.get(code, code)) from exc
 
 
 @router.get("/export")

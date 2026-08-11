@@ -147,6 +147,64 @@ async def refresh_product_meta_status(
     return True
 
 
+async def unpublish_catalog_product_from_meta(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product: CatalogProduct,
+) -> None:
+    if not product.external_id:
+        return
+    try:
+        account = await _get_commerce_whatsapp_account(db, account_id=account_id)
+    except ValueError:
+        return
+    client = await _build_meta_client(db, account)
+    try:
+        await client.update_catalog_product(
+            product_id=product.external_id,
+            payload={"availability": "out of stock"},
+        )
+    except MetaAPIError:
+        pass
+    finally:
+        await client.aclose()
+
+
+async def sync_catalog_product_to_meta(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product_id: UUID,
+    membership=None,
+    whatsapp_account_id: UUID | None = None,
+) -> dict:
+    from app.services.catalog import get_catalog_product
+
+    product = await get_catalog_product(
+        db,
+        account_id=account_id,
+        product_id=product_id,
+        membership=membership,
+    )
+    if not product.is_active:
+        raise ValueError("PRODUCT_NOT_ACTIVE")
+    if not product.meta_sync_enabled:
+        raise ValueError("META_SYNC_DISABLED")
+
+    account = await _get_commerce_whatsapp_account(
+        db,
+        account_id=account_id,
+        whatsapp_account_id=whatsapp_account_id,
+    )
+    return await sync_catalog_to_meta(
+        db,
+        account_id=account_id,
+        whatsapp_account_id=account.id,
+        product_ids=[product_id],
+    )
+
+
 async def refresh_catalog_meta_status(
     db: AsyncSession,
     *,
@@ -227,18 +285,21 @@ async def sync_catalog_to_meta(
     query = select(CatalogProduct).where(
         CatalogProduct.account_id == account_id,
         CatalogProduct.is_active.is_(True),
+        CatalogProduct.meta_sync_enabled.is_(True),
     )
     if product_ids:
         query = query.where(CatalogProduct.id.in_(product_ids))
     products = list((await db.execute(query.order_by(CatalogProduct.sort_order.asc()))).scalars().all())
     if not products:
-        return {"synced": 0, "failed": 0, "total": 0, "pending": 0, "approved": 0, "rejected": 0}
+        return {"synced": 0, "failed": 0, "total": 0, "pending": 0, "approved": 0, "rejected": 0, "skipped": 0}
 
     client = await _build_meta_client(db, account)
     synced = failed = pending = approved = rejected = 0
     errors: list[str] = []
     try:
         for product in products:
+            if not product.meta_sync_enabled:
+                continue
             retailer_id = resolve_retailer_id(product)
             if not product.meta_retailer_id:
                 product.meta_retailer_id = retailer_id
@@ -301,5 +362,6 @@ async def sync_catalog_to_meta(
         "pending": pending,
         "approved": approved,
         "rejected": rejected,
+        "skipped": 0,
         "errors": errors[:20],
     }

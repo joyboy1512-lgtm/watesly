@@ -37,6 +37,7 @@ class CatalogProduct(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     meta_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     meta_sync_error: Mapped[str | None] = mapped_column(String(500))
     meta_review_detail: Mapped[str | None] = mapped_column(String(500))
+    meta_sync_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -52,6 +52,8 @@ def test_catalog_api_routes_exist() -> None:
     assert "catalog/preview-reply" in frontend
     assert "prepare-commerce" in frontend
     assert "refresh-meta-status" in routes
+    assert "sync-meta" in routes
+    assert "meta_sync_enabled" in routes
     assert "catalogMetaStatusLabel" in read("../frontend/src/lib/catalogHelpers.ts")
     assert "InboxProductPicker" in read("../frontend/src/pages/InboxPage.tsx")
     assert "catalog_first" in read("../frontend/src/pages/InboxPage.tsx")

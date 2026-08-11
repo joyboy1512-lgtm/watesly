@@ -46,6 +46,7 @@ export default function CatalogPage() {
   const [editSpecValue, setEditSpecValue] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [refreshingMetaStatus, setRefreshingMetaStatus] = useState(false);
+  const [syncingProductId, setSyncingProductId] = useState<string | null>(null);
   const [previewQuery, setPreviewQuery] = useState("");
   const [previewContactName, setPreviewContactName] = useState("");
 
@@ -195,6 +196,61 @@ export default function CatalogPage() {
       toastStore.getState().show(`تم تجهيز ${result.data.updated} منتج بمعرّف Meta.`, "success");
     } catch {
       toastStore.getState().show("تعذر التجهيز.", "error");
+    }
+  }
+
+  async function toggleMetaSync(product: CatalogProduct) {
+    const next = product.meta_sync_enabled === false;
+    try {
+      await api.patch(`/catalog/${product.id}`, { meta_sync_enabled: next });
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      toastStore.getState().show(
+        next ? "تم تفعيل مزامنة Meta للمنتج." : "تم إيقاف مزامنة Meta — لن يُرسل عند المزامنة الجماعية.",
+        "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذر تحديث إعداد المزامنة.", "error");
+    }
+  }
+
+  async function syncProductToMeta(product: CatalogProduct) {
+    if (product.meta_sync_enabled === false) {
+      toastStore.getState().show("فعّل مزامنة Meta للمنتج أولاً.", "error");
+      return;
+    }
+    setSyncingProductId(product.id);
+    try {
+      const result = await api.post<{
+        synced: number;
+        failed: number;
+        pending?: number;
+        approved?: number;
+        rejected?: number;
+      }>(`/catalog/${product.id}/sync-meta`);
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      const { synced, failed, pending = 0, approved = 0 } = result.data;
+      if (synced > 0) {
+        toastStore.getState().show(
+          `تمت مزامنة «${product.name}» — معتمد ${approved}، قيد المراجعة ${pending}.`,
+          "success"
+        );
+      } else {
+        toastStore.getState().show("تعذر مزامنة المنتج مع Meta.", "error");
+      }
+      if (failed > 0) {
+        toastStore.getState().show("فشلت مزامنة المنتج مع Meta.", "error");
+      }
+    } catch (error: unknown) {
+      const detail =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response: { data: { detail: string } } }).response.data.detail
+          : null;
+      toastStore.getState().show(detail ?? "تعذر مزامنة المنتج.", "error");
+    } finally {
+      setSyncingProductId(null);
     }
   }
 
@@ -441,6 +497,25 @@ export default function CatalogPage() {
                     <td>
                       <div className="catalog-table-actions">
                         <button type="button" className="contacts-erp-btn" onClick={() => openEdit(item)}>تعديل</button>
+                        {item.is_active && item.meta_sync_enabled !== false && (
+                          <button
+                            type="button"
+                            className="contacts-erp-btn"
+                            disabled={syncingProductId === item.id}
+                            onClick={() => void syncProductToMeta(item)}
+                          >
+                            {syncingProductId === item.id ? "جاري…" : "مزامنة Meta"}
+                          </button>
+                        )}
+                        {item.is_active && (
+                          <button
+                            type="button"
+                            className="contacts-erp-btn"
+                            onClick={() => void toggleMetaSync(item)}
+                          >
+                            {item.meta_sync_enabled === false ? "تفعيل Meta" : "إيقاف Meta"}
+                          </button>
+                        )}
                         {item.is_active ? (
                           <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" onClick={() => void deactivateProduct(item.id)}>
                             أرشفة

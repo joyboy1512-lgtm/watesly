@@ -108,6 +108,22 @@ export default function CatalogProductFormFields({
         </label>
       </div>
 
+      <label className="field-label catalog-meta-sync-toggle">
+        <span>مزامنة Meta</span>
+        <div className="catalog-meta-sync-toggle-row">
+          <input
+            type="checkbox"
+            checked={form.metaSyncEnabled}
+            onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
+          />
+          <span className="hint-text">
+            {form.metaSyncEnabled
+              ? "سيُرسل المنتج عند مزامنة الكتالogg مع Meta."
+              : "لن يُرسل إلى Meta — وإن كان مزامَناً سابقاً يُخفى من الكتالogg."}
+          </span>
+        </div>
+      </label>
+
       <label className="field-label">
         <span>الوصف</span>
         <textarea

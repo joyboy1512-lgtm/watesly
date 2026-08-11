@@ -122,9 +122,19 @@ async def update_catalog_product(
     item = await get_catalog_product(
         db, account_id=account_id, product_id=product_id, membership=membership
     )
+    unpublish_from_meta = False
+    if "meta_sync_enabled" in fields:
+        new_enabled = fields.pop("meta_sync_enabled")
+        if item.meta_sync_enabled and not new_enabled and item.external_id:
+            unpublish_from_meta = True
+        item.meta_sync_enabled = bool(new_enabled)
     for key, value in fields.items():
         if value is not None and hasattr(item, key):
             setattr(item, key, value)
+    if unpublish_from_meta:
+        from app.services.meta_catalog_sync import unpublish_catalog_product_from_meta
+
+        await unpublish_catalog_product_from_meta(db, account_id=account_id, product=item)
     await db.commit()
     await db.refresh(item)
     return item

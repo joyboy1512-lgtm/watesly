@@ -22,6 +22,7 @@ export type CatalogProduct = {
   meta_synced_at: string | null;
   meta_sync_error: string | null;
   meta_review_detail: string | null;
+  meta_sync_enabled: boolean;
   usage_count: number;
   is_active: boolean;
   sort_order: number;
@@ -60,6 +61,7 @@ export type ProductFormState = {
   imageUrl: string;
   category: string;
   metaRetailerId: string;
+  metaSyncEnabled: boolean;
   specs: Record<string, string>;
 };
 
@@ -78,6 +80,7 @@ export function emptyProductForm(): ProductFormState {
     imageUrl: "",
     category: "",
     metaRetailerId: "",
+    metaSyncEnabled: true,
     specs: {}
   };
 }
@@ -97,6 +100,7 @@ export function productFormFromCatalog(product: CatalogProduct): ProductFormStat
     imageUrl: product.image_url ?? "",
     category: product.category ?? "",
     metaRetailerId: product.meta_retailer_id ?? "",
+    metaSyncEnabled: product.meta_sync_enabled !== false,
     specs: { ...(product.specs_json ?? {}) }
   };
 }
@@ -116,6 +120,7 @@ export function buildProductPayload(form: ProductFormState) {
     image_url: form.imageUrl.trim() || null,
     category: form.category.trim() || null,
     meta_retailer_id: form.metaRetailerId.trim() || null,
+    meta_sync_enabled: form.metaSyncEnabled,
     sort_order: Number(form.sortOrder) || 0
   };
 }
@@ -145,6 +150,14 @@ export type CatalogMetaStatusView = {
 };
 
 export function catalogMetaStatusLabel(product: CatalogProduct): CatalogMetaStatusView {
+  if (product.meta_sync_enabled === false) {
+    return {
+      label: "المزامنة متوقفة",
+      className: "meta-paused",
+      detail: product.external_id ? "مخفي من كتالوج Meta" : "لن يُرسل إلى Meta"
+    };
+  }
+
   if (product.meta_sync_status === "failed") {
     return {
       label: "فشل المزامنة",

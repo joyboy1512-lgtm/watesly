@@ -3899,10 +3899,23 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: #eff8ff;
   color: #175cd3;
 }
+.catalog-meta-status-pill.meta-paused {
+  background: rgba(120, 120, 120, 0.14);
+  color: var(--muted);
+}
 .catalog-meta-status-detail {
   display: block;
   max-width: 180px;
   line-height: 1.35;
+}
+.catalog-meta-sync-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+}
+.catalog-meta-sync-toggle-row input {
+  margin-top: 3px;
 }
 .catalog-grid {
   display: grid;
