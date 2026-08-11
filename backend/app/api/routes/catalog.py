@@ -137,6 +137,25 @@ async def post_prepare_catalog_commerce(
     return await prepare_catalog_commerce_ids(db, account_id=context.account_id)
 
 
+@router.post("/refresh-meta-status")
+async def post_refresh_catalog_meta_status(
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.meta_catalog_sync import refresh_catalog_meta_status
+
+    try:
+        return await refresh_catalog_meta_status(db, account_id=context.account_id)
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "META_CATALOG_NOT_CONFIGURED":
+            raise HTTPException(
+                status_code=400,
+                detail="فعّل Commerce وأدخل Meta Catalog ID من صفحة ربط WhatsApp أولاً.",
+            ) from exc
+        raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+
+
 @router.get("/export")
 async def export_catalog(
     format: str = Query("xlsx", pattern=r"^(xlsx|csv)$"),

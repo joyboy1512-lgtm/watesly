@@ -1,7 +1,8 @@
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +32,11 @@ class CatalogProduct(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     meta_retailer_id: Mapped[str | None] = mapped_column(String(80), index=True)
     external_source: Mapped[str | None] = mapped_column(String(40))
     external_id: Mapped[str | None] = mapped_column(String(120))
+    meta_sync_status: Mapped[str | None] = mapped_column(String(20), index=True)
+    meta_review_status: Mapped[str | None] = mapped_column(String(20), index=True)
+    meta_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    meta_sync_error: Mapped[str | None] = mapped_column(String(500))
+    meta_review_detail: Mapped[str | None] = mapped_column(String(500))
     usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

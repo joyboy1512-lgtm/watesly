@@ -372,12 +372,23 @@ export default function WhatsAppConnectPage() {
 
   async function syncCatalogToMeta(accountId: string) {
     try {
-      const response = await api.post<{ synced: number; failed: number; total: number; errors?: string[] }>(
-        `/whatsapp/accounts/${accountId}/commerce/sync`
-      );
+      const response = await api.post<{
+        synced: number;
+        failed: number;
+        total: number;
+        pending?: number;
+        approved?: number;
+        rejected?: number;
+        errors?: string[];
+      }>(`/whatsapp/accounts/${accountId}/commerce/sync`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      const { synced, failed, total } = response.data;
-      toastStore.getState().show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل.`, failed ? "error" : "success");
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      const { synced, failed, total, pending = 0, approved = 0, rejected = 0 } = response.data;
+      const reviewSummary =
+        synced > 0 ? ` — معتمد ${approved}، قيد المراجعة ${pending}، مرفوض ${rejected}` : "";
+      toastStore
+        .getState()
+        .show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل${reviewSummary}.`, failed ? "error" : "success");
     } catch {
       toastStore.getState().show("تعذر مزامنة الكتالogg مع Meta.", "error");
     }

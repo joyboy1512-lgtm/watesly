@@ -434,6 +434,28 @@ class MetaWhatsAppClient:
             default_message="Unable to update Meta catalog product",
         )
 
+    async def get_catalog_product(self, *, product_id: str) -> dict:
+        fields = ",".join(
+            [
+                "id",
+                "retailer_id",
+                "capability_to_review_status",
+                "review_status",
+                "review_rejection_reasons",
+                "status",
+            ]
+        )
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{product_id}?fields={fields}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch Meta catalog product",
+        )
+
     async def get_media_metadata(self, media_id: str) -> dict:
         base = settings.meta_graph_api_base_url.rstrip("/")
         version = settings.meta_graph_api_version.strip("/")

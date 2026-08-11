@@ -17,6 +17,11 @@ export type CatalogProduct = {
   meta_retailer_id: string | null;
   external_source: string | null;
   external_id: string | null;
+  meta_sync_status: string | null;
+  meta_review_status: string | null;
+  meta_synced_at: string | null;
+  meta_sync_error: string | null;
+  meta_review_detail: string | null;
   usage_count: number;
   is_active: boolean;
   sort_order: number;
@@ -131,6 +136,57 @@ export function catalogPriceLabel(item: Pick<CatalogProduct, "price_type" | "pri
 
 export function catalogTypeLabel(productType: string) {
   return productType === "service" ? "خدمة" : "منتج";
+}
+
+export type CatalogMetaStatusView = {
+  label: string;
+  className: string;
+  detail?: string | null;
+};
+
+export function catalogMetaStatusLabel(product: CatalogProduct): CatalogMetaStatusView {
+  if (product.meta_sync_status === "failed") {
+    return {
+      label: "فشل المزامنة",
+      className: "meta-failed",
+      detail: product.meta_sync_error
+    };
+  }
+
+  const syncedToMeta =
+    product.meta_sync_status === "synced" ||
+    (product.external_source === "meta" && Boolean(product.external_id));
+
+  if (!syncedToMeta) {
+    return { label: "لم تُزامَن", className: "meta-not-synced" };
+  }
+
+  switch (product.meta_review_status) {
+    case "pending":
+      return {
+        label: "قيد المراجعة",
+        className: "meta-pending",
+        detail: product.meta_review_detail
+      };
+    case "approved":
+      return { label: "معتمد", className: "meta-approved" };
+    case "rejected":
+      return {
+        label: "مرفوض",
+        className: "meta-rejected",
+        detail: product.meta_review_detail
+      };
+    case "outdated":
+      return {
+        label: "يحتاج تحديث",
+        className: "meta-outdated",
+        detail: product.meta_review_detail
+      };
+    case "no_review":
+      return { label: "متاح", className: "meta-approved" };
+    default:
+      return { label: "مزامَن", className: "meta-synced" };
+  }
 }
 
 export function formatSpecsPreview(specs: Record<string, string> | null | undefined) {

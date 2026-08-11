@@ -7,6 +7,7 @@ import Icon from "../components/Icon";
 import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
 import {
   buildProductPayload,
+  catalogMetaStatusLabel,
   catalogPriceLabel,
   catalogTypeLabel,
   downloadCatalogExport,
@@ -44,6 +45,7 @@ export default function CatalogPage() {
   const [editSpecKey, setEditSpecKey] = useState("");
   const [editSpecValue, setEditSpecValue] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [refreshingMetaStatus, setRefreshingMetaStatus] = useState(false);
   const [previewQuery, setPreviewQuery] = useState("");
   const [previewContactName, setPreviewContactName] = useState("");
 
@@ -196,6 +198,41 @@ export default function CatalogPage() {
     }
   }
 
+  async function refreshMetaStatus() {
+    setRefreshingMetaStatus(true);
+    try {
+      const result = await api.post<{
+        refreshed: number;
+        failed: number;
+        total: number;
+        pending: number;
+        approved: number;
+        rejected: number;
+      }>("/catalog/refresh-meta-status");
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      const { refreshed, failed, pending, approved, rejected } = result.data;
+      if (result.data.total === 0) {
+        toastStore.getState().show("لا توجد منتجات مزامَنة مع Meta بعد. استخدم «مزامنة المنتجات → Meta» من صفحة ربط WhatsApp.", "error");
+        return;
+      }
+      toastStore.getState().show(
+        `حالة Meta: ${refreshed} محدّث — معتمد ${approved}، قيد المراجعة ${pending}، مرفوض ${rejected}${failed ? `، فشل ${failed}` : ""}.`,
+        failed ? "error" : "success"
+      );
+    } catch (error: unknown) {
+      const detail =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response: { data: { detail: string } } }).response.data.detail
+          : null;
+      toastStore.getState().show(detail ?? "تعذر تحديث حالة Meta.", "error");
+    } finally {
+      setRefreshingMetaStatus(false);
+    }
+  }
+
   async function exportCatalog() {
     try {
       await downloadCatalogExport({ includeInactive: listTab === "inactive", format: "xlsx" });
@@ -226,6 +263,14 @@ export default function CatalogPage() {
             </Link>
             <button type="button" className="contacts-erp-btn" onClick={() => void prepareCommerceIds()}>
               تجهيز Meta IDs
+            </button>
+            <button
+              type="button"
+              className="contacts-erp-btn"
+              disabled={refreshingMetaStatus}
+              onClick={() => void refreshMetaStatus()}
+            >
+              {refreshingMetaStatus ? "جاري التحديث…" : "تحديث حالة Meta"}
             </button>
             <button type="button" className="contacts-erp-btn contacts-erp-btn-icon" onClick={() => void exportCatalog()} title="تصدير Excel">
               ⬇ Excel
@@ -346,6 +391,7 @@ export default function CatalogPage() {
                   <th>الفرع</th>
                   <th>الترتيب</th>
                   <th>الاستخدام</th>
+                  <th>Meta</th>
                   <th>الحالة</th>
                   <th>إجراءات</th>
                 </tr>
@@ -372,6 +418,21 @@ export default function CatalogPage() {
                     <td>{item.organization_id && orgMap.has(item.organization_id) ? orgMap.get(item.organization_id) : "—"}</td>
                     <td>{item.sort_order ?? 0}</td>
                     <td>{item.usage_count > 0 ? item.usage_count : "—"}</td>
+                    <td>
+                      {(() => {
+                        const metaStatus = catalogMetaStatusLabel(item);
+                        return (
+                          <div className="catalog-meta-status-cell">
+                            <span className={`catalog-meta-status-pill ${metaStatus.className}`}>
+                              {metaStatus.label}
+                            </span>
+                            {metaStatus.detail && (
+                              <small className="hint-text catalog-meta-status-detail">{metaStatus.detail}</small>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td>
                       <span className={`catalog-status-pill ${item.is_active ? "active" : "archived"}`}>
                         {item.is_active ? "نشط" : "مؤرشف"}
