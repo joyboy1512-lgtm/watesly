@@ -47,7 +47,7 @@ export default function CatalogProductFormFields({
 }: CatalogProductFormFieldsProps) {
   return (
     <>
-      <div className="catalog-fields-row">
+      <div className="catalog-fields-row-2">
         <label className="field-label">
           <span>النوع</span>
           <select
@@ -58,7 +58,7 @@ export default function CatalogProductFormFields({
             <option value="service">خدمة</option>
           </select>
         </label>
-        <label className="field-label catalog-field-grow">
+        <label className="field-label">
           <span>اسم المنتج أو الخدمة</span>
           <input
             value={form.name}
@@ -69,7 +69,7 @@ export default function CatalogProductFormFields({
         </label>
       </div>
 
-      <div className="catalog-fields-row">
+      <div className="catalog-fields-row-3">
         <label className="field-label">
           <span>SKU / رمز</span>
           <input
@@ -90,7 +90,7 @@ export default function CatalogProductFormFields({
           />
         </label>
         <label className="field-label">
-          <span>الفرع {organizations.length === 1 ? "" : "(مطلوب لموظفي الفرع)"}</span>
+          <span>الفرع {organizations.length === 1 ? "" : "(مطلوب)"}</span>
           <select
             value={form.organizationId}
             onChange={(e) => setForm((current) => ({ ...current, organizationId: e.target.value }))}
@@ -102,6 +102,9 @@ export default function CatalogProductFormFields({
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="catalog-fields-row-3">
         <label className="field-label">
           <span>الصنف / الفئة</span>
           <input
@@ -129,7 +132,7 @@ export default function CatalogProductFormFields({
               onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
             />
             <span className="hint-text catalog-meta-sync-hint">
-              {form.metaSyncEnabled ? "مفعّلة — تُرسل تلقائياً إلى Meta" : "موقوفة"}
+              {form.metaSyncEnabled ? "مفعّلة — تُرسل تلقائياً" : "موقوفة"}
             </span>
           </div>
         </label>
@@ -148,10 +151,10 @@ export default function CatalogProductFormFields({
       <div className="catalog-variant-block">
         <span className="field-label-title">أشكال Meta المتنوعة (Variants)</span>
         <p className="hint-text catalog-variant-hint">
-          استخدم نفس «مجموعة المنتج» للون/مقاس/نكهة مختلفة — يظهرون كمنتج واحد في كتالogg WhatsApp.
+          استخدم نفس «مجموعة المنتج» للون أو مقاس أو نكهة مختلفة — يظهرون كمنتج واحد في كتالوج WhatsApp.
         </p>
-        <div className="catalog-fields-row">
-          <label className="field-label catalog-field-grow">
+        <div className="catalog-fields-row-3">
+          <label className="field-label">
             <span>مجموعة المنتج (item_group_id)</span>
             <input
               value={form.metaItemGroupId}
@@ -208,7 +211,7 @@ export default function CatalogProductFormFields({
         </div>
       </div>
 
-      <div className="catalog-fields-row">
+      <div className="catalog-fields-row-3">
         <label className="field-label">
           <span>نوع السعر</span>
           <select
