@@ -26,6 +26,7 @@ import {
   type ProductFormState
 } from "../lib/catalogHelpers";
 import { uploadFile } from "../lib/uploads";
+import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
@@ -76,6 +77,11 @@ export default function CatalogPage() {
   const variantGroups = useQuery({
     queryKey: ["catalog-variant-groups"],
     queryFn: async () => (await api.get<string[]>("/catalog/variant-groups")).data
+  });
+
+  const whatsappAccounts = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
   });
 
   useEffect(() => {
@@ -136,8 +142,8 @@ export default function CatalogPage() {
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
     if (!editingProduct) return;
-    if (!editingProduct.meta_item_group_id?.trim() && !simpleProductFormReady(editForm)) {
-      toastStore.getState().show("أكمل: الاسم، السعر، والصورة.", "error");
+    if (!editingProduct.meta_item_group_id?.trim() && !simpleProductFormReady(editForm, organizations.data?.length ?? 1)) {
+      toastStore.getState().show("أكمل: الفرع، الاسم، السعر، والصورة.", "error");
       return;
     }
     try {
@@ -615,6 +621,7 @@ export default function CatalogPage() {
                 form={editForm}
                 setForm={setEditForm}
                 organizations={organizations.data ?? []}
+                whatsappAccounts={whatsappAccounts.data ?? []}
                 uploadingImage={uploadingImage}
                 onUploadImage={(file) => void uploadProductImage(file)}
               />

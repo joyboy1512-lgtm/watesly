@@ -19,6 +19,7 @@ import {
 } from "../lib/catalogHelpers";
 import { uploadFile } from "../lib/uploads";
 import { toastStore } from "../stores/toast";
+import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 
 type Organization = { id: string; name: string };
 type CreateMode = "single" | "meta";
@@ -47,6 +48,11 @@ export default function CatalogCreatePage() {
   const variantGroups = useQuery({
     queryKey: ["catalog-variant-groups"],
     queryFn: async () => (await api.get<string[]>("/catalog/variant-groups")).data
+  });
+
+  const whatsappAccounts = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
   });
 
   useEffect(() => {
@@ -125,7 +131,7 @@ export default function CatalogCreatePage() {
     }
     const orgs = organizations.data ?? [];
     if (orgs.length > 1 && !singleForm.organizationId) {
-      toastStore.getState().show("اختر الفرع.", "error");
+      toastStore.getState().show("اختر الفرع — كل فرع له كتالوج WhatsApp منفصل.", "error");
       return;
     }
     setSaving(true);
@@ -177,7 +183,7 @@ export default function CatalogCreatePage() {
     }
   }
 
-  const singleReady = simpleProductFormReady(singleForm);
+  const singleReady = simpleProductFormReady(singleForm, organizations.data?.length ?? 1);
   const metaReady = metaGroupReady(metaForm);
   const pageTitle = mode === "single" ? "إضافة منتج" : "منتجات متعددة (Meta)";
 
@@ -247,6 +253,7 @@ export default function CatalogCreatePage() {
                     form={singleForm}
                     setForm={setSingleForm}
                     organizations={organizations.data ?? []}
+                    whatsappAccounts={whatsappAccounts.data ?? []}
                     uploadingImage={uploadingImage}
                     onUploadImage={(file) => void uploadProductImage(file)}
                   />

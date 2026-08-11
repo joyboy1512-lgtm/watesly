@@ -1,4 +1,5 @@
 import { type ProductFormState } from "../lib/catalogHelpers";
+import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 
 type Organization = { id: string; name: string };
 
@@ -6,6 +7,7 @@ type CatalogSimpleProductFormProps = {
   form: ProductFormState;
   setForm: (updater: (current: ProductFormState) => ProductFormState) => void;
   organizations: Organization[];
+  whatsappAccounts: WhatsAppAccountRow[];
   uploadingImage: boolean;
   onUploadImage: (file: File) => void;
 };
@@ -14,11 +16,52 @@ export default function CatalogSimpleProductForm({
   form,
   setForm,
   organizations,
+  whatsappAccounts,
   uploadingImage,
   onUploadImage
 }: CatalogSimpleProductFormProps) {
+  const selectedOrgId = form.organizationId || (organizations.length === 1 ? organizations[0]?.id : "");
+  const branchAccount = whatsappAccounts.find((item) => item.organization_id === selectedOrgId);
+  const branchCommerceReady = Boolean(
+    branchAccount?.commerce_enabled && branchAccount.meta_catalog_id?.trim()
+  );
+
   return (
     <div className="catalog-simple-form stack-form">
+      {(organizations.length > 0 || branchAccount) && (
+        <div className="catalog-branch-block">
+          {organizations.length > 1 ? (
+            <label className="field-label">
+              <span>الفرع *</span>
+              <select
+                value={form.organizationId}
+                onChange={(e) => setForm((current) => ({ ...current, organizationId: e.target.value }))}
+                required
+              >
+                <option value="">— اختر الفرع —</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : organizations.length === 1 ? (
+            <p className="catalog-branch-label">
+              <span>الفرع</span>
+              <strong>{organizations[0].name}</strong>
+            </p>
+          ) : null}
+          <p className={`hint-text catalog-branch-hint ${branchCommerceReady ? "ready" : "warn"}`}>
+            {selectedOrgId
+              ? branchCommerceReady
+                ? `يُزامَن المنتج مع كتالوج WhatsApp لهذا الفرع (Catalog ID: ${branchAccount?.meta_catalog_id}).`
+                : "هذا الفرع لا يملك Commerce أو Catalog ID — فعّلهما من صفحة ربط WhatsApp لنفس الفرع."
+              : "اختر الفرع أولاً — كل فرع له رقم WhatsApp وكتالوج منفصل."}
+          </p>
+        </div>
+      )}
+
       <div className="catalog-image-row catalog-simple-image">
         <div className="catalog-image-thumb">
           {form.imageUrl ? (
@@ -110,24 +153,6 @@ export default function CatalogSimpleProductForm({
           dir="ltr"
         />
       </label>
-
-      {organizations.length > 1 && (
-        <label className="field-label">
-          <span>الفرع *</span>
-          <select
-            value={form.organizationId}
-            onChange={(e) => setForm((current) => ({ ...current, organizationId: e.target.value }))}
-            required
-          >
-            <option value="">— اختر الفرع —</option>
-            {organizations.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
 
       <label className="catalog-meta-sync-chip">
         <input

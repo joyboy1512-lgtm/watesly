@@ -36,7 +36,31 @@ def validate_product_for_meta_sync(product: CatalogProduct) -> str | None:
         return "السعر مطلوب ويجب أن يكون أكبر من صفر للمزامنة مع Meta."
     if not (product.name or "").strip():
         return "اسم المنتج مطلوب للمزامنة مع Meta."
+    if product.organization_id is None:
+        return "حدّد فرع المنتج — كل فرع له رقم WhatsApp وكتالوج Meta منفصل."
     return None
+
+
+def meta_sync_error_for_code(code: str) -> str:
+    messages = {
+        "ORGANIZATION_REQUIRED_FOR_META_SYNC": (
+            "حدّد فرع المنتج — كل فرع له رقم WhatsApp وكتالوج Meta منفصل."
+        ),
+        "META_CATALOG_NOT_CONFIGURED_FOR_ORGANIZATION": (
+            "فرع المنتج لا يملك Commerce أو Catalog ID — فعّلهما من إعدادات ربط WhatsApp لنفس الفرع."
+        ),
+        "ORGANIZATION_CATALOG_MISMATCH": (
+            "فرع المنتج لا يطابق كتالوج WhatsApp المحدد."
+        ),
+        "META_CATALOG_NOT_CONFIGURED": (
+            "فعّل Commerce وأدخل Meta Catalog ID من صفحة ربط WhatsApp."
+        ),
+    }
+    return messages.get(code, code)
+
+
+def product_matches_commerce_organization(product: CatalogProduct, whatsapp_account: WhatsAppAccount) -> bool:
+    return product.organization_id is not None and product.organization_id == whatsapp_account.organization_id
 
 
 def format_meta_sync_error(message: str) -> str:

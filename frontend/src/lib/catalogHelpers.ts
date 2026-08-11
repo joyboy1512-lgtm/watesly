@@ -170,13 +170,15 @@ export function buildSimpleProductPayload(form: ProductFormState) {
   };
 }
 
-export function simpleProductFormReady(form: ProductFormState) {
+export function simpleProductFormReady(form: ProductFormState, organizationsCount = 1) {
   const price = Number(form.price);
+  const hasOrg = organizationsCount <= 1 || Boolean(form.organizationId.trim());
   return (
     Boolean(form.name.trim()) &&
     Boolean(form.imageUrl.trim()) &&
     Number.isFinite(price) &&
-    price > 0
+    price > 0 &&
+    hasOrg
   );
 }
 
