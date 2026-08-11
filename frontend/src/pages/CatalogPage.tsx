@@ -268,19 +268,24 @@ export default function CatalogPage() {
         pending?: number;
         approved?: number;
         rejected?: number;
+        errors?: string[];
       }>(`/catalog/${product.id}/sync-meta`);
       await client.invalidateQueries({ queryKey: ["catalog"] });
-      const { synced, failed, pending = 0, approved = 0 } = result.data;
+      const { synced, failed, pending = 0, approved = 0, errors = [] } = result.data;
       if (synced > 0) {
         toastStore.getState().show(
           `تمت مزامنة «${product.name}» — معتمد ${approved}، قيد المراجعة ${pending}.`,
           "success"
         );
+      } else if (errors[0]) {
+        toastStore.getState().show(errors[0], "error");
+      } else if (product.meta_sync_error) {
+        toastStore.getState().show(product.meta_sync_error, "error");
       } else {
         toastStore.getState().show("تعذر مزامنة المنتج مع Meta.", "error");
       }
-      if (failed > 0) {
-        toastStore.getState().show("فشلت مزامنة المنتج مع Meta.", "error");
+      if (failed > 0 && errors[0] && synced > 0) {
+        toastStore.getState().show(errors[0], "error");
       }
     } catch (error: unknown) {
       const detail =

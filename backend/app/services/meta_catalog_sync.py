@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.encryption import decrypt_secret
 from app.models.catalog_product import CatalogProduct
 from app.models.whatsapp_account import WhatsAppAccount
-from app.services.catalog_commerce import resolve_retailer_id, build_meta_catalog_product_payload
+from app.services.catalog_commerce import (
+    build_meta_catalog_product_payload,
+    format_meta_sync_error,
+    resolve_retailer_id,
+    validate_product_for_meta_sync,
+)
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 
 
@@ -318,6 +323,16 @@ async def sync_catalog_to_meta(
         for product in products:
             if not product.meta_sync_enabled:
                 continue
+            validation_error = validate_product_for_meta_sync(product)
+            if validation_error:
+                failed += 1
+                apply_meta_product_status(
+                    product,
+                    sync_status="failed",
+                    sync_error=validation_error,
+                )
+                errors.append(f"{product.name}: {validation_error}"[:500])
+                continue
             payload = build_meta_catalog_product_payload(product)
             if not product.meta_retailer_id:
                 product.meta_retailer_id = payload["retailer_id"]
@@ -351,12 +366,13 @@ async def sync_catalog_to_meta(
                     rejected += 1
             except MetaAPIError as exc:
                 failed += 1
+                sync_error = format_meta_sync_error(str(exc))
                 apply_meta_product_status(
                     product,
                     sync_status="failed",
-                    sync_error=str(exc),
+                    sync_error=sync_error,
                 )
-                errors.append(f"{product.name}: {exc}"[:500])
+                errors.append(f"{product.name}: {sync_error}"[:500])
         account.catalog_synced_at = datetime.now(UTC)
         await db.commit()
     finally:
