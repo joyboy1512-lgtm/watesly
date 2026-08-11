@@ -357,11 +357,27 @@ async def process_inbound_side_effects(
                 order_data=ctx.order_data,
                 conversation_id=conversation.id,
             )
+            from app.services.catalog_orders import create_catalog_order
+
+            catalog_order = await create_catalog_order(
+                db,
+                account_id=whatsapp_account.account_id,
+                organization_id=whatsapp_account.organization_id,
+                channel_id=whatsapp_account.channel_id,
+                contact_id=contact.id,
+                conversation_id=conversation.id,
+                message_id=ctx.message.id,
+                deal_id=deal.id,
+                order_data=ctx.order_data,
+                product_names=product_names,
+            )
             await publish_event(
                 whatsapp_account.account_id,
                 {
                     "type": "commerce.order_received",
                     "deal_id": str(deal.id),
+                    "catalog_order_id": str(catalog_order.id),
+                    "order_number": catalog_order.order_number,
                     "contact_id": str(contact.id),
                     "conversation_id": str(conversation.id),
                     "title": deal.title,

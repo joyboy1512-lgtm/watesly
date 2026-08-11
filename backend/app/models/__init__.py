@@ -59,6 +59,7 @@ from app.models.webhook_delivery import WebhookDelivery
 from app.models.marketplace_integration import MarketplaceIntegration
 
 from app.models.catalog_product import CatalogProduct
+from app.models.catalog_order import CatalogOrder
 from app.models.knowledge_article import KnowledgeArticle
 from app.models.ai_agent_settings import AiAgentSettings
 from app.models.tracked_link import TrackedLink, LinkClick
@@ -80,6 +81,6 @@ __all__ = [
     "ContactTag", "ContactInterest", "InterestCategory", "CustomFieldDefinition", "CustomFieldValue", "Segment",
     "Department", "AgentPresence", "ConversationReadState",
     "ApiKey", "Deal", "DealActivity", "WebhookSubscription", "WebhookDelivery", "MarketplaceIntegration",
-    "CatalogProduct",
+    "CatalogProduct", "CatalogOrder",
     "KnowledgeArticle", "TrackedLink", "LinkClick", "ConversationRating",
 ]

@@ -89,7 +89,7 @@ def format_order_text(
     product_names: dict[str, str] | None = None,
 ) -> str:
     product_names = product_names or {}
-    lines: list[str] = ["🛒 طلب من كتالogg واتساب"]
+    lines: list[str] = ["🛒 طلب من كتالوج واتساب"]
     total = Decimal("0")
     currency = "KWD"
     for item in order_data.get("product_items") or []:
@@ -167,7 +167,7 @@ async def create_deal_from_whatsapp_order(
             DealActivity(
                 deal_id=deal.id,
                 activity_type="note",
-                body=f"تم إنشاء الصفقة تلقائياً من طلب كتالogg واتساب.\nconversation_id={conversation_id}",
+                body=f"تم إنشاء الصفقة تلقائياً من طلب كتالوج واتساب.\nconversation_id={conversation_id}",
             )
         )
         await db.flush()

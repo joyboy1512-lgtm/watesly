@@ -26,6 +26,8 @@ import CatalogPage from "./pages/CatalogPage";
 import CatalogCreatePage from "./pages/CatalogCreatePage";
 import CatalogGroupEditPage from "./pages/CatalogGroupEditPage";
 import CatalogCategoryCreatePage from "./pages/CatalogCategoryCreatePage";
+import CatalogOrdersPage from "./pages/CatalogOrdersPage";
+import CatalogOrderDetailPage from "./pages/CatalogOrderDetailPage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import SiteContentPage from "./pages/SiteContentPage";
@@ -81,6 +83,8 @@ export default function App() {
         <Route path="/catalog/new" element={<CatalogCreatePage />} />
         <Route path="/catalog/group/:groupKey/edit" element={<CatalogGroupEditPage />} />
         <Route path="/catalog/category/new" element={<CatalogCategoryCreatePage />} />
+        <Route path="/catalog/orders" element={<CatalogOrdersPage />} />
+        <Route path="/catalog/orders/:id" element={<CatalogOrderDetailPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/assignments" element={<AssignmentsPage />} />
         <Route path="/organizations" element={<OrganizationsPage />} />
