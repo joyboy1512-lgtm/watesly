@@ -8,6 +8,18 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 - Inbox chat landing style (`cursor/inbox-chat-landing-style-813f`)
 - Template media download fix (`cursor/template-media-download-fix-813f`)
 - External site Arabic content + clients section (`cursor/external-site-ar-813f`)
+- Catalog Meta wizard, variants, sync status, create UI polish (PRs #61–#68)
+
+**GitHub `main` is kept in sync with this branch** after each production deploy.
+
+### Production snapshot (2026-08-11)
+
+| Item | Value |
+|------|-------|
+| Commit | `9813e7b` |
+| Alembic | `0052` |
+| Server backup | `/opt/watesly/backups/20260811-143300` |
+| Snapshot record | `deploy/production-snapshot-20260811.json` |
 
 ## Server
 
@@ -68,4 +80,4 @@ python scripts/restore_site_config_snapshot.py \
 
 ## Alembic migrations
 
-Migration chain ends at `0049_landing_clients_section` (site content defaults). Earlier migrations include campaign opt-out, branch admin role, and billing changes.
+Migration chain ends at **`0052_catalog_meta_variants`**. Earlier migrations include campaign opt-out, branch admin role, catalog Meta sync fields, and billing changes.

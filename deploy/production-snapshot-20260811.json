@@ -1,0 +1,24 @@
+{
+  "created_at": "2026-08-11T14:33:13Z",
+  "domain": "watesly.com",
+  "server_host": "64.226.69.159",
+  "app_path": "/opt/watesly",
+  "git_branch": "cursor/production-unified-813f",
+  "git_commit": "9813e7b7ebea33d84688a0b3ac324352f4fb7fc4",
+  "git_commit_message": "style(catalog): colored section headers and clearer create layout",
+  "alembic_head": "0052",
+  "backup_path": "/opt/watesly/backups/20260811-143300",
+  "backup_latest_symlink": "/opt/watesly/backups/latest",
+  "backup_contents": [
+    "postgres.dump",
+    "minio-data.tar.gz",
+    "redis.rdb",
+    "backend.env",
+    "Caddyfile",
+    "project-config.tar.gz",
+    "manifest.json",
+    "checksums.sha256"
+  ],
+  "github_main_synced": true,
+  "notes": "Full server backup taken before unifying main with production-unified."
+}
