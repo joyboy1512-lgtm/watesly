@@ -185,8 +185,8 @@ export default function CatalogMetaProductWizard({
         title="بيانات المنتج المشتركة"
         hint="تُشارَك بين كل النسخ في كتالوج WhatsApp — نفس item_group_id"
       >
-        <div className="catalog-fields-row catalog-fields-row-2">
-          <label className="field-label">
+        <div className="catalog-fields-row-fit">
+          <label className="field-label catalog-field-w-grow">
             <span>اسم المنتج الأساسي *</span>
             <input
               value={form.baseName}
@@ -195,7 +195,7 @@ export default function CatalogMetaProductWizard({
               required
             />
           </label>
-          <label className="field-label">
+          <label className="field-label catalog-field-w-type">
             <span>النوع</span>
             <select
               value={form.productType}
@@ -229,8 +229,8 @@ export default function CatalogMetaProductWizard({
           </button>
         </div>
 
-        <div className="catalog-fields-row catalog-fields-row-2">
-          <label className="field-label">
+        <div className="catalog-fields-row-fit">
+          <label className="field-label catalog-field-w-md">
             <span>الفرع {organizations.length === 1 ? "" : "(مطلوب)"}</span>
             <select
               value={form.organizationId}
@@ -243,7 +243,7 @@ export default function CatalogMetaProductWizard({
               ))}
             </select>
           </label>
-          <label className="field-label">
+          <label className="field-label catalog-field-w-md">
             <span>الصنف / الفئة</span>
             <input
               value={form.category}
@@ -260,12 +260,12 @@ export default function CatalogMetaProductWizard({
             value={form.description}
             onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
             placeholder="وصف مختصر يظهر للعميل في WhatsApp"
-            rows={3}
+            rows={2}
           />
         </label>
 
-        <div className="catalog-fields-row catalog-fields-row-3">
-          <label className="field-label">
+        <div className="catalog-fields-row-fit">
+          <label className="field-label catalog-field-w-type">
             <span>نوع السعر</span>
             <select
               value={form.priceType}
@@ -282,7 +282,7 @@ export default function CatalogMetaProductWizard({
             </select>
           </label>
           {form.priceType !== "quote" && (
-            <label className="field-label">
+            <label className="field-label catalog-field-w-xs">
               <span>العملة</span>
               <input
                 value={form.currency}
@@ -292,7 +292,7 @@ export default function CatalogMetaProductWizard({
               />
             </label>
           )}
-          <label className="field-label catalog-meta-sync-inline">
+          <label className="field-label catalog-field-w-sync catalog-meta-sync-inline">
             <span>مزامنة Meta</span>
             <div className="catalog-meta-sync-toggle-row">
               <input
@@ -373,8 +373,8 @@ export default function CatalogMetaProductWizard({
                 </div>
 
                 <div className="catalog-variant-card-fields">
-                  <div className="catalog-fields-row catalog-fields-row-3">
-                    <label className="field-label">
+                  <div className="catalog-fields-row-fit">
+                    <label className="field-label catalog-field-w-md">
                       <span>اللون</span>
                       <input
                         value={variant.variantColor}
@@ -382,7 +382,7 @@ export default function CatalogMetaProductWizard({
                         placeholder="أبيض"
                       />
                     </label>
-                    <label className="field-label">
+                    <label className="field-label catalog-field-w-md">
                       <span>المقاس</span>
                       <input
                         value={variant.variantSize}
@@ -391,7 +391,7 @@ export default function CatalogMetaProductWizard({
                       />
                     </label>
                     {form.priceType !== "quote" && (
-                      <label className="field-label">
+                      <label className="field-label catalog-field-w-sm">
                         <span>السعر *</span>
                         <input
                           value={variant.price}
@@ -406,8 +406,8 @@ export default function CatalogMetaProductWizard({
                     )}
                   </div>
 
-                  <div className="catalog-fields-row catalog-fields-row-3">
-                    <label className="field-label">
+                  <div className="catalog-fields-row-fit">
+                    <label className="field-label catalog-field-w-md">
                       <span>SKU</span>
                       <input
                         value={variant.sku}
@@ -416,7 +416,7 @@ export default function CatalogMetaProductWizard({
                         dir="ltr"
                       />
                     </label>
-                    <label className="field-label">
+                    <label className="field-label catalog-field-w-md">
                       <span>Meta Retailer ID</span>
                       <input
                         value={variant.metaRetailerId}
@@ -425,8 +425,8 @@ export default function CatalogMetaProductWizard({
                         dir="ltr"
                       />
                     </label>
-                    <label className="field-label">
-                      <span>ترتيب العرض</span>
+                    <label className="field-label catalog-field-w-xs">
+                      <span>ترتيب</span>
                       <input
                         value={variant.sortOrder}
                         onChange={(e) => updateVariant(variant.clientKey, { sortOrder: e.target.value })}

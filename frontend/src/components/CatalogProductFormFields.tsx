@@ -47,8 +47,8 @@ export default function CatalogProductFormFields({
 }: CatalogProductFormFieldsProps) {
   return (
     <>
-      <div className="catalog-fields-row-2">
-        <label className="field-label">
+      <div className="catalog-fields-row-fit">
+        <label className="field-label catalog-field-w-type">
           <span>النوع</span>
           <select
             value={form.productType}
@@ -58,7 +58,7 @@ export default function CatalogProductFormFields({
             <option value="service">خدمة</option>
           </select>
         </label>
-        <label className="field-label">
+        <label className="field-label catalog-field-w-grow">
           <span>اسم المنتج أو الخدمة</span>
           <input
             value={form.name}
@@ -69,8 +69,8 @@ export default function CatalogProductFormFields({
         </label>
       </div>
 
-      <div className="catalog-fields-row-3">
-        <label className="field-label">
+      <div className="catalog-fields-row-fit">
+        <label className="field-label catalog-field-w-md">
           <span>SKU / رمز</span>
           <input
             value={form.sku}
@@ -79,8 +79,8 @@ export default function CatalogProductFormFields({
             dir="ltr"
           />
         </label>
-        <label className="field-label">
-          <span>ترتيب العرض</span>
+        <label className="field-label catalog-field-w-xs">
+          <span>ترتيب</span>
           <input
             value={form.sortOrder}
             onChange={(e) => setForm((current) => ({ ...current, sortOrder: e.target.value }))}
@@ -89,7 +89,7 @@ export default function CatalogProductFormFields({
             dir="ltr"
           />
         </label>
-        <label className="field-label">
+        <label className="field-label catalog-field-w-md">
           <span>الفرع {organizations.length === 1 ? "" : "(مطلوب)"}</span>
           <select
             value={form.organizationId}
@@ -104,8 +104,8 @@ export default function CatalogProductFormFields({
         </label>
       </div>
 
-      <div className="catalog-fields-row-3">
-        <label className="field-label">
+      <div className="catalog-fields-row-fit">
+        <label className="field-label catalog-field-w-md">
           <span>الصنف / الفئة</span>
           <input
             value={form.category}
@@ -114,7 +114,7 @@ export default function CatalogProductFormFields({
             list="catalog-category-suggestions"
           />
         </label>
-        <label className="field-label">
+        <label className="field-label catalog-field-w-md">
           <span>Meta Retailer ID</span>
           <input
             value={form.metaRetailerId}
@@ -123,7 +123,7 @@ export default function CatalogProductFormFields({
             dir="ltr"
           />
         </label>
-        <label className="field-label catalog-meta-sync-inline">
+        <label className="field-label catalog-field-w-sync catalog-meta-sync-inline">
           <span>مزامنة Meta</span>
           <div className="catalog-meta-sync-toggle-row">
             <input
@@ -144,7 +144,7 @@ export default function CatalogProductFormFields({
           value={form.description}
           onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
           placeholder="وصف مختصر للعميل"
-          rows={3}
+          rows={2}
         />
       </label>
 
@@ -153,8 +153,8 @@ export default function CatalogProductFormFields({
         <p className="hint-text catalog-variant-hint">
           استخدم نفس «مجموعة المنتج» للون أو مقاس أو نكهة مختلفة — يظهرون كمنتج واحد في كتالوج WhatsApp.
         </p>
-        <div className="catalog-fields-row-3">
-          <label className="field-label">
+        <div className="catalog-fields-row-fit">
+          <label className="field-label catalog-field-w-grow">
             <span>مجموعة المنتج (item_group_id)</span>
             <input
               value={form.metaItemGroupId}
@@ -164,7 +164,7 @@ export default function CatalogProductFormFields({
               list="catalog-variant-group-suggestions"
             />
           </label>
-          <label className="field-label">
+          <label className="field-label catalog-field-w-sm">
             <span>المقاس</span>
             <input
               value={form.variantSize}
@@ -172,7 +172,7 @@ export default function CatalogProductFormFields({
               placeholder="400ml"
             />
           </label>
-          <label className="field-label">
+          <label className="field-label catalog-field-w-sm">
             <span>اللون</span>
             <input
               value={form.variantColor}
@@ -211,8 +211,8 @@ export default function CatalogProductFormFields({
         </div>
       </div>
 
-      <div className="catalog-fields-row-3">
-        <label className="field-label">
+      <div className="catalog-fields-row-fit">
+        <label className="field-label catalog-field-w-type">
           <span>نوع السعر</span>
           <select
             value={form.priceType}
@@ -225,7 +225,7 @@ export default function CatalogProductFormFields({
         </label>
         {form.priceType !== "quote" && (
           <>
-            <label className="field-label">
+            <label className="field-label catalog-field-w-sm">
               <span>السعر</span>
               <input
                 value={form.price}
@@ -237,7 +237,7 @@ export default function CatalogProductFormFields({
                 required
               />
             </label>
-            <label className="field-label">
+            <label className="field-label catalog-field-w-xs">
               <span>العملة</span>
               <input
                 value={form.currency}
