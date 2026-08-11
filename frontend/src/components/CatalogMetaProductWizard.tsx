@@ -292,18 +292,14 @@ export default function CatalogMetaProductWizard({
               />
             </label>
           )}
-          <label className="field-label catalog-field-w-sync catalog-meta-sync-inline">
+          <label className="catalog-meta-sync-chip">
+            <input
+              type="checkbox"
+              checked={form.metaSyncEnabled}
+              onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
+            />
             <span>مزامنة Meta</span>
-            <div className="catalog-meta-sync-toggle-row">
-              <input
-                type="checkbox"
-                checked={form.metaSyncEnabled}
-                onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
-              />
-              <span className="hint-text catalog-meta-sync-hint">
-                {form.metaSyncEnabled ? "مفعّلة — تُرسل تلقائياً" : "موقوفة"}
-              </span>
-            </div>
+            <span className="catalog-meta-sync-state">{form.metaSyncEnabled ? "مفعّلة" : "موقوفة"}</span>
           </label>
         </div>
       </WizardSectionCard>
@@ -342,34 +338,38 @@ export default function CatalogMetaProductWizard({
               </header>
 
               <div className="catalog-variant-card-body">
-                <div className="catalog-variant-card-image">
-                  <span className="field-label-title">صورة النسخة</span>
-                  {variant.imageUrl ? (
-                    <img src={variant.imageUrl} alt={`نسخة ${index + 1}`} className="catalog-form-image" />
-                  ) : (
-                    <div className="catalog-form-image placeholder">بدون صورة</div>
-                  )}
-                  <label className="secondary-button compact">
-                    {uploadingKey === variant.clientKey ? "جاري الرفع…" : "رفع صورة"}
+                <div className="catalog-variant-image-row">
+                  <div className="catalog-variant-thumb">
+                    {variant.imageUrl ? (
+                      <img src={variant.imageUrl} alt={`نسخة ${index + 1}`} className="catalog-form-image" />
+                    ) : (
+                      <div className="catalog-form-image placeholder">—</div>
+                    )}
+                  </div>
+                  <div className="catalog-variant-image-controls">
+                    <span className="field-label-title">صورة النسخة</span>
+                    <label className="secondary-button compact">
+                      {uploadingKey === variant.clientKey ? "جاري الرفع…" : "رفع صورة"}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                        disabled={uploadingKey === variant.clientKey}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) void uploadVariantImage(variant.clientKey, file);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
                     <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      hidden
-                      disabled={uploadingKey === variant.clientKey}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) void uploadVariantImage(variant.clientKey, file);
-                        event.currentTarget.value = "";
-                      }}
+                      className="catalog-variant-image-url"
+                      value={variant.imageUrl}
+                      onChange={(e) => updateVariant(variant.clientKey, { imageUrl: e.target.value })}
+                      placeholder="رابط الصورة"
+                      dir="ltr"
                     />
-                  </label>
-                  <input
-                    className="catalog-variant-image-url"
-                    value={variant.imageUrl}
-                    onChange={(e) => updateVariant(variant.clientKey, { imageUrl: e.target.value })}
-                    placeholder="أو الصق رابط الصورة"
-                    dir="ltr"
-                  />
+                  </div>
                 </div>
 
                 <div className="catalog-variant-card-fields">
