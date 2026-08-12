@@ -341,8 +341,15 @@ export default function TeamPage() {
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       setAccessEditor(null);
       toastStore.getState().show("تم تحديث الوصول للفروع وحسابات WhatsApp.", "success");
-    } catch {
-      toastStore.getState().show("تعذر حفظ الوصول. تحقق من الفروع والقنوات.", "error");
+    } catch (error: unknown) {
+      const detail =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response: { data: { detail: string } } }).response.data.detail
+          : null;
+      toastStore.getState().show(detail ?? "تعذر حفظ الدور والوصول. تحقق من الفروع والقنوات.", "error");
     } finally {
       setSavingAccess(false);
     }
