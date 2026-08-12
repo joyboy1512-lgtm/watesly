@@ -72,6 +72,7 @@ async def invite_employee(
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
             "FORBIDDEN": (403, "You cannot invite this role"),
             "OUT_OF_SCOPE": (403, "You can only invite employees to your branch"),
+            "ORGANIZATION_REQUIRED": (400, "Branch-scoped roles require at least one organization"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create invitation"))
         raise HTTPException(status_code=code, detail=detail) from exc
@@ -137,6 +138,7 @@ async def create_employee_account(
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
             "FORBIDDEN": (403, "You cannot create this employee"),
             "OUT_OF_SCOPE": (403, "You can only manage employees in your branch"),
+            "ORGANIZATION_REQUIRED": (400, "Branch-scoped roles require at least one organization"),
             "INVALID_CHANNEL": (400, "One or more WhatsApp channels are invalid for the selected branches"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create employee"))
@@ -190,6 +192,7 @@ async def patch_employee(
             "INVALID_ORGANIZATION": (400, "One or more organizations are invalid"),
             "FORBIDDEN": (403, "You cannot modify this employee"),
             "OUT_OF_SCOPE": (403, "You can only manage employees in your branch"),
+            "ORGANIZATION_REQUIRED": (400, "Branch-scoped roles require at least one organization"),
             "PERMISSION_EXCEEDS_ROLE": (400, "One or more permissions exceed the employee role"),
             "PERMISSION_NOT_ASSIGNABLE": (403, "You cannot assign one or more of these permissions"),
             "INVALID_PERMISSION": (400, "One or more permissions are invalid"),

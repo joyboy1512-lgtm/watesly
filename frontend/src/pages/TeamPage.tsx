@@ -17,6 +17,8 @@ import {
   formatWhatsAppStatus,
   getEmployeeWorkspaces,
   getRolePermissions,
+  isBranchAdminRole,
+  isBranchScopedRole,
   mapWhatsAppAccount,
   permissionSummary,
   roleBadgeClass,
@@ -133,10 +135,23 @@ export default function TeamPage() {
     orgDraft: Set<string>,
     channelDraft: Set<string>,
     onToggleOrg: (orgId: string) => void,
-    onToggleChannel: (channelId: string) => void
+    onToggleChannel: (channelId: string) => void,
+    selectedRole: MembershipRole
   ) {
     return (
       <div className="admin-access-picker">
+        {isBranchAdminRole(selectedRole) && (
+          <div className="team-role-scope-warning" role="status">
+            <strong>أدمن الفرع — حدّد الفروع المسموح بها فقط</strong>
+            <p className="hint-text">
+              لن يرى الموظف أي فرع غير المحدد هنا. لعزل فرع واحد، فعّل فرعاً واحداً فقط.
+              لا يصل إلى الفوترة أو إعدادات النظام العامة.
+            </p>
+          </div>
+        )}
+        {isBranchScopedRole(selectedRole) && !isBranchAdminRole(selectedRole) && (
+          <p className="hint-text">حدّد الفروع التي يعمل ضمنها هذا الموظف.</p>
+        )}
         {(organizationsQuery.data ?? []).map((org) => {
           const orgWorkspaces = workspaces.filter((item) => item.organization_id === org.id);
           const orgSelected = orgDraft.has(org.id);
@@ -427,11 +442,13 @@ export default function TeamPage() {
                   <option key={item} value={item}>{formatRoleLabel(item)}</option>
                 ))}
               </select>
+              <p className="hint-text">{ROLE_DESCRIPTIONS[role]}</p>
               {renderOrgChannelPicker(
                 new Set(selectedOrgIds),
                 new Set(selectedChannelIds),
                 toggleSelectedOrg,
-                toggleSelectedChannel
+                toggleSelectedChannel,
+                role
               )}
               <button type="submit" disabled={creating}>{creating ? "جاري الإنشاء…" : "إنشاء الحساب"}</button>
             </form>
@@ -448,11 +465,13 @@ export default function TeamPage() {
                   <option key={item} value={item}>{formatRoleLabel(item)}</option>
                 ))}
               </select>
+              <p className="hint-text">{ROLE_DESCRIPTIONS[role]}</p>
               {renderOrgChannelPicker(
                 new Set(selectedOrgIds),
                 new Set(selectedChannelIds),
                 toggleSelectedOrg,
-                toggleSelectedChannel
+                toggleSelectedChannel,
+                role
               )}
               <button type="submit" disabled={inviting}>{inviting ? "جاري الإرسال…" : "إرسال الدعوة"}</button>
             </form>
@@ -596,7 +615,8 @@ export default function TeamPage() {
               accessOrgDraft,
               accessChannelDraft,
               toggleAccessOrg,
-              toggleAccessChannel
+              toggleAccessChannel,
+              accessEditor.role
             )}
             <div className="admin-actions" style={{ marginTop: 16 }}>
               <button type="button" disabled={savingAccess} onClick={() => void saveAccess()}>

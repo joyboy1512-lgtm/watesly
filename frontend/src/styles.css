@@ -4982,7 +4982,16 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: grid;
   gap: 4px;
 }
-.whatsapp-replace-warning strong { color: #b54708; }
+.team-role-scope-warning {
+  border: 1px solid #b2ddff;
+  background: #eff8ff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.team-role-scope-warning strong { color: #175cd3; }
 .whatsapp-page-tabs {
   display: flex;
   flex-wrap: wrap;

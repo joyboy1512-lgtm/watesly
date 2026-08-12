@@ -37,6 +37,17 @@ export const TEAM_PAGE_SIZE = 20;
 
 export const INVITABLE_ROLES: MembershipRole[] = ["admin", "branch_admin", "manager", "agent", "viewer"];
 
+/** Roles limited to assigned organization(s) — cannot see other branches. */
+export const BRANCH_SCOPED_ROLES: MembershipRole[] = ["branch_admin", "manager", "agent", "viewer"];
+
+export function isBranchScopedRole(role: MembershipRole): boolean {
+  return BRANCH_SCOPED_ROLES.includes(role);
+}
+
+export function isBranchAdminRole(role: MembershipRole): boolean {
+  return role === "branch_admin";
+}
+
 export function inviteableRolesForActor(actorRole?: string | null): MembershipRole[] {
   if (actorRole === "owner" || actorRole === "admin") {
     return ["admin", "branch_admin", "manager", "agent", "viewer"];
@@ -53,7 +64,7 @@ export function inviteableRolesForActor(actorRole?: string | null): MembershipRo
 export const ROLE_LABELS: Record<MembershipRole, string> = {
   owner: "مالك الحساب",
   admin: "مدير النظام",
-  branch_admin: "مشرف الفرع",
+  branch_admin: "أدمن الفرع",
   manager: "مشرف",
   agent: "موظف",
   viewer: "مشاهد"
@@ -62,7 +73,7 @@ export const ROLE_LABELS: Record<MembershipRole, string> = {
 export const ROLE_DESCRIPTIONS: Record<MembershipRole, string> = {
   owner: "صلاحيات كاملة بما فيها الفوترة وإدارة الحساب",
   admin: "صلاحيات كاملة ما عدا نقل ملكية الحساب",
-  branch_admin: "إدارة كاملة للفرع: منتجات، CRM، أتمتة، وموظفين الفرع",
+  branch_admin: "أدمن على الفروع المعيّنة فقط — حملات، منتجات، CRM، موظفين الفرع، بدون فوترة أو أفرع أخرى",
   manager: "إدارة المحادثات والحملات والتقارير وعرض الموظفين",
   agent: "التعامل مع المحادثات والعملاء وإرسال الرسائل",
   viewer: "عرض البيانات والتقارير فقط بدون تعديل"
@@ -258,9 +269,7 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, ReadonlySet<PermissionKey>
     "files.upload",
     "files.view",
     "trust.view",
-    "trust.manage",
-    "operations.view",
-    "operations.manage"
+    "trust.manage"
   ]),
   manager: new Set([
     "conversations.view",
@@ -422,7 +431,7 @@ export function permissionSummary(role: MembershipRole): string {
   const summaries: Record<MembershipRole, string> = {
     owner: "صلاحيات كاملة · فوترة · إدارة الحساب",
     admin: "صلاحيات كاملة · قنوات · حملات · فريق",
-    branch_admin: "مشرف الفرع · منتجات · CRM · أتمتة · فريق",
+    branch_admin: "أدمن الفرع · فرع محدد · حملات · فريق · بدون فوترة",
     manager: "محادثات · حملات · تقارير · قوالب",
     agent: "محادثات · عملاء · إرسال رسائل",
     viewer: "عرض فقط · تقارير · بدون تعديل"
