@@ -80,6 +80,33 @@ python scripts/restore_site_config_snapshot.py \
   data/production_snapshots/platform_site_config_2026-08-09.json
 ```
 
-## Alembic migrations
+## Email (SMTP) — team invitations
+
+Watesly sends email when you **invite an employee** from **الموظفون**. Owner self-registration does not send email.
+
+Production uses GoDaddy mailbox **`info@watesly.com`**. Settings live in `/opt/watesly/backend/.env` (never commit passwords to git).
+
+```env
+APP_PUBLIC_URL=https://www.watesly.com
+SMTP_HOST=smtpout.secureserver.net
+SMTP_PORT=587
+SMTP_USERNAME=info@watesly.com
+SMTP_FROM_EMAIL=info@watesly.com
+SMTP_FROM_NAME=Watesly
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+```
+
+If the GoDaddy plan is **Microsoft 365 via GoDaddy**, use `SMTP_HOST=smtp.office365.com` instead.
+
+**DigitalOcean note:** Outbound SMTP ports **587/465** are often blocked on new droplets. If sends fail with timeout, open a DigitalOcean support ticket to enable SMTP for transactional mail, or use a relay on port **2525** (Brevo/Mailgun/SendGrid) with DNS verification for `watesly.com`.
+
+Test from the server:
+
+```bash
+cd /opt/watesly/backend
+docker compose -f compose.prod.yaml exec api python3 -c "from app.services.email import is_smtp_configured; print(is_smtp_configured())"
+```
+
 
 Migration chain ends at **`0055_contact_reachability`**. Recent migrations include branch admin enum fix (0054), catalog orders (0053), and contact reachability scoring (0055).
