@@ -6,22 +6,35 @@ import smtplib
 from email.message import EmailMessage
 from urllib.parse import urlencode
 
+import httpx
+
 from app.core.config import settings
 from app.models.membership import MembershipRole
 
 logger = logging.getLogger(__name__)
 
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
 ROLE_LABELS: dict[MembershipRole, str] = {
     MembershipRole.OWNER: "مالك الحساب",
     MembershipRole.ADMIN: "مدير النظام",
+    MembershipRole.BRANCH_ADMIN: "أدمن الفرع",
     MembershipRole.MANAGER: "مشرف",
     MembershipRole.AGENT: "موظف",
     MembershipRole.VIEWER: "مشاهد",
 }
 
 
+def is_brevo_configured() -> bool:
+    return bool(settings.brevo_api_key and settings.smtp_from_email)
+
+
 def is_smtp_configured() -> bool:
     return bool(settings.smtp_host and settings.smtp_from_email)
+
+
+def is_email_configured() -> bool:
+    return is_brevo_configured() or is_smtp_configured()
 
 
 def build_invitation_accept_url(token: str) -> str:
@@ -30,15 +43,39 @@ def build_invitation_accept_url(token: str) -> str:
     return f"{base}/invite?{query}"
 
 
-def _format_from_address() -> str:
+def _sender_payload() -> dict[str, str]:
     from_email = settings.smtp_from_email or ""
-    from_name = settings.smtp_from_name.strip()
-    if from_name:
-        return f"{from_name} <{from_email}>"
-    return from_email
+    from_name = settings.smtp_from_name.strip() or "Watesly"
+    return {"email": from_email, "name": from_name}
 
 
-def _send_email_sync(*, to: str, subject: str, text_body: str, html_body: str) -> None:
+async def _send_via_brevo_api(*, to: str, subject: str, text_body: str, html_body: str) -> None:
+    api_key = settings.brevo_api_key.get_secret_value() if settings.brevo_api_key else None
+    if not api_key:
+        raise RuntimeError("Brevo API key is not configured")
+
+    payload = {
+        "sender": _sender_payload(),
+        "to": [{"email": to}],
+        "subject": subject,
+        "textContent": text_body,
+        "htmlContent": html_body,
+    }
+    async with httpx.AsyncClient(timeout=settings.smtp_timeout_seconds) as client:
+        response = await client.post(
+            BREVO_API_URL,
+            headers={
+                "accept": "application/json",
+                "content-type": "application/json",
+                "api-key": api_key,
+            },
+            json=payload,
+        )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Brevo API error {response.status_code}: {response.text[:500]}")
+
+
+def _send_email_smtp_sync(*, to: str, subject: str, text_body: str, html_body: str) -> None:
     if not is_smtp_configured():
         raise RuntimeError("SMTP is not configured")
 
@@ -69,9 +106,17 @@ def _send_email_sync(*, to: str, subject: str, text_body: str, html_body: str) -
         client.send_message(message)
 
 
+def _format_from_address() -> str:
+    sender = _sender_payload()
+    return f"{sender['name']} <{sender['email']}>"
+
+
 async def send_email(*, to: str, subject: str, text_body: str, html_body: str) -> None:
+    if is_brevo_configured():
+        await _send_via_brevo_api(to=to, subject=subject, text_body=text_body, html_body=html_body)
+        return
     await asyncio.to_thread(
-        _send_email_sync,
+        _send_email_smtp_sync,
         to=to,
         subject=subject,
         text_body=text_body,
@@ -87,7 +132,7 @@ async def send_team_invitation_email(
     account_name: str,
     role: MembershipRole,
 ) -> bool:
-    if not is_smtp_configured():
+    if not is_email_configured():
         return False
 
     role_label = ROLE_LABELS.get(role, str(role))

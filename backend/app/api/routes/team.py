@@ -23,7 +23,7 @@ from app.services.team import (
     update_employee,
 )
 from app.services.membership_channels import list_membership_channel_ids
-from app.services.email import build_invitation_accept_url, is_smtp_configured, send_team_invitation_email
+from app.services.email import build_invitation_accept_url, is_email_configured, send_team_invitation_email
 
 router = APIRouter()
 
@@ -79,7 +79,7 @@ async def invite_employee(
 
     invite_url = build_invitation_accept_url(token)
     email_sent = False
-    if is_smtp_configured():
+    if is_email_configured():
         account = await db.get(Account, context.account_id)
         email_sent = await send_team_invitation_email(
             to=payload.email,

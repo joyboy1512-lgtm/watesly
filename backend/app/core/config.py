@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
     smtp_timeout_seconds: int = 20
+    brevo_api_key: SecretStr | None = None
     login_max_attempts: int = 5
     login_lock_minutes: int = 15
     max_upload_bytes: int = 26214400

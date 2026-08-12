@@ -80,32 +80,40 @@ python scripts/restore_site_config_snapshot.py \
   data/production_snapshots/platform_site_config_2026-08-09.json
 ```
 
-## Email (SMTP) — team invitations
+## Email (SMTP / Brevo) — team invitations
 
-Watesly sends email when you **invite an employee** from **الموظفون**. Owner self-registration does not send email.
+Watesly sends email when you **invite an employee** from **الموظفون**.
 
-Production uses GoDaddy mailbox **`info@watesly.com`**. Settings live in `/opt/watesly/backend/.env` (never commit passwords to git).
+### Recommended: Brevo API (works on DigitalOcean — HTTPS, no blocked SMTP ports)
 
 ```env
 APP_PUBLIC_URL=https://www.watesly.com
-SMTP_HOST=smtpout.secureserver.net
-SMTP_PORT=587
-SMTP_USERNAME=info@watesly.com
+BREVO_API_KEY=xkeysib-...
 SMTP_FROM_EMAIL=info@watesly.com
 SMTP_FROM_NAME=Watesly
+```
+
+Create the key at [Brevo → SMTP & API → API Keys](https://app.brevo.com/settings/keys/api). Verify sender `info@watesly.com` under **Senders & Domains**.
+
+### Alternative: Brevo SMTP on port 2525
+
+```env
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=2525
+SMTP_USERNAME=your-login@smtp-brevo.com
+SMTP_PASSWORD=your-smtp-key
+SMTP_FROM_EMAIL=info@watesly.com
 SMTP_USE_TLS=true
 SMTP_USE_SSL=false
 ```
 
-If the GoDaddy plan is **Microsoft 365 via GoDaddy**, use `SMTP_HOST=smtp.office365.com` instead.
+GoDaddy direct SMTP (`smtpout.secureserver.net:587`) is blocked from DigitalOcean droplets.
 
-**DigitalOcean note:** Outbound SMTP ports **587/465** are often blocked on new droplets. If sends fail with timeout, open a DigitalOcean support ticket to enable SMTP for transactional mail, or use a relay on port **2525** (Brevo/Mailgun/SendGrid) with DNS verification for `watesly.com`.
-
-Test from the server:
+Test:
 
 ```bash
 cd /opt/watesly/backend
-docker compose -f compose.prod.yaml exec api python3 -c "from app.services.email import is_smtp_configured; print(is_smtp_configured())"
+docker compose -f compose.prod.yaml exec api python3 -c "from app.services.email import is_email_configured; print(is_email_configured())"
 ```
 
 
