@@ -48,9 +48,13 @@ export function isBranchAdminRole(role: MembershipRole): boolean {
   return role === "branch_admin";
 }
 
-export function inviteableRolesForActor(actorRole?: string | null): MembershipRole[] {
+export function inviteableRolesForActor(
+  actorRole?: string | null,
+  actorPermissions?: ReadonlySet<PermissionKey> | PermissionKey[]
+): MembershipRole[] {
+  const granted = actorPermissions instanceof Set ? actorPermissions : new Set(actorPermissions ?? []);
   if (actorRole === "owner" || actorRole === "admin") {
-    return ["admin", "branch_admin", "manager", "agent", "viewer"];
+    return ["branch_admin", "admin", "manager", "agent", "viewer"];
   }
   if (actorRole === "branch_admin") {
     return ["manager", "agent", "viewer"];
@@ -58,7 +62,22 @@ export function inviteableRolesForActor(actorRole?: string | null): MembershipRo
   if (actorRole === "manager") {
     return ["agent", "viewer"];
   }
+  if (granted.has("billing.manage")) {
+    return ["branch_admin", "admin", "manager", "agent", "viewer"];
+  }
   return [];
+}
+
+export function assignableRolesForEmployee(
+  actorRole?: string | null,
+  targetRole?: MembershipRole,
+  actorPermissions?: ReadonlySet<PermissionKey> | PermissionKey[]
+): MembershipRole[] {
+  const roles = inviteableRolesForActor(actorRole, actorPermissions);
+  if (targetRole && !roles.includes(targetRole) && targetRole !== "owner") {
+    return [targetRole, ...roles];
+  }
+  return roles;
 }
 
 export const ROLE_LABELS: Record<MembershipRole, string> = {
