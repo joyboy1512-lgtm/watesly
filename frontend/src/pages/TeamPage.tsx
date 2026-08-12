@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
   INVITABLE_ROLES,
+  assignableRolesForEmployee,
   inviteableRolesForActor,
   PERMISSION_GROUPS,
   ROLE_DESCRIPTIONS,
@@ -57,6 +58,7 @@ export default function TeamPage() {
   const [permissionDraft, setPermissionDraft] = useState<Set<PermissionKey>>(new Set());
   const [savingPermissions, setSavingPermissions] = useState(false);
   const [accessEditor, setAccessEditor] = useState<Employee | null>(null);
+  const [accessRoleDraft, setAccessRoleDraft] = useState<MembershipRole>("agent");
   const [accessOrgDraft, setAccessOrgDraft] = useState<Set<string>>(new Set());
   const [accessChannelDraft, setAccessChannelDraft] = useState<Set<string>>(new Set());
   const [savingAccess, setSavingAccess] = useState(false);
@@ -68,8 +70,8 @@ export default function TeamPage() {
   const actorPermissions = (profileQuery.data?.permissions ?? []) as PermissionKey[];
   const canManagePermissions = canAssignPermissions(actorPermissions);
   const inviteableRoles = useMemo(
-    () => inviteableRolesForActor(profileQuery.data?.role),
-    [profileQuery.data?.role]
+    () => inviteableRolesForActor(profileQuery.data?.role, actorPermissions),
+    [profileQuery.data?.role, actorPermissions]
   );
 
   const employeesQuery = useQuery({
@@ -293,6 +295,7 @@ export default function TeamPage() {
 
   function openAccessEditor(item: Employee) {
     setAccessEditor(item);
+    setAccessRoleDraft(item.role);
     setAccessOrgDraft(new Set(item.organization_ids));
     setAccessChannelDraft(new Set(item.channel_ids));
   }
@@ -331,6 +334,7 @@ export default function TeamPage() {
     setSavingAccess(true);
     try {
       await api.patch(`/team/employees/${accessEditor.membership_id}`, {
+        role: accessRoleDraft,
         organization_ids: [...accessOrgDraft],
         channel_ids: [...accessChannelDraft]
       });
@@ -406,6 +410,17 @@ export default function TeamPage() {
         <article className="admin-stat-card admin-stat-card-brand"><span>موظفو محادثات</span><strong>{stats.agents}</strong></article>
       </section>
 
+      {canManagePermissions && inviteableRoles.includes("branch_admin") && (
+        <section className="card team-role-guide-card">
+          <h2>أدمن الفرع</h2>
+          <p className="hint-text">
+            لتعيين موظف كـ <strong>أدمن فرع واحد فقط</strong>: اختر الدور «أدمن الفرع» ثم حدّد الفرع المطلوب فقط.
+            لن يرى الفوترة أو الأفرع الأخرى أو منصة المطور.
+          </p>
+        </section>
+      )}
+
+      {canManagePermissions && (
       <section className="card form-card admin-form-card">
         <div className="admin-form-card-header">
           <h2>إضافة موظف</h2>
@@ -496,6 +511,7 @@ export default function TeamPage() {
           </>
         )}
       </section>
+      )}
 
       <section className="card admin-table-card">
         <div className="admin-table-header">
@@ -577,7 +593,7 @@ export default function TeamPage() {
                       {canManagePermissions && item.role !== "owner" && (
                         <>
                           <button type="button" className="secondary-button" onClick={() => openAccessEditor(item)}>
-                            الوصول
+                            الدور والفرع
                           </button>
                           <button type="button" className="secondary-button" onClick={() => openPermissionEditor(item)}>
                             صلاحيات
@@ -603,24 +619,34 @@ export default function TeamPage() {
           <div className="modal-card admin-permissions-modal" onClick={(event) => event.stopPropagation()}>
             <header className="modal-header">
               <div>
-                <h2>الوصول للفروع وحسابات WhatsApp</h2>
-                <small>{accessEditor.full_name} · {formatRoleLabel(accessEditor.role)}</small>
+                <h2>الدور والوصول للفروع</h2>
+                <small>{accessEditor.full_name}</small>
               </div>
               <button type="button" className="secondary-button" onClick={() => setAccessEditor(null)}>إغلاق</button>
             </header>
-            <p className="hint-text">
-              حدّد الفروع التي يراها الموظف. يمكنك تقييد حسابات WhatsApp داخل الفرع — إذا لم تختر قناة، يرى كل قنوات الفرع.
-            </p>
+            <label className="field-label">
+              <span>دور الموظف</span>
+              <select
+                value={accessRoleDraft}
+                onChange={(e) => setAccessRoleDraft(e.target.value as MembershipRole)}
+                disabled={accessEditor.role === "owner"}
+              >
+                {assignableRolesForEmployee(profileQuery.data?.role, accessEditor.role, actorPermissions).map((item) => (
+                  <option key={item} value={item}>{formatRoleLabel(item)}</option>
+                ))}
+              </select>
+            </label>
+            <p className="hint-text">{ROLE_DESCRIPTIONS[accessRoleDraft]}</p>
             {renderOrgChannelPicker(
               accessOrgDraft,
               accessChannelDraft,
               toggleAccessOrg,
               toggleAccessChannel,
-              accessEditor.role
+              accessRoleDraft
             )}
             <div className="admin-actions" style={{ marginTop: 16 }}>
               <button type="button" disabled={savingAccess} onClick={() => void saveAccess()}>
-                {savingAccess ? "جاري الحفظ…" : "حفظ الوصول"}
+                {savingAccess ? "جاري الحفظ…" : "حفظ الدور والوصول"}
               </button>
             </div>
           </div>

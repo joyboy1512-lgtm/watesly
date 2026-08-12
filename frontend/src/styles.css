@@ -4992,6 +4992,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   margin-bottom: 12px;
 }
 .team-role-scope-warning strong { color: #175cd3; }
+.team-role-guide-card {
+  border: 1px solid #b2ddff;
+  background: linear-gradient(180deg, #eff8ff 0%, #ffffff 100%);
+}
+.team-role-guide-card h2 {
+  margin: 0 0 8px;
+  color: #175cd3;
+}
 .whatsapp-page-tabs {
   display: flex;
   flex-wrap: wrap;
