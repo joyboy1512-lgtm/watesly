@@ -12,14 +12,16 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **GitHub `main` is kept in sync with this branch** after each production deploy.
 
-### Production snapshot (2026-08-11)
+### Production snapshot (2026-08-12)
 
 | Item | Value |
 |------|-------|
-| Commit | `9813e7b` |
-| Alembic | `0052` |
-| Server backup | `/opt/watesly/backups/20260811-143300` |
-| Snapshot record | `deploy/production-snapshot-20260811.json` |
+| Commit | `c3cbc46` |
+| Alembic | `0055` |
+| Server backup | `/opt/watesly/backups/20260812-223130` |
+| Snapshot record | `deploy/production-snapshot-20260812.json` |
+
+Previous snapshot: `deploy/production-snapshot-20260811.json` (commit `9813e7b`, Alembic `0052`).
 
 ## Server
 
@@ -80,4 +82,4 @@ python scripts/restore_site_config_snapshot.py \
 
 ## Alembic migrations
 
-Migration chain ends at **`0052_catalog_meta_variants`**. Earlier migrations include campaign opt-out, branch admin role, catalog Meta sync fields, and billing changes.
+Migration chain ends at **`0055_contact_reachability`**. Recent migrations include branch admin enum fix (0054), catalog orders (0053), and contact reachability scoring (0055).

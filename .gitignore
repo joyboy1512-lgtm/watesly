@@ -23,6 +23,7 @@ frontend/dist/
 
 # Backups and local data
 backend/backups/
+backend/data/minio/
 backend/celerybeat-schedule
 *.dump
 *.tar.gz

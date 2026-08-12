@@ -1,0 +1,34 @@
+{
+  "created_at": "2026-08-12T22:31:40Z",
+  "domain": "watesly.com",
+  "server_host": "64.226.69.159",
+  "app_path": "/opt/watesly",
+  "git_branch": "cursor/production-unified-813f",
+  "git_commit": "c3cbc46",
+  "git_commit_message": "Add contact reachability scoring to improve campaign delivery targeting",
+  "alembic_head": "0055",
+  "backup_path": "/opt/watesly/backups/20260812-223130",
+  "backup_latest_symlink": "/opt/watesly/backups/latest",
+  "backup_contents": [
+    "postgres.dump",
+    "minio-data.tar.gz",
+    "redis.rdb",
+    "backend.env",
+    "Caddyfile",
+    "project-config.tar.gz",
+    "manifest.json",
+    "checksums.sha256"
+  ],
+  "backup_checksums": {
+    "postgres.dump": "0a586f59ab63e9ae973ce5df1b5732c9f493d9325810a4ab8da3d3ac8298b19f",
+    "minio-data.tar.gz": "f093d137eb67e6eac9a6c36c1943f1a70de30fe4c3faaa6d72dc65dbafd7179c",
+    "redis.rdb": "442ed03d56e71bc828bdf12bbdd08fc7a2690b8510fbd99ef815e3ac85ebb8bf"
+  },
+  "database_stats": {
+    "contacts": 14,
+    "campaigns": 13
+  },
+  "services_healthy": true,
+  "github_main_synced": true,
+  "notes": "Post-deploy audit: server code matches GitHub production-unified at c3cbc46; fresh full backup after reachability migration 0055."
+}
