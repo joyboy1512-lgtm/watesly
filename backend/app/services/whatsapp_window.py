@@ -93,9 +93,15 @@ async def campaign_audience_preflight(
     whatsapp_account_id: UUID | None = None,
     template_components: list | None = None,
     include_opt_out_option: bool = True,
+    exclude_unreachable: bool = True,
+    exclude_risky: bool = False,
 ) -> dict:
     from app.models.contact import Contact
     from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.contact_reachability import (
+        count_campaign_eligible,
+        summarize_reachability,
+    )
     from app.services.marketing_compliance import (
         template_has_opt_out_button,
         template_has_opt_out_footer,
@@ -131,6 +137,19 @@ async def campaign_audience_preflight(
     eligible_recipients = marketing_opt_in
 
     last_inbound = await get_last_inbound_by_contact(db, account_id=account_id, contact_ids=contact_ids)
+    reachability = await summarize_reachability(
+        db,
+        account_id=account_id,
+        contact_ids=contact_ids,
+        last_inbound=last_inbound,
+    )
+    eligible_recipients = await count_campaign_eligible(
+        db,
+        account_id=account_id,
+        contact_ids=contact_ids,
+        exclude_unreachable=exclude_unreachable,
+        exclude_risky=exclude_risky,
+    )
     never_messaged = 0
     window_open = 0
     window_closed = 0
@@ -147,6 +166,18 @@ async def campaign_audience_preflight(
 
     warnings: list[str] = []
     category = (template_category or "").lower()
+    if reachability["unreachable"]:
+        warnings.append(
+            f"{reachability['unreachable']} عميل غير قابل للوصول — سيتم استبعادهم تلقائياً (فشل سابق أو رقم غير صالح)."
+        )
+    if reachability["invalid_phone"]:
+        warnings.append(
+            f"{reachability['invalid_phone']} رقم غير صالح — سيتم استبعادهم من الإرسال."
+        )
+    if reachability["cold_audience"]:
+        warnings.append(
+            f"{reachability['cold_audience']} عميل بدون تفاعل سابق — احتمال فشل Meta أعلى."
+        )
     if category == "marketing" and never_messaged:
         warnings.append(
             f"{never_messaged} عميل لم يراسلوك من قبل — تأكد من موافقة التسويق (opt-in)."
@@ -199,6 +230,12 @@ async def campaign_audience_preflight(
         "marketing_opt_in": marketing_opt_in,
         "marketing_opt_out": marketing_opt_out,
         "eligible_recipients": eligible_recipients,
+        "reachable": reachability["reachable"],
+        "risky": reachability["risky"],
+        "unreachable": reachability["unreachable"],
+        "invalid_phone": reachability["invalid_phone"],
+        "cold_audience": reachability["cold_audience"],
+        "warm_audience": reachability["warm_audience"],
         "template_has_opt_out_button": has_opt_out_button,
         "template_has_opt_out_footer": has_opt_out_footer,
         "include_opt_out_option": include_opt_out_option,
@@ -215,6 +252,9 @@ async def campaign_audience_preflight(
             template_components=template_components,
             marketing_opt_out=marketing_opt_out,
             eligible_recipients=eligible_recipients,
+            unreachable=reachability["unreachable"],
+            invalid_phone=reachability["invalid_phone"],
+            cold_audience=reachability["cold_audience"],
             include_opt_out_option=include_opt_out_option,
             template_has_opt_out_button=has_opt_out_button,
         ),
@@ -236,6 +276,9 @@ def _build_preflight_checks(
     template_components: list | None = None,
     marketing_opt_out: int = 0,
     eligible_recipients: int | None = None,
+    unreachable: int = 0,
+    invalid_phone: int = 0,
+    cold_audience: int = 0,
     include_opt_out_option: bool = True,
     template_has_opt_out_button: bool = False,
 ) -> list[dict]:
@@ -247,8 +290,8 @@ def _build_preflight_checks(
         checks.append(
             {
                 "level": "error",
-                "code": "all_opted_out",
-                "message": "كل المستلمين اختاروا عدم الإزعاج — لا يمكن إطلاق الحملة.",
+                "code": "no_eligible_recipients",
+                "message": "لا يوجد مستلمون مؤهلون — تحقق من opt-out أو قابلية الوصول.",
             }
         )
     elif marketing_opt_out:
@@ -257,6 +300,22 @@ def _build_preflight_checks(
                 "level": "warning",
                 "code": "marketing_opt_out",
                 "message": f"{marketing_opt_out} عميل مستبعد لاختيار «عدم الإزعاج».",
+            }
+        )
+    if unreachable:
+        checks.append(
+            {
+                "level": "warning",
+                "code": "unreachable_contacts",
+                "message": f"{unreachable} عميل غير قابل للوصول — مستبعد تلقائياً.",
+            }
+        )
+    if invalid_phone:
+        checks.append(
+            {
+                "level": "error",
+                "code": "invalid_phone",
+                "message": f"{invalid_phone} رقم غير صالح — مستبعد من الإرسال.",
             }
         )
     if include_opt_out_option and category == "marketing" and not template_has_opt_out_button:

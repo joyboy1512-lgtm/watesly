@@ -150,6 +150,13 @@ async def _run_campaign(campaign_id: UUID, execution_token: UUID) -> dict:
                     if not to:
                         recipient.status = CampaignRecipientStatus.FAILED
                         recipient.error_message = "Invalid phone number"
+                        from app.services.contact_reachability import record_delivery_failure
+
+                        await record_delivery_failure(
+                            db,
+                            contact=contact,
+                            error_message=recipient.error_message,
+                        )
                         failed += 1
                     else:
                         response = await client.send_template(
@@ -200,6 +207,13 @@ async def _run_campaign(campaign_id: UUID, execution_token: UUID) -> dict:
                         continue
                     recipient.status = CampaignRecipientStatus.FAILED
                     recipient.error_message = str(exc)[:2000]
+                    from app.services.contact_reachability import record_delivery_failure
+
+                    await record_delivery_failure(
+                        db,
+                        contact=contact,
+                        error_message=recipient.error_message,
+                    )
                     failed += 1
                 finally:
                     recipient.sending_started_at = None

@@ -55,6 +55,11 @@ class ContactResponse(BaseModel):
     country_code: str | None
     gender: ContactGender = "unknown"
     marketing_opt_in: bool = True
+    reachability_status: str | None = None
+    reachability_reason: str | None = None
+    delivery_failure_count: int = 0
+    last_delivery_failure_at: datetime | None = None
+    last_inbound_at: datetime | None = None
     lifecycle_stage: str = "lead"
     utm_source: str | None = None
     utm_campaign: str | None = None

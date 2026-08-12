@@ -75,22 +75,38 @@ async def create_campaign(
     contact_ids = [r.contact_id for r in payload.recipients]
     if len(set(contact_ids)) != len(contact_ids):
         raise ValueError("DUPLICATE_RECIPIENT")
-    contact_query = select(Contact.id, Contact.marketing_opt_in).where(
+    contact_query = select(Contact).where(
         Contact.account_id == account_id,
         Contact.organization_id == payload.organization_id,
         Contact.deleted_at.is_(None),
         Contact.id.in_(contact_ids),
     )
     result = await db.execute(contact_query)
-    rows = {row[0]: row[1] for row in result.all()}
+    contact_rows = list(result.scalars().all())
+    rows = {contact.id: contact.marketing_opt_in for contact in contact_rows}
     if set(rows.keys()) != set(contact_ids):
         raise ValueError("INVALID_RECIPIENT")
+
+    from app.services.contact_reachability import is_contact_campaign_eligible
 
     recipients = payload.recipients
     if payload.exclude_marketing_opt_out:
         recipients = [item for item in recipients if rows.get(item.contact_id) is not False]
         if not recipients:
             raise ValueError("ALL_RECIPIENTS_OPTED_OUT")
+
+    contact_by_id = {contact.id: contact for contact in contact_rows}
+    recipients = [
+        item
+        for item in recipients
+        if is_contact_campaign_eligible(
+            contact_by_id[item.contact_id],
+            exclude_unreachable=payload.exclude_unreachable,
+            exclude_risky=payload.exclude_risky,
+        )
+    ]
+    if not recipients:
+        raise ValueError("ALL_RECIPIENTS_UNREACHABLE")
 
     campaign = Campaign(
         account_id=account_id,

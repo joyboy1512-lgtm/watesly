@@ -158,6 +158,7 @@ async def post_campaign(payload: CampaignCreateRequest, context: AuthContext = D
             raise HTTPException(status_code=403, detail=code) from exc
         messages = {
             "ALL_RECIPIENTS_OPTED_OUT": "كل العملاء المختارين رفضوا التسويق (opt-out).",
+            "ALL_RECIPIENTS_UNREACHABLE": "لا يوجد مستلمون قابلون للوصول — راجع فحص الجمهور قبل الإرسال.",
             "INVALID_RECIPIENT": "بعض العملاء غير صالحين لهذا الفرع — اختر الفرع والقناة ثم حمّل الجمهور من جديد.",
             "INVALID_WHATSAPP_ACCOUNT": "حساب WhatsApp غير صالح.",
             "INVALID_TEMPLATE": "القالب غير موجود.",
@@ -247,6 +248,8 @@ async def post_campaign_preflight(
         whatsapp_account_id=payload.whatsapp_account_id,
         template_components=template.components,
         include_opt_out_option=payload.include_opt_out_option,
+        exclude_unreachable=payload.exclude_unreachable,
+        exclude_risky=payload.exclude_risky,
     )
 
 

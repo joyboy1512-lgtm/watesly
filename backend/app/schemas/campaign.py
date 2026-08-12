@@ -20,6 +20,8 @@ class CampaignCreateRequest(BaseModel):
     recipients: list[CampaignRecipientInput] = Field(min_length=1, max_length=10000)
     include_opt_out_option: bool = True
     exclude_marketing_opt_out: bool = True
+    exclude_unreachable: bool = True
+    exclude_risky: bool = False
 
 
 class CampaignPreflightRequest(BaseModel):
@@ -27,6 +29,8 @@ class CampaignPreflightRequest(BaseModel):
     contact_ids: list[UUID] = Field(min_length=1, max_length=10000)
     whatsapp_account_id: UUID | None = None
     include_opt_out_option: bool = True
+    exclude_unreachable: bool = True
+    exclude_risky: bool = False
 
 
 class CampaignResponse(BaseModel):

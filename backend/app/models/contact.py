@@ -1,6 +1,8 @@
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +34,11 @@ class Contact(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     country_code: Mapped[str | None] = mapped_column(String(2))
     gender: Mapped[str] = mapped_column(String(10), default="unknown", server_default="unknown")
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    reachability_status: Mapped[str | None] = mapped_column(String(20), index=True)
+    reachability_reason: Mapped[str | None] = mapped_column(String(500))
+    delivery_failure_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_delivery_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_inbound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_campaign_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="SET NULL"), index=True
     )

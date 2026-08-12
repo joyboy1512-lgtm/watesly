@@ -18,6 +18,7 @@ from app.models.organization import Organization
 from app.models.segment import Segment
 from app.models.tag import Tag
 from app.schemas.contact import ContactCreateRequest
+from app.services.contact_reachability import ReachabilityStatus
 from app.services.gender_inference import infer_gender_with_llm_fallback
 
 CONTACT_EXPORT_HEADERS = [
@@ -269,6 +270,13 @@ def _apply_segment_filters(query, filters: dict):
         query = query.where(Contact.lifecycle_stage == str(lifecycle_stage))
     if filters.get("marketing_opt_in") is True:
         query = query.where(Contact.marketing_opt_in.is_(True))
+    if reachability := filters.get("reachability_status"):
+        query = query.where(Contact.reachability_status == str(reachability))
+    if filters.get("exclude_unreachable") is True:
+        query = query.where(
+            (Contact.reachability_status.is_(None))
+            | (Contact.reachability_status != ReachabilityStatus.UNREACHABLE)
+        )
     if gender := filters.get("gender"):
         query = query.where(Contact.gender == str(gender))
     if exclude_genders := filters.get("exclude_genders"):

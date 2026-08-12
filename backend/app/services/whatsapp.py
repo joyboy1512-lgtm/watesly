@@ -721,6 +721,23 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                                 detail = first.get("title") or first.get("message") or first.get("code")
                                 if detail:
                                     recipient.error_message = str(detail)[:2000]
+                            from app.models.contact import Contact
+                            from app.services.contact_reachability import record_delivery_failure
+
+                            contact = await db.get(Contact, recipient.contact_id)
+                            if contact is not None:
+                                await record_delivery_failure(
+                                    db,
+                                    contact=contact,
+                                    error_message=recipient.error_message,
+                                )
+                        elif status_value in {"delivered", "read"}:
+                            from app.models.contact import Contact
+                            from app.services.contact_reachability import record_delivery_success
+
+                            contact = await db.get(Contact, recipient.contact_id)
+                            if contact is not None:
+                                await record_delivery_success(db, contact=contact)
                     if message is not None or recipient is not None:
                         processed_count += 1
 

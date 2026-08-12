@@ -279,7 +279,13 @@ async def process_inbound_side_effects(
     created_conversation = ctx.created_conversation
 
     try:
-        from app.services.feature_flags import get_feature_flags
+        from app.services.contact_reachability import record_inbound_activity
+
+        await record_inbound_activity(db, contact=contact)
+    except Exception:
+        logger.exception("Reachability update failed for contact_id=%s", contact.id)
+
+    try:
         from app.services.sla_monitor import set_sla_deadline_on_inbound
 
         power_flags = await get_feature_flags(db, account_id=whatsapp_account.account_id)

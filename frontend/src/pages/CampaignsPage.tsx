@@ -56,6 +56,12 @@ type CampaignPreflight = {
   marketing_opt_in?: number;
   marketing_opt_out?: number;
   eligible_recipients?: number;
+  reachable?: number;
+  risky?: number;
+  unreachable?: number;
+  invalid_phone?: number;
+  cold_audience?: number;
+  warm_audience?: number;
   template_has_opt_out_button?: boolean;
   include_opt_out_option?: boolean;
   warnings: string[];
@@ -149,6 +155,8 @@ export default function CampaignsPage() {
   const [audienceLifecycle, setAudienceLifecycle] = useState("");
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
   const [includeOptOutOption, setIncludeOptOutOption] = useState(true);
+  const [excludeUnreachable, setExcludeUnreachable] = useState(true);
+  const [excludeRisky, setExcludeRisky] = useState(false);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
   const [linkCampaignId, setLinkCampaignId] = useState("");
@@ -328,11 +336,13 @@ export default function CampaignsPage() {
         template_id: templateId,
         contact_ids: selectedContacts,
         whatsapp_account_id: accountId || null,
-        include_opt_out_option: includeOptOutOption
+        include_opt_out_option: includeOptOutOption,
+        exclude_unreachable: excludeUnreachable,
+        exclude_risky: excludeRisky
       })
       .then((res) => setPreflight(res.data as CampaignPreflight))
       .catch(() => setPreflight(null));
-  }, [templateId, selectedContacts, accountId, includeOptOutOption]);
+  }, [templateId, selectedContacts, accountId, includeOptOutOption, excludeUnreachable, excludeRisky]);
 
   function onOrganizationChange(value: string) {
     setOrganizationId(value);
@@ -500,6 +510,8 @@ export default function CampaignsPage() {
         scheduled_at: null,
         include_opt_out_option: includeOptOutOption,
         exclude_marketing_opt_out: true,
+        exclude_unreachable: excludeUnreachable,
+        exclude_risky: excludeRisky,
         recipients: selectedContacts.map((contact_id) => ({
           contact_id,
           template_parameters: templateParameters
@@ -867,10 +879,12 @@ export default function CampaignsPage() {
                   <div className="campaign-preflight-stats">
                     <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
                     <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
+                    <div><strong>{preflight.reachable ?? 0}</strong><span>قابل للوصول</span></div>
+                    <div><strong>{preflight.unreachable ?? 0}</strong><span>غير قابل</span></div>
+                    <div><strong>{preflight.risky ?? 0}</strong><span>محفوف بالمخاطر</span></div>
                     <div><strong>{preflight.marketing_opt_out ?? 0}</strong><span>عدم الإزعاج</span></div>
-                    <div><strong>{preflight.never_messaged}</strong><span>بدون محادثة</span></div>
-                    <div><strong>{preflight.window_open}</strong><span>نافذة نشطة</span></div>
-                    <div><strong>{preflight.window_closed}</strong><span>نافذة منتهية</span></div>
+                    <div><strong>{preflight.cold_audience ?? preflight.never_messaged}</strong><span>بدون تفاعل</span></div>
+                    <div><strong>{preflight.warm_audience ?? preflight.window_open + preflight.window_closed}</strong><span>تفاعل سابق</span></div>
                   </div>
                   {preflight.warnings.map((warning) => (
                     <p key={warning} className="campaign-warning">⚠ {warning}</p>
@@ -905,6 +919,22 @@ export default function CampaignsPage() {
                   onChange={(event) => setIncludeOptOutOption(event.target.checked)}
                 />
                 <span>إظهار خيار «عدم الإزعاج» للعملاء واستبعاد من اختاروه تلقائياً</span>
+              </label>
+              <label className="field-label checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={excludeUnreachable}
+                  onChange={(event) => setExcludeUnreachable(event.target.checked)}
+                />
+                <span>استبعاد العملاء غير القابلين للوصول (فشل سابق أو رقم غير صالح)</span>
+              </label>
+              <label className="field-label checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={excludeRisky}
+                  onChange={(event) => setExcludeRisky(event.target.checked)}
+                />
+                <span>استبعاد العملاء بدون تفاعل سابق (محفوف بالمخاطر)</span>
               </label>
               <button
                 type="submit"
