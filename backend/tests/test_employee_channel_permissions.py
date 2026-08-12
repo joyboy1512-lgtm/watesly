@@ -38,6 +38,8 @@ def test_team_persists_channel_access() -> None:
     assert "InvitationChannelAccess" in team
     assert "INVALID_CHANNEL" in routes
     assert "permissions" in schema
+    assert "previous_role = membership.role" in team
+    assert "membership.custom_permissions = None" in team
 
 
 def test_channel_access_enforced_on_core_routes() -> None:

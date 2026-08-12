@@ -452,6 +452,7 @@ async def update_employee(
         if (owner_count or 0) <= 1:
             raise ValueError("LAST_OWNER")
 
+    previous_role = membership.role
     if payload.role is not None:
         membership.role = payload.role
     if payload.status is not None:
@@ -508,6 +509,8 @@ async def update_employee(
                 payload.permissions,
                 assignable=assignable,
             )
+    elif payload.role is not None and payload.role != previous_role:
+        membership.custom_permissions = None
 
     effective_role = payload.role or membership.role
     _validate_branch_scoped_assignment(effective_role, target_org_ids)

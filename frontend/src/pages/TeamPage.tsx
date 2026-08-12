@@ -333,14 +333,16 @@ export default function TeamPage() {
     }
     setSavingAccess(true);
     try {
+      const roleChanged = accessRoleDraft !== accessEditor.role;
       await api.patch(`/team/employees/${accessEditor.membership_id}`, {
         role: accessRoleDraft,
         organization_ids: [...accessOrgDraft],
-        channel_ids: [...accessChannelDraft]
+        channel_ids: [...accessChannelDraft],
+        ...(roleChanged ? { permissions: [] } : {})
       });
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       setAccessEditor(null);
-      toastStore.getState().show("تم تحديث الوصول للفروع وحسابات WhatsApp.", "success");
+      toastStore.getState().show("تم تحديث الدور والوصول للفروع.", "success");
     } catch (error: unknown) {
       const detail =
         typeof error === "object" &&
