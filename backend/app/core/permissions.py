@@ -53,8 +53,6 @@ ROLE_PERMISSIONS: dict[MembershipRole, frozenset[Permission]] = {
         Permission.CHANNELS_MANAGE,
         Permission.ORGANIZATIONS_MANAGE,
         Permission.TRUST_MANAGE,
-        Permission.OPERATIONS_VIEW,
-        Permission.OPERATIONS_MANAGE,
     }),
     MembershipRole.MANAGER: frozenset(_BRANCH_OPS),
     MembershipRole.AGENT: frozenset({

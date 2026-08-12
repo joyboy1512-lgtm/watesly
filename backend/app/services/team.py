@@ -129,6 +129,11 @@ def _assert_actor_can_manage_target(
         raise ValueError("OUT_OF_SCOPE")
 
 
+def _validate_branch_scoped_assignment(role: MembershipRole, organization_ids: set[UUID]) -> None:
+    if role in BRANCH_SCOPED_ROLES and not organization_ids:
+        raise ValueError("ORGANIZATION_REQUIRED")
+
+
 async def create_invitation(
     db: AsyncSession,
     *,
@@ -144,6 +149,7 @@ async def create_invitation(
         target_role=payload.role,
         target_org_ids=set(payload.organization_ids),
     )
+    _validate_branch_scoped_assignment(payload.role, set(payload.organization_ids))
     if actor_membership.role in BRANCH_SCOPED_ROLES and not set(payload.organization_ids).issubset(actor_org_ids):
         raise ValueError("OUT_OF_SCOPE")
     await _validate_new_member_capacity(db, account_id=account_id, email=payload.email)
@@ -241,6 +247,7 @@ async def create_employee(
         target_role=payload.role,
         target_org_ids=set(payload.organization_ids),
     )
+    _validate_branch_scoped_assignment(payload.role, set(payload.organization_ids))
     await _validate_new_member_capacity(db, account_id=account_id, email=payload.email)
     valid_ids = await _validate_organization_ids(
         db,
@@ -501,6 +508,9 @@ async def update_employee(
                 payload.permissions,
                 assignable=assignable,
             )
+
+    effective_role = payload.role or membership.role
+    _validate_branch_scoped_assignment(effective_role, target_org_ids)
 
     await db.commit()
     user = await db.get(User, membership.user_id)
