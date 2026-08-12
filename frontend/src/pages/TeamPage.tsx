@@ -414,7 +414,7 @@ export default function TeamPage() {
         <section className="card team-role-guide-card">
           <h2>صلاحيات غير كافية</h2>
           <p className="hint-text">
-            دورك الحالي لا يسمح بتعيين «أدmin الفرع». سجّل دخولك كـ <strong>مدير النظام</strong> أو <strong>مالك الحساب</strong>.
+            دورك الحالي لا يسمح بتعيين «أدمن الفرع». سجّل دخولك كـ <strong>مدير النظام</strong> أو <strong>مالك الحساب</strong>.
           </p>
         </section>
       )}
