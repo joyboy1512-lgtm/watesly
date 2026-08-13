@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0056_whatsapp_meta_health"
-down_revision = "0055_contact_reachability"
+down_revision = "0055"
 branch_labels = None
 depends_on = None
 
