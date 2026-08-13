@@ -95,6 +95,32 @@ SMTP_FROM_NAME=Watesly
 
 Create the key at [Brevo → SMTP & API → API Keys](https://app.brevo.com/settings/keys/api). Verify sender `info@watesly.com` under **Senders & Domains**.
 
+**Quick activate on server** (after you have the key):
+
+```bash
+ssh root@64.226.69.159
+/opt/watesly/deploy/activate-brevo.sh xkeysib-YOUR_KEY
+```
+
+### تفعيل Brevo — خطوات يدوية (مرة واحدة)
+
+الكود على السيرفر جاهز، لكن `BREVO_API_KEY` فارغ حالياً. GoDaddy SMTP محجوب من DigitalOcean؛ Brevo API يعمل عبر HTTPS.
+
+1. **فعّل MFA لبريد info@watesly.com** (Microsoft 365 عبر GoDaddy):
+   - افتح https://email.secureserver.net
+   - سجّل دخول `info@watesly.com`
+   - أكمل إعداد Microsoft Authenticator على جوالك (مطلوب مرة واحدة)
+2. **ادخل Brevo**: https://login.brevo.com بحساب `admin@watesly.com` (أو أنشئ حساباً جديداً وتحقق من البريد)
+3. **أنشئ API Key**: Settings → SMTP & API → API Keys → `Watesly Production`
+4. **تحقق من المرسل**: Senders & Domains → `info@watesly.com` (أو domain `watesly.com` + سجلات DNS)
+5. **على السيرفر**:
+   ```bash
+   /opt/watesly/deploy/activate-brevo.sh xkeysib-...
+   ```
+6. **اختبر**: من لوحة Watesly → **الموظفون** → دعوة موظف
+
+**الحالة الحالية على الإنتاج:** `BREVO_API_KEY` فارغ → `is_brevo_configured()=False` → الدعوات لا تُرسل فعلياً رغم ظهور واجهة الدعوة.
+
 ### Alternative: Brevo SMTP on port 2525
 
 ```env
