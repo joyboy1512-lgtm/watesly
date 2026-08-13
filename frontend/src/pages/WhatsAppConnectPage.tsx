@@ -17,12 +17,15 @@ import {
   formatCommerceSummary,
   formatConnectionMethod,
   formatHealthSynced,
+  formatMetaHealthDetails,
+  formatMetaHealthLabel,
   formatMessagingLimit,
   formatQualityRating,
   formatWhatsAppStatus,
+  getMetaHealthSeverity,
+  metaHealthBadgeClass,
   qualityBadgeClass,
   truncateMetaId,
-  whatsappStatusBadgeClass,
   type WhatsAppAccountRow
 } from "../lib/whatsappHelpers";
 
@@ -156,6 +159,8 @@ export default function WhatsAppConnectPage() {
       linked: linked.length,
       active: linked.filter((item) => item.status === "active").length,
       disconnected: linked.filter((item) => item.status === "disconnected").length,
+      suspended: linked.filter((item) => item.status === "suspended").length,
+      metaIssues: linked.filter((item) => getMetaHealthSeverity(item) !== "ok").length,
       embedded: linked.filter((item) => item.connection_method === "embedded").length
     };
   }, [accounts.data, whatsappChannels.length]);
@@ -682,7 +687,7 @@ export default function WhatsAppConnectPage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">WhatsApp Business API</span>
           <h1>WhatsApp Business</h1>
-          <p>جدول موحّد لكل قناة وحساب مربوط — الجودة، الحدود، Token، Commerce، والإجراءات في صف واحد.</p>
+          <p>جدول موحّد لكل قناة وحساب مربوط — حالة Meta مباشرة، الجودة، Token، Commerce، والإجراءات.</p>
         </div>
         <Link to="/channels" className="secondary-button">إدارة القنوات ←</Link>
       </header>
@@ -692,6 +697,8 @@ export default function WhatsAppConnectPage() {
         <article className="admin-stat-card admin-stat-card-brand"><span>حسابات مربوطة</span><strong>{stats.linked}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>متصل</span><strong>{stats.active}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>Embedded</span><strong>{stats.embedded}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>تنبيه Meta</span><strong>{stats.metaIssues}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>موقوف</span><strong>{stats.suspended}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>غير متصل</span><strong>{stats.disconnected}</strong></article>
       </section>
 
@@ -712,7 +719,7 @@ export default function WhatsAppConnectPage() {
           <div className="admin-table-header">
             <div>
               <h2>جدول حسابات WhatsApp</h2>
-              <small>{filteredRows.length} صف · قناة أو حساب</small>
+              <small>{filteredRows.length} صف · تُزامَن حالة Meta تلقائياً عند فتح الصفحة (كل 10 دقائق)</small>
             </div>
           </div>
 
@@ -725,6 +732,7 @@ export default function WhatsAppConnectPage() {
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">كل الحالات</option>
               <option value="active">متصل</option>
+              <option value="suspended">موقوف / Meta</option>
               <option value="disconnected">غير متصل</option>
               <option value="pending">قيد الربط</option>
               <option value="unlinked">غير مربوط</option>
@@ -743,7 +751,7 @@ export default function WhatsAppConnectPage() {
                   <th>Token</th>
                   <th>آخر مزامنة</th>
                   <th>الربط</th>
-                  <th>الحالة</th>
+                  <th>حالة Meta (مباشرة)</th>
                   <th>إجراءات</th>
                 </tr>
               </thead>
@@ -817,9 +825,13 @@ export default function WhatsAppConnectPage() {
                           </span>
                         </td>
                         <td>
-                          <span className={whatsappStatusBadgeClass(account.status)}>
-                            {formatWhatsAppStatus(account.status)}
-                          </span>
+                          <div className="admin-cell-stack">
+                            <span className={metaHealthBadgeClass(account)}>
+                              {formatMetaHealthLabel(account)}
+                            </span>
+                            <small className="meta-health-details">{formatMetaHealthDetails(account)}</small>
+                            <small className="meta-health-details">Watesly: {formatWhatsAppStatus(account.status)}</small>
+                          </div>
                         </td>
                         <td>
                           <div className="admin-actions whatsapp-row-actions">

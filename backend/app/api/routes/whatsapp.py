@@ -41,7 +41,11 @@ from app.services.whatsapp import (
     send_template_message,
     update_whatsapp_access_token,
 )
-from app.services.whatsapp_health import inspect_whatsapp_access_token, sync_whatsapp_account_health
+from app.services.whatsapp_health import (
+    inspect_whatsapp_access_token,
+    refresh_stale_whatsapp_health,
+    sync_whatsapp_account_health,
+)
 from app.services.catalog_commerce import (
     commerce_readiness,
     update_whatsapp_commerce_settings,
@@ -126,6 +130,8 @@ async def get_whatsapp_accounts(
             row for row in accounts
             if row[0].channel_id in allowed
         ]
+    linked_accounts = [item for item, _, _ in accounts]
+    await refresh_stale_whatsapp_health(db, whatsapp_accounts=linked_accounts)
     return [
         WhatsAppAccountResponse(**_account_to_response(item, channel_name=channel_name, organization_name=organization_name))
         for item, channel_name, organization_name in accounts

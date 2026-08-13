@@ -18,6 +18,11 @@ export type WhatsAppAccountRow = {
   messaging_limit_tier?: string | null;
   messaging_limit?: number | null;
   health_synced_at?: string | null;
+  meta_phone_status?: string | null;
+  meta_name_status?: string | null;
+  meta_can_send_message?: string | null;
+  meta_account_review_status?: string | null;
+  meta_status_message?: string | null;
   meta_catalog_id?: string | null;
   commerce_enabled?: boolean;
   catalog_synced_at?: string | null;
@@ -57,6 +62,48 @@ export function formatMessagingLimit(account: WhatsAppAccountRow): string {
 export function formatHealthSynced(value: string | null | undefined): string {
   if (!value) return "لم تُزامَن";
   return formatAppTime(value);
+}
+
+export type MetaHealthSeverity = "ok" | "warning" | "critical";
+
+export function getMetaHealthSeverity(account: WhatsAppAccountRow): MetaHealthSeverity {
+  const canSend = (account.meta_can_send_message ?? "").toUpperCase();
+  const nameStatus = (account.meta_name_status ?? "").toUpperCase();
+  const phoneStatus = (account.meta_phone_status ?? "").toUpperCase();
+  if (canSend === "BLOCKED" || phoneStatus === "DISCONNECTED" || phoneStatus === "BANNED") {
+    return "critical";
+  }
+  if (canSend === "LIMITED" || nameStatus === "DECLINED" || nameStatus === "PENDING") {
+    return "warning";
+  }
+  if (!account.health_synced_at) return "warning";
+  return "ok";
+}
+
+export function formatMetaHealthLabel(account: WhatsAppAccountRow): string {
+  if (account.meta_status_message?.trim()) return account.meta_status_message;
+  const canSend = (account.meta_can_send_message ?? "").toUpperCase();
+  if (canSend === "AVAILABLE") return "متاح — Meta";
+  if (canSend === "LIMITED") return "مقيّد — Meta";
+  if (canSend === "BLOCKED") return "معطّل — Meta";
+  return "غير مُزامَن";
+}
+
+export function metaHealthBadgeClass(account: WhatsAppAccountRow): string {
+  const severity = getMetaHealthSeverity(account);
+  if (severity === "critical") return "meta-health-badge meta-health-critical";
+  if (severity === "warning") return "meta-health-badge meta-health-warning";
+  return "meta-health-badge meta-health-ok";
+}
+
+export function formatMetaHealthDetails(account: WhatsAppAccountRow): string {
+  const parts = [
+    account.meta_can_send_message ? `إرسال: ${account.meta_can_send_message}` : null,
+    account.meta_phone_status ? `رقم: ${account.meta_phone_status}` : null,
+    account.meta_name_status ? `اسم: ${account.meta_name_status}` : null,
+    account.meta_account_review_status ? `WABA: ${account.meta_account_review_status}` : null
+  ].filter(Boolean);
+  return parts.join(" · ") || "—";
 }
 
 export function formatCommerceSummary(account: WhatsAppAccountRow): string {

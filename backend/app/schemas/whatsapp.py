@@ -64,6 +64,11 @@ class WhatsAppAccountResponse(BaseModel):
     messaging_limit_tier: str | None = None
     messaging_limit: int | None = None
     health_synced_at: datetime | None = None
+    meta_phone_status: str | None = None
+    meta_name_status: str | None = None
+    meta_can_send_message: str | None = None
+    meta_account_review_status: str | None = None
+    meta_status_message: str | None = None
     meta_catalog_id: str | None = None
     commerce_enabled: bool = False
     catalog_synced_at: datetime | None = None

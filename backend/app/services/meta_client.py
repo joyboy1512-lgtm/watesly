@@ -79,7 +79,10 @@ class MetaWhatsAppClient:
         url = f"{base}/{version}/{self.phone_number_id}"
         headers = {"Authorization": f"Bearer {self.access_token}"}
         params = {
-            "fields": "display_phone_number,verified_name,quality_rating,messaging_limit_tier,status",
+            "fields": (
+                "display_phone_number,verified_name,quality_rating,messaging_limit_tier,status,"
+                "name_status,new_name_status,code_verification_status"
+            ),
         }
         client = self._get_client()
         response = await client.get(url, headers=headers, params=params)
@@ -91,6 +94,29 @@ class MetaWhatsAppClient:
             error = data.get("error", {}) if isinstance(data, dict) else {}
             raise MetaAPIError(
                 error.get("message", "Unable to fetch phone number health"),
+                status_code=response.status_code,
+                response_data=data,
+            )
+        return data if isinstance(data, dict) else {}
+
+    async def get_waba_health(self, *, waba_id: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {
+            "fields": "id,name,account_review_status,health_status",
+        }
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"raw": response.text}
+        if response.is_error:
+            error = data.get("error", {}) if isinstance(data, dict) else {}
+            raise MetaAPIError(
+                error.get("message", "Unable to fetch WABA health"),
                 status_code=response.status_code,
                 response_data=data,
             )

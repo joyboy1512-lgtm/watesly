@@ -2,7 +2,7 @@ from enum import StrEnum
 from uuid import UUID
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -61,6 +61,11 @@ class WhatsAppAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     messaging_limit_tier: Mapped[str | None] = mapped_column(String(30))
     messaging_limit: Mapped[int | None] = mapped_column(Integer)
     health_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    meta_phone_status: Mapped[str | None] = mapped_column(String(30))
+    meta_name_status: Mapped[str | None] = mapped_column(String(30))
+    meta_can_send_message: Mapped[str | None] = mapped_column(String(30))
+    meta_account_review_status: Mapped[str | None] = mapped_column(String(30))
+    meta_status_message: Mapped[str | None] = mapped_column(Text)
     meta_catalog_id: Mapped[str | None] = mapped_column(String(80))
     commerce_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     catalog_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
