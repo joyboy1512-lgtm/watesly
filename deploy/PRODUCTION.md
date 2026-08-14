@@ -9,19 +9,21 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 - Template media download fix (`cursor/template-media-download-fix-813f`)
 - External site Arabic content + clients section (`cursor/external-site-ar-813f`)
 - Catalog Meta wizard, variants, sync status, create UI polish (PRs #61–#68)
+- Contact reachability + campaign role permissions (PRs #80–#81)
+- Brevo email transport + Meta live health sync (PRs #82–#83)
 
 **GitHub `main` is kept in sync with this branch** after each production deploy.
 
-### Production snapshot (2026-08-12)
+### Production snapshot (2026-08-14)
 
 | Item | Value |
 |------|-------|
-| Commit | `c3cbc46` |
-| Alembic | `0055` |
-| Server backup | `/opt/watesly/backups/20260812-223130` |
-| Snapshot record | `deploy/production-snapshot-20260812.json` |
+| Commit | `41c322e` |
+| Alembic | `0056_whatsapp_meta_health` |
+| Server backup | see `/opt/watesly/backups/latest` after sync |
+| Snapshot record | `deploy/production-snapshot-20260814.json` |
 
-Previous snapshot: `deploy/production-snapshot-20260811.json` (commit `9813e7b`, Alembic `0052`).
+Previous snapshot: `deploy/production-snapshot-20260812.json` (commit `c3cbc46`, Alembic `0055`).
 
 ## Server
 
