@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, Link } from "react-router-dom";
+import { NavLink, Outlet, Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { authStore } from "../stores/auth";
 import { themeStore } from "../stores/theme";
@@ -16,6 +16,8 @@ import { formatRoleLabel, type MembershipRole } from "../lib/teamHelpers";
 export default function AppLayout() {
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const location = useLocation();
+  const isInboxRoute = location.pathname.startsWith("/inbox");
   const [mobileOpen, setMobileOpen] = useState(false);
   const profile = useCurrentUser();
   const displayName = profile.data?.full_name ?? "Watesly User";
@@ -135,7 +137,7 @@ export default function AppLayout() {
 
       {mobileOpen && <button className="sidebar-overlay" onClick={() => setMobileOpen(false)} />}
 
-      <section className="app-content">
+      <section className={`app-content${isInboxRoute ? " app-content--inbox" : ""}`}>
         <header className="topbar">
           <div className="topbar-search">
             <Icon name="search" />
