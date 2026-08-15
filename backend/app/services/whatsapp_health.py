@@ -43,6 +43,26 @@ def format_tier_hint(tier: str | None, limit: int | None) -> str:
     return "Tier 1: حتى 1,000 محادثة فريدة/24س (افتراضي قبل المزامنة)"
 
 
+def resolve_effective_name_status(
+    name_status: str | None,
+    new_name_status: str | None,
+) -> str | None:
+    """Meta may keep name_status=DECLINED while new_name_status=APPROVED after a rename."""
+    old = str(name_status).upper() if name_status else None
+    new = str(new_name_status).upper() if new_name_status else None
+    if new == "APPROVED":
+        return "APPROVED"
+    if old == "APPROVED":
+        return "APPROVED"
+    if new == "PENDING":
+        return "PENDING"
+    if old == "PENDING":
+        return "PENDING"
+    if old == "DECLINED":
+        return "DECLINED"
+    return new or old
+
+
 def parse_phone_health(data: dict) -> dict:
     tier = data.get("messaging_limit_tier") or data.get("messaging_limit")
     tier_str = str(tier).upper() if tier else None
@@ -52,6 +72,8 @@ def parse_phone_health(data: dict) -> dict:
     limit = tier_to_daily_limit(tier_str) if tier_str else None
     phone_status = data.get("status")
     name_status = data.get("name_status")
+    new_name_status = data.get("new_name_status")
+    effective_name_status = resolve_effective_name_status(name_status, new_name_status)
     return {
         "display_phone_number": data.get("display_phone_number"),
         "verified_name": data.get("verified_name"),
@@ -59,7 +81,8 @@ def parse_phone_health(data: dict) -> dict:
         "messaging_limit_tier": tier_str,
         "messaging_limit": limit,
         "meta_phone_status": str(phone_status).upper() if phone_status else None,
-        "meta_name_status": str(name_status).upper() if name_status else None,
+        "meta_name_status": effective_name_status,
+        "meta_new_name_status": str(new_name_status).upper() if new_name_status else None,
     }
 
 

@@ -4,6 +4,7 @@ from app.services.whatsapp_health import (
     derive_account_status_from_meta,
     parse_phone_health,
     parse_waba_health,
+    resolve_effective_name_status,
     tier_to_daily_limit,
     format_tier_hint,
 )
@@ -36,6 +37,27 @@ def test_parse_waba_health() -> None:
     assert parsed["meta_can_send_message"] == "AVAILABLE"
 
 
+def test_resolve_effective_name_status_approved_rename() -> None:
+    assert resolve_effective_name_status("DECLINED", "APPROVED") == "APPROVED"
+    assert resolve_effective_name_status("APPROVED", None) == "APPROVED"
+    assert resolve_effective_name_status("DECLINED", "PENDING") == "PENDING"
+    assert resolve_effective_name_status("DECLINED", None) == "DECLINED"
+
+
+def test_parse_phone_health_uses_new_name_status() -> None:
+    parsed = parse_phone_health({
+        "display_phone_number": "+96560460048",
+        "verified_name": "Olive",
+        "quality_rating": "GREEN",
+        "messaging_limit_tier": "TIER_1K",
+        "status": "CONNECTED",
+        "name_status": "DECLINED",
+        "new_name_status": "APPROVED",
+    })
+    assert parsed["meta_name_status"] == "APPROVED"
+    assert parsed["meta_new_name_status"] == "APPROVED"
+
+
 def test_build_meta_status_message_declined_name() -> None:
     message = build_meta_status_message(
         meta_phone_status="CONNECTED",
@@ -62,6 +84,15 @@ def test_derive_account_status_declined_name() -> None:
         meta_name_status="DECLINED",
     )
     assert status == WhatsAppAccountStatus.SUSPENDED
+
+
+def test_derive_account_status_approved_after_rename() -> None:
+    status = derive_account_status_from_meta(
+        meta_phone_status="CONNECTED",
+        meta_can_send_message="AVAILABLE",
+        meta_name_status="APPROVED",
+    )
+    assert status == WhatsAppAccountStatus.ACTIVE
 
 
 def test_tier_to_daily_limit() -> None:
