@@ -1,0 +1,18 @@
+{
+  "created_at": "2026-08-16T00:05:00Z",
+  "domain": "watesly.com",
+  "server_host": "64.226.69.159",
+  "app_path": "/opt/watesly",
+  "git_branch": "cursor/production-unified-813f",
+  "git_commit": "8007390",
+  "git_commit_message": "fix(inbox): mobile Safari layout without affecting desktop",
+  "previous_commit": "04ad119",
+  "alembic_head": "0056_whatsapp_meta_health",
+  "frontend_version": "0.32.5",
+  "github_main_synced": true,
+  "deploy_includes": [
+    "PR #84 — Meta approved display name health (new_name_status)",
+    "PR #85 — Inbox mobile Safari layout (max-width 900px only)"
+  ],
+  "notes": "Unified GitHub main + production-unified from server baseline 04ad119, then deployed inbox mobile + Meta name fixes."
+}

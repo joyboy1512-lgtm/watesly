@@ -14,6 +14,17 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **GitHub `main` is kept in sync with this branch** after each production deploy.
 
+### Production snapshot (2026-08-16)
+
+| Item | Value |
+|------|-------|
+| Commit | `8007390` |
+| Alembic | `0056_whatsapp_meta_health` |
+| Server backup | run before deploy — see `/opt/watesly/backups/latest` |
+| Snapshot record | `deploy/production-snapshot-20260816.json` |
+
+Previous snapshot: `deploy/production-snapshot-20260814.json` (commit `04ad119`, Alembic `0056`).
+
 ### Production snapshot (2026-08-14)
 
 | Item | Value |
