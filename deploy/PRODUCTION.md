@@ -14,11 +14,24 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **GitHub `main` is kept in sync with this branch** after each production deploy.
 
+### Production snapshot (2026-08-20) — current baseline
+
+| Item | Value |
+|------|-------|
+| Commit | `c550ca1` |
+| Alembic | `0056_whatsapp_meta_health` |
+| Frontend | `0.32.5` |
+| Backend | `0.28.0` |
+| Live assets | `index-CNNlhcHB.js`, `index-C9piTbv5.css` |
+| Snapshot record | `deploy/production-snapshot-20260820.json` |
+
+**Status:** GitHub `main` + `cursor/production-unified-813f` + live site (`watesly.com`) are aligned at **`c550ca1`**. No code drift detected.
+
 ### Production snapshot (2026-08-16)
 
 | Item | Value |
 |------|-------|
-| Commit | `8007390` |
+| Commit | `c550ca1` |
 | Alembic | `0056_whatsapp_meta_health` |
 | Server backup | run before deploy — see `/opt/watesly/backups/latest` |
 | Snapshot record | `deploy/production-snapshot-20260816.json` |

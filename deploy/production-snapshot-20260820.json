@@ -1,0 +1,23 @@
+{
+  "created_at": "2026-08-20T23:50:00Z",
+  "domain": "watesly.com",
+  "server_host": "64.226.69.159",
+  "app_path": "/opt/watesly",
+  "git_branch": "cursor/production-unified-813f",
+  "git_commit": "c550ca1",
+  "git_commit_message": "docs(deploy): production snapshot 2026-08-16 — unify from server 04ad119 + deploy mobile fixes",
+  "alembic_head": "0056_whatsapp_meta_health",
+  "frontend_version": "0.32.5",
+  "backend_version": "0.28.0",
+  "github_main_synced": true,
+  "github_production_unified_synced": true,
+  "live_verification": {
+    "api_health": "https://api.watesly.com/api/v1/health/ready",
+    "frontend_assets": [
+      "index-CNNlhcHB.js",
+      "index-C9piTbv5.css"
+    ],
+    "viewport_fit_cover": true
+  },
+  "notes": "Verified live production assets match commit c550ca1 build. GitHub main and cursor/production-unified-813f are identical. No deploy required — baseline for upcoming UX notes."
+}
