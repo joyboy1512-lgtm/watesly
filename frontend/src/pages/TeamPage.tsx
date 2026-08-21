@@ -274,8 +274,8 @@ export default function TeamPage() {
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       toastStore.getState().show(
         emailSent
-          ? `تم إرسال الدعوة إلى ${email.trim().toLowerCase()}.`
-          : "تم إنشاء الدعوة. انسخ الرابط — لم يُرسل بريد (SMTP غير مفعّل أو فشل الإرسال).",
+          ? `تم إرسال الدعوة إلى ${email.trim().toLowerCase()}. تحقق من الوارد ومجلد Spam/Junk.`
+          : "تم إنشاء الدعوة. انسخ الرابط الاحتياطي — لم يُرسل بريد (Brevo/SMTP).",
         "success"
       );
     } catch (error) {
@@ -535,20 +535,37 @@ export default function TeamPage() {
           : renderAddEmployeeForm(invite, "إرسال الدعوة", inviting, false)}
 
         {addMode === "invite" && pendingInvite && (
-          <div className="admin-invite-link-box team-invite-box">
-            <strong>
-              {pendingInvite.emailSent ? `تم إرسال الدعوة إلى ${pendingInvite.email}` : `رابط احتياطي — ${pendingInvite.email}`}
-            </strong>
-            <small>
-              {pendingInvite.emailSent
-                ? `صالح لمدة ${pendingInvite.expiresInHours} ساعة. إذا لم يصل البريد، انسخ الرابط أدناه.`
-                : `SMTP غير مفعّل أو فشل الإرسال — انسخ الرابط وأرسله يدوياً (صالح ${pendingInvite.expiresInHours} ساعة).`}
-            </small>
-            <input value={pendingInvite.url} readOnly dir="ltr" />
-            <div className="team-row-actions">
-              <button type="button" className="secondary-button compact" onClick={copyInviteLink}>نسخ الرابط</button>
-              <a className="secondary-button compact" href={pendingInvite.url} target="_blank" rel="noreferrer">معاينة</a>
-            </div>
+          <div className={`admin-invite-link-box team-invite-box${pendingInvite.emailSent ? " team-invite-box-sent" : " team-invite-box-fallback"}`}>
+            {pendingInvite.emailSent ? (
+              <>
+                <strong>تم إرسال الدعوة إلى {pendingInvite.email}</strong>
+                <p className="team-invite-email-hint">
+                  وُرسلت الرسالة من النظام. تحقق من <strong>الوارد</strong> و<strong>البريد غير المرغوب (Spam/Junk)</strong>.
+                  قد تتأخر دقيقة أو دقيقتين. المرسل: <span dir="ltr">info@watesly.com</span>
+                </p>
+                <details className="team-invite-backup">
+                  <summary>رابط احتياطي — إذا لم يصل البريد</summary>
+                  <small>صالح لمدة {pendingInvite.expiresInHours} ساعة. انسخ الرابط وأرسله عبر WhatsApp إن لزم.</small>
+                  <input value={pendingInvite.url} readOnly dir="ltr" />
+                  <div className="team-row-actions">
+                    <button type="button" className="secondary-button compact" onClick={copyInviteLink}>نسخ الرابط</button>
+                    <a className="secondary-button compact" href={pendingInvite.url} target="_blank" rel="noreferrer">معاينة</a>
+                  </div>
+                </details>
+              </>
+            ) : (
+              <>
+                <strong>لم يُرسل البريد — استخدم الرابط الاحتياطي</strong>
+                <small>
+                  Brevo/SMTP غير مفعّل أو فشل الإرسال. انسخ الرابط وأرسله يدوياً (WhatsApp أو أي قناة). صالح {pendingInvite.expiresInHours} ساعة.
+                </small>
+                <input value={pendingInvite.url} readOnly dir="ltr" />
+                <div className="team-row-actions">
+                  <button type="button" className="secondary-button compact" onClick={copyInviteLink}>نسخ الرابط</button>
+                  <a className="secondary-button compact" href={pendingInvite.url} target="_blank" rel="noreferrer">معاينة</a>
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>
