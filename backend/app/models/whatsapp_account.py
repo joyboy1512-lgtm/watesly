@@ -69,3 +69,8 @@ class WhatsAppAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     meta_catalog_id: Mapped[str | None] = mapped_column(String(80))
     commerce_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     catalog_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    profile_image_url: Mapped[str | None] = mapped_column(String(2048))
+    profile_image_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    catalog_cover_image_url: Mapped[str | None] = mapped_column(String(2048))
+    meta_catalog_product_set_id: Mapped[str | None] = mapped_column(String(80))
+    catalog_cover_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

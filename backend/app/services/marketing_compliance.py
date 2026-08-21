@@ -17,7 +17,7 @@ MARKETING_OPT_OUT_FOOTER = "أرسل «إيقاف» لإلغاء الاشترا�
 MARKETING_INTERESTED_BUTTON_ID = "watesly_interested"
 MARKETING_INTERESTED_BUTTON_TEXT = "مهتم"
 MARKETING_INTERESTED_WELCOME = (
-    "أهلاً بك! يسعدنا اهتمامك — تصفّح كتالogg منتجاتنا واختر ما يناسبك. "
+    "أهلاً بك! يسعدنا اهتمامك — تصفّح كتالوج منتجاتنا واختر ما يناسبك. "
     "عند إتمام الطلب سنتواصل معك لتأكيد التفاصيل."
 )
 
