@@ -1,4 +1,5 @@
 from typing import Any
+import json
 
 import httpx
 
@@ -529,7 +530,7 @@ class MetaWhatsAppClient:
             )
         return response.content, mime_type, None
 
-    async def upload_template_sample(
+    async def upload_resumable_file(
         self,
         *,
         file_name: str,
@@ -557,7 +558,7 @@ class MetaWhatsAppClient:
         )
         session_data = await self._parse_graph_response(
             session_response,
-            default_message="Unable to start Meta template media upload",
+            default_message="Unable to start Meta resumable upload",
         )
         session_id = session_data.get("id")
         if not session_id:
@@ -579,16 +580,190 @@ class MetaWhatsAppClient:
         )
         handle_data = await self._parse_graph_response(
             upload_response,
-            default_message="Unable to upload template media sample to Meta",
+            default_message="Unable to upload binary data to Meta",
         )
         handle = handle_data.get("h")
         if not handle:
             raise MetaAPIError(
-                "Meta template media handle missing",
+                "Meta upload handle missing",
                 status_code=502,
                 response_data=handle_data,
             )
         return str(handle)
+
+    async def upload_template_sample(
+        self,
+        *,
+        file_name: str,
+        file_bytes: bytes,
+        mime_type: str,
+    ) -> str:
+        return await self.upload_resumable_file(
+            file_name=file_name,
+            file_bytes=file_bytes,
+            mime_type=mime_type,
+        )
+
+    async def get_whatsapp_business_profile(self) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{self.phone_number_id}/whatsapp_business_profile"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {
+            "fields": "about,address,description,email,profile_picture_url,websites,vertical",
+        }
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        data = await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch WhatsApp business profile",
+        )
+        rows = data.get("data", [])
+        if isinstance(rows, list) and rows:
+            first = rows[0]
+            return first if isinstance(first, dict) else {}
+        return data if isinstance(data, dict) else {}
+
+    async def update_whatsapp_business_profile(
+        self,
+        *,
+        profile_picture_handle: str | None = None,
+    ) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{self.phone_number_id}/whatsapp_business_profile"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload: dict[str, str] = {"messaging_product": "whatsapp"}
+        if profile_picture_handle:
+            payload["profile_picture_handle"] = profile_picture_handle
+        client = self._get_client()
+        response = await client.post(url, headers=headers, json=payload)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to update WhatsApp business profile",
+        )
+
+    async def list_catalog_product_sets(self, *, catalog_id: str) -> list[dict]:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{catalog_id}/product_sets"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {"fields": "id,name,filter", "limit": 50}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        data = await self._parse_graph_response(
+            response,
+            default_message="Unable to list Meta catalog product sets",
+        )
+        rows = data.get("data", [])
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def get_product_set(self, *, product_set_id: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{product_set_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {"fields": "id,name,latest_metadata,live_metadata"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch Meta catalog product set",
+        )
+
+    async def update_product_set_metadata(
+        self,
+        *,
+        product_set_id: str,
+        metadata: dict,
+    ) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{product_set_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.post(
+            url,
+            headers=headers,
+            data={"metadata": json.dumps(metadata, ensure_ascii=False)},
+        )
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to update Meta catalog product set",
+        )
+
+    async def get_whatsapp_commerce_settings(self) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{self.phone_number_id}/whatsapp_commerce_settings"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers)
+        data = await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch WhatsApp commerce settings",
+        )
+        rows = data.get("data", [])
+        if isinstance(rows, list) and rows:
+            first = rows[0]
+            return first if isinstance(first, dict) else {}
+        return data if isinstance(data, dict) else {}
+
+    async def update_whatsapp_commerce_settings(
+        self,
+        *,
+        is_catalog_visible: bool | None = None,
+        is_cart_enabled: bool | None = None,
+    ) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{self.phone_number_id}/whatsapp_commerce_settings"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params: dict[str, str] = {}
+        if is_catalog_visible is not None:
+            params["is_catalog_visible"] = "true" if is_catalog_visible else "false"
+        if is_cart_enabled is not None:
+            params["is_cart_enabled"] = "true" if is_cart_enabled else "false"
+        client = self._get_client()
+        response = await client.post(url, headers=headers, params=params)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to update WhatsApp commerce settings",
+        )
+
+    async def list_waba_product_catalogs(self, *, waba_id: str) -> list[dict]:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}/product_catalogs"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {"fields": "id,name", "limit": 25}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        data = await self._parse_graph_response(
+            response,
+            default_message="Unable to list catalogs linked to WhatsApp Business Account",
+        )
+        rows = data.get("data", [])
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def link_catalog_to_waba(self, *, waba_id: str, catalog_id: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}/product_catalogs"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.post(
+            url,
+            headers=headers,
+            data={"catalog_id": catalog_id},
+        )
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to link catalog to WhatsApp Business Account",
+        )
 
     async def create_message_template(
         self,
