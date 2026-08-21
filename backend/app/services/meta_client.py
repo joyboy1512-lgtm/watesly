@@ -646,6 +646,35 @@ class MetaWhatsAppClient:
             default_message="Unable to update WhatsApp business profile",
         )
 
+    async def get_catalog(self, *, catalog_id: str, fields: str = "id,name,default_image_url,vertical") -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{catalog_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {"fields": fields}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch Meta catalog",
+        )
+
+    async def update_catalog_default_image(self, *, catalog_id: str, default_image_url: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{catalog_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.post(
+            url,
+            headers=headers,
+            data={"default_image_url": default_image_url},
+        )
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to update Meta catalog default image",
+        )
+
     async def list_catalog_product_sets(self, *, catalog_id: str) -> list[dict]:
         base = settings.meta_graph_api_base_url.rstrip("/")
         version = settings.meta_graph_api_version.strip("/")

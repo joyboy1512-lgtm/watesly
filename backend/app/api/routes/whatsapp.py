@@ -72,6 +72,10 @@ _BRANDING_ERRORS = {
     "CATALOG_COVER_HTTPS_REQUIRED": (400, "رابط غلاف الكتالوج يجب أن يبدأ بـ https://"),
     "META_CATALOG_NOT_CONFIGURED": (400, "فعّل Commerce وأدخل Catalog ID أولاً."),
     "META_PRODUCT_SET_NOT_FOUND": (400, "لم يُعثر على Product Set في Meta — أنشئ كتالوجاً في Commerce Manager."),
+    "META_CATALOG_COVER_NOT_APPLIED": (
+        400,
+        "Meta لم تطبّق غلاف الكتالوج — تأكد أن الصورة HTTPS عامة وجرّب مرة أخرى بعد دقيقة.",
+    ),
 }
 
 

@@ -218,34 +218,48 @@ async def sync_catalog_cover_to_meta(
     client = _meta_client(account)
     try:
         commerce_result = await _ensure_meta_commerce_active(client, account)
+        await client.update_catalog_default_image(
+            catalog_id=catalog_id,
+            default_image_url=cover_url,
+        )
+        catalog = await client.get_catalog(catalog_id=catalog_id, fields="id,default_image_url")
+        meta_cover_url = (catalog.get("default_image_url") or "").strip()
+        if meta_cover_url != cover_url:
+            raise ValueError("META_CATALOG_COVER_NOT_APPLIED")
+
+        product_set_id: str | None = None
+        product_set_cover_url: str | None = None
         product_sets = await client.list_catalog_product_sets(catalog_id=catalog_id)
-        if not product_sets:
-            raise ValueError("META_PRODUCT_SET_NOT_FOUND")
-        product_set_id = _pick_product_set_id(account, product_sets)
-        await client.update_product_set_metadata(
-            product_set_id=product_set_id,
-            metadata={"cover_image_url": cover_url},
-        )
-        product_set = await client.get_product_set(product_set_id=product_set_id)
-        live_metadata = product_set.get("live_metadata") or {}
-        latest_metadata = product_set.get("latest_metadata") or {}
-        meta_cover_url = (
-            live_metadata.get("cover_image_url")
-            or latest_metadata.get("cover_image_url")
-        )
+        if product_sets:
+            product_set_id = _pick_product_set_id(account, product_sets)
+            try:
+                await client.update_product_set_metadata(
+                    product_set_id=product_set_id,
+                    metadata={"cover_image_url": cover_url},
+                )
+                product_set = await client.get_product_set(product_set_id=product_set_id)
+                live_metadata = product_set.get("live_metadata") or {}
+                latest_metadata = product_set.get("latest_metadata") or {}
+                product_set_cover_url = (
+                    live_metadata.get("cover_image_url")
+                    or latest_metadata.get("cover_image_url")
+                )
+            except MetaAPIError:
+                product_set_cover_url = None
+
         account.meta_catalog_product_set_id = product_set_id
         account.catalog_cover_synced_at = datetime.now(UTC)
         await db.commit()
         return {
             "synced": True,
             "cover_image_url": cover_url,
-            "meta_cover_image_url": meta_cover_url,
+            "meta_cover_image_url": meta_cover_url or product_set_cover_url,
             "product_set_id": product_set_id,
             "commerce_enabled_on_meta": True,
             "commerce_settings": commerce_result.get("commerce_settings"),
             "whatsapp_note": (
-                "WhatsApp catalog header usually shows the business profile photo. "
-                "This cover applies to Meta Shop collections."
+                "WhatsApp catalog header uses the catalog default image on Meta. "
+                "Changes may take a few minutes to appear in the WhatsApp app."
             ),
         }
     except MetaAPIError as exc:

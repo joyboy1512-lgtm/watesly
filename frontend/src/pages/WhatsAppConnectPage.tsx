@@ -568,7 +568,7 @@ export default function WhatsAppConnectPage() {
       }
       await api.post(`/whatsapp/accounts/${accountId}/branding/sync-catalog-cover`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم تفعيل غلاف Meta Shop — داخل WhatsApp قد يبقى أعلى الكتالوج يعرض صورة الملف.", "success");
+      toastStore.getState().show("تم تفعيل غلاف الكتالوج على Meta — قد يتأخر ظهوره في WhatsApp 5–15 دقيقة.", "success");
     } catch (error: unknown) {
       toastStore.getState().show(extractApiDetail(error, "تعذر مزامنة غلاف الكتالوج."), "error");
     } finally {
@@ -775,11 +775,12 @@ export default function WhatsAppConnectPage() {
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
                 <h3>الهوية البصرية — WhatsApp</h3>
                 <p className="hint-text">
-                  صورة الملف تظهر بجانب اسم الشركة في المحادثات. غلاف Meta Shop يُزامَن لمجموعة المنتجات في Commerce Manager.
+                  صورة الملف تظهر بجانب اسم الشركة في المحادثات. غلاف الكتالوج يُحدَّث على Meta Catalog
+                  (default_image_url) ويظهر أعلى صفحة الكتالوج داخل WhatsApp.
                 </p>
                 <p className="hint-text whatsapp-branding-note" role="note">
-                  ملاحظة: داخل WhatsApp، أعلى الكتالوج غالباً يعرض <strong>صورة الملف</strong> وليس غلاف Meta Shop —
-                  لذلك قد ترى نفس الصورة في الموضعين. هذا سلوك Meta وليس خطأ في Watesly.
+                  ملاحظة: التغيير قد يتأخر 5–15 دقيقة داخل تطبيق WhatsApp. أغلق صفحة الكتالوج وأعد فتحها،
+                  أو امسح cache التطبيق إن لم يظهر الغلاف الجديد.
                 </p>
                 {(brandingDraft?.profile_image_url || brandingDraft?.catalog_cover_image_url) &&
                   !account.profile_image_synced_at &&
@@ -857,10 +858,10 @@ export default function WhatsAppConnectPage() {
                     </div>
                   </div>
                   <div className="whatsapp-branding-col">
-                    <h4>غلاف Meta Shop (مجموعة المنتجات)</h4>
+                    <h4>غلاف الكتالوج في WhatsApp</h4>
                     <p className="hint-text">
                       {commerceOn && savedCatalogId
-                        ? "يُرسل لـ Meta Commerce كغلاف مجموعة — لا يغيّر صورة الملف في WhatsApp."
+                        ? "يُحدَّث default_image_url على Meta Catalog — هذا ما يظهر أعلى صفحة الكتالوج."
                         : "فعّل Commerce وأدخل Catalog ID أولاً."}
                     </p>
                     <div className="catalog-image-row whatsapp-branding-image">
@@ -906,7 +907,7 @@ export default function WhatsAppConnectPage() {
                         />
                         {account.catalog_cover_synced_at && (
                           <p className="hint-text">
-                            ✓ غلاف Meta Shop: {formatHealthSynced(account.catalog_cover_synced_at)}
+                            ✓ غلاف الكتالوج: {formatHealthSynced(account.catalog_cover_synced_at)}
                           </p>
                         )}
                         <button
