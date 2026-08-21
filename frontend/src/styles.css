@@ -5414,6 +5414,35 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .whatsapp-expand-commerce h3 {
   color: var(--primary-dark);
 }
+.whatsapp-expand-branding {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+  background: linear-gradient(180deg, rgba(37, 211, 102, 0.06) 0%, var(--panel) 100%);
+}
+.whatsapp-expand-branding h3,
+.whatsapp-expand-branding h4 {
+  margin: 0;
+}
+.whatsapp-expand-branding h4 {
+  font-size: 14px;
+}
+.whatsapp-branding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.whatsapp-branding-col {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.whatsapp-branding-image.catalog-image-row {
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .whatsapp-branding-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .whatsapp-expand-token {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
   background: linear-gradient(180deg, rgba(37, 211, 102, 0.04) 0%, var(--panel) 100%);

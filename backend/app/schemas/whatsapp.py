@@ -72,11 +72,32 @@ class WhatsAppAccountResponse(BaseModel):
     meta_catalog_id: str | None = None
     commerce_enabled: bool = False
     catalog_synced_at: datetime | None = None
+    profile_image_url: str | None = None
+    profile_image_synced_at: datetime | None = None
+    catalog_cover_image_url: str | None = None
+    meta_catalog_product_set_id: str | None = None
+    catalog_cover_synced_at: datetime | None = None
 
 
 class WhatsAppCommerceSettingsRequest(BaseModel):
     meta_catalog_id: str | None = Field(default=None, max_length=80)
     commerce_enabled: bool | None = None
+
+
+class WhatsAppBrandingSettingsRequest(BaseModel):
+    profile_image_url: str | None = Field(default=None, max_length=2048)
+    catalog_cover_image_url: str | None = Field(default=None, max_length=2048)
+
+
+class WhatsAppBrandingSyncResponse(BaseModel):
+    synced: bool = True
+    profile_image_url: str | None = None
+    meta_profile_picture_url: str | None = None
+    cover_image_url: str | None = None
+    product_set_id: str | None = None
+    profile: dict | None = None
+    catalog_cover: dict | None = None
+    errors: list[str] = Field(default_factory=list)
 
 
 class SendTextMessageRequest(BaseModel):
