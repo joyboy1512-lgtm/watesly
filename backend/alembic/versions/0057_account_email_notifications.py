@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "0057_account_email_notifications"
-down_revision = "0056"
+down_revision = "0056_whatsapp_meta_health"
 branch_labels = None
 depends_on = None
 
