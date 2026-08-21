@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-08-21T00:50:00Z",
+  "domain": "watesly.com",
+  "server_host": "64.226.69.159",
+  "app_path": "/opt/watesly",
+  "git_branch": "cursor/production-unified-813f",
+  "git_commit": "df36f12",
+  "git_commit_message": "feat(email): Brevo notifications for inbox events and catalog orders with invoice PDF",
+  "previous_commit": "96c2d98",
+  "alembic_head": "0057_account_email_notifications",
+  "frontend_version": "0.32.5",
+  "deploy_includes": [
+    "PR #86 — Email notifications + catalog order PDF",
+    "Brevo API activation (info@watesly.com sender)"
+  ],
+  "notes": "Production deploy with email notification settings UI (Developer → البريد)."
+}
