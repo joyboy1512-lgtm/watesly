@@ -26,6 +26,7 @@ import {
   statusBadgeClass,
   workspaceDisplayName,
   buildInvitationAcceptUrl,
+  formatTeamActionError,
   type Employee,
   type InvitationResult,
   type MembershipRole,
@@ -275,8 +276,11 @@ export default function TeamPage() {
           : "تم إنشاء الدعوة. انسخ الرابط — لم يُرسل بريد (SMTP غير مفعّل أو فشل الإرسال).",
         "success"
       );
-    } catch {
-      toastStore.getState().show("تعذر إنشاء الدعوة. تحقق من البريد والفرع وحد المستخدمين.", "error");
+    } catch (error) {
+      toastStore.getState().show(
+        formatTeamActionError(error, "تعذر إنشاء الدعوة. تحقق من البريد والفرع وحد المستخدمين."),
+        "error"
+      );
     } finally {
       setInviting(false);
     }
@@ -325,8 +329,11 @@ export default function TeamPage() {
         `تم إنشاء حساب ${createdName}. شارك البريد وكلمة المرور مع الموظف (مثلاً عبر WhatsApp).`,
         "success"
       );
-    } catch {
-      toastStore.getState().show("تعذر إنشاء الحساب. تحقق من البيانات أو أن البريد غير مستخدم مسبقاً.", "error");
+    } catch (error) {
+      toastStore.getState().show(
+        formatTeamActionError(error, "تعذر إنشاء الحساب. تحقق من البيانات أو أن البريد غير مستخدم مسبقاً."),
+        "error"
+      );
     } finally {
       setCreating(false);
     }

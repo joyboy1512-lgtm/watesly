@@ -159,6 +159,21 @@ async def create_invitation(
         organization_ids=payload.organization_ids,
     )
 
+    now = datetime.now(UTC)
+    stale_invites = await db.execute(
+        select(Invitation).where(
+            Invitation.account_id == account_id,
+            Invitation.email == payload.email,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+    )
+    for stale in stale_invites.scalars().all():
+        stale.status = (
+            InvitationStatus.EXPIRED
+            if stale.expires_at <= now
+            else InvitationStatus.REVOKED
+        )
+
     invitation = Invitation(
         account_id=account_id,
         email=payload.email,
@@ -323,6 +338,16 @@ async def accept_invitation(
     result = await db.execute(select(User).where(User.email == invitation.email))
     user = result.scalar_one_or_none()
 
+    if user is not None:
+        existing_membership = await db.execute(
+            select(Membership).where(
+                Membership.account_id == invitation.account_id,
+                Membership.user_id == user.id,
+            )
+        )
+        if existing_membership.scalar_one_or_none() is not None:
+            raise ValueError("ALREADY_MEMBER")
+
     async with db.begin_nested():
         if user is None:
             user = User(
@@ -334,6 +359,11 @@ async def accept_invitation(
             )
             db.add(user)
             await db.flush()
+        else:
+            user.full_name = payload.full_name.strip()
+            user.password_hash = hash_password(payload.password)
+            user.preferred_language = payload.preferred_language
+            user.status = UserStatus.ACTIVE
 
         membership = Membership(
             account_id=invitation.account_id,

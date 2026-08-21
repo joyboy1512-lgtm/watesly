@@ -105,8 +105,15 @@ async def accept_employee_invitation(
 ) -> EmployeeResponse:
     try:
         user, membership, organization_ids = await accept_invitation(db, payload)
-    except (ValueError, jwt.InvalidTokenError) as exc:
-        raise HTTPException(status_code=400, detail="Invalid or expired invitation") from exc
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=400, detail="Invalid invitation link") from exc
+    except ValueError as exc:
+        messages = {
+            "INVALID_INVITATION": (400, "Invitation expired or already used"),
+            "ALREADY_MEMBER": (409, "This user is already a member of the account"),
+        }
+        code, detail = messages.get(str(exc), (400, "Invalid or expired invitation"))
+        raise HTTPException(status_code=code, detail=detail) from exc
 
     return await _employee_response(
         db,

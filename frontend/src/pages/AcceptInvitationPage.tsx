@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, silentRequest } from "../lib/api";
 import { pickSiteText, useSiteContent } from "../hooks/useSiteContent";
+import { formatInvitationAcceptError } from "../lib/teamHelpers";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import BrandLogo from "../components/BrandLogo";
 
@@ -57,8 +58,8 @@ export default function AcceptInvitationPage() {
         silentRequest
       );
       navigate("/login?invited=1", { replace: true });
-    } catch {
-      setError("رابط الدعوة غير صالح أو منتهي الصلاحية. اطلب دعوة جديدة من مدير الحساب.");
+    } catch (error) {
+      setError(formatInvitationAcceptError(error));
     } finally {
       setLoading(false);
     }
@@ -97,7 +98,7 @@ export default function AcceptInvitationPage() {
           <p>اختر اسمك وكلمة مرور لتفعيل حسابك.</p>
 
           {tokenMissing ? (
-            <p className="form-error">رابط الدعوة ناقص أو غير صالح. تأكد أنك فتحت الرابط كاملاً من مدير الحساب.</p>
+            <p className="form-error">رابط الدعوة ناقص أو غير صالح. اطلب رابطاً جديداً من الموظفون → رابط دعوة.</p>
           ) : (
             <form onSubmit={handleSubmit}>
               <label className="field-label">

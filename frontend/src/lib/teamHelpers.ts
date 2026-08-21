@@ -1,3 +1,5 @@
+import axios from "axios";
+
 export type MembershipRole = "owner" | "admin" | "branch_admin" | "manager" | "agent" | "viewer";
 export type MembershipStatus = "active" | "suspended";
 
@@ -528,4 +530,58 @@ export type InvitationResult = {
 export function buildInvitationAcceptUrl(token: string): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   return `${origin}/invite?token=${encodeURIComponent(token)}`;
+}
+
+export function formatTeamActionError(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError(error)) return fallback;
+  const status = error.response?.status;
+  const detail = String(
+    typeof error.response?.data === "object" &&
+      error.response?.data !== null &&
+      "detail" in error.response.data
+      ? (error.response.data as { detail?: unknown }).detail
+      : ""
+  ).toLowerCase();
+
+  if (status === 402 || detail.includes("subscription")) {
+    return "انتهى اشتراك الحساب. جدّد الاشتراك من صفحة الفوترة ثم أعد المحاولة.";
+  }
+  if (status === 403 && detail.includes("user limit")) {
+    return "وصلت إلى الحد الأقصى لعدد الموظفين في خطتك.";
+  }
+  if (status === 409 && detail.includes("already a member")) {
+    return "هذا البريد مسجّل مسبقاً كموظف في حسابك.";
+  }
+  if (status === 409 && detail.includes("already")) {
+    return "هذا البريد مستخدم مسبقاً أو لديه دعوة نشطة.";
+  }
+  if (status === 402) {
+    return "يلزم اشتراك نشط لإضافة موظفين.";
+  }
+  return fallback;
+}
+
+export function formatInvitationAcceptError(error: unknown): string {
+  if (!axios.isAxiosError(error)) {
+    return "رابط الدعوة غير صالح أو منتهي الصلاحية. اطلب دعوة جديدة من مدير الحساب.";
+  }
+  const status = error.response?.status;
+  const detail = String(
+    typeof error.response?.data === "object" &&
+      error.response?.data !== null &&
+      "detail" in error.response.data
+      ? (error.response.data as { detail?: unknown }).detail
+      : ""
+  ).toLowerCase();
+
+  if (detail.includes("invalid invitation link")) {
+    return "رابط الدعوة تالف أو ناقص. انسخ الرابط كاملاً من مدير الحساب.";
+  }
+  if (detail.includes("expired or already used") || detail.includes("invalid or expired")) {
+    return "انتهت صلاحية الدعوة أو استُخدمت مسبقاً. اطلب رابطاً جديداً من الموظفون → رابط دعوة.";
+  }
+  if (status === 409 && detail.includes("already a member")) {
+    return "أنت مسجّل مسبقاً في هذا الحساب. سجّل الدخول من صفحة تسجيل الدخول.";
+  }
+  return "تعذر تفعيل الحساب. اطلب دعوة جديدة من مدير الحساب.";
 }
