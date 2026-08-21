@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-08-21T15:50:00Z",
+  "domain": "watesly.com",
+  "server_host": "64.226.69.159",
+  "app_path": "/opt/watesly",
+  "git_branch": "cursor/production-unified-813f",
+  "git_commit": "d43b0eb",
+  "git_commit_message": "docs: note team page UI in production snapshot",
+  "previous_commit": "e7069be",
+  "alembic_head": "0057_account_email_notifications",
+  "frontend_version": "0.32.5",
+  "live_assets": {
+    "js": "index-BmF7wnjs.js",
+    "css": "index-DeCmc5dC.css"
+  },
+  "deploy_includes": [
+    "PR #87 — Team page UI (add form, table, single-row actions)",
+    "PR #86 — Email notifications + catalog order PDF"
+  ],
+  "notes": "Production deploy verified: team-add-card CSS live on www.watesly.com."
+}

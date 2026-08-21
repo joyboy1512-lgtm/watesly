@@ -18,12 +18,13 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 | Item | Value |
 |------|-------|
-| Commit | `df36f12` |
+| Commit | `d43b0eb` |
 | Alembic | `0057_account_email_notifications` |
 | Frontend | `0.32.5` |
+| Live assets | `index-BmF7wnjs.js`, `index-DeCmc5dC.css` |
 | Snapshot record | `deploy/production-snapshot-20260821.json` |
 
-**Includes:** PR #86 email notifications + catalog order PDF emails; PR #87 team page UI (pending deploy verification).
+**Includes:** PR #86 email notifications + catalog order PDF emails; PR #87 team page UI.
 
 ### Production snapshot (2026-08-20) — current baseline
 
