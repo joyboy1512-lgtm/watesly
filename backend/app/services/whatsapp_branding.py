@@ -165,10 +165,17 @@ async def update_whatsapp_branding_settings(
         account_id=account_id,
         whatsapp_account_id=whatsapp_account_id,
     )
-    if profile_image_url is not None:
-        account.profile_image_url = profile_image_url.strip() or None
-    if catalog_cover_image_url is not None:
-        account.catalog_cover_image_url = catalog_cover_image_url.strip() or None
+    if profile_image_url is not None or catalog_cover_image_url is not None:
+        profile_value = profile_image_url.strip() if profile_image_url is not None else None
+        cover_value = catalog_cover_image_url.strip() if catalog_cover_image_url is not None else None
+        if profile_image_url is not None and catalog_cover_image_url is not None:
+            unified = (profile_value or cover_value or "").strip() or None
+        elif profile_image_url is not None:
+            unified = profile_value or None
+        else:
+            unified = cover_value or None
+        account.profile_image_url = unified
+        account.catalog_cover_image_url = unified
     await db.commit()
     await db.refresh(account)
     return account
@@ -325,33 +332,37 @@ async def sync_all_branding_to_meta(
         account_id=account_id,
         whatsapp_account_id=whatsapp_account_id,
     )
-    has_cover = bool((account.catalog_cover_image_url or "").strip()) and account_commerce_ready(account)
-    has_profile = bool((account.profile_image_url or "").strip())
-    if has_cover:
-        try:
-            cover_result = await sync_catalog_cover_to_meta(
-                db,
-                account_id=account_id,
-                whatsapp_account_id=whatsapp_account_id,
-            )
-            profile_result = {
-                "synced": True,
-                "profile_image_url": (account.catalog_cover_image_url or "").strip(),
-                "meta_profile_picture_url": (cover_result or {}).get("meta_profile_picture_url"),
-                "via_catalog_cover": True,
-            }
-        except ValueError as exc:
-            errors.append(str(exc))
-    elif has_profile:
-        try:
-            profile_result = await sync_profile_image_to_meta(
-                db,
-                account_id=account_id,
-                whatsapp_account_id=whatsapp_account_id,
-            )
-        except ValueError as exc:
-            errors.append(str(exc))
-    if not has_cover and account_commerce_ready(account):
+    unified_image = (
+        (account.profile_image_url or "").strip()
+        or (account.catalog_cover_image_url or "").strip()
+    )
+    has_commerce = account_commerce_ready(account)
+    if unified_image:
+        if has_commerce:
+            try:
+                cover_result = await sync_catalog_cover_to_meta(
+                    db,
+                    account_id=account_id,
+                    whatsapp_account_id=whatsapp_account_id,
+                )
+                profile_result = {
+                    "synced": True,
+                    "profile_image_url": unified_image,
+                    "meta_profile_picture_url": (cover_result or {}).get("meta_profile_picture_url"),
+                    "via_catalog_cover": True,
+                }
+            except ValueError as exc:
+                errors.append(str(exc))
+        else:
+            try:
+                profile_result = await sync_profile_image_to_meta(
+                    db,
+                    account_id=account_id,
+                    whatsapp_account_id=whatsapp_account_id,
+                )
+            except ValueError as exc:
+                errors.append(str(exc))
+    elif has_commerce:
         try:
             await sync_whatsapp_commerce_to_meta(
                 db,
