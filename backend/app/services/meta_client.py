@@ -661,6 +661,19 @@ class MetaWhatsAppClient:
         rows = data.get("data", [])
         return [row for row in rows if isinstance(row, dict)]
 
+    async def get_product_set(self, *, product_set_id: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{product_set_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {"fields": "id,name,metadata,live_metadata,cover_image_url"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch Meta catalog product set",
+        )
+
     async def update_product_set_metadata(
         self,
         *,

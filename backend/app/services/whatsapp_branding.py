@@ -206,15 +206,28 @@ async def sync_catalog_cover_to_meta(
             product_set_id=product_set_id,
             metadata={"cover_image_url": cover_url},
         )
+        product_set = await client.get_product_set(product_set_id=product_set_id)
+        live_metadata = product_set.get("live_metadata") or {}
+        latest_metadata = product_set.get("metadata") or {}
+        meta_cover_url = (
+            live_metadata.get("cover_image_url")
+            or latest_metadata.get("cover_image_url")
+            or product_set.get("cover_image_url")
+        )
         account.meta_catalog_product_set_id = product_set_id
         account.catalog_cover_synced_at = datetime.now(UTC)
         await db.commit()
         return {
             "synced": True,
             "cover_image_url": cover_url,
+            "meta_cover_image_url": meta_cover_url,
             "product_set_id": product_set_id,
             "commerce_enabled_on_meta": True,
             "commerce_settings": commerce_result.get("commerce_settings"),
+            "whatsapp_note": (
+                "WhatsApp catalog header usually shows the business profile photo. "
+                "This cover applies to Meta Shop collections."
+            ),
         }
     except MetaAPIError as exc:
         raise ValueError(format_meta_sync_error(str(exc))) from exc

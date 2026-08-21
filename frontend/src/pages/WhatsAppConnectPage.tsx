@@ -472,8 +472,11 @@ export default function WhatsAppConnectPage() {
     return fallback;
   }
 
-  async function persistBranding(accountId: string): Promise<boolean> {
-    const draft = brandingDrafts[accountId];
+  async function persistBranding(
+    accountId: string,
+    draftOverride?: { profile_image_url: string; catalog_cover_image_url: string }
+  ): Promise<boolean> {
+    const draft = draftOverride ?? brandingDrafts[accountId];
     if (!draft) return false;
     await api.patch(`/whatsapp/accounts/${accountId}/branding`, {
       profile_image_url: draft.profile_image_url.trim() || null,
@@ -500,15 +503,21 @@ export default function WhatsAppConnectPage() {
     setUploading(accountId);
     try {
       const uploaded = await uploadFile(file);
+      const nextDraft = {
+        profile_image_url:
+          field === "profile_image_url"
+            ? uploaded.public_url
+            : brandingDrafts[accountId]?.profile_image_url ?? "",
+        catalog_cover_image_url:
+          field === "catalog_cover_image_url"
+            ? uploaded.public_url
+            : brandingDrafts[accountId]?.catalog_cover_image_url ?? ""
+      };
       setBrandingDrafts((current) => ({
         ...current,
-        [accountId]: {
-          profile_image_url: current[accountId]?.profile_image_url ?? "",
-          catalog_cover_image_url: current[accountId]?.catalog_cover_image_url ?? "",
-          [field]: uploaded.public_url
-        }
+        [accountId]: nextDraft
       }));
-      await persistBranding(accountId);
+      await persistBranding(accountId, nextDraft);
       toastStore.getState().show("تم رفع الصورة وحفظها.", "success");
     } catch {
       toastStore.getState().show("تعذر رفع الصورة.", "error");
@@ -559,7 +568,7 @@ export default function WhatsAppConnectPage() {
       }
       await api.post(`/whatsapp/accounts/${accountId}/branding/sync-catalog-cover`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم تفعيل غلاف الكتالوج وCommerce على Meta.", "success");
+      toastStore.getState().show("تم تفعيل غلاف Meta Shop — داخل WhatsApp قد يبقى أعلى الكتالوج يعرض صورة الملف.", "success");
     } catch (error: unknown) {
       toastStore.getState().show(extractApiDetail(error, "تعذر مزامنة غلاف الكتالوج."), "error");
     } finally {
@@ -766,7 +775,11 @@ export default function WhatsAppConnectPage() {
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
                 <h3>الهوية البصرية — WhatsApp</h3>
                 <p className="hint-text">
-                  ارفع الصور ثم اضغط «تفعيل على Meta» — يُفعّل Commerce تلقائياً ويُرسل الشعار وغلاف الكتالوج.
+                  صورة الملف تظهر بجانب اسم الشركة في المحادثات. غلاف Meta Shop يُزامَن لمجموعة المنتجات في Commerce Manager.
+                </p>
+                <p className="hint-text whatsapp-branding-note" role="note">
+                  ملاحظة: داخل WhatsApp، أعلى الكتالوج غالباً يعرض <strong>صورة الملف</strong> وليس غلاف Meta Shop —
+                  لذلك قد ترى نفس الصورة في الموضعين. هذا سلوك Meta وليس خطأ في Watesly.
                 </p>
                 {(brandingDraft?.profile_image_url || brandingDraft?.catalog_cover_image_url) &&
                   !account.profile_image_synced_at &&
@@ -778,7 +791,7 @@ export default function WhatsAppConnectPage() {
                 <div className="whatsapp-branding-grid">
                   <div className="whatsapp-branding-col">
                     <h4>صورة ملف WhatsApp Business</h4>
-                    <p className="hint-text">تظهر بجانب اسم الشركة في المحادثات — JPG/PNG/WebP، حتى 5MB.</p>
+                    <p className="hint-text">شعار الشركة — يظهر في المحادثات وملف WhatsApp Business.</p>
                     <div className="catalog-image-row whatsapp-branding-image">
                       <div className="catalog-image-thumb">
                         {brandingDraft?.profile_image_url ? (
@@ -821,8 +834,17 @@ export default function WhatsAppConnectPage() {
                           placeholder="https://…"
                         />
                         {account.profile_image_synced_at && (
-                          <p className="hint-text">آخر مزامنة: {formatHealthSynced(account.profile_image_synced_at)}</p>
+                          <p className="hint-text">
+                            ✓ مفعّل على Meta: {formatHealthSynced(account.profile_image_synced_at)}
+                          </p>
                         )}
+                        {brandingDraft?.profile_image_url &&
+                          brandingDraft?.catalog_cover_image_url &&
+                          brandingDraft.profile_image_url === brandingDraft.catalog_cover_image_url && (
+                            <p className="hint-text whatsapp-branding-pending" role="alert">
+                              ⚠ نفس الرابط مستخدم للملف والغلاف — ارفع صورتين مختلفتين.
+                            </p>
+                          )}
                         <button
                           type="button"
                           className="secondary-button compact"
@@ -835,10 +857,10 @@ export default function WhatsAppConnectPage() {
                     </div>
                   </div>
                   <div className="whatsapp-branding-col">
-                    <h4>غلاف الكتالوج</h4>
+                    <h4>غلاف Meta Shop (مجموعة المنتجات)</h4>
                     <p className="hint-text">
                       {commerceOn && savedCatalogId
-                        ? "يظهر أعلى كتالوج WhatsApp — يتطلب Commerce وCatalog ID."
+                        ? "يُرسل لـ Meta Commerce كغلاف مجموعة — لا يغيّر صورة الملف في WhatsApp."
                         : "فعّل Commerce وأدخل Catalog ID أولاً."}
                     </p>
                     <div className="catalog-image-row whatsapp-branding-image">
@@ -883,7 +905,9 @@ export default function WhatsAppConnectPage() {
                           placeholder="https://…"
                         />
                         {account.catalog_cover_synced_at && (
-                          <p className="hint-text">آخر مزامنة: {formatHealthSynced(account.catalog_cover_synced_at)}</p>
+                          <p className="hint-text">
+                            ✓ غلاف Meta Shop: {formatHealthSynced(account.catalog_cover_synced_at)}
+                          </p>
                         )}
                         <button
                           type="button"
