@@ -93,6 +93,11 @@ def format_meta_sync_error(message: str) -> str:
             "أضف Watesly كشريك، أو اربط الكتالوج يدوياً من WhatsApp Manager → Settings → Catalog "
             "ثم أعد «تفعيل على Meta»."
         )
+    if "nonexisting field" in lower and "metadata" in lower:
+        return (
+            "Meta لا يدعم قراءة metadata على Product Set بهذا الشكل — "
+            "تم إصلاح المزامنة؛ أعد «تفعيل على Meta»."
+        )
     return message
 
 

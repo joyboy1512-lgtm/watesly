@@ -228,11 +228,10 @@ async def sync_catalog_cover_to_meta(
         )
         product_set = await client.get_product_set(product_set_id=product_set_id)
         live_metadata = product_set.get("live_metadata") or {}
-        latest_metadata = product_set.get("metadata") or {}
+        latest_metadata = product_set.get("latest_metadata") or {}
         meta_cover_url = (
             live_metadata.get("cover_image_url")
             or latest_metadata.get("cover_image_url")
-            or product_set.get("cover_image_url")
         )
         account.meta_catalog_product_set_id = product_set_id
         account.catalog_cover_synced_at = datetime.now(UTC)

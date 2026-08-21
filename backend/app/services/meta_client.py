@@ -666,7 +666,7 @@ class MetaWhatsAppClient:
         version = settings.meta_graph_api_version.strip("/")
         url = f"{base}/{version}/{product_set_id}"
         headers = {"Authorization": f"Bearer {self.access_token}"}
-        params = {"fields": "id,name,metadata,live_metadata,cover_image_url"}
+        params = {"fields": "id,name,latest_metadata,live_metadata"}
         client = self._get_client()
         response = await client.get(url, headers=headers, params=params)
         return await self._parse_graph_response(

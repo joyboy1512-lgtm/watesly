@@ -65,6 +65,11 @@ def test_format_meta_sync_error_invalid_partner() -> None:
     assert "Commerce Manager" in message
 
 
+def test_format_meta_sync_error_nonexisting_metadata_field() -> None:
+    message = format_meta_sync_error("Tried accessing nonexisting field (#100) (metadata)")
+    assert "Product Set" in message or "metadata" in message
+
+
 def test_catalog_id_linked_to_waba() -> None:
     linked = [{"id": "123"}, {"id": "456", "name": "Shop"}]
     assert catalog_id_linked_to_waba(linked, "456") is True
