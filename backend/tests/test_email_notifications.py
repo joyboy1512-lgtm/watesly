@@ -89,6 +89,73 @@ async def test_send_catalog_order_notification_with_pdf(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_resolve_catalog_order_recipients_includes_branch_admin(monkeypatch) -> None:
+    from uuid import uuid4
+
+    account_id = uuid4()
+    organization_id = uuid4()
+    branch_email = "branch-admin@watesly.com"
+    owner_email = "owner@watesly.com"
+
+    async def fake_branch(db, *, account_id, organization_id):  # noqa: ARG001
+        return [branch_email]
+
+    async def fake_account_admins(db, *, account_id):  # noqa: ARG001
+        return [owner_email]
+
+    account = AsyncMock()
+    account.email_notifications_enabled = True
+    account.catalog_order_emails = []
+    account.notification_emails = []
+
+    db = AsyncMock()
+    db.get = AsyncMock(return_value=account)
+
+    monkeypatch.setattr(settings_service, "_branch_admin_emails", fake_branch)
+    monkeypatch.setattr(settings_service, "_account_admin_emails", fake_account_admins)
+
+    recipients = await settings_service.resolve_catalog_order_recipients(
+        db,
+        account_id=account_id,
+        organization_id=organization_id,
+    )
+    assert branch_email in recipients
+    assert owner_email in recipients
+
+
+@pytest.mark.asyncio
+async def test_resolve_notification_recipients_scoped_to_branch(monkeypatch) -> None:
+    from uuid import uuid4
+
+    account_id = uuid4()
+    organization_id = uuid4()
+    branch_email = "branch-admin@watesly.com"
+
+    async def fake_branch(db, *, account_id, organization_id):  # noqa: ARG001
+        return [branch_email]
+
+    async def fake_account_admins(db, *, account_id):  # noqa: ARG001
+        return []
+
+    account = AsyncMock()
+    account.email_notifications_enabled = True
+    account.notification_emails = []
+
+    db = AsyncMock()
+    db.get = AsyncMock(return_value=account)
+
+    monkeypatch.setattr(settings_service, "_branch_admin_emails", fake_branch)
+    monkeypatch.setattr(settings_service, "_account_admin_emails", fake_account_admins)
+
+    recipients = await settings_service.resolve_notification_recipients(
+        db,
+        account_id=account_id,
+        organization_id=organization_id,
+    )
+    assert recipients == [branch_email]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_notification_email_skips_catalog_order_type(monkeypatch) -> None:
     notification = AsyncMock()
     notification.type = "catalog_order_received"

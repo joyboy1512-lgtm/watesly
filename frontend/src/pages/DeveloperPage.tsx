@@ -460,8 +460,8 @@ function EmailNotificationsPanel() {
     <section className="card stack-form">
       <h2>إشعارات البريد الإلكتروني</h2>
       <p className="hint-text">
-        استلم على البريد: إشعارات Inbox، SLA، القوالب، و<strong>طلبات الكتالوج مع فاتورة PDF</strong>.
-        دعوات الموظفين تُرسل تلقائيًا من صفحة «الموظفون».
+        تُرسل تلقائيًا إلى <strong>أدمن الفرع</strong> (لطلبات وإشعارات فرعه) و<strong>مالك/أدمن الحساب</strong> (لجميع الفروع).
+        يمكن إضافة بريد شركة إضافي أدناه. دعوات الموظفين تُرسل من صفحة «الموظفون».
       </p>
       {settings.isLoading && <p className="hint-text">جاري التحميل…</p>}
       {data && (
@@ -492,7 +492,9 @@ function EmailNotificationsPanel() {
                 placeholder="info@watesly.com, manager@watesly.com"
                 dir="ltr"
               />
-              <small className="hint-text">رسائل WhatsApp جديدة، SLA، حالة القوالب، وغيرها.</small>
+              <small className="hint-text">
+                بريد إضافي لجميع الإشعارات. أدمن الفرع ومالك الحساب يستلمون تلقائيًا حسب الفرع.
+              </small>
             </label>
             <label className="field-label">
               <span>بريد طلبات الكتالوج (اختياري)</span>
@@ -503,7 +505,9 @@ function EmailNotificationsPanel() {
                 placeholder="orders@watesly.com"
                 dir="ltr"
               />
-              <small className="hint-text">إذا تُرك فارغًا يُستخدم بريد الإشعارات العامة. يُرفق PDF الفاتورة.</small>
+              <small className="hint-text">
+                بريد إضافي لطلبات الكتالوج (مع PDF). أدمن الفرع المعني يستلم تلقائيًا على بريده المسجّل في «الموظفون».
+              </small>
             </label>
             <div className="admin-actions">
               <button type="submit" className="secondary-button" disabled={saving}>

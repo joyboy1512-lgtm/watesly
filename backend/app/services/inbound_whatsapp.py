@@ -527,7 +527,10 @@ async def process_inbound_side_effects(
             type="message_received",
             title="رسالة WhatsApp جديدة",
             body=text_body or f"رسالة جديدة من {sender}",
-            data={"conversation_id": str(conversation.id)},
+            data={
+                "conversation_id": str(conversation.id),
+                "organization_id": str(conversation.organization_id),
+            },
         )
     except Exception:
         logger.exception("Notification failed for conversation_id=%s", conversation.id)

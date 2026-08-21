@@ -112,7 +112,11 @@ async def send_catalog_order_notification(
     account_id: UUID,
     order: CatalogOrder,
 ) -> bool:
-    recipients = await resolve_catalog_order_recipients(db, account_id=account_id)
+    recipients = await resolve_catalog_order_recipients(
+        db,
+        account_id=account_id,
+        organization_id=order.organization_id,
+    )
     if not recipients:
         return False
 
@@ -168,6 +172,29 @@ async def send_catalog_order_notification(
     return sent_count > 0
 
 
+async def _resolve_notification_organization_id(
+    db: AsyncSession,
+    *,
+    notification: Notification,
+) -> UUID | None:
+    data = notification.data or {}
+    raw_org_id = data.get("organization_id")
+    if raw_org_id:
+        try:
+            return UUID(str(raw_org_id))
+        except ValueError:
+            pass
+    conversation_id = data.get("conversation_id")
+    if not conversation_id:
+        return None
+    from app.models.conversation import Conversation
+
+    conversation = await db.get(Conversation, UUID(str(conversation_id)))
+    if conversation is None:
+        return None
+    return conversation.organization_id
+
+
 async def dispatch_notification_email(
     db: AsyncSession,
     *,
@@ -176,10 +203,12 @@ async def dispatch_notification_email(
     if notification.type == "catalog_order_received":
         return False
 
+    organization_id = await _resolve_notification_organization_id(db, notification=notification)
     recipients = await resolve_notification_recipients(
         db,
         account_id=notification.account_id,
         user_id=notification.user_id,
+        organization_id=organization_id,
     )
     if not recipients:
         return False

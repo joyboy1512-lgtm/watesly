@@ -139,6 +139,7 @@ async def notify_catalog_order_received(
         data={
             "catalog_order_id": str(order.id),
             "order_number": order.order_number,
+            "organization_id": str(order.organization_id),
             "conversation_id": str(order.conversation_id) if order.conversation_id else None,
         },
     )
