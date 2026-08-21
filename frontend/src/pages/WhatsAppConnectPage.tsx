@@ -415,7 +415,7 @@ export default function WhatsAppConnectPage() {
     try {
       await api.patch(`/whatsapp/accounts/${accountId}/commerce`, draft);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم حفظ إعدادات Commerce.", "success");
+      toastStore.getState().show("تم حفظ Commerce وتفعيل الكتالوج على Meta.", "success");
     } catch {
       toastStore.getState().show("تعذر حفظ Commerce.", "error");
     }
@@ -460,6 +460,29 @@ export default function WhatsAppConnectPage() {
     }
   }
 
+  function extractApiDetail(error: unknown, fallback: string): string {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "response" in error &&
+      typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+    ) {
+      return (error as { response: { data: { detail: string } } }).response.data.detail;
+    }
+    return fallback;
+  }
+
+  async function persistBranding(accountId: string): Promise<boolean> {
+    const draft = brandingDrafts[accountId];
+    if (!draft) return false;
+    await api.patch(`/whatsapp/accounts/${accountId}/branding`, {
+      profile_image_url: draft.profile_image_url.trim() || null,
+      catalog_cover_image_url: draft.catalog_cover_image_url.trim() || null
+    });
+    await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+    return true;
+  }
+
   async function uploadBrandingImage(
     accountId: string,
     field: "profile_image_url" | "catalog_cover_image_url",
@@ -485,7 +508,8 @@ export default function WhatsAppConnectPage() {
           [field]: uploaded.public_url
         }
       }));
-      toastStore.getState().show("تم رفع الصورة.", "success");
+      await persistBranding(accountId);
+      toastStore.getState().show("تم رفع الصورة وحفظها.", "success");
     } catch {
       toastStore.getState().show("تعذر رفع الصورة.", "error");
     } finally {
@@ -493,19 +517,17 @@ export default function WhatsAppConnectPage() {
     }
   }
 
-  async function saveBranding(accountId: string) {
+  async function saveBranding(accountId: string): Promise<boolean> {
     const draft = brandingDrafts[accountId];
-    if (!draft) return;
+    if (!draft) return false;
     setSavingBrandingId(accountId);
     try {
-      await api.patch(`/whatsapp/accounts/${accountId}/branding`, {
-        profile_image_url: draft.profile_image_url.trim() || null,
-        catalog_cover_image_url: draft.catalog_cover_image_url.trim() || null
-      });
-      await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+      await persistBranding(accountId);
       toastStore.getState().show("تم حفظ صور الهوية.", "success");
+      return true;
     } catch {
       toastStore.getState().show("تعذر حفظ صور الهوية.", "error");
+      return false;
     } finally {
       setSavingBrandingId(null);
     }
@@ -514,18 +536,15 @@ export default function WhatsAppConnectPage() {
   async function syncBrandingProfile(accountId: string) {
     setSyncingBrandingId(accountId);
     try {
+      if (!(await persistBranding(accountId))) {
+        toastStore.getState().show("ارفع صورة الملف أولاً.", "error");
+        return;
+      }
       await api.post(`/whatsapp/accounts/${accountId}/branding/sync-profile`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تمت مزامنة صورة ملف WhatsApp Business.", "success");
+      toastStore.getState().show("تم تفعيل صورة ملف WhatsApp Business على Meta.", "success");
     } catch (error: unknown) {
-      const detail =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
-          ? (error as { response: { data: { detail: string } } }).response.data.detail
-          : "تعذر مزامنة صورة الملف.";
-      toastStore.getState().show(detail, "error");
+      toastStore.getState().show(extractApiDetail(error, "تعذر مزامنة صورة الملف."), "error");
     } finally {
       setSyncingBrandingId(null);
     }
@@ -534,18 +553,15 @@ export default function WhatsAppConnectPage() {
   async function syncBrandingCatalogCover(accountId: string) {
     setSyncingBrandingId(accountId);
     try {
+      if (!(await persistBranding(accountId))) {
+        toastStore.getState().show("ارفع صورة الغلاف أولاً.", "error");
+        return;
+      }
       await api.post(`/whatsapp/accounts/${accountId}/branding/sync-catalog-cover`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تمت مزامنة غلاف الكتالوج.", "success");
+      toastStore.getState().show("تم تفعيل غلاف الكتالوج وCommerce على Meta.", "success");
     } catch (error: unknown) {
-      const detail =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
-          ? (error as { response: { data: { detail: string } } }).response.data.detail
-          : "تعذر مزامنة غلاف الكتالوج.";
-      toastStore.getState().show(detail, "error");
+      toastStore.getState().show(extractApiDetail(error, "تعذر مزامنة غلاف الكتالوج."), "error");
     } finally {
       setSyncingBrandingId(null);
     }
@@ -554,6 +570,10 @@ export default function WhatsAppConnectPage() {
   async function syncAllBranding(accountId: string) {
     setSyncingBrandingId(accountId);
     try {
+      if (!(await persistBranding(accountId))) {
+        toastStore.getState().show("ارفع صورة واحدة على الأقل.", "error");
+        return;
+      }
       const response = await api.post<{
         synced: boolean;
         errors?: string[];
@@ -563,19 +583,12 @@ export default function WhatsAppConnectPage() {
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       const errors = response.data.errors ?? [];
       if (errors.length > 0) {
-        toastStore.getState().show(`مزامنة جزئية — ${errors[0]}`, "error");
+        toastStore.getState().show(`تفعيل جزئي — ${errors[0]}`, "error");
       } else {
-        toastStore.getState().show("تمت مزامنة الهوية مع Meta.", "success");
+        toastStore.getState().show("تم تفعيل الهوية البصرية على Meta.", "success");
       }
     } catch (error: unknown) {
-      const detail =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
-          ? (error as { response: { data: { detail: string } } }).response.data.detail
-          : "تعذر مزامنة الهوية.";
-      toastStore.getState().show(detail, "error");
+      toastStore.getState().show(extractApiDetail(error, "تعذر تفعيل الهوية على Meta."), "error");
     } finally {
       setSyncingBrandingId(null);
     }
@@ -753,8 +766,15 @@ export default function WhatsAppConnectPage() {
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
                 <h3>الهوية البصرية — WhatsApp</h3>
                 <p className="hint-text">
-                  صورة ملف WhatsApp Business وغلاف الكتالوج — ارفع الصور، احفظ، ثم زامِن مع Meta.
+                  ارفع الصور ثم اضغط «تفعيل على Meta» — يُفعّل Commerce تلقائياً ويُرسل الشعار وغلاف الكتالوج.
                 </p>
+                {(brandingDraft?.profile_image_url || brandingDraft?.catalog_cover_image_url) &&
+                  !account.profile_image_synced_at &&
+                  !account.catalog_cover_synced_at && (
+                    <p className="hint-text whatsapp-branding-pending" role="alert">
+                      ⚠ الصور محفوظة لكن لم تُفعَّل على Meta بعد — اضغط «تفعيل على Meta».
+                    </p>
+                  )}
                 <div className="whatsapp-branding-grid">
                   <div className="whatsapp-branding-col">
                     <h4>صورة ملف WhatsApp Business</h4>
@@ -892,7 +912,7 @@ export default function WhatsAppConnectPage() {
                     disabled={brandingBusy}
                     onClick={() => void syncAllBranding(account.id)}
                   >
-                    {syncingBrandingId === account.id ? "جاري المزامنة…" : "مزامنة الكل → Meta"}
+                    {syncingBrandingId === account.id ? "جاري التفعيل…" : "تفعيل على Meta"}
                   </button>
                 </div>
               </article>

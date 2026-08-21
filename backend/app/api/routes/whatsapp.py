@@ -57,6 +57,7 @@ from app.services.whatsapp_branding import (
     sync_all_branding_to_meta,
     sync_catalog_cover_to_meta,
     sync_profile_image_to_meta,
+    sync_whatsapp_commerce_to_meta,
     update_whatsapp_branding_settings,
 )
 from app.services.meta_setup import ensure_whatsapp_account_webhook, get_waba_webhook_status
@@ -482,8 +483,20 @@ async def patch_whatsapp_commerce(
             meta_catalog_id=payload.meta_catalog_id,
             commerce_enabled=payload.commerce_enabled,
         )
+        if item.commerce_enabled and (item.meta_catalog_id or "").strip():
+            await sync_whatsapp_commerce_to_meta(
+                db,
+                account_id=context.account_id,
+                whatsapp_account_id=whatsapp_account_id,
+            )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+        code = str(exc)
+        if code == "WHATSAPP_ACCOUNT_NOT_AVAILABLE":
+            raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+        raise HTTPException(
+            status_code=400,
+            detail=format_meta_sync_error(code) if code not in {"META_CATALOG_NOT_CONFIGURED"} else "فعّل Commerce وأدخل Catalog ID أولاً.",
+        ) from exc
     return _response(item)
 
 

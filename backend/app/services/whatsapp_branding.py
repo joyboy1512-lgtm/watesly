@@ -12,6 +12,7 @@ from app.core.encryption import decrypt_secret
 from app.models.whatsapp_account import WhatsAppAccount
 from app.services.catalog_commerce import account_commerce_ready, format_meta_sync_error
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
+from app.services.storage import storage
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -36,7 +37,52 @@ def _meta_client(account: WhatsAppAccount) -> MetaWhatsAppClient:
     )
 
 
+async def _ensure_meta_commerce_active(client: MetaWhatsAppClient, account: WhatsAppAccount) -> dict:
+    catalog_id = (account.meta_catalog_id or "").strip()
+    if not catalog_id:
+        raise ValueError("META_CATALOG_NOT_CONFIGURED")
+
+    link_result: dict | None = None
+    try:
+        link_result = await client.link_catalog_to_waba(
+            waba_id=account.waba_id,
+            catalog_id=catalog_id,
+        )
+    except MetaAPIError as exc:
+        message = str(exc).lower()
+        if not any(token in message for token in ("already", "duplicate", "exists")):
+            raise
+
+    commerce = await client.update_whatsapp_commerce_settings(
+        is_catalog_visible=True,
+        is_cart_enabled=True,
+    )
+    return {
+        "catalog_linked": link_result is not None,
+        "commerce_settings": commerce,
+    }
+
+
 async def _fetch_image_bytes(url: str) -> tuple[bytes, str, str]:
+    key = storage.key_from_public_url(url)
+    if key:
+        try:
+            data = storage.download_bytes(key)
+            if data:
+                content_type = "image/jpeg"
+                if url.lower().endswith(".png"):
+                    content_type = "image/png"
+                elif url.lower().endswith(".webp"):
+                    content_type = "image/webp"
+                extension = "jpg"
+                if content_type == "image/png":
+                    extension = "png"
+                elif content_type == "image/webp":
+                    extension = "webp"
+                return data, content_type, f"watesly-brand.{extension}"
+        except Exception:
+            pass
+
     async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
         response = await client.get(url)
         if response.is_error:
@@ -151,6 +197,7 @@ async def sync_catalog_cover_to_meta(
     catalog_id = (account.meta_catalog_id or "").strip()
     client = _meta_client(account)
     try:
+        commerce_result = await _ensure_meta_commerce_active(client, account)
         product_sets = await client.list_catalog_product_sets(catalog_id=catalog_id)
         if not product_sets:
             raise ValueError("META_PRODUCT_SET_NOT_FOUND")
@@ -166,7 +213,35 @@ async def sync_catalog_cover_to_meta(
             "synced": True,
             "cover_image_url": cover_url,
             "product_set_id": product_set_id,
+            "commerce_enabled_on_meta": True,
+            "commerce_settings": commerce_result.get("commerce_settings"),
         }
+    except MetaAPIError as exc:
+        raise ValueError(format_meta_sync_error(str(exc))) from exc
+    finally:
+        await client.aclose()
+
+
+async def sync_whatsapp_commerce_to_meta(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    whatsapp_account_id: UUID,
+) -> dict:
+    account = await _load_whatsapp_account(
+        db,
+        account_id=account_id,
+        whatsapp_account_id=whatsapp_account_id,
+    )
+    if not account_commerce_ready(account):
+        raise ValueError("META_CATALOG_NOT_CONFIGURED")
+
+    client = _meta_client(account)
+    try:
+        result = await _ensure_meta_commerce_active(client, account)
+        account.catalog_synced_at = datetime.now(UTC)
+        await db.commit()
+        return {"synced": True, **result}
     except MetaAPIError as exc:
         raise ValueError(format_meta_sync_error(str(exc))) from exc
     finally:
@@ -200,6 +275,15 @@ async def sync_all_branding_to_meta(
     if (account.catalog_cover_image_url or "").strip() and account_commerce_ready(account):
         try:
             cover_result = await sync_catalog_cover_to_meta(
+                db,
+                account_id=account_id,
+                whatsapp_account_id=whatsapp_account_id,
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
+    elif account_commerce_ready(account):
+        try:
+            await sync_whatsapp_commerce_to_meta(
                 db,
                 account_id=account_id,
                 whatsapp_account_id=whatsapp_account_id,
