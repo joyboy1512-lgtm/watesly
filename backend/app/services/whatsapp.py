@@ -331,6 +331,11 @@ def _account_to_response(
         "meta_catalog_id": item.meta_catalog_id,
         "commerce_enabled": bool(item.commerce_enabled),
         "catalog_synced_at": item.catalog_synced_at,
+        "profile_image_url": item.profile_image_url,
+        "profile_image_synced_at": item.profile_image_synced_at,
+        "catalog_cover_image_url": item.catalog_cover_image_url,
+        "meta_catalog_product_set_id": item.meta_catalog_product_set_id,
+        "catalog_cover_synced_at": item.catalog_cover_synced_at,
     }
 
 
