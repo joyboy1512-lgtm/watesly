@@ -15,6 +15,7 @@ import { toastStore } from "../stores/toast";
 import {
   commerceStatusClass,
   connectionMethodClass,
+  formatCommerceShort,
   formatCommerceSummary,
   formatConnectionMethod,
   formatHealthSynced,
@@ -26,7 +27,7 @@ import {
   getMetaHealthSeverity,
   metaHealthBadgeClass,
   qualityBadgeClass,
-  truncateMetaId,
+  whatsappStatusBadgeClass,
   type WhatsAppAccountRow
 } from "../lib/whatsappHelpers";
 
@@ -42,6 +43,8 @@ type TableRow = {
 };
 
 type PageTab = "accounts" | "connect" | "entry";
+
+const WHATSAPP_ACCOUNT_TABLE_COLS = 5;
 
 type CommerceReadiness = {
   commerce_enabled: boolean;
@@ -61,6 +64,7 @@ export default function WhatsAppConnectPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
 
   const [channelId, setChannelId] = useState("");
   const [embeddedChannelId, setEmbeddedChannelId] = useState("");
@@ -560,6 +564,7 @@ export default function WhatsAppConnectPage() {
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       toastStore.getState().show("تم فصل الحساب.", "success");
       if (expandedId === accountId) setExpandedId(null);
+      if (detailsId === accountId) setDetailsId(null);
     } catch {
       toastStore.getState().show("تعذر فصل الحساب.", "error");
     }
@@ -570,6 +575,22 @@ export default function WhatsAppConnectPage() {
     setEmbeddedChannelId(channelIdValue);
     setActiveTab("connect");
     setSearchParams({ channel: channelIdValue });
+  }
+
+  function toggleAccountDetails(accountId: string) {
+    setDetailsId((current) => {
+      const next = current === accountId ? null : accountId;
+      if (next) setExpandedId(null);
+      return next;
+    });
+  }
+
+  function toggleAccountSettings(accountId: string) {
+    setExpandedId((current) => {
+      const next = current === accountId ? null : accountId;
+      if (next) setDetailsId(null);
+      return next;
+    });
   }
 
   function renderReplaceWarning(account: WhatsAppAccountRow) {
@@ -647,6 +668,115 @@ export default function WhatsAppConnectPage() {
     return null;
   }
 
+  function renderAccountDetailsPanel(account: WhatsAppAccountRow, row: TableRow) {
+    return (
+      <tr className="whatsapp-details-row">
+        <td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS}>
+          <div className="whatsapp-details-shell">
+            <header className="whatsapp-details-header">
+              <div>
+                <h3>تفاصيل {account.verified_name || account.display_phone_number}</h3>
+                <p className="hint-text">{row.channelName} · {row.organizationName}</p>
+              </div>
+              <button type="button" className="secondary-button compact" onClick={() => setDetailsId(null)}>
+                إغلاق
+              </button>
+            </header>
+            <div className="whatsapp-details-grid">
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">WABA ID</span>
+                <code dir="ltr">{account.waba_id}</code>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">Phone Number ID</span>
+                <code dir="ltr">{account.phone_number_id}</code>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">الجودة</span>
+                <span className={qualityBadgeClass(account.quality_rating)}>
+                  {formatQualityRating(account.quality_rating)}
+                </span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">حد الإرسال</span>
+                <span>{formatMessagingLimit(account)}</span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">طريقة الربط</span>
+                <span className={connectionMethodClass(account.connection_method)}>
+                  {formatConnectionMethod(account.connection_method)}
+                </span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">آخر مزامنة Meta</span>
+                <span>{formatHealthSynced(account.health_synced_at)}</span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">Commerce</span>
+                <span className={commerceStatusClass(account)}>{formatCommerceSummary(account)}</span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">حالة Meta</span>
+                <div className="whatsapp-details-stack">
+                  <span className={metaHealthBadgeClass(account)}>{formatMetaHealthLabel(account)}</span>
+                  <small className="meta-health-details">{formatMetaHealthDetails(account)}</small>
+                </div>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">Watesly</span>
+                <span className={whatsappStatusBadgeClass(account.status)}>{formatWhatsAppStatus(account.status)}</span>
+              </div>
+              {account.meta_catalog_id && (
+                <div className="whatsapp-details-item">
+                  <span className="whatsapp-details-label">Catalog ID</span>
+                  <code dir="ltr">{account.meta_catalog_id}</code>
+                </div>
+              )}
+              {account.catalog_synced_at && (
+                <div className="whatsapp-details-item">
+                  <span className="whatsapp-details-label">مزامنة الكتالوج</span>
+                  <span>{formatHealthSynced(account.catalog_synced_at)}</span>
+                </div>
+              )}
+            </div>
+            <div className="admin-actions whatsapp-details-actions">
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={syncingId === account.id}
+                onClick={() => void syncHealth(account.id)}
+              >
+                {syncingId === account.id ? "…" : "مزامنة Meta"}
+              </button>
+              <Link to="/inbox" className="secondary-button compact">Inbox</Link>
+              <button
+                type="button"
+                className="secondary-button compact"
+                onClick={() => openConnectForChannel(row.channel.id)}
+              >
+                استبدال الرقم
+              </button>
+              <button
+                type="button"
+                className="secondary-button compact"
+                onClick={() => toggleAccountSettings(account.id)}
+              >
+                إعدادات
+              </button>
+              <button
+                type="button"
+                className="secondary-button compact danger-text"
+                onClick={() => void disconnectAccount(account.id)}
+              >
+                فصل
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   function renderExpandedPanel(account: WhatsAppAccountRow) {
     const commerceDraft = commerceDrafts[account.id];
     const brandingDraft = brandingDrafts[account.id];
@@ -662,7 +792,7 @@ export default function WhatsAppConnectPage() {
 
     return (
       <tr className="whatsapp-expand-row">
-        <td colSpan={10}>
+        <td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS}>
           <div className="whatsapp-expand-shell">
             <header className="whatsapp-expand-header">
               <div>
@@ -921,7 +1051,7 @@ export default function WhatsAppConnectPage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">WhatsApp Business API</span>
           <h1>WhatsApp Business</h1>
-          <p>جدول موحّد لكل قناة وحساب مربوط — حالة Meta مباشرة، الجودة، Token، Commerce، والإجراءات.</p>
+          <p>جدول مرتب لكل قناة — صف واحد مختصر مع تفاصيل كاملة وإعدادات عند الطلب.</p>
         </div>
         <Link to="/channels" className="secondary-button">إدارة القنوات ←</Link>
       </header>
@@ -953,7 +1083,7 @@ export default function WhatsAppConnectPage() {
           <div className="admin-table-header">
             <div>
               <h2>جدول حسابات WhatsApp</h2>
-              <small>{filteredRows.length} صف · تُزامَن حالة Meta تلقائياً عند فتح الصفحة (كل 10 دقائق)</small>
+              <small>{filteredRows.length} صف · اضغط «تفاصيل» لعرض المعرفات والمزامنة · «إعدادات» للتعديل</small>
             </div>
           </div>
 
@@ -974,27 +1104,22 @@ export default function WhatsAppConnectPage() {
           </div>
 
           <div className="admin-table-wrap">
-            <table className="admin-erp-table whatsapp-erp-table">
+            <table className="admin-erp-table whatsapp-erp-table whatsapp-accounts-compact">
               <thead>
                 <tr>
-                  <th>القناة / الفرع</th>
-                  <th>WhatsApp Business</th>
-                  <th>Meta IDs</th>
-                  <th>الجودة / الحد</th>
+                  <th>الحساب</th>
+                  <th>الحالة</th>
                   <th>Commerce</th>
                   <th>Token</th>
-                  <th>آخر مزامنة</th>
-                  <th>الربط</th>
-                  <th>حالة Meta (مباشرة)</th>
                   <th>إجراءات</th>
                 </tr>
               </thead>
               <tbody>
                 {accounts.isLoading && (
-                  <tr><td colSpan={10} className="admin-table-empty">جاري التحميل…</td></tr>
+                  <tr><td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS} className="admin-table-empty">جاري التحميل…</td></tr>
                 )}
                 {!accounts.isLoading && filteredRows.length === 0 && (
-                  <tr><td colSpan={10} className="admin-table-empty">لا توجد قنوات WhatsApp.</td></tr>
+                  <tr><td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS} className="admin-table-empty">لا توجد قنوات WhatsApp.</td></tr>
                 )}
                 {filteredRows.map((row) => {
                   const account = row.account;
@@ -1002,13 +1127,14 @@ export default function WhatsAppConnectPage() {
                     return (
                       <tr key={row.key}>
                         <td>
-                          <div className="admin-cell-main">
+                          <div className="whatsapp-account-cell">
                             <strong>{row.channelName}</strong>
                             <small>{row.organizationName}</small>
                           </div>
                         </td>
-                        <td colSpan={7}><span className="admin-chip admin-chip-muted">لم يُربَط بعد</span></td>
                         <td><span className="admin-status admin-status-pending">غير مربوط</span></td>
+                        <td><span className="admin-chip admin-chip-muted">—</span></td>
+                        <td><span className="admin-chip admin-chip-muted">—</span></td>
                         <td>
                           <button type="button" className="whatsapp-button compact" onClick={() => openConnectForChannel(row.channel.id)}>
                             ربط
@@ -1019,89 +1145,53 @@ export default function WhatsAppConnectPage() {
                   }
 
                   const isExpanded = expandedId === account.id;
+                  const isDetailsOpen = detailsId === account.id;
                   return (
                     <Fragment key={account.id}>
                       <tr>
                         <td>
-                          <div className="admin-cell-main">
-                            <strong>{row.channelName}</strong>
-                            <small>{row.organizationName}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="admin-cell-stack">
-                            <strong>{account.verified_name || "—"}</strong>
+                          <div className="whatsapp-account-cell">
+                            <strong>{account.verified_name || row.channelName}</strong>
                             <small dir="ltr">{account.display_phone_number}</small>
+                            <small>{row.channelName} · {row.organizationName}</small>
                           </div>
                         </td>
                         <td>
-                          <div className="admin-cell-stack" dir="ltr">
-                            <small title={account.waba_id}>WABA {truncateMetaId(account.waba_id)}</small>
-                            <small title={account.phone_number_id}>Phone {truncateMetaId(account.phone_number_id)}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="admin-cell-stack">
-                            <span className={qualityBadgeClass(account.quality_rating)}>
-                              {formatQualityRating(account.quality_rating)}
-                            </span>
-                            <small>{formatMessagingLimit(account)}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={commerceStatusClass(account)}>{formatCommerceSummary(account)}</span>
-                        </td>
-                        <td>{renderTokenBadge(account.id)}</td>
-                        <td><small>{formatHealthSynced(account.health_synced_at)}</small></td>
-                        <td>
-                          <span className={connectionMethodClass(account.connection_method)}>
-                            {formatConnectionMethod(account.connection_method)}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="admin-cell-stack">
-                            <span className={metaHealthBadgeClass(account)}>
+                          <div className="whatsapp-status-cell">
+                            <span className={metaHealthBadgeClass(account)} title={formatMetaHealthDetails(account)}>
                               {formatMetaHealthLabel(account)}
                             </span>
-                            <small className="meta-health-details">{formatMetaHealthDetails(account)}</small>
-                            <small className="meta-health-details">Watesly: {formatWhatsAppStatus(account.status)}</small>
+                            <span className={whatsappStatusBadgeClass(account.status)}>
+                              {formatWhatsAppStatus(account.status)}
+                            </span>
                           </div>
                         </td>
                         <td>
-                          <div className="admin-actions whatsapp-row-actions">
+                          <span className={commerceStatusClass(account)} title={formatCommerceSummary(account)}>
+                            {formatCommerceShort(account)}
+                          </span>
+                        </td>
+                        <td>{renderTokenBadge(account.id)}</td>
+                        <td>
+                          <div className="admin-actions whatsapp-row-actions whatsapp-row-actions-compact">
                             <button
                               type="button"
                               className="secondary-button compact"
-                              disabled={syncingId === account.id}
-                              onClick={() => void syncHealth(account.id)}
+                              onClick={() => toggleAccountDetails(account.id)}
                             >
-                              {syncingId === account.id ? "…" : "مزامنة"}
+                              {isDetailsOpen ? "إخفاء" : "تفاصيل"}
                             </button>
                             <button
                               type="button"
-                              className="secondary-button compact"
-                              onClick={() => setExpandedId(isExpanded ? null : account.id)}
+                              className="whatsapp-button compact"
+                              onClick={() => toggleAccountSettings(account.id)}
                             >
                               {isExpanded ? "إغلاق" : "إعدادات"}
-                            </button>
-                            <Link to={`/inbox`} className="secondary-button compact">Inbox</Link>
-                            <button
-                              type="button"
-                              className="secondary-button compact"
-                              onClick={() => openConnectForChannel(row.channel.id)}
-                            >
-                              استبدال
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-button compact danger-text"
-                              onClick={() => void disconnectAccount(account.id)}
-                            >
-                              فصل
                             </button>
                           </div>
                         </td>
                       </tr>
+                      {isDetailsOpen && renderAccountDetailsPanel(account, row)}
                       {isExpanded && renderExpandedPanel(account)}
                     </Fragment>
                   );

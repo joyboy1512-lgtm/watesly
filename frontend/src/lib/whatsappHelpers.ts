@@ -120,6 +120,13 @@ export function formatCommerceSummary(account: WhatsAppAccountRow): string {
   return "غير مفعّل";
 }
 
+export function formatCommerceShort(account: WhatsAppAccountRow): string {
+  if (account.commerce_enabled && account.meta_catalog_id) return "مفعّل";
+  if (account.meta_catalog_id) return "Catalog";
+  if (account.commerce_enabled) return "بدون Catalog";
+  return "—";
+}
+
 export function commerceStatusClass(account: WhatsAppAccountRow): string {
   if (account.commerce_enabled && account.meta_catalog_id) {
     return "admin-status admin-status-active";
