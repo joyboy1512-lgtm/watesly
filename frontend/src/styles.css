@@ -5164,22 +5164,34 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .team-add-tip .hint-text { margin: 8px 0 0; }
 .team-add-form { display: grid; gap: 16px; padding: 16px 20px 20px; }
+.team-add-form-section {
+  display: grid;
+  gap: 14px;
+}
 .team-add-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
 .team-field {
   display: grid;
   gap: 6px;
+  min-width: 0;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
 }
+.team-field > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-darker);
+}
 .team-field input,
 .team-field select {
-  padding: 9px 11px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(7, 94, 84, 0.14);
   font-size: 13px;
@@ -5187,11 +5199,23 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 400;
   color: var(--text);
 }
+.team-add-form-grid-compact {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 420px;
+}
+.team-field-role {
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+.team-field-role select {
+  max-width: 360px;
+}
 .team-field small {
   font-weight: 400;
   font-size: 11px;
   color: var(--muted);
-  line-height: 1.4;
+  line-height: 1.5;
+  max-width: 640px;
 }
 .team-add-access {
   padding: 14px 16px;
@@ -5279,8 +5303,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   min-width: 200px;
   white-space: nowrap;
 }
-@media (max-width: 980px) {
+@media (max-width: 720px) {
   .team-add-form-grid { grid-template-columns: 1fr; }
+  .team-field-role select { max-width: none; }
   .team-table-toolbar input,
   .team-table-toolbar select { width: 100%; min-width: 0; }
   .team-row-actions { flex-wrap: wrap; }

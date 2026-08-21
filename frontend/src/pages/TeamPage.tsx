@@ -189,30 +189,32 @@ export default function TeamPage() {
   function renderAddEmployeeForm(onSubmit: (event: FormEvent) => void, submitLabel: string, submitting: boolean, showDirectFields: boolean) {
     return (
       <form className="team-add-form" onSubmit={onSubmit}>
-        <div className="team-add-form-grid">
-          {showDirectFields && (
+        <div className="team-add-form-section">
+          <div className={`team-add-form-grid${showDirectFields ? "" : " team-add-form-grid-compact"}`}>
+            {showDirectFields && (
+              <label className="team-field">
+                <span>الاسم الكامل</span>
+                <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="مثال: أحمد محمد" required minLength={2} />
+              </label>
+            )}
             <label className="team-field">
-              <span>الاسم الكامل</span>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="مثال: أحمد محمد" required minLength={2} />
+              <span>البريد الإلكتروني</span>
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" required type="email" dir="ltr" />
             </label>
-          )}
-          <label className="team-field">
-            <span>البريد الإلكتروني</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" required type="email" dir="ltr" />
-          </label>
-          {showDirectFields && (
-            <>
-              <label className="team-field">
-                <span>كلمة المرور</span>
-                <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6 أحرف على الأقل" required type="password" minLength={6} autoComplete="new-password" />
-              </label>
-              <label className="team-field">
-                <span>تأكيد كلمة المرور</span>
-                <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="أعد إدخال كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
-              </label>
-            </>
-          )}
-          <label className="team-field">
+            {showDirectFields && (
+              <>
+                <label className="team-field">
+                  <span>كلمة المرور</span>
+                  <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6 أحرف على الأقل" required type="password" minLength={6} autoComplete="new-password" />
+                </label>
+                <label className="team-field">
+                  <span>تأكيد كلمة المرور</span>
+                  <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="أعد إدخال كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
+                </label>
+              </>
+            )}
+          </div>
+          <label className="team-field team-field-role">
             <span>دور الموظف</span>
             <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
               {inviteableRoles.map((item) => (
