@@ -123,6 +123,24 @@ async def _fetch_image_bytes(url: str) -> tuple[bytes, str, str]:
         return data, content_type, f"watesly-brand.{extension}"
 
 
+async def _push_image_url_to_whatsapp_profile(
+    client: MetaWhatsAppClient,
+    image_url: str,
+) -> dict:
+    file_bytes, mime_type, file_name = await _fetch_image_bytes(image_url)
+    handle = await client.upload_resumable_file(
+        file_name=file_name,
+        file_bytes=file_bytes,
+        mime_type=mime_type,
+    )
+    await client.update_whatsapp_business_profile(profile_picture_handle=handle)
+    profile = await client.get_whatsapp_business_profile()
+    return {
+        "profile_image_url": image_url,
+        "meta_profile_picture_url": profile.get("profile_picture_url"),
+    }
+
+
 def _pick_product_set_id(account: WhatsAppAccount, product_sets: list[dict]) -> str:
     stored = (account.meta_catalog_product_set_id or "").strip()
     if stored and any(str(item.get("id")) == stored for item in product_sets):
@@ -171,22 +189,14 @@ async def sync_profile_image_to_meta(
     if not image_url:
         raise ValueError("PROFILE_IMAGE_REQUIRED")
 
-    file_bytes, mime_type, file_name = await _fetch_image_bytes(image_url)
     client = _meta_client(account)
     try:
-        handle = await client.upload_resumable_file(
-            file_name=file_name,
-            file_bytes=file_bytes,
-            mime_type=mime_type,
-        )
-        await client.update_whatsapp_business_profile(profile_picture_handle=handle)
-        profile = await client.get_whatsapp_business_profile()
+        profile_result = await _push_image_url_to_whatsapp_profile(client, image_url)
         account.profile_image_synced_at = datetime.now(UTC)
         await db.commit()
         return {
             "synced": True,
-            "profile_image_url": image_url,
-            "meta_profile_picture_url": profile.get("profile_picture_url"),
+            **profile_result,
         }
     except MetaAPIError as exc:
         raise ValueError(format_meta_sync_error(str(exc))) from exc
@@ -227,6 +237,10 @@ async def sync_catalog_cover_to_meta(
         if meta_cover_url != cover_url:
             raise ValueError("META_CATALOG_COVER_NOT_APPLIED")
 
+        # WhatsApp catalog header renders the business profile photo, not default_image_url.
+        profile_result = await _push_image_url_to_whatsapp_profile(client, cover_url)
+        account.profile_image_synced_at = datetime.now(UTC)
+
         product_set_id: str | None = None
         product_set_cover_url: str | None = None
         product_sets = await client.list_catalog_product_sets(catalog_id=catalog_id)
@@ -257,8 +271,10 @@ async def sync_catalog_cover_to_meta(
             "product_set_id": product_set_id,
             "commerce_enabled_on_meta": True,
             "commerce_settings": commerce_result.get("commerce_settings"),
+            "meta_profile_picture_url": profile_result.get("meta_profile_picture_url"),
             "whatsapp_note": (
-                "WhatsApp catalog header uses the catalog default image on Meta. "
+                "WhatsApp catalog header uses the business profile photo. "
+                "We updated both catalog default_image_url and profile photo from the cover image. "
                 "Changes may take a few minutes to appear in the WhatsApp app."
             ),
         }
@@ -309,7 +325,24 @@ async def sync_all_branding_to_meta(
         account_id=account_id,
         whatsapp_account_id=whatsapp_account_id,
     )
-    if (account.profile_image_url or "").strip():
+    has_cover = bool((account.catalog_cover_image_url or "").strip()) and account_commerce_ready(account)
+    has_profile = bool((account.profile_image_url or "").strip())
+    if has_cover:
+        try:
+            cover_result = await sync_catalog_cover_to_meta(
+                db,
+                account_id=account_id,
+                whatsapp_account_id=whatsapp_account_id,
+            )
+            profile_result = {
+                "synced": True,
+                "profile_image_url": (account.catalog_cover_image_url or "").strip(),
+                "meta_profile_picture_url": (cover_result or {}).get("meta_profile_picture_url"),
+                "via_catalog_cover": True,
+            }
+        except ValueError as exc:
+            errors.append(str(exc))
+    elif has_profile:
         try:
             profile_result = await sync_profile_image_to_meta(
                 db,
@@ -318,16 +351,7 @@ async def sync_all_branding_to_meta(
             )
         except ValueError as exc:
             errors.append(str(exc))
-    if (account.catalog_cover_image_url or "").strip() and account_commerce_ready(account):
-        try:
-            cover_result = await sync_catalog_cover_to_meta(
-                db,
-                account_id=account_id,
-                whatsapp_account_id=whatsapp_account_id,
-            )
-        except ValueError as exc:
-            errors.append(str(exc))
-    elif account_commerce_ready(account):
+    if not has_cover and account_commerce_ready(account):
         try:
             await sync_whatsapp_commerce_to_meta(
                 db,

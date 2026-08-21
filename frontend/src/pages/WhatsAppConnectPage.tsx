@@ -775,12 +775,12 @@ export default function WhatsAppConnectPage() {
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
                 <h3>الهوية البصرية — WhatsApp</h3>
                 <p className="hint-text">
-                  صورة الملف تظهر بجانب اسم الشركة في المحادثات. غلاف الكتالوج يُحدَّث على Meta Catalog
-                  (default_image_url) ويظهر أعلى صفحة الكتالوج داخل WhatsApp.
+                  صورة الملف تظهر في المحادثات. أعلى صفحة الكتالوج في WhatsApp يستخدم Meta نفس صورة الملف
+                  (مع اسم الشركة) — لذلك عند تفعيل الغلاف نحدّث صورة الملف على Meta من صورة الغلاف.
                 </p>
                 <p className="hint-text whatsapp-branding-note" role="note">
-                  ملاحظة: التغيير قد يتأخر 5–15 دقيقة داخل تطبيق WhatsApp. أغلق صفحة الكتالوج وأعد فتحها،
-                  أو امسح cache التطبيق إن لم يظهر الغلاف الجديد.
+                  WhatsApp Cloud API لا يدعم غلافاً منفصلاً عن صورة الملف — الغلاف هو ما يظهر أعلى الكتالوج.
+                  التغيير قد يتأخر 5–15 دقيقة؛ أغلق الكتالوج وأعد فتحه.
                 </p>
                 {(brandingDraft?.profile_image_url || brandingDraft?.catalog_cover_image_url) &&
                   !account.profile_image_synced_at &&
@@ -861,7 +861,7 @@ export default function WhatsAppConnectPage() {
                     <h4>غلاف الكتالوج في WhatsApp</h4>
                     <p className="hint-text">
                       {commerceOn && savedCatalogId
-                        ? "يُحدَّث default_image_url على Meta Catalog — هذا ما يظهر أعلى صفحة الكتالوج."
+                        ? "يُحدَّث على Meta Catalog ويُطبَّق كصورة ملف — هذا ما يظهر أعلى الكتالوج."
                         : "فعّل Commerce وأدخل Catalog ID أولاً."}
                     </p>
                     <div className="catalog-image-row whatsapp-branding-image">
