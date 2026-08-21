@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import smtplib
 from email.message import EmailMessage
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -14,6 +16,8 @@ from app.models.membership import MembershipRole
 logger = logging.getLogger(__name__)
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
+EmailAttachment = tuple[str, bytes, str]
 
 ROLE_LABELS: dict[MembershipRole, str] = {
     MembershipRole.OWNER: "مالك الحساب",
@@ -49,18 +53,33 @@ def _sender_payload() -> dict[str, str]:
     return {"email": from_email, "name": from_name}
 
 
-async def _send_via_brevo_api(*, to: str, subject: str, text_body: str, html_body: str) -> None:
+async def _send_via_brevo_api(
+    *,
+    to: str,
+    subject: str,
+    text_body: str,
+    html_body: str,
+    attachments: list[EmailAttachment] | None = None,
+) -> None:
     api_key = settings.brevo_api_key.get_secret_value() if settings.brevo_api_key else None
     if not api_key:
         raise RuntimeError("Brevo API key is not configured")
 
-    payload = {
+    payload: dict[str, Any] = {
         "sender": _sender_payload(),
         "to": [{"email": to}],
         "subject": subject,
         "textContent": text_body,
         "htmlContent": html_body,
     }
+    if attachments:
+        payload["attachment"] = [
+            {
+                "content": base64.b64encode(content).decode("ascii"),
+                "name": filename,
+            }
+            for filename, content, _mime in attachments
+        ]
     async with httpx.AsyncClient(timeout=settings.smtp_timeout_seconds) as client:
         response = await client.post(
             BREVO_API_URL,
@@ -75,7 +94,14 @@ async def _send_via_brevo_api(*, to: str, subject: str, text_body: str, html_bod
         raise RuntimeError(f"Brevo API error {response.status_code}: {response.text[:500]}")
 
 
-def _send_email_smtp_sync(*, to: str, subject: str, text_body: str, html_body: str) -> None:
+def _send_email_smtp_sync(
+    *,
+    to: str,
+    subject: str,
+    text_body: str,
+    html_body: str,
+    attachments: list[EmailAttachment] | None = None,
+) -> None:
     if not is_smtp_configured():
         raise RuntimeError("SMTP is not configured")
 
@@ -85,6 +111,9 @@ def _send_email_smtp_sync(*, to: str, subject: str, text_body: str, html_body: s
     message["To"] = to
     message.set_content(text_body)
     message.add_alternative(html_body, subtype="html")
+    for filename, content, mime_type in attachments or []:
+        maintype, _, subtype = mime_type.partition("/")
+        message.add_attachment(content, maintype=maintype, subtype=subtype or "octet-stream", filename=filename)
 
     host = settings.smtp_host or ""
     port = settings.smtp_port
@@ -111,9 +140,22 @@ def _format_from_address() -> str:
     return f"{sender['name']} <{sender['email']}>"
 
 
-async def send_email(*, to: str, subject: str, text_body: str, html_body: str) -> None:
+async def send_email(
+    *,
+    to: str,
+    subject: str,
+    text_body: str,
+    html_body: str,
+    attachments: list[EmailAttachment] | None = None,
+) -> None:
     if is_brevo_configured():
-        await _send_via_brevo_api(to=to, subject=subject, text_body=text_body, html_body=html_body)
+        await _send_via_brevo_api(
+            to=to,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            attachments=attachments,
+        )
         return
     await asyncio.to_thread(
         _send_email_smtp_sync,
@@ -121,6 +163,7 @@ async def send_email(*, to: str, subject: str, text_body: str, html_body: str) -
         subject=subject,
         text_body=text_body,
         html_body=html_body,
+        attachments=attachments,
     )
 
 

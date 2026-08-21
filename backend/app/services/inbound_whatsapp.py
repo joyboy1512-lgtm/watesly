@@ -377,6 +377,14 @@ async def process_inbound_side_effects(
                 order_data=ctx.order_data,
                 product_names=product_names,
             )
+            from app.services.catalog_orders import notify_catalog_order_received
+
+            await notify_catalog_order_received(
+                db,
+                account_id=whatsapp_account.account_id,
+                order=catalog_order,
+                contact_name=contact.display_name,
+            )
             await publish_event(
                 whatsapp_account.account_id,
                 {

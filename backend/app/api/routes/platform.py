@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.permissions import Permission
 from app.db.session import get_db
+from app.schemas.email_settings import EmailSettingsResponse, EmailSettingsUpdate, EmailTestRequest
 from app.services.ai_assistant import (
     agent_capabilities,
     categorize_conversation,
@@ -969,6 +970,78 @@ async def patch_webhook(
 
 class FeatureFlagsUpdate(BaseModel):
     flags: dict = Field(default_factory=dict)
+
+
+@router.get("/email-settings", response_model=EmailSettingsResponse)
+async def get_email_settings_route(
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.account_email_settings import get_email_settings
+
+    try:
+        data = await get_email_settings(db, account_id=context.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Account not found") from exc
+    return EmailSettingsResponse(**data)
+
+
+@router.patch("/email-settings", response_model=EmailSettingsResponse)
+async def patch_email_settings_route(
+    payload: EmailSettingsUpdate,
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.account_email_settings import update_email_settings
+
+    try:
+        data = await update_email_settings(
+            db,
+            account_id=context.account_id,
+            email_notifications_enabled=payload.email_notifications_enabled,
+            notification_emails=payload.notification_emails,
+            catalog_order_emails=payload.catalog_order_emails,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Account not found") from exc
+    return EmailSettingsResponse(**data)
+
+
+@router.post("/email-settings/test")
+async def post_email_settings_test(
+    payload: EmailTestRequest,
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.account_email_settings import (
+        resolve_catalog_order_recipients,
+        resolve_notification_recipients,
+    )
+    from app.services.email import is_email_configured, send_email
+
+    if not is_email_configured():
+        raise HTTPException(status_code=409, detail="EMAIL_NOT_CONFIGURED")
+
+    if payload.target == "catalog_order":
+        recipients = await resolve_catalog_order_recipients(db, account_id=context.account_id)
+    else:
+        recipients = await resolve_notification_recipients(db, account_id=context.account_id)
+
+    if not recipients:
+        raise HTTPException(status_code=400, detail="NO_EMAIL_RECIPIENTS")
+
+    subject = "اختبار بريد Watesly"
+    text_body = "تم إرسال رسالة اختبار من Watesly بنجاح."
+    html_body = (
+        "<html lang='ar' dir='rtl'><body style='font-family:Arial,sans-serif;'>"
+        "<p>تم إرسال رسالة اختبار من <strong>Watesly</strong> بنجاح.</p>"
+        "</body></html>"
+    )
+    sent = 0
+    for recipient in recipients:
+        await send_email(to=recipient, subject=subject, text_body=text_body, html_body=html_body)
+        sent += 1
+    return {"sent": sent, "recipients": recipients}
 
 
 @router.get("/feature-flags")

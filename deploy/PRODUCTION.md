@@ -147,6 +147,30 @@ ssh root@64.226.69.159
 
 **الحالة الحالية على الإنتاج:** `BREVO_API_KEY` فارغ → `is_brevo_configured()=False` → الدعوات لا تُرسل فعلياً رغم ظهور واجهة الدعوة.
 
+### إشعارات البريد (Inbox + طلبات الكتالوج)
+
+بعد تفعيل Brevo:
+
+1. من Watesly → **المطور** → تبويب **«البريد»**
+2. أدخل عناوين الإشعارات (مثل `info@watesly.com`)
+3. اختياري: بريد منفصل لطلبات الكتالوج (يُرفق PDF الفاتورة)
+4. اضغط **اختبار** للتأكد
+
+**ما يُرسل تلقائياً:**
+
+| الحدث | البريد |
+|-------|--------|
+| دعوة موظف | من «الموظفون» (موجود مسبقاً) |
+| رسالة WhatsApp / SLA / قالب | نسخة إلى `notification_emails` |
+| طلب كتالوج جديد | إلى `catalog_order_emails` + **PDF فاتورة** |
+
+Env اختياري على السيرفر:
+
+```env
+NOTIFICATION_EMAILS=info@watesly.com
+CATALOG_ORDER_EMAILS=orders@watesly.com
+```
+
 ### Alternative: Brevo SMTP on port 2525
 
 ```env

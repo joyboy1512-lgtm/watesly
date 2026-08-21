@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -17,6 +18,8 @@ from app.models.contact import Contact
 from app.models.message import Message, MessageType
 from app.models.organization import Organization
 from app.services.inbound_commerce import order_total_amount, resolve_order_product_names
+
+logger = logging.getLogger(__name__)
 
 
 def build_line_items(
@@ -110,6 +113,39 @@ async def create_catalog_order(
     db.add(order)
     await db.flush()
     return order
+
+
+async def notify_catalog_order_received(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    order: CatalogOrder,
+    contact_name: str | None = None,
+) -> None:
+    """Create in-app notification and send email with invoice PDF."""
+    from app.services.email_notifications import send_catalog_order_notification
+    from app.services.notifications import create_notification
+
+    customer = contact_name or "عميل"
+    title = f"طلب كتالوج جديد — {order.order_number}"
+    body = f"استلم {customer} طلبًا من WhatsApp Catalog بقيمة {order.subtotal} {order.currency}."
+    await create_notification(
+        db,
+        account_id=account_id,
+        user_id=None,
+        type="catalog_order_received",
+        title=title,
+        body=body,
+        data={
+            "catalog_order_id": str(order.id),
+            "order_number": order.order_number,
+            "conversation_id": str(order.conversation_id) if order.conversation_id else None,
+        },
+    )
+    try:
+        await send_catalog_order_notification(db, account_id=account_id, order=order)
+    except Exception:
+        logger.exception("Catalog order email notification failed for order %s", order.id)
 
 
 async def backfill_catalog_orders_from_messages(db: AsyncSession, *, account_id: UUID) -> int:

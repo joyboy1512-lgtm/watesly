@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, String
+from sqlalchemy import Enum, String, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,9 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     feature_flags: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    notification_emails: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    catalog_order_emails: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    email_notifications_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
     organizations: Mapped[list["Organization"]] = relationship(
         back_populates="account",

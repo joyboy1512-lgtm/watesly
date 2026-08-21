@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,7 +34,16 @@ type DeliveryRow = {
   created_at: string | null;
 };
 
-type DevTab = "keys" | "webhooks" | "deliveries" | "docs" | "marketplace" | "power" | "growth";
+type DevTab = "keys" | "webhooks" | "deliveries" | "docs" | "marketplace" | "power" | "growth" | "email";
+
+type EmailSettings = {
+  email_notifications_enabled: boolean;
+  notification_emails: string[];
+  catalog_order_emails: string[];
+  email_configured: boolean;
+  brevo_configured: boolean;
+  smtp_configured: boolean;
+};
 
 type MarketplacePayload = {
   integrations?: Array<{ id: string; name: string; category: string; description: string | null; status: string }>;
@@ -61,7 +70,8 @@ export default function DeveloperPage() {
     { id: "docs", label: t("developer.tabDocs") },
     { id: "marketplace", label: t("developer.tabMarketplace") },
     { id: "power", label: "ميزات Watesly" },
-    { id: "growth", label: "E-Commerce" }
+    { id: "growth", label: "E-Commerce" },
+    { id: "email", label: "البريد" }
   ];
   const client = useQueryClient();
   const [tab, setTab] = useState<DevTab>("keys");
@@ -386,7 +396,130 @@ export default function DeveloperPage() {
       {tab === "growth" && (
         <GrowthEcommercePanel />
       )}
+
+      {tab === "email" && (
+        <EmailNotificationsPanel />
+      )}
     </main>
+  );
+}
+
+function EmailNotificationsPanel() {
+  const client = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["email-settings"],
+    queryFn: async () => (await api.get<EmailSettings>("/platform/email-settings")).data
+  });
+  const [enabled, setEnabled] = useState(true);
+  const [notificationEmails, setNotificationEmails] = useState("");
+  const [catalogOrderEmails, setCatalogOrderEmails] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!settings.data) return;
+    setEnabled(settings.data.email_notifications_enabled);
+    setNotificationEmails(settings.data.notification_emails.join(", "));
+    setCatalogOrderEmails(settings.data.catalog_order_emails.join(", "));
+  }, [settings.data]);
+
+  async function saveSettings(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const parseList = (value: string) =>
+        value
+          .split(/[,;\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      await api.patch("/platform/email-settings", {
+        email_notifications_enabled: enabled,
+        notification_emails: parseList(notificationEmails),
+        catalog_order_emails: parseList(catalogOrderEmails)
+      });
+      await client.invalidateQueries({ queryKey: ["email-settings"] });
+      toastStore.getState().show("تم حفظ إعدادات البريد.", "success");
+    } catch {
+      toastStore.getState().show("تعذر حفظ إعدادات البريد.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sendTest(target: "notification" | "catalog_order") {
+    try {
+      const result = await api.post<{ sent: number; recipients: string[] }>("/platform/email-settings/test", { target });
+      toastStore.getState().show(`تم إرسال ${result.data.sent} رسالة اختبار.`, "success");
+    } catch {
+      toastStore.getState().show("تعذر إرسال رسالة الاختبار — تحقق من Brevo/SMTP والمستلمين.", "error");
+    }
+  }
+
+  const data = settings.data;
+
+  return (
+    <section className="card stack-form">
+      <h2>إشعارات البريد الإلكتروني</h2>
+      <p className="hint-text">
+        استلم على البريد: إشعارات Inbox، SLA، القوالب، و<strong>طلبات الكتالوج مع فاتورة PDF</strong>.
+        دعوات الموظفين تُرسل تلقائيًا من صفحة «الموظفون».
+      </p>
+      {settings.isLoading && <p className="hint-text">جاري التحميل…</p>}
+      {data && (
+        <>
+          <div className="admin-actions" style={{ marginBottom: 8 }}>
+            <span className={data.email_configured ? "admin-status admin-status-active" : "admin-status admin-status-danger"}>
+              {data.email_configured ? "البريد مفعّل على السيرفر" : "البريد غير مُعد على السيرفر"}
+            </span>
+            {data.brevo_configured && <span className="admin-chip admin-chip-muted">Brevo API</span>}
+            {data.smtp_configured && !data.brevo_configured && <span className="admin-chip admin-chip-muted">SMTP</span>}
+          </div>
+          {!data.email_configured && (
+            <p className="hint-text">
+              أضف <span dir="ltr">BREVO_API_KEY</span> و<span dir="ltr">SMTP_FROM_EMAIL</span> في إعدادات السيرفر.
+            </p>
+          )}
+          <form className="stack-form" onSubmit={(e) => void saveSettings(e)}>
+            <label className="admin-permission-item">
+              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              <span>تفعيل إرسال الإشعارات بالبريد</span>
+            </label>
+            <label className="field-label">
+              <span>بريد الإشعارات العامة</span>
+              <textarea
+                value={notificationEmails}
+                onChange={(e) => setNotificationEmails(e.target.value)}
+                rows={3}
+                placeholder="info@watesly.com, manager@watesly.com"
+                dir="ltr"
+              />
+              <small className="hint-text">رسائل WhatsApp جديدة، SLA، حالة القوالب، وغيرها.</small>
+            </label>
+            <label className="field-label">
+              <span>بريد طلبات الكتالوج (اختياري)</span>
+              <textarea
+                value={catalogOrderEmails}
+                onChange={(e) => setCatalogOrderEmails(e.target.value)}
+                rows={2}
+                placeholder="orders@watesly.com"
+                dir="ltr"
+              />
+              <small className="hint-text">إذا تُرك فارغًا يُستخدم بريد الإشعارات العامة. يُرفق PDF الفاتورة.</small>
+            </label>
+            <div className="admin-actions">
+              <button type="submit" className="secondary-button" disabled={saving}>
+                {saving ? "جاري الحفظ…" : "حفظ"}
+              </button>
+              <button type="button" className="secondary-button" onClick={() => void sendTest("notification")}>
+                اختبار إشعار عام
+              </button>
+              <button type="button" className="secondary-button" onClick={() => void sendTest("catalog_order")}>
+                اختبار طلب كتالوج
+              </button>
+            </div>
+          </form>
+        </>
+      )}
+    </section>
   );
 }
 

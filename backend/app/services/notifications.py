@@ -1,10 +1,13 @@
 from datetime import UTC, datetime
+import logging
 from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification
+
+logger = logging.getLogger(__name__)
 
 
 async def create_notification(
@@ -27,6 +30,14 @@ async def create_notification(
     )
     db.add(item)
     await db.flush()
+
+    try:
+        from app.services.email_notifications import dispatch_notification_email
+
+        await dispatch_notification_email(db, notification=item)
+    except Exception:
+        logger.exception("Notification email dispatch failed for type=%s", type)
+
     return item
 
 
