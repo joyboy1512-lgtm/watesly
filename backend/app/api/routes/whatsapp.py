@@ -13,6 +13,8 @@ from app.schemas.whatsapp import (
     SendTextMessageRequest,
     WhatsAppAccountCreateRequest,
     WhatsAppAccountResponse,
+    WhatsAppBrandingSettingsRequest,
+    WhatsAppBrandingSyncResponse,
     WhatsAppCommerceSettingsRequest,
     WhatsAppEmbeddedSignupConfigResponse,
     WhatsAppEmbeddedSignupRequest,
@@ -48,11 +50,37 @@ from app.services.whatsapp_health import (
 )
 from app.services.catalog_commerce import (
     commerce_readiness,
+    format_meta_sync_error,
     update_whatsapp_commerce_settings,
+)
+from app.services.whatsapp_branding import (
+    sync_all_branding_to_meta,
+    sync_catalog_cover_to_meta,
+    sync_profile_image_to_meta,
+    sync_whatsapp_commerce_to_meta,
+    update_whatsapp_branding_settings,
 )
 from app.services.meta_setup import ensure_whatsapp_account_webhook, get_waba_webhook_status
 
 router = APIRouter()
+
+_BRANDING_ERRORS = {
+    "PROFILE_IMAGE_REQUIRED": (400, "ارفع صورة الشركة أولاً."),
+    "PROFILE_IMAGE_FETCH_FAILED": (400, "تعذر تحميل صورة الشركة — تأكد أن الرابط HTTPS عام."),
+    "PROFILE_IMAGE_TOO_LARGE": (400, "صورة الشركة أكبر من 5MB."),
+    "CATALOG_COVER_REQUIRED": (400, "ارفع صورة غلاف الكتالوج أولاً."),
+    "CATALOG_COVER_HTTPS_REQUIRED": (400, "رابط غلاف الكتالوج يجب أن يبدأ بـ https://"),
+    "META_CATALOG_NOT_CONFIGURED": (400, "فعّل Commerce وأدخل Catalog ID أولاً."),
+    "META_PRODUCT_SET_NOT_FOUND": (400, "لم يُعثر على Product Set في Meta — أنشئ كتالوجاً في Commerce Manager."),
+}
+
+
+def _raise_branding_error(exc: ValueError) -> None:
+    code = str(exc)
+    status_code, detail = _BRANDING_ERRORS.get(code, (400, format_meta_sync_error(code) if code else "تعذر المزامنة"))
+    if code not in _BRANDING_ERRORS and code == "WHATSAPP_ACCOUNT_NOT_AVAILABLE":
+        status_code, detail = 404, "WhatsApp account is not available"
+    raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 def _response(item) -> WhatsAppAccountResponse:
@@ -455,8 +483,20 @@ async def patch_whatsapp_commerce(
             meta_catalog_id=payload.meta_catalog_id,
             commerce_enabled=payload.commerce_enabled,
         )
+        if item.commerce_enabled and (item.meta_catalog_id or "").strip():
+            await sync_whatsapp_commerce_to_meta(
+                db,
+                account_id=context.account_id,
+                whatsapp_account_id=whatsapp_account_id,
+            )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+        code = str(exc)
+        if code == "WHATSAPP_ACCOUNT_NOT_AVAILABLE":
+            raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+        raise HTTPException(
+            status_code=400,
+            detail=format_meta_sync_error(code) if code not in {"META_CATALOG_NOT_CONFIGURED"} else "فعّل Commerce وأدخل Catalog ID أولاً.",
+        ) from exc
     return _response(item)
 
 
@@ -500,6 +540,97 @@ async def post_whatsapp_commerce_sync(
                 detail="فرع هذا الرقم لا يملك Commerce أو Catalog ID — فعّلهما من إعدادات ربط WhatsApp.",
             ) from exc
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+
+
+@router.patch("/accounts/{whatsapp_account_id}/branding", response_model=WhatsAppAccountResponse)
+async def patch_whatsapp_branding(
+    whatsapp_account_id: UUID,
+    payload: WhatsAppBrandingSettingsRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await update_whatsapp_branding_settings(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+            profile_image_url=payload.profile_image_url,
+            catalog_cover_image_url=payload.catalog_cover_image_url,
+        )
+    except ValueError as exc:
+        if str(exc) == "WHATSAPP_ACCOUNT_NOT_AVAILABLE":
+            raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _response(item)
+
+
+@router.post(
+    "/accounts/{whatsapp_account_id}/branding/sync-profile",
+    response_model=WhatsAppBrandingSyncResponse,
+)
+async def post_whatsapp_branding_sync_profile(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await sync_profile_image_to_meta(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    except ValueError as exc:
+        _raise_branding_error(exc)
+    return WhatsAppBrandingSyncResponse(**result)
+
+
+@router.post(
+    "/accounts/{whatsapp_account_id}/branding/sync-catalog-cover",
+    response_model=WhatsAppBrandingSyncResponse,
+)
+async def post_whatsapp_branding_sync_catalog_cover(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await sync_catalog_cover_to_meta(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    except ValueError as exc:
+        _raise_branding_error(exc)
+    return WhatsAppBrandingSyncResponse(**result)
+
+
+@router.post(
+    "/accounts/{whatsapp_account_id}/branding/sync-all",
+    response_model=WhatsAppBrandingSyncResponse,
+)
+async def post_whatsapp_branding_sync_all(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await sync_all_branding_to_meta(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    except ValueError as exc:
+        _raise_branding_error(exc)
+    return WhatsAppBrandingSyncResponse(
+        synced=True,
+        profile=result.get("profile"),
+        catalog_cover=result.get("catalog_cover"),
+        errors=result.get("errors") or [],
+        profile_image_url=(result.get("profile") or {}).get("profile_image_url"),
+        meta_profile_picture_url=(result.get("profile") or {}).get("meta_profile_picture_url"),
+        cover_image_url=(result.get("catalog_cover") or {}).get("cover_image_url"),
+        product_set_id=(result.get("catalog_cover") or {}).get("product_set_id"),
+    )
 
 
 @router.post("/accounts/{whatsapp_account_id}/messages/product", response_model=MediaSendResponse)

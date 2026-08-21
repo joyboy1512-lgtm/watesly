@@ -26,6 +26,11 @@ export type WhatsAppAccountRow = {
   meta_catalog_id?: string | null;
   commerce_enabled?: boolean;
   catalog_synced_at?: string | null;
+  profile_image_url?: string | null;
+  profile_image_synced_at?: string | null;
+  catalog_cover_image_url?: string | null;
+  meta_catalog_product_set_id?: string | null;
+  catalog_cover_synced_at?: string | null;
 };
 
 export const CONNECTION_METHOD_LABELS: Record<string, string> = {

@@ -160,6 +160,7 @@ async def post_campaign(payload: CampaignCreateRequest, context: AuthContext = D
             "ALL_RECIPIENTS_OPTED_OUT": "كل العملاء المختارين رفضوا التسويق (opt-out).",
             "ALL_RECIPIENTS_UNREACHABLE": "لا يوجد مستلمون قابلون للوصول — راجع فحص الجمهور قبل الإرسال.",
             "INVALID_RECIPIENT": "بعض العملاء غير صالحين لهذا الفرع — اختر الفرع والقناة ثم حمّل الجمهور من جديد.",
+            "RECIPIENT_CHANNEL_MISMATCH": "العملاء المختارون لا ينتمون لقناة WhatsApp المحددة — اضغط «إلغاء التحديد» ثم اختر من جديد.",
             "INVALID_WHATSAPP_ACCOUNT": "حساب WhatsApp غير صالح.",
             "INVALID_TEMPLATE": "القالب غير موجود.",
             "TEMPLATE_ACCOUNT_MISMATCH": "القالب لا ينتمي لحساب WhatsApp المختار.",

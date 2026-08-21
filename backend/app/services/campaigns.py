@@ -89,13 +89,20 @@ async def create_campaign(
 
     from app.services.contact_reachability import is_contact_campaign_eligible
 
-    recipients = payload.recipients
+    contact_by_id = {contact.id: contact for contact in contact_rows}
+    recipients = [
+        item
+        for item in payload.recipients
+        if contact_by_id[item.contact_id].channel_id == wa.channel_id
+    ]
+    if not recipients:
+        raise ValueError("RECIPIENT_CHANNEL_MISMATCH")
+
     if payload.exclude_marketing_opt_out:
         recipients = [item for item in recipients if rows.get(item.contact_id) is not False]
         if not recipients:
             raise ValueError("ALL_RECIPIENTS_OPTED_OUT")
 
-    contact_by_id = {contact.id: contact for contact in contact_rows}
     recipients = [
         item
         for item in recipients
