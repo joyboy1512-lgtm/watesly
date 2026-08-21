@@ -62,9 +62,14 @@ def _cell_arabic(pdf: Any, w: float, h: float, text: str, *, size: int, arabic_l
     pdf.cell(w, h, _pdf_text(text), **kwargs)
 
 
+def _sanitize_latin(text: str) -> str:
+    value = str(text or "")
+    return value.replace("\u2014", "-").replace("\u2013", "-")
+
+
 def _cell_latin(pdf: Any, w: float, h: float, text: str, *, size: int, **kwargs: Any) -> None:
     _set_font(pdf, size=size, arabic=False, arabic_loaded=False)
-    pdf.cell(w, h, str(text or ""), **kwargs)
+    pdf.cell(w, h, _sanitize_latin(text), **kwargs)
 
 
 def _row_label_value(

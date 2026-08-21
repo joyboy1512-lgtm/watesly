@@ -119,7 +119,7 @@ async def send_catalog_order_notification(
     invoice_context = await get_invoice_context(db, account_id=account_id, order=order)
     line_items = order.line_items or []
     order_url = f"{settings.app_public_url.rstrip('/')}/catalog/orders/{order.id}"
-    subject = f"طلب كتالوج جديد — {order.order_number}"
+    subject = f"تنبيه Watesly: طلب كتالوج جديد - {order.order_number}"
     text_body = (
         f"تم استلام طلب جديد من WhatsApp Catalog.\n\n"
         f"رقم الطلب: {order.order_number}\n"
