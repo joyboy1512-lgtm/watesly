@@ -2,6 +2,7 @@ import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { uploadFile } from "../lib/uploads";
 import {
   EmbeddedSignupConfig,
   EmbeddedSignupSession,
@@ -82,6 +83,10 @@ export default function WhatsAppConnectPage() {
   const [commerceDrafts, setCommerceDrafts] = useState<Record<string, { meta_catalog_id: string; commerce_enabled: boolean }>>({});
   const [commerceReadiness, setCommerceReadiness] = useState<Record<string, CommerceReadiness | null>>({});
   const [loadingReadinessId, setLoadingReadinessId] = useState<string | null>(null);
+  const [brandingDrafts, setBrandingDrafts] = useState<Record<string, { brand_image_url: string }>>({});
+  const [uploadingBrandingId, setUploadingBrandingId] = useState<string | null>(null);
+  const [savingBrandingId, setSavingBrandingId] = useState<string | null>(null);
+  const [syncingBrandingId, setSyncingBrandingId] = useState<string | null>(null);
 
   const channels = useQuery({
     queryKey: ["channels"],
@@ -218,6 +223,16 @@ export default function WhatsAppConnectPage() {
       };
     }
     setCommerceDrafts(next);
+  }, [accounts.data]);
+
+  useEffect(() => {
+    const next: Record<string, { brand_image_url: string }> = {};
+    for (const item of accounts.data ?? []) {
+      next[item.id] = {
+        brand_image_url: item.profile_image_url || item.catalog_cover_image_url || ""
+      };
+    }
+    setBrandingDrafts(next);
   }, [accounts.data]);
 
   useEffect(() => {
@@ -396,7 +411,7 @@ export default function WhatsAppConnectPage() {
     try {
       await api.patch(`/whatsapp/accounts/${accountId}/commerce`, draft);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم حفظ إعدادات Commerce.", "success");
+      toastStore.getState().show("تم حفظ Commerce وتفعيل الكتالوج على Meta.", "success");
     } catch {
       toastStore.getState().show("تعذر حفظ Commerce.", "error");
     }
@@ -437,7 +452,105 @@ export default function WhatsAppConnectPage() {
         .getState()
         .show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل${reviewSummary}${detail}.`, failed ? "error" : "success");
     } catch {
-      toastStore.getState().show("تعذر مزامنة الكتالogg مع Meta.", "error");
+      toastStore.getState().show("تعذر مزامنة الكتالوج مع Meta.", "error");
+    }
+  }
+
+  function extractApiDetail(error: unknown, fallback: string): string {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "response" in error &&
+      typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+    ) {
+      return (error as { response: { data: { detail: string } } }).response.data.detail;
+    }
+    return fallback;
+  }
+
+  async function persistBranding(accountId: string, brandImageUrl?: string): Promise<boolean> {
+    const url = (brandImageUrl ?? brandingDrafts[accountId]?.brand_image_url ?? "").trim();
+    await api.patch(`/whatsapp/accounts/${accountId}/branding`, {
+      profile_image_url: url || null,
+      catalog_cover_image_url: url || null
+    });
+    await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+    return true;
+  }
+
+  async function uploadBrandImage(accountId: string, file: File) {
+    if (!file.type.startsWith("image/")) {
+      toastStore.getState().show("اختر صورة فقط (JPG / PNG / WebP).", "error");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toastStore.getState().show("الصورة أكبر من 5MB.", "error");
+      return;
+    }
+    setUploadingBrandingId(accountId);
+    try {
+      const uploaded = await uploadFile(file);
+      const nextDraft = { brand_image_url: uploaded.public_url };
+      setBrandingDrafts((current) => ({
+        ...current,
+        [accountId]: nextDraft
+      }));
+      await persistBranding(accountId, uploaded.public_url);
+      toastStore.getState().show("تم رفع صورة الهوية وحفظها.", "success");
+    } catch {
+      toastStore.getState().show("تعذر رفع الصورة.", "error");
+    } finally {
+      setUploadingBrandingId(null);
+    }
+  }
+
+  async function saveBranding(accountId: string): Promise<boolean> {
+    const draft = brandingDrafts[accountId];
+    if (!draft?.brand_image_url?.trim()) {
+      toastStore.getState().show("ارفع صورة الهوية أولاً.", "error");
+      return false;
+    }
+    setSavingBrandingId(accountId);
+    try {
+      await persistBranding(accountId);
+      toastStore.getState().show("تم حفظ صورة الهوية.", "success");
+      return true;
+    } catch {
+      toastStore.getState().show("تعذر حفظ صورة الهوية.", "error");
+      return false;
+    } finally {
+      setSavingBrandingId(null);
+    }
+  }
+
+  async function syncBrandingToMeta(accountId: string) {
+    setSyncingBrandingId(accountId);
+    try {
+      const draft = brandingDrafts[accountId];
+      if (!draft?.brand_image_url?.trim()) {
+        toastStore.getState().show("ارفع صورة الهوية أولاً.", "error");
+        return;
+      }
+      await persistBranding(accountId);
+      const response = await api.post<{
+        synced: boolean;
+        errors?: string[];
+        profile?: { synced?: boolean } | null;
+        catalog_cover?: { synced?: boolean } | null;
+      }>(`/whatsapp/accounts/${accountId}/branding/sync-all`);
+      await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+      const errors = response.data.errors ?? [];
+      if (errors.length > 0) {
+        toastStore.getState().show(`تفعيل جزئي — ${errors[0]}`, "error");
+      } else {
+        toastStore
+          .getState()
+          .show("تم تفعيل الهوية على Meta — قد يتأخر ظهورها في WhatsApp 5–15 دقيقة.", "success");
+      }
+    } catch (error: unknown) {
+      toastStore.getState().show(extractApiDetail(error, "تعذر تفعيل الهوية على Meta."), "error");
+    } finally {
+      setSyncingBrandingId(null);
     }
   }
 
@@ -536,8 +649,16 @@ export default function WhatsAppConnectPage() {
 
   function renderExpandedPanel(account: WhatsAppAccountRow) {
     const commerceDraft = commerceDrafts[account.id];
+    const brandingDraft = brandingDrafts[account.id];
     const savedCatalogId = account.meta_catalog_id?.trim() || commerceDraft?.meta_catalog_id?.trim() || "";
     const commerceOn = account.commerce_enabled || commerceDraft?.commerce_enabled;
+    const brandingBusy =
+      syncingBrandingId === account.id ||
+      savingBrandingId === account.id ||
+      uploadingBrandingId === account.id;
+    const brandImageUrl = brandingDraft?.brand_image_url?.trim() || "";
+    const brandingSyncedAt = account.profile_image_synced_at || account.catalog_cover_synced_at;
+    const brandingPending = Boolean(brandImageUrl) && !brandingSyncedAt;
 
     return (
       <tr className="whatsapp-expand-row">
@@ -546,7 +667,7 @@ export default function WhatsAppConnectPage() {
             <header className="whatsapp-expand-header">
               <div>
                 <h2>إعدادات {account.verified_name || account.display_phone_number}</h2>
-                <p className="hint-text">Commerce، الرمز، Webhook، ومعرّفات Meta لهذه القناة.</p>
+                <p className="hint-text">Commerce، الرمز، Webhook، الهوية البصرية، ومعرّفات Meta لهذه القناة.</p>
               </div>
               <button type="button" className="secondary-button" onClick={() => setExpandedId(null)}>
                 إغلاق الإعدادات
@@ -606,6 +727,119 @@ export default function WhatsAppConnectPage() {
                   >
                     مزامنة المنتجات → Meta
                   </button>
+                </div>
+              </article>
+              <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
+                <div className="whatsapp-branding-head">
+                  <div>
+                    <h3>الهوية البصرية</h3>
+                    <p className="hint-text">
+                      صورة واحدة لـ WhatsApp — تظهر في المحادثات وأعلى الكتالوج. Meta لا يدعم صورتين منفصلتين.
+                    </p>
+                  </div>
+                  {brandingSyncedAt ? (
+                    <span className="admin-chip admin-chip-whatsapp">مفعّل على Meta</span>
+                  ) : brandImageUrl ? (
+                    <span className="admin-chip admin-chip-muted">محفوظ · لم يُفعَّل</span>
+                  ) : null}
+                </div>
+
+                {brandingPending && (
+                  <p className="hint-text whatsapp-branding-pending" role="alert">
+                    الصورة محفوظة — اضغط «تفعيل على Meta» لتطبيقها في WhatsApp.
+                  </p>
+                )}
+
+                <div className="whatsapp-branding-unified">
+                  <div className="whatsapp-branding-preview">
+                    <div className="whatsapp-branding-preview-frame">
+                      {brandImageUrl ? (
+                        <img src={brandImageUrl} alt="معاينة الهوية" className="whatsapp-branding-preview-img" />
+                      ) : (
+                        <div className="whatsapp-branding-preview-empty">ارفع شعار الشركة</div>
+                      )}
+                      <div className="whatsapp-branding-preview-name">
+                        {account.verified_name || account.display_phone_number || "اسم الشركة"}
+                      </div>
+                    </div>
+                    <ul className="whatsapp-branding-uses">
+                      <li>
+                        <span className="whatsapp-branding-use-icon" aria-hidden="true">💬</span>
+                        <span>بجانب اسم الشركة في المحادثات</span>
+                      </li>
+                      <li>
+                        <span className="whatsapp-branding-use-icon" aria-hidden="true">🛍️</span>
+                        <span>أعلى صفحة الكتالوج داخل WhatsApp</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="whatsapp-branding-form">
+                    <label className="field-label">
+                      <span>صورة الهوية</span>
+                      <span className="hint-text">JPG · PNG · WebP — حتى 5MB · يُفضّل 640×640 أو أكبر</span>
+                    </label>
+                    <div className="whatsapp-branding-upload-row">
+                      <label className="whatsapp-branding-upload-btn">
+                        {uploadingBrandingId === account.id ? "جاري الرفع…" : "رفع صورة"}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          hidden
+                          disabled={brandingBusy}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) void uploadBrandImage(account.id, file);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      <input
+                        dir="ltr"
+                        className="whatsapp-branding-url-input"
+                        value={brandingDraft?.brand_image_url ?? ""}
+                        onChange={(e) =>
+                          setBrandingDrafts((current) => ({
+                            ...current,
+                            [account.id]: { brand_image_url: e.target.value }
+                          }))
+                        }
+                        placeholder="https://… أو ارفع من الجهاز"
+                      />
+                    </div>
+                    {brandingSyncedAt && (
+                      <p className="hint-text whatsapp-branding-synced">
+                        ✓ آخر تفعيل على Meta: {formatHealthSynced(brandingSyncedAt)}
+                      </p>
+                    )}
+                    {!commerceOn || !savedCatalogId ? (
+                      <p className="hint-text whatsapp-branding-note">
+                        بدون Commerce: تُفعَّل صورة الملف فقط. فعّل Commerce أعلاه لتطبيقها على الكتالوج أيضاً.
+                      </p>
+                    ) : (
+                      <p className="hint-text whatsapp-branding-note">
+                        التغيير قد يتأخر 5–15 دقيقة — أغلق الكتالوج في WhatsApp وأعد فتحه.
+                      </p>
+                    )}
+                    <div className="whatsapp-branding-actions">
+                      <button
+                        type="button"
+                        className="whatsapp-button compact"
+                        disabled={!brandImageUrl || brandingBusy}
+                        onClick={() => void syncBrandingToMeta(account.id)}
+                      >
+                        {syncingBrandingId === account.id ? "جاري التفعيل…" : "تفعيل على Meta"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        disabled={!brandImageUrl || brandingBusy}
+                        onClick={() => void saveBranding(account.id)}
+                      >
+                        {savingBrandingId === account.id ? "جاري الحفظ…" : "حفظ فقط"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </article>
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-token">
