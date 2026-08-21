@@ -5126,6 +5126,165 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   margin: 0 0 8px;
   color: #175cd3;
 }
+
+/* Team page — add employee form + ERP table */
+.team-page { display: grid; gap: 16px; }
+.team-add-card { padding: 0; overflow: hidden; }
+.team-add-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px 0;
+}
+.team-add-card-header h2 { margin: 0 0 4px; font-size: 16px; }
+.team-add-card-header .hint-text { margin: 0; }
+.team-add-alert {
+  margin: 12px 20px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b42318;
+  font-size: 13px;
+}
+.team-add-tip {
+  margin: 12px 20px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #b2ddff;
+  background: #eff8ff;
+}
+.team-add-tip summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #175cd3;
+  font-size: 13px;
+}
+.team-add-tip .hint-text { margin: 8px 0 0; }
+.team-add-form { display: grid; gap: 16px; padding: 16px 20px 20px; }
+.team-add-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.team-field {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.team-field input,
+.team-field select {
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(7, 94, 84, 0.14);
+  font-size: 13px;
+  background: #fff;
+  font-weight: 400;
+  color: var(--text);
+}
+.team-field small {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.team-add-access {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(7, 94, 84, 0.02);
+}
+.team-add-access-head {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.team-add-access-head strong { font-size: 13px; }
+.team-add-access-head small { color: var(--muted); font-size: 12px; }
+.team-add-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 4px;
+}
+.team-invite-box { margin: 0 20px 20px; }
+.team-table-card { padding: 0; }
+.team-table-header { padding: 14px 16px; }
+.team-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 16px 14px;
+  align-items: center;
+}
+.team-table-toolbar input,
+.team-table-toolbar select {
+  min-width: 160px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 13px;
+}
+.team-erp-table thead th {
+  background: rgba(7, 94, 84, 0.08);
+  font-weight: 700;
+}
+.team-erp-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+  vertical-align: middle;
+}
+.team-erp-table tbody td:last-child { border-inline-end: none; }
+.team-chips-cell { max-width: 220px; }
+.team-chips-cell .admin-chip-row {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.team-chips-cell .admin-chip {
+  font-size: 10px;
+  padding: 2px 8px;
+}
+.team-permission-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(7, 94, 84, 0.08);
+  color: var(--primary-darker);
+  border: 1px solid rgba(7, 94, 84, 0.12);
+  white-space: nowrap;
+}
+.team-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.team-row-actions .secondary-button.compact {
+  padding: 5px 10px !important;
+  font-size: 12px !important;
+  white-space: nowrap;
+  min-width: 0;
+}
+.team-erp-table td:last-child {
+  min-width: 200px;
+  white-space: nowrap;
+}
+@media (max-width: 980px) {
+  .team-add-form-grid { grid-template-columns: 1fr; }
+  .team-table-toolbar input,
+  .team-table-toolbar select { width: 100%; min-width: 0; }
+  .team-row-actions { flex-wrap: wrap; }
+}
 .whatsapp-page-tabs {
   display: flex;
   flex-wrap: wrap;

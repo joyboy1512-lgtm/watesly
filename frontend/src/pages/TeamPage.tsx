@@ -185,6 +185,66 @@ export default function TeamPage() {
     );
   }
 
+  function renderAddEmployeeForm(onSubmit: (event: FormEvent) => void, submitLabel: string, submitting: boolean, showDirectFields: boolean) {
+    return (
+      <form className="team-add-form" onSubmit={onSubmit}>
+        <div className="team-add-form-grid">
+          {showDirectFields && (
+            <label className="team-field">
+              <span>الاسم الكامل</span>
+              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="مثال: أحمد محمد" required minLength={2} />
+            </label>
+          )}
+          <label className="team-field">
+            <span>البريد الإلكتروني</span>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" required type="email" dir="ltr" />
+          </label>
+          {showDirectFields && (
+            <>
+              <label className="team-field">
+                <span>كلمة المرور</span>
+                <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6 أحرف على الأقل" required type="password" minLength={6} autoComplete="new-password" />
+              </label>
+              <label className="team-field">
+                <span>تأكيد كلمة المرور</span>
+                <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="أعد إدخال كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
+              </label>
+            </>
+          )}
+          <label className="team-field">
+            <span>دور الموظف</span>
+            <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
+              {inviteableRoles.map((item) => (
+                <option key={item} value={item}>{formatRoleLabel(item)}</option>
+              ))}
+            </select>
+            <small>{ROLE_DESCRIPTIONS[role]}</small>
+          </label>
+        </div>
+
+        <div className="team-add-access">
+          <div className="team-add-access-head">
+            <strong>الفروع وحسابات WhatsApp</strong>
+            <small>حدّد الفروع التي يعمل ضمنها الموظف</small>
+          </div>
+          {renderOrgChannelPicker(
+            new Set(selectedOrgIds),
+            new Set(selectedChannelIds),
+            toggleSelectedOrg,
+            toggleSelectedChannel,
+            role
+          )}
+        </div>
+
+        <div className="team-add-actions">
+          <button type="submit" className="whatsapp-button" disabled={submitting}>
+            {submitting ? "جاري الحفظ…" : submitLabel}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   async function invite(event: FormEvent) {
     event.preventDefault();
     if (!selectedOrgIds.length) {
@@ -405,10 +465,10 @@ export default function TeamPage() {
   }
 
   return (
-    <main className="page">
+    <main className="page team-page">
       <header className="page-header">
         <h1>الموظفون</h1>
-        <p>جدول شامل لبيانات الموظفين وصلاحياتهم وأفرعهم وحسابات WhatsApp Business.</p>
+        <p>إدارة الفريق، الأدوار، الفروع، وصلاحيات الوصول.</p>
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">
@@ -419,29 +479,17 @@ export default function TeamPage() {
         <article className="admin-stat-card admin-stat-card-brand"><span>موظفو محادثات</span><strong>{stats.agents}</strong></article>
       </section>
 
-      {canManagePermissions && inviteableRoles.length === 0 && (
-        <section className="card team-role-guide-card">
-          <h2>صلاحيات غير كافية</h2>
-          <p className="hint-text">
-            دورك الحالي لا يسمح بتعيين «أدمن الفرع». سجّل دخولك كـ <strong>مدير النظام</strong> أو <strong>مالك الحساب</strong>.
-          </p>
-        </section>
-      )}
-
-      {canManagePermissions && inviteableRoles.includes("branch_admin") && (
-        <section className="card team-role-guide-card">
-          <h2>أدمن الفرع</h2>
-          <p className="hint-text">
-            لتعيين موظف كـ <strong>أدمن فرع واحد فقط</strong>: اختر الدور «أدمن الفرع» ثم حدّد الفرع المطلوب فقط.
-            لن يرى الفوترة أو الأفرع الأخرى أو منصة المطور.
-          </p>
-        </section>
-      )}
-
       {canManagePermissions && (
-      <section className="card form-card admin-form-card">
-        <div className="admin-form-card-header">
-          <h2>إضافة موظف</h2>
+      <section className="card team-add-card">
+        <div className="team-add-card-header">
+          <div>
+            <h2>إضافة موظف</h2>
+            <p className="hint-text">
+              {addMode === "direct"
+                ? "إنشاء حساب فوري — شارك البريد وكلمة المرور مع الموظف."
+                : "إرسال دعوة بالبريد — أو انسخ الرابط إذا لم يصل SMTP."}
+            </p>
+          </div>
           <div className="admin-mode-tabs">
             <button
               type="button"
@@ -460,87 +508,53 @@ export default function TeamPage() {
           </div>
         </div>
 
-        {addMode === "direct" ? (
-          <>
-            <p className="hint-text" style={{ marginBottom: 12 }}>
-              أنشئ حساباً فوراً بدون بريد إلكتروني. حدّد كلمة المرور وشاركها مع الموظف يدوياً (WhatsApp أو أي قناة).
-            </p>
-            <form className="inline-form" onSubmit={createDirect}>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="الاسم الكامل" required minLength={2} />
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" required type="email" />
-              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
-              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="تأكيد كلمة المرور" required type="password" minLength={6} autoComplete="new-password" />
-              <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
-                {inviteableRoles.map((item) => (
-                  <option key={item} value={item}>{formatRoleLabel(item)}</option>
-                ))}
-              </select>
-              <p className="hint-text">{ROLE_DESCRIPTIONS[role]}</p>
-              {renderOrgChannelPicker(
-                new Set(selectedOrgIds),
-                new Set(selectedChannelIds),
-                toggleSelectedOrg,
-                toggleSelectedChannel,
-                role
-              )}
-              <button type="submit" disabled={creating}>{creating ? "جاري الإنشاء…" : "إنشاء الحساب"}</button>
-            </form>
-          </>
-        ) : (
-          <>
-            <p className="hint-text" style={{ marginBottom: 12 }}>
-              يُرسل رابط الدعوة تلقائياً إلى البريد عند تفعيل SMTP. بدون SMTP، انسخ الرابط الاحتياطي وأرسله يدوياً.
-            </p>
-            <form className="inline-form" onSubmit={invite}>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" required type="email" />
-              <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)}>
-                {inviteableRoles.map((item) => (
-                  <option key={item} value={item}>{formatRoleLabel(item)}</option>
-                ))}
-              </select>
-              <p className="hint-text">{ROLE_DESCRIPTIONS[role]}</p>
-              {renderOrgChannelPicker(
-                new Set(selectedOrgIds),
-                new Set(selectedChannelIds),
-                toggleSelectedOrg,
-                toggleSelectedChannel,
-                role
-              )}
-              <button type="submit" disabled={inviting}>{inviting ? "جاري الإرسال…" : "إرسال الدعوة"}</button>
-            </form>
+        {inviteableRoles.length === 0 && (
+          <p className="team-add-alert">دورك الحالي لا يسمح بإضافة موظفين. سجّل دخولك كمدير النظام أو مالك الحساب.</p>
+        )}
 
-            {pendingInvite && (
-              <div className="admin-invite-link-box" style={{ marginTop: 16 }}>
-                <strong>
-                  {pendingInvite.emailSent ? `تم إرسال الدعوة إلى ${pendingInvite.email}` : `رابط احتياطي — ${pendingInvite.email}`}
-                </strong>
-                <small>
-                  {pendingInvite.emailSent
-                    ? `صالح لمدة ${pendingInvite.expiresInHours} ساعة. إذا لم يصل البريد، انسخ الرابط أدناه.`
-                    : `SMTP غير مفعّل أو فشل الإرسال — انسخ الرابط وأرسله يدوياً (صالح ${pendingInvite.expiresInHours} ساعة).`}
-                </small>
-                <input value={pendingInvite.url} readOnly dir="ltr" />
-                <div className="admin-actions">
-                  <button type="button" className="secondary-button" onClick={copyInviteLink}>نسخ الرابط</button>
-                  <a className="secondary-button" href={pendingInvite.url} target="_blank" rel="noreferrer">معاينة</a>
-                </div>
-              </div>
-            )}
-          </>
+        {inviteableRoles.includes("branch_admin") && (
+          <details className="team-add-tip">
+            <summary>ملاحظة: أدمن الفرع</summary>
+            <p className="hint-text">
+              اختر «أدمن الفرع» ثم حدّد فرعاً واحداً فقط لعزل الصلاحيات. لن يرى الفوترة أو الأفرع الأخرى.
+            </p>
+          </details>
+        )}
+
+        {addMode === "direct"
+          ? renderAddEmployeeForm(createDirect, "إنشاء الحساب", creating, true)
+          : renderAddEmployeeForm(invite, "إرسال الدعوة", inviting, false)}
+
+        {addMode === "invite" && pendingInvite && (
+          <div className="admin-invite-link-box team-invite-box">
+            <strong>
+              {pendingInvite.emailSent ? `تم إرسال الدعوة إلى ${pendingInvite.email}` : `رابط احتياطي — ${pendingInvite.email}`}
+            </strong>
+            <small>
+              {pendingInvite.emailSent
+                ? `صالح لمدة ${pendingInvite.expiresInHours} ساعة. إذا لم يصل البريد، انسخ الرابط أدناه.`
+                : `SMTP غير مفعّل أو فشل الإرسال — انسخ الرابط وأرسله يدوياً (صالح ${pendingInvite.expiresInHours} ساعة).`}
+            </small>
+            <input value={pendingInvite.url} readOnly dir="ltr" />
+            <div className="team-row-actions">
+              <button type="button" className="secondary-button compact" onClick={copyInviteLink}>نسخ الرابط</button>
+              <a className="secondary-button compact" href={pendingInvite.url} target="_blank" rel="noreferrer">معاينة</a>
+            </div>
+          </div>
         )}
       </section>
       )}
 
-      <section className="card admin-table-card">
-        <div className="admin-table-header">
+      <section className="card admin-table-card team-table-card">
+        <div className="admin-table-header team-table-header">
           <div>
             <h2>جدول الموظفين</h2>
-            <small>{filtered.length} موظف · صف لكل عضو في الفريق</small>
+            <small>{filtered.length} موظف · يعرض {visible.length} صف</small>
           </div>
         </div>
 
-        <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو البريد أو WhatsApp" />
+        <div className="team-table-toolbar">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو البريد…" />
           <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
             <option value="">كل الأدوار</option>
             {INVITABLE_ROLES.map((item) => (
@@ -562,14 +576,14 @@ export default function TeamPage() {
         </div>
 
         <div className="admin-table-wrap">
-          <table className="admin-erp-table">
+          <table className="admin-erp-table team-erp-table">
             <thead>
               <tr>
                 <th>الموظف</th>
                 <th>الدور</th>
                 <th>الصلاحيات</th>
                 <th>الفروع</th>
-                <th>WhatsApp Business</th>
+                <th>WhatsApp</th>
                 <th>الحالة</th>
                 <th>إجراءات</th>
               </tr>
@@ -596,30 +610,29 @@ export default function TeamPage() {
                     <span className={roleBadgeClass(item.role)}>{formatRoleLabel(item.role)}</span>
                   </td>
                   <td>
-                    <div className="admin-cell-stack">
-                      <span>{permissionSummary(item.role)}</span>
-                      <small title={ROLE_DESCRIPTIONS[item.role]}>{getRolePermissionsLabel(item.role)}</small>
-                    </div>
+                    <span className="team-permission-pill" title={ROLE_DESCRIPTIONS[item.role]}>
+                      {permissionSummary(item.role)}
+                    </span>
                   </td>
-                  <td>{renderBranches(item)}</td>
-                  <td>{renderWorkspaces(item)}</td>
+                  <td className="team-chips-cell">{renderBranches(item)}</td>
+                  <td className="team-chips-cell">{renderWorkspaces(item)}</td>
                   <td>
                     <span className={statusBadgeClass(item.status)}>{formatStatusLabel(item.status)}</span>
                   </td>
                   <td>
-                    <div className="admin-actions">
+                    <div className="team-row-actions admin-actions">
                       {canManagePermissions && item.role !== "owner" && (
                         <>
-                          <button type="button" className="secondary-button" onClick={() => openAccessEditor(item)}>
-                            الدور والفرع
+                          <button type="button" className="secondary-button compact" onClick={() => openAccessEditor(item)} title="الدور والفرع">
+                            الفرع
                           </button>
-                          <button type="button" className="secondary-button" onClick={() => openPermissionEditor(item)}>
+                          <button type="button" className="secondary-button compact" onClick={() => openPermissionEditor(item)} title="صلاحيات الصفحات">
                             صلاحيات
                           </button>
                         </>
                       )}
                       {item.role !== "owner" && (
-                        <button type="button" className="secondary-button" onClick={() => void toggleStatus(item)}>
+                        <button type="button" className="secondary-button compact" onClick={() => void toggleStatus(item)}>
                           {item.status === "active" ? "تعطيل" : "تفعيل"}
                         </button>
                       )}
@@ -740,8 +753,4 @@ export default function TeamPage() {
       )}
     </main>
   );
-}
-
-function getRolePermissionsLabel(role: MembershipRole): string {
-  return `${getRolePermissions(role).size} صلاحية مفعّلة`;
 }
