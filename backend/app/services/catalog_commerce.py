@@ -85,6 +85,14 @@ def format_meta_sync_error(message: str) -> str:
         )
     if "duplicate" in lower and "retailer" in lower:
         return "retailer_id مكرر في الكتالوج — غيّر SKU أو Meta retailer ID للمنتج."
+    if "invalid partner" in lower:
+        return (
+            "Meta رفض ربط الكتالوج (Invalid partner). "
+            "تأكد أن Catalog ID يخص نفس Business Portfolio لحساب WhatsApp، "
+            "ثم من Meta Business Suite → Commerce Manager → الكتالوج → Partners "
+            "أضف Watesly كشريك، أو اربط الكتالوج يدوياً من WhatsApp Manager → Settings → Catalog "
+            "ثم أعد «تفعيل على Meta»."
+        )
     return message
 
 
@@ -144,6 +152,26 @@ async def list_catalog_variant_groups(db: AsyncSession, account_id: UUID) -> lis
 
 def account_commerce_ready(account: WhatsAppAccount) -> bool:
     return bool(account.commerce_enabled and account.meta_catalog_id)
+
+
+def catalog_id_linked_to_waba(linked_catalogs: list[dict], catalog_id: str) -> bool:
+    target = (catalog_id or "").strip()
+    if not target:
+        return False
+    return any(
+        str(row.get("id") or "").strip() == target
+        for row in linked_catalogs
+        if isinstance(row, dict)
+    )
+
+
+def is_catalog_link_skip_error(message: str) -> bool:
+    lower = message.lower()
+    return any(token in lower for token in ("already", "duplicate", "exists"))
+
+
+def is_invalid_partner_catalog_error(message: str) -> bool:
+    return "invalid partner" in message.lower()
 
 
 async def increment_product_usage(db: AsyncSession, *, product: CatalogProduct) -> None:

@@ -2,7 +2,10 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.services.catalog_commerce import (
+    catalog_id_linked_to_waba,
     format_meta_sync_error,
+    is_catalog_link_skip_error,
+    is_invalid_partner_catalog_error,
     meta_sync_error_for_code,
     validate_product_for_meta_sync,
 )
@@ -54,6 +57,29 @@ def test_format_meta_sync_error_catalog_not_found() -> None:
         "Unsupported post request. Object with ID '1677372356655691' does not exist"
     )
     assert "catalog_management" in message
+
+
+def test_format_meta_sync_error_invalid_partner() -> None:
+    message = format_meta_sync_error("Invalid partner")
+    assert "Invalid partner" in message
+    assert "Commerce Manager" in message
+
+
+def test_catalog_id_linked_to_waba() -> None:
+    linked = [{"id": "123"}, {"id": "456", "name": "Shop"}]
+    assert catalog_id_linked_to_waba(linked, "456") is True
+    assert catalog_id_linked_to_waba(linked, "999") is False
+    assert catalog_id_linked_to_waba(linked, "") is False
+
+
+def test_is_catalog_link_skip_error() -> None:
+    assert is_catalog_link_skip_error("Catalog already linked") is True
+    assert is_catalog_link_skip_error("Invalid partner") is False
+
+
+def test_is_invalid_partner_catalog_error() -> None:
+    assert is_invalid_partner_catalog_error("Invalid partner") is True
+    assert is_invalid_partner_catalog_error("Permission denied") is False
 
 
 def test_validate_product_requires_organization() -> None:

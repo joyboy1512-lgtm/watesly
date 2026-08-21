@@ -734,6 +734,21 @@ class MetaWhatsAppClient:
             default_message="Unable to update WhatsApp commerce settings",
         )
 
+    async def list_waba_product_catalogs(self, *, waba_id: str) -> list[dict]:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{waba_id}/product_catalogs"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {"fields": "id,name", "limit": 25}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        data = await self._parse_graph_response(
+            response,
+            default_message="Unable to list catalogs linked to WhatsApp Business Account",
+        )
+        rows = data.get("data", [])
+        return [row for row in rows if isinstance(row, dict)]
+
     async def link_catalog_to_waba(self, *, waba_id: str, catalog_id: str) -> dict:
         base = settings.meta_graph_api_base_url.rstrip("/")
         version = settings.meta_graph_api_version.strip("/")
