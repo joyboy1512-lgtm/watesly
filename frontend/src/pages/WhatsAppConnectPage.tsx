@@ -456,7 +456,7 @@ export default function WhatsAppConnectPage() {
         .getState()
         .show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل${reviewSummary}${detail}.`, failed ? "error" : "success");
     } catch {
-      toastStore.getState().show("تعذر مزامنة الكتالogg مع Meta.", "error");
+      toastStore.getState().show("تعذر مزامنة الكتالوج مع Meta.", "error");
     }
   }
 
@@ -536,7 +536,7 @@ export default function WhatsAppConnectPage() {
     try {
       await api.post(`/whatsapp/accounts/${accountId}/branding/sync-catalog-cover`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تمت مزامنة غلاف الكتالogg.", "success");
+      toastStore.getState().show("تمت مزامنة غلاف الكتالوج.", "success");
     } catch (error: unknown) {
       const detail =
         typeof error === "object" &&
@@ -544,7 +544,7 @@ export default function WhatsAppConnectPage() {
         "response" in error &&
         typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
           ? (error as { response: { data: { detail: string } } }).response.data.detail
-          : "تعذر مزامنة غلاف الكتالogg.";
+          : "تعذر مزامنة غلاف الكتالوج.";
       toastStore.getState().show(detail, "error");
     } finally {
       setSyncingBrandingId(null);
@@ -753,7 +753,7 @@ export default function WhatsAppConnectPage() {
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
                 <h3>الهوية البصرية — WhatsApp</h3>
                 <p className="hint-text">
-                  صورة ملف WhatsApp Business وغلاف الكتالogg — ارفع الصور، احفظ، ثم زامِن مع Meta.
+                  صورة ملف WhatsApp Business وغلاف الكتالوج — ارفع الصور، احفظ، ثم زامِن مع Meta.
                 </p>
                 <div className="whatsapp-branding-grid">
                   <div className="whatsapp-branding-col">
@@ -815,10 +815,10 @@ export default function WhatsAppConnectPage() {
                     </div>
                   </div>
                   <div className="whatsapp-branding-col">
-                    <h4>غلاف الكتالogg</h4>
+                    <h4>غلاف الكتالوج</h4>
                     <p className="hint-text">
                       {commerceOn && savedCatalogId
-                        ? "يظهر أعلى كتالogg WhatsApp — يتطلب Commerce وCatalog ID."
+                        ? "يظهر أعلى كتالوج WhatsApp — يتطلب Commerce وCatalog ID."
                         : "فعّل Commerce وأدخل Catalog ID أولاً."}
                     </p>
                     <div className="catalog-image-row whatsapp-branding-image">
@@ -826,7 +826,7 @@ export default function WhatsAppConnectPage() {
                         {brandingDraft?.catalog_cover_image_url ? (
                           <img
                             src={brandingDraft.catalog_cover_image_url}
-                            alt="غلاف الكتالogg"
+                            alt="غلاف الكتالوج"
                             className="catalog-form-image"
                           />
                         ) : (

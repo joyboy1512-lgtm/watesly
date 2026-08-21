@@ -67,10 +67,10 @@ _BRANDING_ERRORS = {
     "PROFILE_IMAGE_REQUIRED": (400, "ارفع صورة الشركة أولاً."),
     "PROFILE_IMAGE_FETCH_FAILED": (400, "تعذر تحميل صورة الشركة — تأكد أن الرابط HTTPS عام."),
     "PROFILE_IMAGE_TOO_LARGE": (400, "صورة الشركة أكبر من 5MB."),
-    "CATALOG_COVER_REQUIRED": (400, "ارفع صورة غلاف الكتالogg أولاً."),
-    "CATALOG_COVER_HTTPS_REQUIRED": (400, "رابط غلاف الكتالogg يجب أن يبدأ بـ https://"),
+    "CATALOG_COVER_REQUIRED": (400, "ارفع صورة غلاف الكتالوج أولاً."),
+    "CATALOG_COVER_HTTPS_REQUIRED": (400, "رابط غلاف الكتالوج يجب أن يبدأ بـ https://"),
     "META_CATALOG_NOT_CONFIGURED": (400, "فعّل Commerce وأدخل Catalog ID أولاً."),
-    "META_PRODUCT_SET_NOT_FOUND": (400, "لم يُعثر على Product Set في Meta — أنشئ كتالoggاً في Commerce Manager."),
+    "META_PRODUCT_SET_NOT_FOUND": (400, "لم يُعثر على Product Set في Meta — أنشئ كتالوجاً في Commerce Manager."),
 }
 
 
