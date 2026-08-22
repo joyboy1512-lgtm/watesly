@@ -382,13 +382,15 @@ export default function KnowledgePage() {
                 const isPreviewOpen = previewId === item.id;
                 return (
                   <Fragment key={item.id}>
-                    <tr className={item.is_active ? "" : "knowledge-row-inactive"}>
+                    <tr className={`knowledge-data-row ${item.is_active ? "" : "knowledge-row-inactive"}`}>
                       <td className="knowledge-cell-order" data-label="الترتيب">
                         <span dir="ltr">{item.sort_order}</span>
                       </td>
                       <td className="knowledge-cell-title" data-label="العنوان">
-                        <strong className="knowledge-title-ellipsis" title={item.title}>{item.title}</strong>
-                        {!item.is_active && <span className="admin-chip admin-chip-muted">مؤرشف</span>}
+                        <div className="knowledge-title-wrap">
+                          <strong className="knowledge-title-ellipsis" title={item.title}>{item.title}</strong>
+                          {!item.is_active && <span className="admin-chip admin-chip-muted knowledge-archived-chip">مؤرشف</span>}
+                        </div>
                       </td>
                       <td className="knowledge-cell-center" data-label="الفئة">
                         <span className="knowledge-category-badge">{CATEGORY_LABELS[item.category] ?? item.category}</span>
