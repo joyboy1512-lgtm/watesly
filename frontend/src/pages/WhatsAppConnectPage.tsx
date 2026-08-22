@@ -21,6 +21,7 @@ import {
   formatHealthSynced,
   formatMetaHealthDetails,
   formatMetaHealthLabel,
+  formatMetaHealthShort,
   formatMessagingLimit,
   formatQualityRating,
   formatWhatsAppStatus,
@@ -44,7 +45,9 @@ type TableRow = {
 
 type PageTab = "accounts" | "connect" | "entry";
 
-const WHATSAPP_ACCOUNT_TABLE_COLS = 5;
+const WHATSAPP_ACCOUNT_TABLE_COLS = 3;
+
+type AccountPanelTab = "details" | "settings";
 
 type CommerceReadiness = {
   commerce_enabled: boolean;
@@ -63,8 +66,7 @@ export default function WhatsAppConnectPage() {
   const [activeTab, setActiveTab] = useState<PageTab>("accounts");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [panelState, setPanelState] = useState<{ accountId: string; tab: AccountPanelTab } | null>(null);
 
   const [channelId, setChannelId] = useState("");
   const [embeddedChannelId, setEmbeddedChannelId] = useState("");
@@ -240,9 +242,9 @@ export default function WhatsAppConnectPage() {
   }, [accounts.data]);
 
   useEffect(() => {
-    if (!expandedId) return;
-    void loadCommerceReadiness(expandedId);
-  }, [expandedId]);
+    if (!panelState || panelState.tab !== "settings") return;
+    void loadCommerceReadiness(panelState.accountId);
+  }, [panelState]);
 
   useEffect(() => {
     for (const item of accounts.data ?? []) {
@@ -563,8 +565,7 @@ export default function WhatsAppConnectPage() {
       await api.post(`/whatsapp/accounts/${accountId}/disconnect`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       toastStore.getState().show("تم فصل الحساب.", "success");
-      if (expandedId === accountId) setExpandedId(null);
-      if (detailsId === accountId) setDetailsId(null);
+      if (panelState?.accountId === accountId) setPanelState(null);
     } catch {
       toastStore.getState().show("تعذر فصل الحساب.", "error");
     }
@@ -577,20 +578,15 @@ export default function WhatsAppConnectPage() {
     setSearchParams({ channel: channelIdValue });
   }
 
-  function toggleAccountDetails(accountId: string) {
-    setDetailsId((current) => {
-      const next = current === accountId ? null : accountId;
-      if (next) setExpandedId(null);
-      return next;
+  function toggleAccountPanel(accountId: string, tab: AccountPanelTab) {
+    setPanelState((current) => {
+      if (current?.accountId === accountId && current.tab === tab) return null;
+      return { accountId, tab };
     });
   }
 
-  function toggleAccountSettings(accountId: string) {
-    setExpandedId((current) => {
-      const next = current === accountId ? null : accountId;
-      if (next) setDetailsId(null);
-      return next;
-    });
+  function closeAccountPanel() {
+    setPanelState(null);
   }
 
   function renderReplaceWarning(account: WhatsAppAccountRow) {
@@ -668,21 +664,11 @@ export default function WhatsAppConnectPage() {
     return null;
   }
 
-  function renderAccountDetailsPanel(account: WhatsAppAccountRow, row: TableRow) {
+  function renderDetailsContent(account: WhatsAppAccountRow, row: TableRow) {
     return (
-      <tr className="whatsapp-details-row">
-        <td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS}>
-          <div className="whatsapp-details-shell">
-            <header className="whatsapp-details-header">
-              <div>
-                <h3>تفاصيل {account.verified_name || account.display_phone_number}</h3>
-                <p className="hint-text">{row.channelName} · {row.organizationName}</p>
-              </div>
-              <button type="button" className="secondary-button compact" onClick={() => setDetailsId(null)}>
-                إغلاق
-              </button>
-            </header>
-            <div className="whatsapp-details-grid">
+      <>
+        <p className="hint-text whatsapp-panel-subtitle">{row.channelName} · {row.organizationName}</p>
+        <div className="whatsapp-details-grid">
               <div className="whatsapp-details-item">
                 <span className="whatsapp-details-label">WABA ID</span>
                 <code dir="ltr">{account.waba_id}</code>
@@ -759,7 +745,7 @@ export default function WhatsAppConnectPage() {
               <button
                 type="button"
                 className="secondary-button compact"
-                onClick={() => toggleAccountSettings(account.id)}
+                onClick={() => toggleAccountPanel(account.id, "settings")}
               >
                 إعدادات
               </button>
@@ -771,13 +757,11 @@ export default function WhatsAppConnectPage() {
                 فصل
               </button>
             </div>
-          </div>
-        </td>
-      </tr>
+      </>
     );
   }
 
-  function renderExpandedPanel(account: WhatsAppAccountRow) {
+  function renderSettingsContent(account: WhatsAppAccountRow) {
     const commerceDraft = commerceDrafts[account.id];
     const brandingDraft = brandingDrafts[account.id];
     const savedCatalogId = account.meta_catalog_id?.trim() || commerceDraft?.meta_catalog_id?.trim() || "";
@@ -791,19 +775,7 @@ export default function WhatsAppConnectPage() {
     const brandingPending = Boolean(brandImageUrl) && !brandingSyncedAt;
 
     return (
-      <tr className="whatsapp-expand-row">
-        <td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS}>
-          <div className="whatsapp-expand-shell">
-            <header className="whatsapp-expand-header">
-              <div>
-                <h2>إعدادات {account.verified_name || account.display_phone_number}</h2>
-                <p className="hint-text">Commerce، الرمز، Webhook، الهوية البصرية، ومعرّفات Meta لهذه القناة.</p>
-              </div>
-              <button type="button" className="secondary-button" onClick={() => setExpandedId(null)}>
-                إغلاق الإعدادات
-              </button>
-            </header>
-            <div className="whatsapp-expand-grid">
+      <div className="whatsapp-expand-grid">
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-commerce">
                 <h3>WhatsApp Commerce — الكتالوج</h3>
                 <p className="hint-text">
@@ -1039,6 +1011,40 @@ export default function WhatsAppConnectPage() {
                 </div>
               </article>
             </div>
+    );
+  }
+
+  function renderAccountPanelRow(account: WhatsAppAccountRow, row: TableRow, tab: AccountPanelTab) {
+    return (
+      <tr className="whatsapp-panel-row">
+        <td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS}>
+          <div className="whatsapp-panel-shell">
+            <div className="whatsapp-panel-toolbar">
+              <div className="whatsapp-panel-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "details"}
+                  className={tab === "details" ? "whatsapp-panel-tab active" : "whatsapp-panel-tab"}
+                  onClick={() => toggleAccountPanel(account.id, "details")}
+                >
+                  تفاصيل
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "settings"}
+                  className={tab === "settings" ? "whatsapp-panel-tab active" : "whatsapp-panel-tab"}
+                  onClick={() => toggleAccountPanel(account.id, "settings")}
+                >
+                  إعدادات
+                </button>
+              </div>
+              <button type="button" className="secondary-button compact" onClick={closeAccountPanel}>
+                إغلاق
+              </button>
+            </div>
+            {tab === "details" ? renderDetailsContent(account, row) : renderSettingsContent(account)}
           </div>
         </td>
       </tr>
@@ -1083,7 +1089,7 @@ export default function WhatsAppConnectPage() {
           <div className="admin-table-header">
             <div>
               <h2>جدول حسابات WhatsApp</h2>
-              <small>{filteredRows.length} صف · اضغط «تفاصيل» لعرض المعرفات والمزامنة · «إعدادات» للتعديل</small>
+              <small>{filteredRows.length} صف · صف واحد ثابت · تفاصيل وإعدادات في لوحة واحدة</small>
             </div>
           </div>
 
@@ -1103,14 +1109,12 @@ export default function WhatsAppConnectPage() {
             </select>
           </div>
 
-          <div className="admin-table-wrap">
+          <div className="admin-table-wrap whatsapp-accounts-table-wrap">
             <table className="admin-erp-table whatsapp-erp-table whatsapp-accounts-compact">
               <thead>
                 <tr>
                   <th>الحساب</th>
                   <th>الحالة</th>
-                  <th>Commerce</th>
-                  <th>Token</th>
                   <th>إجراءات</th>
                 </tr>
               </thead>
@@ -1125,16 +1129,14 @@ export default function WhatsAppConnectPage() {
                   const account = row.account;
                   if (!account) {
                     return (
-                      <tr key={row.key}>
+                      <tr key={row.key} className="whatsapp-account-row">
                         <td>
-                          <div className="whatsapp-account-cell">
+                          <div className="whatsapp-account-inline" title={`${row.channelName} · ${row.organizationName}`}>
                             <strong>{row.channelName}</strong>
                             <small>{row.organizationName}</small>
                           </div>
                         </td>
                         <td><span className="admin-status admin-status-pending">غير مربوط</span></td>
-                        <td><span className="admin-chip admin-chip-muted">—</span></td>
-                        <td><span className="admin-chip admin-chip-muted">—</span></td>
                         <td>
                           <button type="button" className="whatsapp-button compact" onClick={() => openConnectForChannel(row.channel.id)}>
                             ربط
@@ -1144,55 +1146,56 @@ export default function WhatsAppConnectPage() {
                     );
                   }
 
-                  const isExpanded = expandedId === account.id;
-                  const isDetailsOpen = detailsId === account.id;
+                  const panelOpen = panelState?.accountId === account.id;
+                  const panelTab = panelState?.tab ?? "details";
+                  const accountTitle = `${account.verified_name || row.channelName} · ${account.display_phone_number} · ${row.channelName}`;
                   return (
                     <Fragment key={account.id}>
-                      <tr>
+                      <tr className="whatsapp-account-row">
                         <td>
-                          <div className="whatsapp-account-cell">
+                          <div className="whatsapp-account-inline" title={accountTitle}>
                             <strong>{account.verified_name || row.channelName}</strong>
-                            <small dir="ltr">{account.display_phone_number}</small>
-                            <small>{row.channelName} · {row.organizationName}</small>
+                            <span dir="ltr" className="whatsapp-account-phone">{account.display_phone_number}</span>
+                            <small>{row.channelName}</small>
                           </div>
                         </td>
                         <td>
-                          <div className="whatsapp-status-cell">
-                            <span className={metaHealthBadgeClass(account)} title={formatMetaHealthDetails(account)}>
-                              {formatMetaHealthLabel(account)}
+                          <div className="whatsapp-indicators-inline">
+                            <span
+                              className={metaHealthBadgeClass(account)}
+                              title={formatMetaHealthLabel(account)}
+                            >
+                              {formatMetaHealthShort(account)}
                             </span>
                             <span className={whatsappStatusBadgeClass(account.status)}>
                               {formatWhatsAppStatus(account.status)}
                             </span>
+                            <span className={commerceStatusClass(account)} title={formatCommerceSummary(account)}>
+                              {formatCommerceShort(account)}
+                            </span>
+                            {renderTokenBadge(account.id)}
                           </div>
                         </td>
-                        <td>
-                          <span className={commerceStatusClass(account)} title={formatCommerceSummary(account)}>
-                            {formatCommerceShort(account)}
-                          </span>
-                        </td>
-                        <td>{renderTokenBadge(account.id)}</td>
                         <td>
                           <div className="admin-actions whatsapp-row-actions whatsapp-row-actions-compact">
                             <button
                               type="button"
-                              className="secondary-button compact"
-                              onClick={() => toggleAccountDetails(account.id)}
+                              className={panelOpen && panelTab === "details" ? "whatsapp-button compact" : "secondary-button compact"}
+                              onClick={() => toggleAccountPanel(account.id, "details")}
                             >
-                              {isDetailsOpen ? "إخفاء" : "تفاصيل"}
+                              تفاصيل
                             </button>
                             <button
                               type="button"
-                              className="whatsapp-button compact"
-                              onClick={() => toggleAccountSettings(account.id)}
+                              className={panelOpen && panelTab === "settings" ? "whatsapp-button compact" : "secondary-button compact"}
+                              onClick={() => toggleAccountPanel(account.id, "settings")}
                             >
-                              {isExpanded ? "إغلاق" : "إعدادات"}
+                              إعدادات
                             </button>
                           </div>
                         </td>
                       </tr>
-                      {isDetailsOpen && renderAccountDetailsPanel(account, row)}
-                      {isExpanded && renderExpandedPanel(account)}
+                      {panelOpen && renderAccountPanelRow(account, row, panelTab)}
                     </Fragment>
                   );
                 })}

@@ -85,6 +85,13 @@ export function getMetaHealthSeverity(account: WhatsAppAccountRow): MetaHealthSe
   return "ok";
 }
 
+export function formatMetaHealthShort(account: WhatsAppAccountRow): string {
+  const severity = getMetaHealthSeverity(account);
+  if (severity === "critical") return "Meta ✗";
+  if (severity === "warning") return "Meta !";
+  return "Meta ✓";
+}
+
 export function formatMetaHealthLabel(account: WhatsAppAccountRow): string {
   if (account.meta_status_message?.trim()) return account.meta_status_message;
   const canSend = (account.meta_can_send_message ?? "").toUpperCase();
