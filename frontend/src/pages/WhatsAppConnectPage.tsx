@@ -1134,18 +1134,18 @@ export default function WhatsAppConnectPage() {
                   if (!account) {
                     return (
                       <tr key={row.key} className="whatsapp-account-row">
-                        <td className="whatsapp-cell-text">
+                        <td className="whatsapp-cell-text" data-label="اسم الحساب">
                           <span className="whatsapp-cell-ellipsis">—</span>
                         </td>
-                        <td className="whatsapp-cell-text" title={row.channelName}>
+                        <td className="whatsapp-cell-text" data-label="اسم القناة" title={row.channelName}>
                           <span className="whatsapp-cell-ellipsis">{row.channelName}</span>
                         </td>
-                        <td className="whatsapp-cell-center">
+                        <td className="whatsapp-cell-center" data-label="الحالة">
                           <span className="admin-status admin-status-pending">غير مربوط</span>
                         </td>
-                        <td className="whatsapp-cell-center"><span className="admin-chip admin-chip-muted">—</span></td>
-                        <td className="whatsapp-cell-center"><span className="admin-chip admin-chip-muted">—</span></td>
-                        <td colSpan={2} className="whatsapp-cell-action">
+                        <td className="whatsapp-cell-center" data-label="Commerce"><span className="admin-chip admin-chip-muted">—</span></td>
+                        <td className="whatsapp-cell-center" data-label="حالة الاتصال"><span className="admin-chip admin-chip-muted">—</span></td>
+                        <td colSpan={2} className="whatsapp-cell-action whatsapp-cell-action-span" data-label="ربط">
                           <button type="button" className="whatsapp-button compact" onClick={() => openConnectForChannel(row.channel.id)}>
                             ربط
                           </button>
@@ -1160,26 +1160,26 @@ export default function WhatsAppConnectPage() {
                   return (
                     <Fragment key={account.id}>
                       <tr className="whatsapp-account-row">
-                        <td className="whatsapp-cell-text" title={`${accountName} · ${account.display_phone_number}`}>
+                        <td className="whatsapp-cell-text" data-label="اسم الحساب" title={`${accountName} · ${account.display_phone_number}`}>
                           <span className="whatsapp-cell-ellipsis">{accountName}</span>
                         </td>
-                        <td className="whatsapp-cell-text" title={`${row.channelName} · ${row.organizationName}`}>
+                        <td className="whatsapp-cell-text" data-label="اسم القناة" title={`${row.channelName} · ${row.organizationName}`}>
                           <span className="whatsapp-cell-ellipsis">{row.channelName}</span>
                         </td>
-                        <td className="whatsapp-cell-center">
+                        <td className="whatsapp-cell-center" data-label="الحالة">
                           <span className={metaHealthBadgeClass(account)} title={formatMetaHealthLabel(account)}>
                             {formatMetaHealthShort(account)}
                           </span>
                         </td>
-                        <td className="whatsapp-cell-center">
+                        <td className="whatsapp-cell-center" data-label="Commerce">
                           <span className={commerceStatusClass(account)} title={formatCommerceSummary(account)}>
                             {formatCommerceShort(account)}
                           </span>
                         </td>
-                        <td className="whatsapp-cell-center">
+                        <td className="whatsapp-cell-center" data-label="حالة الاتصال">
                           <span className={whatsappStatusBadgeClass(account.status)}>{formatWhatsAppStatus(account.status)}</span>
                         </td>
-                        <td className="whatsapp-cell-action">
+                        <td className="whatsapp-cell-action" data-label="تفاصيل">
                           <button
                             type="button"
                             className={panelOpen && panelTab === "details" ? "whatsapp-button compact" : "secondary-button compact"}
@@ -1188,7 +1188,7 @@ export default function WhatsAppConnectPage() {
                             تفاصيل
                           </button>
                         </td>
-                        <td className="whatsapp-cell-action">
+                        <td className="whatsapp-cell-action" data-label="إعدادات">
                           <button
                             type="button"
                             className={panelOpen && panelTab === "settings" ? "whatsapp-button compact" : "secondary-button compact"}

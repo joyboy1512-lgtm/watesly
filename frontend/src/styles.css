@@ -5449,6 +5449,104 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 11px;
   white-space: nowrap;
 }
+@media (max-width: 1024px) and (min-width: 769px) {
+  .whatsapp-connect-page .admin-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .whatsapp-accounts-compact {
+    min-width: 720px;
+  }
+}
+@media (max-width: 768px) {
+  .whatsapp-connect-page .admin-table-wrap {
+    overflow-x: visible;
+  }
+  .whatsapp-connect-page .admin-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .whatsapp-connect-page .admin-toolbar input,
+  .whatsapp-connect-page .admin-toolbar select {
+    width: 100%;
+    min-width: 0;
+  }
+  .whatsapp-page-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .whatsapp-tab {
+    flex: 0 0 auto;
+  }
+  .whatsapp-accounts-compact {
+    table-layout: auto;
+    min-width: 0;
+  }
+  .whatsapp-accounts-compact thead {
+    display: none;
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row td {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    white-space: normal;
+    text-align: start !important;
+    border: none;
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row td:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row td.whatsapp-cell-action {
+    grid-column: span 1;
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row td.whatsapp-cell-action-span {
+    grid-column: 1 / -1;
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row td.whatsapp-cell-action .secondary-button.compact,
+  .whatsapp-accounts-compact tbody tr.whatsapp-account-row td.whatsapp-cell-action .whatsapp-button.compact {
+    width: 100%;
+    min-height: 36px;
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-panel-row {
+    display: block;
+  }
+  .whatsapp-accounts-compact tbody tr.whatsapp-panel-row td {
+    display: block;
+    padding: 0 !important;
+    border: none;
+  }
+  .whatsapp-panel-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .whatsapp-panel-tabs {
+    width: 100%;
+    justify-content: center;
+  }
+  .whatsapp-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .whatsapp-panel-row td {
   background: color-mix(in srgb, var(--primary) 3%, var(--panel-soft));
   padding: 0;
