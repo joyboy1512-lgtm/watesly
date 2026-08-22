@@ -1,8 +1,11 @@
-# Watesly v0.26 — Operational Hardening
+# Watesly — Production Platform
 
-This release builds on v0.25 and focuses on preventing customer-facing harm and silent system stalls.
+**Canonical versions (live on watesly.com):** Backend `0.28.0` · Frontend `0.32.5` · Alembic `0058_whatsapp_branding`  
+**Single source of truth:** `deploy/VERSION.json`
 
-Main improvements:
+This repository builds on v0.26 operational hardening and v0.28 platform features.
+
+Main v0.26 hardening highlights:
 
 - guarded campaign starts with execution tokens and row locks;
 - stale campaign sends move to an explicit unknown/failed state instead of being resent automatically;
@@ -15,6 +18,6 @@ Main improvements:
 - streaming private file uploads and file lifecycle fields;
 - lightweight readiness checks, pinned MinIO image and persistent Redis;
 - PostgreSQL + MinIO backup/restore scripts;
-- migration `0018` and version consistency at `0.26.0`.
+- migration chain through `0058_whatsapp_branding` and version consistency at backend **0.28.0** / frontend **0.32.5** (see `deploy/VERSION.json`).
 
 Read `OPERATIONAL_HARDENING_V026.md` before deployment. Docker/PostgreSQL/Redis integration and load tests must still be run on the target environment before real customers are onboarded.

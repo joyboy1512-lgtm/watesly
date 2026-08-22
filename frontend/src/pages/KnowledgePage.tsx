@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
@@ -118,6 +118,22 @@ export default function KnowledgePage() {
     const rows = articles.data ?? [];
     return listTab === "inactive" ? rows.filter((item) => !item.is_active) : rows.filter((item) => item.is_active);
   }, [articles.data, listTab]);
+
+  const sortedArticles = useMemo(() => {
+    return [...visibleArticles].sort((left, right) => {
+      if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order;
+      return left.title.localeCompare(right.title, "ar");
+    });
+  }, [visibleArticles]);
+
+  const categoryOptions = useMemo(() => {
+    const values = new Set<string>([...(categories.data ?? []), ...Object.keys(CATEGORY_LABELS)]);
+    return Array.from(values).sort((left, right) =>
+      (CATEGORY_LABELS[left] ?? left).localeCompare(CATEGORY_LABELS[right] ?? right, "ar")
+    );
+  }, [categories.data]);
+
+  const [previewId, setPreviewId] = useState<string | null>(null);
 
   async function createArticle(event: FormEvent) {
     event.preventDefault();
@@ -286,7 +302,7 @@ export default function KnowledgePage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">AI Agent</span>
           <h1>قاعدة المعرفة</h1>
-          <p>أجوبة FAQ للرد التلقائي في Inbox والأتمتة — KB → كatalog → AI محلي مع LLM اختياري.</p>
+          <p>قواعد FAQ مرتّبة أفقياً للرد التلقائي في Inbox — KB → كatalog → AI محلي مع LLM اختياري.</p>
           {settings && (
             <p className="hint-text">
               LLM: {settings.llm_available ? (settings.llm_enabled ? "مفعّل" : "متاح — غير مفعّل") : "غير متاح (أضف AI_API_KEY)"}
@@ -297,68 +313,144 @@ export default function KnowledgePage() {
         </div>
       </header>
 
-      <section className="card knowledge-list-card">
-        <div className="catalog-list-header">
+      <section className="card admin-table-card knowledge-list-card">
+        <div className="admin-table-header">
           <div>
-            <h2 className="section-title">مقالات المعرفة</h2>
-            <p className="hint-text">{visibleArticles.length} مقال معروض</p>
+            <h2>قواعد المعرفة</h2>
+            <small>{sortedArticles.length} قاعدة · مرتّبة حسب ترتيب العرض</small>
           </div>
-          <div className="catalog-toolbar">
-            <input
-              className="catalog-search-input"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="بحث بالعنوان أو الكلمات المفتاحية…"
-            />
-            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
-              <option value="">كل الفئات</option>
-              {(categories.data ?? []).map((category) => (
-                <option key={category} value={category}>
-                  {CATEGORY_LABELS[category] ?? category}
-                </option>
-              ))}
-            </select>
-            <button type="button" className="secondary-button" onClick={() => void downloadKnowledgeExport()}>
-              تصدير CSV
+          <button type="button" className="secondary-button" onClick={() => void downloadKnowledgeExport()}>
+            تصدير CSV
+          </button>
+        </div>
+
+        <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="بحث بالعنوان أو الكلمات المفتاحية…"
+          />
+        </div>
+
+        <div className="knowledge-filter-bar">
+          <div className="catalog-filter-tabs knowledge-status-tabs">
+            <button type="button" className={listTab === "active" ? "active" : ""} onClick={() => setListTab("active")}>
+              نشطة
+            </button>
+            <button type="button" className={listTab === "inactive" ? "active" : ""} onClick={() => setListTab("inactive")}>
+              مؤرشفة
             </button>
           </div>
+          <div className="knowledge-category-tabs catalog-filter-tabs">
+            <button type="button" className={filterCategory === "" ? "active" : ""} onClick={() => setFilterCategory("")}>
+              كل الفئات
+            </button>
+            {categoryOptions.map((category) => (
+              <button
+                key={category}
+                type="button"
+                className={filterCategory === category ? "active" : ""}
+                onClick={() => setFilterCategory(category)}
+              >
+                {CATEGORY_LABELS[category] ?? category}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="catalog-filter-tabs">
-          <button type="button" className={listTab === "active" ? "active" : ""} onClick={() => setListTab("active")}>
-            نشطة
-          </button>
-          <button type="button" className={listTab === "inactive" ? "active" : ""} onClick={() => setListTab("inactive")}>
-            مؤرشفة
-          </button>
-        </div>
-
-        {articles.isLoading && <p className="hint-text">جاري التحميل…</p>}
-        {!articles.isLoading && visibleArticles.length === 0 && (
-          <p className="hint-text">لا توجد مقالات مطابقة — أضف أسئلة شائعة.</p>
-        )}
-
-        <div className="knowledge-grid-cards">
-          {visibleArticles.map((item) => (
-            <article key={item.id} className={`knowledge-card ${item.is_active ? "" : "knowledge-card-inactive"}`}>
-              <div className="knowledge-card-head">
-                <span className="knowledge-category-badge">{CATEGORY_LABELS[item.category] ?? item.category}</span>
-                {!item.is_active && <span className="catalog-status-badge">مؤرشف</span>}
-                {item.usage_count > 0 && <span className="knowledge-usage-badge">استخدام: {item.usage_count}</span>}
-              </div>
-              <h3>{item.title}</h3>
-              <p className="knowledge-card-body">{item.body.slice(0, 180)}{item.body.length > 180 ? "…" : ""}</p>
-              {item.keywords && <p className="knowledge-card-keywords">{item.keywords}</p>}
-              <div className="catalog-card-actions">
-                <button type="button" className="secondary-button" onClick={() => openEdit(item)}>تعديل</button>
-                {item.is_active ? (
-                  <button type="button" className="danger-link" onClick={() => void archiveArticle(item.id)}>أرشفة</button>
-                ) : (
-                  <button type="button" className="secondary-button" onClick={() => void restoreArticle(item.id)}>استرجاع</button>
-                )}
-              </div>
-            </article>
-          ))}
+        <div className="admin-table-wrap">
+          <table className="admin-erp-table knowledge-erp-table">
+            <thead>
+              <tr>
+                <th>الترتيب</th>
+                <th>العنوان</th>
+                <th>الفئة</th>
+                <th>الجواب</th>
+                <th>كلمات مفتاحية</th>
+                <th>استخدام</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {articles.isLoading && (
+                <tr><td colSpan={7} className="admin-table-empty">جاري التحميل…</td></tr>
+              )}
+              {!articles.isLoading && sortedArticles.length === 0 && (
+                <tr><td colSpan={7} className="admin-table-empty">لا توجد قواعد مطابقة — أضف أسئلة شائعة.</td></tr>
+              )}
+              {!articles.isLoading && sortedArticles.map((item) => {
+                const isPreviewOpen = previewId === item.id;
+                return (
+                  <Fragment key={item.id}>
+                    <tr className={`knowledge-data-row ${item.is_active ? "" : "knowledge-row-inactive"}`}>
+                      <td className="knowledge-cell-order" data-label="الترتيب">
+                        <span dir="ltr">{item.sort_order}</span>
+                      </td>
+                      <td className="knowledge-cell-title" data-label="العنوان">
+                        <div className="knowledge-title-wrap">
+                          <strong className="knowledge-title-ellipsis" title={item.title}>{item.title}</strong>
+                          {!item.is_active && <span className="admin-chip admin-chip-muted knowledge-archived-chip">مؤرشف</span>}
+                        </div>
+                      </td>
+                      <td className="knowledge-cell-center" data-label="الفئة">
+                        <span className="knowledge-category-badge">{CATEGORY_LABELS[item.category] ?? item.category}</span>
+                      </td>
+                      <td className="knowledge-cell-body" data-label="الجواب">
+                        <span className="knowledge-body-ellipsis" title={item.body}>
+                          {item.body.slice(0, 100)}{item.body.length > 100 ? "…" : ""}
+                        </span>
+                      </td>
+                      <td className="knowledge-cell-keywords" data-label="كلمات مفتاحية">
+                        <span className="knowledge-keywords-ellipsis" title={item.keywords ?? undefined}>
+                          {item.keywords || "—"}
+                        </span>
+                      </td>
+                      <td className="knowledge-cell-center" data-label="استخدام">
+                        {item.usage_count > 0 ? item.usage_count : "—"}
+                      </td>
+                      <td className="knowledge-cell-actions" data-label="إجراءات">
+                        <div className="admin-actions knowledge-row-actions">
+                          <button
+                            type="button"
+                            className="secondary-button compact"
+                            onClick={() => setPreviewId(isPreviewOpen ? null : item.id)}
+                          >
+                            {isPreviewOpen ? "إخفاء" : "عرض"}
+                          </button>
+                          <button type="button" className="secondary-button compact" onClick={() => openEdit(item)}>
+                            تعديل
+                          </button>
+                          {item.is_active ? (
+                            <button type="button" className="secondary-button compact danger-text" onClick={() => void archiveArticle(item.id)}>
+                              أرشفة
+                            </button>
+                          ) : (
+                            <button type="button" className="secondary-button compact" onClick={() => void restoreArticle(item.id)}>
+                              استرجاع
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {isPreviewOpen && (
+                      <tr className="knowledge-preview-row">
+                        <td colSpan={7}>
+                          <div className="knowledge-preview-panel">
+                            <div className="knowledge-preview-meta">
+                              <span className="knowledge-category-badge">{CATEGORY_LABELS[item.category] ?? item.category}</span>
+                              <span className="hint-text">ترتيب {item.sort_order} · {item.language}</span>
+                              {item.keywords && <span className="hint-text">{item.keywords}</span>}
+                            </div>
+                            <p className="knowledge-preview-body">{item.body}</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </section>
 
