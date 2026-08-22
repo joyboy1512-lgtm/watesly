@@ -26,6 +26,11 @@ export type WhatsAppAccountRow = {
   meta_catalog_id?: string | null;
   commerce_enabled?: boolean;
   catalog_synced_at?: string | null;
+  profile_image_url?: string | null;
+  profile_image_synced_at?: string | null;
+  catalog_cover_image_url?: string | null;
+  meta_catalog_product_set_id?: string | null;
+  catalog_cover_synced_at?: string | null;
 };
 
 export const CONNECTION_METHOD_LABELS: Record<string, string> = {
@@ -80,6 +85,13 @@ export function getMetaHealthSeverity(account: WhatsAppAccountRow): MetaHealthSe
   return "ok";
 }
 
+export function formatMetaHealthShort(account: WhatsAppAccountRow): string {
+  const severity = getMetaHealthSeverity(account);
+  if (severity === "critical") return "Meta ✗";
+  if (severity === "warning") return "Meta !";
+  return "Meta ✓";
+}
+
 export function formatMetaHealthLabel(account: WhatsAppAccountRow): string {
   if (account.meta_status_message?.trim()) return account.meta_status_message;
   const canSend = (account.meta_can_send_message ?? "").toUpperCase();
@@ -113,6 +125,13 @@ export function formatCommerceSummary(account: WhatsAppAccountRow): string {
   if (account.meta_catalog_id) return `Catalog: ${account.meta_catalog_id}`;
   if (account.commerce_enabled) return "مفعّل بدون Catalog";
   return "غير مفعّل";
+}
+
+export function formatCommerceShort(account: WhatsAppAccountRow): string {
+  if (account.commerce_enabled && account.meta_catalog_id) return "مفعّل";
+  if (account.meta_catalog_id) return "Catalog";
+  if (account.commerce_enabled) return "بدون Catalog";
+  return "—";
 }
 
 export function commerceStatusClass(account: WhatsAppAccountRow): string {

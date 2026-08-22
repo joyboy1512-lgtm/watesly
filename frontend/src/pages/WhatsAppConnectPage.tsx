@@ -2,6 +2,7 @@ import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { uploadFile } from "../lib/uploads";
 import {
   EmbeddedSignupConfig,
   EmbeddedSignupSession,
@@ -14,18 +15,20 @@ import { toastStore } from "../stores/toast";
 import {
   commerceStatusClass,
   connectionMethodClass,
+  formatCommerceShort,
   formatCommerceSummary,
   formatConnectionMethod,
   formatHealthSynced,
   formatMetaHealthDetails,
   formatMetaHealthLabel,
+  formatMetaHealthShort,
   formatMessagingLimit,
   formatQualityRating,
   formatWhatsAppStatus,
   getMetaHealthSeverity,
   metaHealthBadgeClass,
   qualityBadgeClass,
-  truncateMetaId,
+  whatsappStatusBadgeClass,
   type WhatsAppAccountRow
 } from "../lib/whatsappHelpers";
 
@@ -41,6 +44,10 @@ type TableRow = {
 };
 
 type PageTab = "accounts" | "connect" | "entry";
+
+const WHATSAPP_ACCOUNT_TABLE_COLS = 7;
+
+type AccountPanelTab = "details" | "settings";
 
 type CommerceReadiness = {
   commerce_enabled: boolean;
@@ -59,7 +66,7 @@ export default function WhatsAppConnectPage() {
   const [activeTab, setActiveTab] = useState<PageTab>("accounts");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [panelState, setPanelState] = useState<{ accountId: string; tab: AccountPanelTab } | null>(null);
 
   const [channelId, setChannelId] = useState("");
   const [embeddedChannelId, setEmbeddedChannelId] = useState("");
@@ -82,6 +89,10 @@ export default function WhatsAppConnectPage() {
   const [commerceDrafts, setCommerceDrafts] = useState<Record<string, { meta_catalog_id: string; commerce_enabled: boolean }>>({});
   const [commerceReadiness, setCommerceReadiness] = useState<Record<string, CommerceReadiness | null>>({});
   const [loadingReadinessId, setLoadingReadinessId] = useState<string | null>(null);
+  const [brandingDrafts, setBrandingDrafts] = useState<Record<string, { brand_image_url: string }>>({});
+  const [uploadingBrandingId, setUploadingBrandingId] = useState<string | null>(null);
+  const [savingBrandingId, setSavingBrandingId] = useState<string | null>(null);
+  const [syncingBrandingId, setSyncingBrandingId] = useState<string | null>(null);
 
   const channels = useQuery({
     queryKey: ["channels"],
@@ -221,9 +232,19 @@ export default function WhatsAppConnectPage() {
   }, [accounts.data]);
 
   useEffect(() => {
-    if (!expandedId) return;
-    void loadCommerceReadiness(expandedId);
-  }, [expandedId]);
+    const next: Record<string, { brand_image_url: string }> = {};
+    for (const item of accounts.data ?? []) {
+      next[item.id] = {
+        brand_image_url: item.profile_image_url || item.catalog_cover_image_url || ""
+      };
+    }
+    setBrandingDrafts(next);
+  }, [accounts.data]);
+
+  useEffect(() => {
+    if (!panelState || panelState.tab !== "settings") return;
+    void loadCommerceReadiness(panelState.accountId);
+  }, [panelState]);
 
   useEffect(() => {
     for (const item of accounts.data ?? []) {
@@ -396,7 +417,7 @@ export default function WhatsAppConnectPage() {
     try {
       await api.patch(`/whatsapp/accounts/${accountId}/commerce`, draft);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم حفظ إعدادات Commerce.", "success");
+      toastStore.getState().show("تم حفظ Commerce وتفعيل الكتالوج على Meta.", "success");
     } catch {
       toastStore.getState().show("تعذر حفظ Commerce.", "error");
     }
@@ -437,7 +458,105 @@ export default function WhatsAppConnectPage() {
         .getState()
         .show(`مزامنة Meta: ${synced}/${total} نجح، ${failed} فشل${reviewSummary}${detail}.`, failed ? "error" : "success");
     } catch {
-      toastStore.getState().show("تعذر مزامنة الكتالogg مع Meta.", "error");
+      toastStore.getState().show("تعذر مزامنة الكتالوج مع Meta.", "error");
+    }
+  }
+
+  function extractApiDetail(error: unknown, fallback: string): string {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "response" in error &&
+      typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+    ) {
+      return (error as { response: { data: { detail: string } } }).response.data.detail;
+    }
+    return fallback;
+  }
+
+  async function persistBranding(accountId: string, brandImageUrl?: string): Promise<boolean> {
+    const url = (brandImageUrl ?? brandingDrafts[accountId]?.brand_image_url ?? "").trim();
+    await api.patch(`/whatsapp/accounts/${accountId}/branding`, {
+      profile_image_url: url || null,
+      catalog_cover_image_url: url || null
+    });
+    await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+    return true;
+  }
+
+  async function uploadBrandImage(accountId: string, file: File) {
+    if (!file.type.startsWith("image/")) {
+      toastStore.getState().show("اختر صورة فقط (JPG / PNG / WebP).", "error");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toastStore.getState().show("الصورة أكبر من 5MB.", "error");
+      return;
+    }
+    setUploadingBrandingId(accountId);
+    try {
+      const uploaded = await uploadFile(file);
+      const nextDraft = { brand_image_url: uploaded.public_url };
+      setBrandingDrafts((current) => ({
+        ...current,
+        [accountId]: nextDraft
+      }));
+      await persistBranding(accountId, uploaded.public_url);
+      toastStore.getState().show("تم رفع صورة الهوية وحفظها.", "success");
+    } catch {
+      toastStore.getState().show("تعذر رفع الصورة.", "error");
+    } finally {
+      setUploadingBrandingId(null);
+    }
+  }
+
+  async function saveBranding(accountId: string): Promise<boolean> {
+    const draft = brandingDrafts[accountId];
+    if (!draft?.brand_image_url?.trim()) {
+      toastStore.getState().show("ارفع صورة الهوية أولاً.", "error");
+      return false;
+    }
+    setSavingBrandingId(accountId);
+    try {
+      await persistBranding(accountId);
+      toastStore.getState().show("تم حفظ صورة الهوية.", "success");
+      return true;
+    } catch {
+      toastStore.getState().show("تعذر حفظ صورة الهوية.", "error");
+      return false;
+    } finally {
+      setSavingBrandingId(null);
+    }
+  }
+
+  async function syncBrandingToMeta(accountId: string) {
+    setSyncingBrandingId(accountId);
+    try {
+      const draft = brandingDrafts[accountId];
+      if (!draft?.brand_image_url?.trim()) {
+        toastStore.getState().show("ارفع صورة الهوية أولاً.", "error");
+        return;
+      }
+      await persistBranding(accountId);
+      const response = await api.post<{
+        synced: boolean;
+        errors?: string[];
+        profile?: { synced?: boolean } | null;
+        catalog_cover?: { synced?: boolean } | null;
+      }>(`/whatsapp/accounts/${accountId}/branding/sync-all`);
+      await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+      const errors = response.data.errors ?? [];
+      if (errors.length > 0) {
+        toastStore.getState().show(`تفعيل جزئي — ${errors[0]}`, "error");
+      } else {
+        toastStore
+          .getState()
+          .show("تم تفعيل الهوية على Meta — قد يتأخر ظهورها في WhatsApp 5–15 دقيقة.", "success");
+      }
+    } catch (error: unknown) {
+      toastStore.getState().show(extractApiDetail(error, "تعذر تفعيل الهوية على Meta."), "error");
+    } finally {
+      setSyncingBrandingId(null);
     }
   }
 
@@ -446,7 +565,7 @@ export default function WhatsAppConnectPage() {
       await api.post(`/whatsapp/accounts/${accountId}/disconnect`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       toastStore.getState().show("تم فصل الحساب.", "success");
-      if (expandedId === accountId) setExpandedId(null);
+      if (panelState?.accountId === accountId) setPanelState(null);
     } catch {
       toastStore.getState().show("تعذر فصل الحساب.", "error");
     }
@@ -457,6 +576,17 @@ export default function WhatsAppConnectPage() {
     setEmbeddedChannelId(channelIdValue);
     setActiveTab("connect");
     setSearchParams({ channel: channelIdValue });
+  }
+
+  function toggleAccountPanel(accountId: string, tab: AccountPanelTab) {
+    setPanelState((current) => {
+      if (current?.accountId === accountId && current.tab === tab) return null;
+      return { accountId, tab };
+    });
+  }
+
+  function closeAccountPanel() {
+    setPanelState(null);
   }
 
   function renderReplaceWarning(account: WhatsAppAccountRow) {
@@ -534,25 +664,118 @@ export default function WhatsAppConnectPage() {
     return null;
   }
 
-  function renderExpandedPanel(account: WhatsAppAccountRow) {
+  function renderDetailsContent(account: WhatsAppAccountRow, row: TableRow) {
+    return (
+      <>
+        <p className="hint-text whatsapp-panel-subtitle">{row.channelName} · {row.organizationName}</p>
+        <div className="whatsapp-details-grid">
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">WABA ID</span>
+                <code dir="ltr">{account.waba_id}</code>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">Phone Number ID</span>
+                <code dir="ltr">{account.phone_number_id}</code>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">الجودة</span>
+                <span className={qualityBadgeClass(account.quality_rating)}>
+                  {formatQualityRating(account.quality_rating)}
+                </span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">حد الإرسال</span>
+                <span>{formatMessagingLimit(account)}</span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">طريقة الربط</span>
+                <span className={connectionMethodClass(account.connection_method)}>
+                  {formatConnectionMethod(account.connection_method)}
+                </span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">آخر مزامنة Meta</span>
+                <span>{formatHealthSynced(account.health_synced_at)}</span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">Commerce</span>
+                <span className={commerceStatusClass(account)}>{formatCommerceSummary(account)}</span>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">حالة Meta</span>
+                <div className="whatsapp-details-stack">
+                  <span className={metaHealthBadgeClass(account)}>{formatMetaHealthLabel(account)}</span>
+                  <small className="meta-health-details">{formatMetaHealthDetails(account)}</small>
+                </div>
+              </div>
+              <div className="whatsapp-details-item">
+                <span className="whatsapp-details-label">Watesly</span>
+                <span className={whatsappStatusBadgeClass(account.status)}>{formatWhatsAppStatus(account.status)}</span>
+              </div>
+              {account.meta_catalog_id && (
+                <div className="whatsapp-details-item">
+                  <span className="whatsapp-details-label">Catalog ID</span>
+                  <code dir="ltr">{account.meta_catalog_id}</code>
+                </div>
+              )}
+              {account.catalog_synced_at && (
+                <div className="whatsapp-details-item">
+                  <span className="whatsapp-details-label">مزامنة الكتالوج</span>
+                  <span>{formatHealthSynced(account.catalog_synced_at)}</span>
+                </div>
+              )}
+            </div>
+            <div className="admin-actions whatsapp-details-actions">
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={syncingId === account.id}
+                onClick={() => void syncHealth(account.id)}
+              >
+                {syncingId === account.id ? "…" : "مزامنة Meta"}
+              </button>
+              <Link to="/inbox" className="secondary-button compact">Inbox</Link>
+              <button
+                type="button"
+                className="secondary-button compact"
+                onClick={() => openConnectForChannel(row.channel.id)}
+              >
+                استبدال الرقم
+              </button>
+              <button
+                type="button"
+                className="secondary-button compact"
+                onClick={() => toggleAccountPanel(account.id, "settings")}
+              >
+                إعدادات
+              </button>
+              <button
+                type="button"
+                className="secondary-button compact danger-text"
+                onClick={() => void disconnectAccount(account.id)}
+              >
+                فصل
+              </button>
+            </div>
+      </>
+    );
+  }
+
+  function renderSettingsContent(account: WhatsAppAccountRow) {
     const commerceDraft = commerceDrafts[account.id];
+    const brandingDraft = brandingDrafts[account.id];
     const savedCatalogId = account.meta_catalog_id?.trim() || commerceDraft?.meta_catalog_id?.trim() || "";
     const commerceOn = account.commerce_enabled || commerceDraft?.commerce_enabled;
+    const brandingBusy =
+      syncingBrandingId === account.id ||
+      savingBrandingId === account.id ||
+      uploadingBrandingId === account.id;
+    const brandImageUrl = brandingDraft?.brand_image_url?.trim() || "";
+    const brandingSyncedAt = account.profile_image_synced_at || account.catalog_cover_synced_at;
+    const brandingPending = Boolean(brandImageUrl) && !brandingSyncedAt;
 
     return (
-      <tr className="whatsapp-expand-row">
-        <td colSpan={10}>
-          <div className="whatsapp-expand-shell">
-            <header className="whatsapp-expand-header">
-              <div>
-                <h2>إعدادات {account.verified_name || account.display_phone_number}</h2>
-                <p className="hint-text">Commerce، الرمز، Webhook، ومعرّفات Meta لهذه القناة.</p>
-              </div>
-              <button type="button" className="secondary-button" onClick={() => setExpandedId(null)}>
-                إغلاق الإعدادات
-              </button>
-            </header>
-            <div className="whatsapp-expand-grid">
+      <div className="whatsapp-expand-grid">
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-commerce">
                 <h3>WhatsApp Commerce — الكتالوج</h3>
                 <p className="hint-text">
@@ -606,6 +829,119 @@ export default function WhatsAppConnectPage() {
                   >
                     مزامنة المنتجات → Meta
                   </button>
+                </div>
+              </article>
+              <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
+                <div className="whatsapp-branding-head">
+                  <div>
+                    <h3>الهوية البصرية</h3>
+                    <p className="hint-text">
+                      صورة واحدة لـ WhatsApp — تظهر في المحادثات وأعلى الكتالوج. Meta لا يدعم صورتين منفصلتين.
+                    </p>
+                  </div>
+                  {brandingSyncedAt ? (
+                    <span className="admin-chip admin-chip-whatsapp">مفعّل على Meta</span>
+                  ) : brandImageUrl ? (
+                    <span className="admin-chip admin-chip-muted">محفوظ · لم يُفعَّل</span>
+                  ) : null}
+                </div>
+
+                {brandingPending && (
+                  <p className="hint-text whatsapp-branding-pending" role="alert">
+                    الصورة محفوظة — اضغط «تفعيل على Meta» لتطبيقها في WhatsApp.
+                  </p>
+                )}
+
+                <div className="whatsapp-branding-unified">
+                  <div className="whatsapp-branding-preview">
+                    <div className="whatsapp-branding-preview-frame">
+                      {brandImageUrl ? (
+                        <img src={brandImageUrl} alt="معاينة الهوية" className="whatsapp-branding-preview-img" />
+                      ) : (
+                        <div className="whatsapp-branding-preview-empty">ارفع شعار الشركة</div>
+                      )}
+                      <div className="whatsapp-branding-preview-name">
+                        {account.verified_name || account.display_phone_number || "اسم الشركة"}
+                      </div>
+                    </div>
+                    <ul className="whatsapp-branding-uses">
+                      <li>
+                        <span className="whatsapp-branding-use-icon" aria-hidden="true">💬</span>
+                        <span>بجانب اسم الشركة في المحادثات</span>
+                      </li>
+                      <li>
+                        <span className="whatsapp-branding-use-icon" aria-hidden="true">🛍️</span>
+                        <span>أعلى صفحة الكتالوج داخل WhatsApp</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="whatsapp-branding-form">
+                    <label className="field-label">
+                      <span>صورة الهوية</span>
+                      <span className="hint-text">JPG · PNG · WebP — حتى 5MB · يُفضّل 640×640 أو أكبر</span>
+                    </label>
+                    <div className="whatsapp-branding-upload-row">
+                      <label className="whatsapp-branding-upload-btn">
+                        {uploadingBrandingId === account.id ? "جاري الرفع…" : "رفع صورة"}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          hidden
+                          disabled={brandingBusy}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) void uploadBrandImage(account.id, file);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      <input
+                        dir="ltr"
+                        className="whatsapp-branding-url-input"
+                        value={brandingDraft?.brand_image_url ?? ""}
+                        onChange={(e) =>
+                          setBrandingDrafts((current) => ({
+                            ...current,
+                            [account.id]: { brand_image_url: e.target.value }
+                          }))
+                        }
+                        placeholder="https://… أو ارفع من الجهاز"
+                      />
+                    </div>
+                    {brandingSyncedAt && (
+                      <p className="hint-text whatsapp-branding-synced">
+                        ✓ آخر تفعيل على Meta: {formatHealthSynced(brandingSyncedAt)}
+                      </p>
+                    )}
+                    {!commerceOn || !savedCatalogId ? (
+                      <p className="hint-text whatsapp-branding-note">
+                        بدون Commerce: تُفعَّل صورة الملف فقط. فعّل Commerce أعلاه لتطبيقها على الكتالوج أيضاً.
+                      </p>
+                    ) : (
+                      <p className="hint-text whatsapp-branding-note">
+                        التغيير قد يتأخر 5–15 دقيقة — أغلق الكتالوج في WhatsApp وأعد فتحه.
+                      </p>
+                    )}
+                    <div className="whatsapp-branding-actions">
+                      <button
+                        type="button"
+                        className="whatsapp-button compact"
+                        disabled={!brandImageUrl || brandingBusy}
+                        onClick={() => void syncBrandingToMeta(account.id)}
+                      >
+                        {syncingBrandingId === account.id ? "جاري التفعيل…" : "تفعيل على Meta"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        disabled={!brandImageUrl || brandingBusy}
+                        onClick={() => void saveBranding(account.id)}
+                      >
+                        {savingBrandingId === account.id ? "جاري الحفظ…" : "حفظ فقط"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </article>
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-token">
@@ -675,6 +1011,40 @@ export default function WhatsAppConnectPage() {
                 </div>
               </article>
             </div>
+    );
+  }
+
+  function renderAccountPanelRow(account: WhatsAppAccountRow, row: TableRow, tab: AccountPanelTab) {
+    return (
+      <tr className="whatsapp-panel-row">
+        <td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS}>
+          <div className="whatsapp-panel-shell">
+            <div className="whatsapp-panel-toolbar">
+              <div className="whatsapp-panel-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "details"}
+                  className={tab === "details" ? "whatsapp-panel-tab active" : "whatsapp-panel-tab"}
+                  onClick={() => toggleAccountPanel(account.id, "details")}
+                >
+                  تفاصيل
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "settings"}
+                  className={tab === "settings" ? "whatsapp-panel-tab active" : "whatsapp-panel-tab"}
+                  onClick={() => toggleAccountPanel(account.id, "settings")}
+                >
+                  إعدادات
+                </button>
+              </div>
+              <button type="button" className="secondary-button compact" onClick={closeAccountPanel}>
+                إغلاق
+              </button>
+            </div>
+            {tab === "details" ? renderDetailsContent(account, row) : renderSettingsContent(account)}
           </div>
         </td>
       </tr>
@@ -687,7 +1057,7 @@ export default function WhatsAppConnectPage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">WhatsApp Business API</span>
           <h1>WhatsApp Business</h1>
-          <p>جدول موحّد لكل قناة وحساب مربوط — حالة Meta مباشرة، الجودة، Token، Commerce، والإجراءات.</p>
+          <p>جدول مرتب لكل قناة — صف واحد مختصر مع تفاصيل كاملة وإعدادات عند الطلب.</p>
         </div>
         <Link to="/channels" className="secondary-button">إدارة القنوات ←</Link>
       </header>
@@ -719,7 +1089,7 @@ export default function WhatsAppConnectPage() {
           <div className="admin-table-header">
             <div>
               <h2>جدول حسابات WhatsApp</h2>
-              <small>{filteredRows.length} صف · تُزامَن حالة Meta تلقائياً عند فتح الصفحة (كل 10 دقائق)</small>
+              <small>{filteredRows.length} صف · كل معلومة في عمود · صف واحد أفقي</small>
             </div>
           </div>
 
@@ -740,42 +1110,42 @@ export default function WhatsAppConnectPage() {
           </div>
 
           <div className="admin-table-wrap">
-            <table className="admin-erp-table whatsapp-erp-table">
+            <table className="admin-erp-table whatsapp-erp-table whatsapp-accounts-compact">
               <thead>
                 <tr>
-                  <th>القناة / الفرع</th>
-                  <th>WhatsApp Business</th>
-                  <th>Meta IDs</th>
-                  <th>الجودة / الحد</th>
+                  <th>اسم الحساب</th>
+                  <th>اسم القناة</th>
+                  <th>الحالة</th>
                   <th>Commerce</th>
-                  <th>Token</th>
-                  <th>آخر مزامنة</th>
-                  <th>الربط</th>
-                  <th>حالة Meta (مباشرة)</th>
-                  <th>إجراءات</th>
+                  <th>حالة الاتصال</th>
+                  <th>تفاصيل</th>
+                  <th>إعدادات</th>
                 </tr>
               </thead>
               <tbody>
                 {accounts.isLoading && (
-                  <tr><td colSpan={10} className="admin-table-empty">جاري التحميل…</td></tr>
+                  <tr><td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS} className="admin-table-empty">جاري التحميل…</td></tr>
                 )}
                 {!accounts.isLoading && filteredRows.length === 0 && (
-                  <tr><td colSpan={10} className="admin-table-empty">لا توجد قنوات WhatsApp.</td></tr>
+                  <tr><td colSpan={WHATSAPP_ACCOUNT_TABLE_COLS} className="admin-table-empty">لا توجد قنوات WhatsApp.</td></tr>
                 )}
                 {filteredRows.map((row) => {
                   const account = row.account;
                   if (!account) {
                     return (
-                      <tr key={row.key}>
-                        <td>
-                          <div className="admin-cell-main">
-                            <strong>{row.channelName}</strong>
-                            <small>{row.organizationName}</small>
-                          </div>
+                      <tr key={row.key} className="whatsapp-account-row">
+                        <td className="whatsapp-cell-text" data-label="اسم الحساب">
+                          <span className="whatsapp-cell-ellipsis">—</span>
                         </td>
-                        <td colSpan={7}><span className="admin-chip admin-chip-muted">لم يُربَط بعد</span></td>
-                        <td><span className="admin-status admin-status-pending">غير مربوط</span></td>
-                        <td>
+                        <td className="whatsapp-cell-text" data-label="اسم القناة" title={row.channelName}>
+                          <span className="whatsapp-cell-ellipsis">{row.channelName}</span>
+                        </td>
+                        <td className="whatsapp-cell-center" data-label="الحالة">
+                          <span className="admin-status admin-status-pending">غير مربوط</span>
+                        </td>
+                        <td className="whatsapp-cell-center" data-label="Commerce"><span className="admin-chip admin-chip-muted">—</span></td>
+                        <td className="whatsapp-cell-center" data-label="حالة الاتصال"><span className="admin-chip admin-chip-muted">—</span></td>
+                        <td colSpan={2} className="whatsapp-cell-action whatsapp-cell-action-span" data-label="ربط">
                           <button type="button" className="whatsapp-button compact" onClick={() => openConnectForChannel(row.channel.id)}>
                             ربط
                           </button>
@@ -784,91 +1154,51 @@ export default function WhatsAppConnectPage() {
                     );
                   }
 
-                  const isExpanded = expandedId === account.id;
+                  const panelOpen = panelState?.accountId === account.id;
+                  const panelTab = panelState?.tab ?? "details";
+                  const accountName = account.verified_name?.trim() || "—";
                   return (
                     <Fragment key={account.id}>
-                      <tr>
-                        <td>
-                          <div className="admin-cell-main">
-                            <strong>{row.channelName}</strong>
-                            <small>{row.organizationName}</small>
-                          </div>
+                      <tr className="whatsapp-account-row">
+                        <td className="whatsapp-cell-text" data-label="اسم الحساب" title={`${accountName} · ${account.display_phone_number}`}>
+                          <span className="whatsapp-cell-ellipsis">{accountName}</span>
                         </td>
-                        <td>
-                          <div className="admin-cell-stack">
-                            <strong>{account.verified_name || "—"}</strong>
-                            <small dir="ltr">{account.display_phone_number}</small>
-                          </div>
+                        <td className="whatsapp-cell-text" data-label="اسم القناة" title={`${row.channelName} · ${row.organizationName}`}>
+                          <span className="whatsapp-cell-ellipsis">{row.channelName}</span>
                         </td>
-                        <td>
-                          <div className="admin-cell-stack" dir="ltr">
-                            <small title={account.waba_id}>WABA {truncateMetaId(account.waba_id)}</small>
-                            <small title={account.phone_number_id}>Phone {truncateMetaId(account.phone_number_id)}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="admin-cell-stack">
-                            <span className={qualityBadgeClass(account.quality_rating)}>
-                              {formatQualityRating(account.quality_rating)}
-                            </span>
-                            <small>{formatMessagingLimit(account)}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={commerceStatusClass(account)}>{formatCommerceSummary(account)}</span>
-                        </td>
-                        <td>{renderTokenBadge(account.id)}</td>
-                        <td><small>{formatHealthSynced(account.health_synced_at)}</small></td>
-                        <td>
-                          <span className={connectionMethodClass(account.connection_method)}>
-                            {formatConnectionMethod(account.connection_method)}
+                        <td className="whatsapp-cell-center" data-label="الحالة">
+                          <span className={metaHealthBadgeClass(account)} title={formatMetaHealthLabel(account)}>
+                            {formatMetaHealthShort(account)}
                           </span>
                         </td>
-                        <td>
-                          <div className="admin-cell-stack">
-                            <span className={metaHealthBadgeClass(account)}>
-                              {formatMetaHealthLabel(account)}
-                            </span>
-                            <small className="meta-health-details">{formatMetaHealthDetails(account)}</small>
-                            <small className="meta-health-details">Watesly: {formatWhatsAppStatus(account.status)}</small>
-                          </div>
+                        <td className="whatsapp-cell-center" data-label="Commerce">
+                          <span className={commerceStatusClass(account)} title={formatCommerceSummary(account)}>
+                            {formatCommerceShort(account)}
+                          </span>
                         </td>
-                        <td>
-                          <div className="admin-actions whatsapp-row-actions">
-                            <button
-                              type="button"
-                              className="secondary-button compact"
-                              disabled={syncingId === account.id}
-                              onClick={() => void syncHealth(account.id)}
-                            >
-                              {syncingId === account.id ? "…" : "مزامنة"}
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-button compact"
-                              onClick={() => setExpandedId(isExpanded ? null : account.id)}
-                            >
-                              {isExpanded ? "إغلاق" : "إعدادات"}
-                            </button>
-                            <Link to={`/inbox`} className="secondary-button compact">Inbox</Link>
-                            <button
-                              type="button"
-                              className="secondary-button compact"
-                              onClick={() => openConnectForChannel(row.channel.id)}
-                            >
-                              استبدال
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-button compact danger-text"
-                              onClick={() => void disconnectAccount(account.id)}
-                            >
-                              فصل
-                            </button>
-                          </div>
+                        <td className="whatsapp-cell-center" data-label="حالة الاتصال">
+                          <span className={whatsappStatusBadgeClass(account.status)}>{formatWhatsAppStatus(account.status)}</span>
+                        </td>
+                        <td className="whatsapp-cell-action" data-label="تفاصيل">
+                          <button
+                            type="button"
+                            className={panelOpen && panelTab === "details" ? "whatsapp-button compact" : "secondary-button compact"}
+                            onClick={() => toggleAccountPanel(account.id, "details")}
+                          >
+                            تفاصيل
+                          </button>
+                        </td>
+                        <td className="whatsapp-cell-action" data-label="إعدادات">
+                          <button
+                            type="button"
+                            className={panelOpen && panelTab === "settings" ? "whatsapp-button compact" : "secondary-button compact"}
+                            onClick={() => toggleAccountPanel(account.id, "settings")}
+                          >
+                            إعدادات
+                          </button>
                         </td>
                       </tr>
-                      {isExpanded && renderExpandedPanel(account)}
+                      {panelOpen && renderAccountPanelRow(account, row, panelTab)}
                     </Fragment>
                   );
                 })}
