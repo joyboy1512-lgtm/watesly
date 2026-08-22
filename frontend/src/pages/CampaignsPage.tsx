@@ -303,6 +303,10 @@ export default function CampaignsPage() {
     [accounts.data, accountId]
   );
   const selectedAccountChannelId = selectedAccount?.channel_id ?? "";
+  const contactById = useMemo(
+    () => new Map((contacts.data ?? []).map((item) => [item.id, item])),
+    [contacts.data]
+  );
   const filteredContacts = (contacts.data ?? []).filter((item) => {
     if (selectedAccountChannelId && item.channel_id !== selectedAccountChannelId) return false;
     if (!contactSearch.trim()) return true;
@@ -312,6 +316,16 @@ export default function CampaignsPage() {
       (item.display_name ?? "").toLowerCase().includes(term)
     );
   });
+  const channelScopedSelectedContacts = useMemo(() => {
+    if (!selectedAccountChannelId) return selectedContacts;
+    return selectedContacts.filter(
+      (id) => contactById.get(id)?.channel_id === selectedAccountChannelId
+    );
+  }, [selectedContacts, selectedAccountChannelId, contactById]);
+  const hiddenSelectedCount = selectedContacts.length - channelScopedSelectedContacts.length;
+  const visibleSelectedCount = filteredContacts.filter((item) =>
+    channelScopedSelectedContacts.includes(item.id)
+  ).length;
 
   useEffect(() => {
     if (!accountId) return;
@@ -327,14 +341,24 @@ export default function CampaignsPage() {
   }, [accountId, accounts.data, approvedTemplates, templateId]);
 
   useEffect(() => {
-    if (!templateId || !selectedContacts.length) {
+    if (!selectedAccountChannelId) return;
+    setSelectedContacts((current) => {
+      const pruned = current.filter(
+        (id) => contactById.get(id)?.channel_id === selectedAccountChannelId
+      );
+      return pruned.length === current.length ? current : pruned;
+    });
+  }, [selectedAccountChannelId, contactById]);
+
+  useEffect(() => {
+    if (!templateId || !channelScopedSelectedContacts.length) {
       setPreflight(null);
       return;
     }
     void api
       .post("/campaigns/preflight", {
         template_id: templateId,
-        contact_ids: selectedContacts,
+        contact_ids: channelScopedSelectedContacts,
         whatsapp_account_id: accountId || null,
         include_opt_out_option: includeOptOutOption,
         exclude_unreachable: excludeUnreachable,
@@ -342,11 +366,13 @@ export default function CampaignsPage() {
       })
       .then((res) => setPreflight(res.data as CampaignPreflight))
       .catch(() => setPreflight(null));
-  }, [templateId, selectedContacts, accountId, includeOptOutOption, excludeUnreachable, excludeRisky]);
+  }, [templateId, channelScopedSelectedContacts, accountId, includeOptOutOption, excludeUnreachable, excludeRisky]);
 
   function onOrganizationChange(value: string) {
     setOrganizationId(value);
     setChannelId("");
+    setSelectedContacts([]);
+    setPreflight(null);
   }
 
   async function importAudience(event: FormEvent<HTMLFormElement>) {
@@ -422,7 +448,10 @@ export default function CampaignsPage() {
     if (!selectedSegmentId) return;
     try {
       const result = await api.get<{ id: string }[]>(`/platform/segments/${selectedSegmentId}/contacts`);
-      const ids = result.data.map((item) => item.id);
+      let ids = result.data.map((item) => item.id);
+      if (selectedAccountChannelId) {
+        ids = ids.filter((id) => contactById.get(id)?.channel_id === selectedAccountChannelId);
+      }
       setSelectedContacts(ids);
       toastStore.getState().show(`تم تحميل ${ids.length} عميل من الشريحة.`, "success");
     } catch {
@@ -441,10 +470,25 @@ export default function CampaignsPage() {
       toastStore.getState().show("اختر الفرع في نموذج الحملة أولاً.", "error");
       return;
     }
+    const audienceChannelId = selectedAccountChannelId || channelId;
+    if (!audienceChannelId) {
+      toastStore.getState().show("اختر حساب WhatsApp أو القناة قبل تحميل الجمهور.", "error");
+      return;
+    }
+    const hasAudienceFilter = Boolean(
+      audienceGenderFilter || audienceInterestIds.length > 0 || audienceLifecycle
+    );
+    if (!hasAudienceFilter) {
+      toastStore.getState().show(
+        "اختر اهتماماً أو جنساً أو مرحلة العميل — لا يُحمَّل كل العملاء تلقائياً.",
+        "error"
+      );
+      return;
+    }
     try {
       const payload = buildAudienceResolvePayload({
         organizationId,
-        channelId: channelId || undefined,
+        channelId: audienceChannelId,
         genderFilter: audienceGenderFilter,
         interestIds: audienceInterestIds,
         lifecycleStage: audienceLifecycle || undefined,
@@ -489,8 +533,8 @@ export default function CampaignsPage() {
       toastStore.getState().show("اختر حساب WhatsApp والقالب المعتمد.", "error");
       return;
     }
-    if (!selectedContacts.length) {
-      toastStore.getState().show("اختر عملاء للحملة أو ارفع Excel.", "error");
+    if (!channelScopedSelectedContacts.length) {
+      toastStore.getState().show("اختر عملاء للحملة على قناة WhatsApp المحددة.", "error");
       return;
     }
     if (templateHeader && !templateHeader.mediaUrl && !campaignMediaOverride) {
@@ -512,7 +556,7 @@ export default function CampaignsPage() {
         exclude_marketing_opt_out: true,
         exclude_unreachable: excludeUnreachable,
         exclude_risky: excludeRisky,
-        recipients: selectedContacts.map((contact_id) => ({
+        recipients: channelScopedSelectedContacts.map((contact_id) => ({
           contact_id,
           template_parameters: templateParameters
         }))
@@ -735,8 +779,13 @@ export default function CampaignsPage() {
               </label>
               <p className="hint-text">الأعمدة: phone (رقم) · name (اسم)</p>
               <button type="submit" disabled={!organizationId || !channelId}>تحميل العملاء</button>
-              {selectedContacts.length > 0 && (
-                <p className="hint-text">✓ {selectedContacts.length} عميل محدّد للحملة</p>
+              {channelScopedSelectedContacts.length > 0 && (
+                <p className="hint-text">✓ {channelScopedSelectedContacts.length} عميل محدّد للحملة</p>
+              )}
+              {hiddenSelectedCount > 0 && (
+                <p className="hint-text campaigns-audience-warning" role="alert">
+                  ⚠ {hiddenSelectedCount} عميل محدّد من قناة أخرى — تم استبعادهم تلقائياً من الإرسال.
+                </p>
               )}
             </form>
 
@@ -873,7 +922,7 @@ export default function CampaignsPage() {
                   />
                 </div>
               )}
-              {preflight && selectedContacts.length > 0 && (
+              {preflight && channelScopedSelectedContacts.length > 0 && (
                 <div className="campaign-preflight-panel">
                   <strong>فحص الجمهور قبل الإرسال</strong>
                   <div className="campaign-preflight-stats">
@@ -939,9 +988,9 @@ export default function CampaignsPage() {
               <button
                 type="submit"
                 className="whatsapp-button"
-                disabled={!selectedContacts.length || preflight?.eligible_recipients === 0}
+                disabled={!channelScopedSelectedContacts.length || preflight?.eligible_recipients === 0}
               >
-                إنشاء وبدء الحملة ({preflight?.eligible_recipients ?? selectedContacts.length})
+                إنشاء وبدء الحملة ({preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})
               </button>
             </form>
           </div>
@@ -1026,24 +1075,32 @@ export default function CampaignsPage() {
                 className="secondary-button"
                 onClick={() => setSelectedContacts(filteredContacts.map((c) => c.id))}
               >
-                تحديد الكل
+                تحديد الكل ({filteredContacts.length})
               </button>
               <button type="button" className="secondary-button" onClick={() => setSelectedContacts([])}>
                 إلغاء التحديد
               </button>
+              {channelScopedSelectedContacts.length > 0 && (
+                <span className="hint-text">
+                  {visibleSelectedCount} ظاهر · {channelScopedSelectedContacts.length} للإرسال
+                </span>
+              )}
             </div>
             <div className="contact-picker campaigns-contact-picker">
               {filteredContacts.map((item) => (
                 <label key={item.id} className="checkbox-row">
                   <input
                     type="checkbox"
-                    checked={selectedContacts.includes(item.id)}
+                    checked={channelScopedSelectedContacts.includes(item.id)}
                     onChange={(e) => {
-                      setSelectedContacts((current) =>
-                        e.target.checked
-                          ? [...current, item.id]
-                          : current.filter((id) => id !== item.id)
-                      );
+                      setSelectedContacts((current) => {
+                        const scoped = selectedAccountChannelId
+                          ? current.filter((id) => contactById.get(id)?.channel_id === selectedAccountChannelId)
+                          : current;
+                        return e.target.checked
+                          ? [...scoped, item.id]
+                          : scoped.filter((id) => id !== item.id);
+                      });
                     }}
                   />
                   <span>{item.display_name || item.external_address}</span>
