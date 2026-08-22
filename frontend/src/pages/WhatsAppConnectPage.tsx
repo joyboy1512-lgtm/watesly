@@ -45,7 +45,7 @@ type TableRow = {
 
 type PageTab = "accounts" | "connect" | "entry";
 
-const WHATSAPP_ACCOUNT_TABLE_COLS = 3;
+const WHATSAPP_ACCOUNT_TABLE_COLS = 7;
 
 type AccountPanelTab = "details" | "settings";
 
@@ -1089,7 +1089,7 @@ export default function WhatsAppConnectPage() {
           <div className="admin-table-header">
             <div>
               <h2>جدول حسابات WhatsApp</h2>
-              <small>{filteredRows.length} صف · صف واحد ثابت · تفاصيل وإعدادات في لوحة واحدة</small>
+              <small>{filteredRows.length} صف · كل معلومة في عمود · صف واحد أفقي</small>
             </div>
           </div>
 
@@ -1109,13 +1109,17 @@ export default function WhatsAppConnectPage() {
             </select>
           </div>
 
-          <div className="admin-table-wrap whatsapp-accounts-table-wrap">
+          <div className="admin-table-wrap">
             <table className="admin-erp-table whatsapp-erp-table whatsapp-accounts-compact">
               <thead>
                 <tr>
-                  <th>الحساب</th>
+                  <th>اسم الحساب</th>
+                  <th>اسم القناة</th>
                   <th>الحالة</th>
-                  <th>إجراءات</th>
+                  <th>Commerce</th>
+                  <th>حالة الاتصال</th>
+                  <th>تفاصيل</th>
+                  <th>إعدادات</th>
                 </tr>
               </thead>
               <tbody>
@@ -1130,14 +1134,18 @@ export default function WhatsAppConnectPage() {
                   if (!account) {
                     return (
                       <tr key={row.key} className="whatsapp-account-row">
-                        <td>
-                          <div className="whatsapp-account-inline" title={`${row.channelName} · ${row.organizationName}`}>
-                            <strong>{row.channelName}</strong>
-                            <small>{row.organizationName}</small>
-                          </div>
+                        <td className="whatsapp-cell-text">
+                          <span className="whatsapp-cell-ellipsis">—</span>
                         </td>
-                        <td><span className="admin-status admin-status-pending">غير مربوط</span></td>
-                        <td>
+                        <td className="whatsapp-cell-text" title={row.channelName}>
+                          <span className="whatsapp-cell-ellipsis">{row.channelName}</span>
+                        </td>
+                        <td className="whatsapp-cell-center">
+                          <span className="admin-status admin-status-pending">غير مربوط</span>
+                        </td>
+                        <td className="whatsapp-cell-center"><span className="admin-chip admin-chip-muted">—</span></td>
+                        <td className="whatsapp-cell-center"><span className="admin-chip admin-chip-muted">—</span></td>
+                        <td colSpan={2} className="whatsapp-cell-action">
                           <button type="button" className="whatsapp-button compact" onClick={() => openConnectForChannel(row.channel.id)}>
                             ربط
                           </button>
@@ -1148,51 +1156,46 @@ export default function WhatsAppConnectPage() {
 
                   const panelOpen = panelState?.accountId === account.id;
                   const panelTab = panelState?.tab ?? "details";
-                  const accountTitle = `${account.verified_name || row.channelName} · ${account.display_phone_number} · ${row.channelName}`;
+                  const accountName = account.verified_name?.trim() || "—";
                   return (
                     <Fragment key={account.id}>
                       <tr className="whatsapp-account-row">
-                        <td>
-                          <div className="whatsapp-account-inline" title={accountTitle}>
-                            <strong>{account.verified_name || row.channelName}</strong>
-                            <span dir="ltr" className="whatsapp-account-phone">{account.display_phone_number}</span>
-                            <small>{row.channelName}</small>
-                          </div>
+                        <td className="whatsapp-cell-text" title={`${accountName} · ${account.display_phone_number}`}>
+                          <span className="whatsapp-cell-ellipsis">{accountName}</span>
                         </td>
-                        <td>
-                          <div className="whatsapp-indicators-inline">
-                            <span
-                              className={metaHealthBadgeClass(account)}
-                              title={formatMetaHealthLabel(account)}
-                            >
-                              {formatMetaHealthShort(account)}
-                            </span>
-                            <span className={whatsappStatusBadgeClass(account.status)}>
-                              {formatWhatsAppStatus(account.status)}
-                            </span>
-                            <span className={commerceStatusClass(account)} title={formatCommerceSummary(account)}>
-                              {formatCommerceShort(account)}
-                            </span>
-                            {renderTokenBadge(account.id)}
-                          </div>
+                        <td className="whatsapp-cell-text" title={`${row.channelName} · ${row.organizationName}`}>
+                          <span className="whatsapp-cell-ellipsis">{row.channelName}</span>
                         </td>
-                        <td>
-                          <div className="admin-actions whatsapp-row-actions whatsapp-row-actions-compact">
-                            <button
-                              type="button"
-                              className={panelOpen && panelTab === "details" ? "whatsapp-button compact" : "secondary-button compact"}
-                              onClick={() => toggleAccountPanel(account.id, "details")}
-                            >
-                              تفاصيل
-                            </button>
-                            <button
-                              type="button"
-                              className={panelOpen && panelTab === "settings" ? "whatsapp-button compact" : "secondary-button compact"}
-                              onClick={() => toggleAccountPanel(account.id, "settings")}
-                            >
-                              إعدادات
-                            </button>
-                          </div>
+                        <td className="whatsapp-cell-center">
+                          <span className={metaHealthBadgeClass(account)} title={formatMetaHealthLabel(account)}>
+                            {formatMetaHealthShort(account)}
+                          </span>
+                        </td>
+                        <td className="whatsapp-cell-center">
+                          <span className={commerceStatusClass(account)} title={formatCommerceSummary(account)}>
+                            {formatCommerceShort(account)}
+                          </span>
+                        </td>
+                        <td className="whatsapp-cell-center">
+                          <span className={whatsappStatusBadgeClass(account.status)}>{formatWhatsAppStatus(account.status)}</span>
+                        </td>
+                        <td className="whatsapp-cell-action">
+                          <button
+                            type="button"
+                            className={panelOpen && panelTab === "details" ? "whatsapp-button compact" : "secondary-button compact"}
+                            onClick={() => toggleAccountPanel(account.id, "details")}
+                          >
+                            تفاصيل
+                          </button>
+                        </td>
+                        <td className="whatsapp-cell-action">
+                          <button
+                            type="button"
+                            className={panelOpen && panelTab === "settings" ? "whatsapp-button compact" : "secondary-button compact"}
+                            onClick={() => toggleAccountPanel(account.id, "settings")}
+                          >
+                            إعدادات
+                          </button>
                         </td>
                       </tr>
                       {panelOpen && renderAccountPanelRow(account, row, panelTab)}
