@@ -21,7 +21,7 @@
 17. Uploaded files are private by default and include scan/deletion/retention lifecycle fields.
 18. Redis persistence, worker health checks, MinIO health checks, graceful stop and fixed image versions were added.
 19. Backup and restore cover both PostgreSQL and MinIO without PowerShell binary-redirection corruption.
-20. Version metadata is aligned at `0.26.0`.
+20. Version metadata is aligned at backend **0.28.0** and frontend **0.32.5** (`deploy/VERSION.json`).
 
 ## Important operational limits
 

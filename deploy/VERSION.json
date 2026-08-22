@@ -1,0 +1,30 @@
+{
+  "product": "Watesly",
+  "updated_at": "2026-08-22T01:10:00Z",
+  "production": {
+    "domain": "watesly.com",
+    "api": "https://api.watesly.com",
+    "site": "https://www.watesly.com",
+    "server_host": "64.226.69.159",
+    "app_path": "/opt/watesly",
+    "git_branch": "cursor/production-unified-813f",
+    "git_commit": "1114cae",
+    "git_commit_message": "Redesign knowledge base as horizontal rules table",
+    "alembic_head": "0058_whatsapp_branding",
+    "backend_version": "0.28.0",
+    "frontend_version": "0.32.5",
+    "live_assets": {
+      "js": "index-DD45zkrQ.js",
+      "css": "index-B4sBDhS-.css"
+    }
+  },
+  "versions": {
+    "backend": "0.28.0",
+    "frontend": "0.32.5",
+    "platform_label": "v0.28"
+  },
+  "sources": {
+    "backend": "backend/app/core/config.py → app_version",
+    "frontend": "frontend/package.json → version"
+  }
+}

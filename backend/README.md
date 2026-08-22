@@ -1,4 +1,6 @@
-# Watesly Backend v0.28
+# Watesly Backend v0.28.0
+
+Frontend counterpart: **0.32.5** — see `deploy/VERSION.json`.
 
 ## الجديد
 - إرسال صورة عبر رابط عام.

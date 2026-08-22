@@ -14,7 +14,22 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **GitHub `main` is kept in sync with this branch** after each production deploy.
 
-### Production snapshot (2026-08-21) — current baseline
+**Canonical version file:** `deploy/VERSION.json`
+
+### Production snapshot (2026-08-22) — current baseline
+
+| Item | Value |
+|------|-------|
+| Commit | `1114cae` |
+| Alembic | `0058_whatsapp_branding` |
+| Backend | `0.28.0` |
+| Frontend | `0.32.5` |
+| Live assets | `index-DD45zkrQ.js`, `index-B4sBDhS-.css` |
+| Snapshot record | `deploy/production-snapshot-20260822.json` |
+
+**Includes:** PR #96 WhatsApp accounts table; PR #97 knowledge horizontal table; branding + mobile table fixes.
+
+### Production snapshot (2026-08-21)
 
 | Item | Value |
 |------|-------|
@@ -26,7 +41,7 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Includes:** PR #86 email notifications + catalog order PDF emails; PR #87 team page UI.
 
-### Production snapshot (2026-08-20) — current baseline
+### Production snapshot (2026-08-20)
 
 | Item | Value |
 |------|-------|
@@ -37,7 +52,7 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 | Live assets | `index-CNNlhcHB.js`, `index-C9piTbv5.css` |
 | Snapshot record | `deploy/production-snapshot-20260820.json` |
 
-**Status:** GitHub `main` + `cursor/production-unified-813f` + live site (`watesly.com`) are aligned at **`c550ca1`**. No code drift detected.
+**Status:** GitHub `main` + `cursor/production-unified-813f` aligned at **`1114cae`** as of 2026-08-22 (see `deploy/VERSION.json`).
 
 ### Production snapshot (2026-08-16)
 

@@ -1,6 +1,6 @@
-# قائمة الإطلاق — Watesly v0.28
+# قائمة الإطلاق — Watesly v0.28 (Backend 0.28.0 · Frontend 0.32.5)
 
-مرجع عملي قبل ربط WhatsApp والنشر. حدّث `[ ]` إلى `[x]` عند الإنجاز.
+مرجع عملي قبل ربط WhatsApp والنشر. النسخ الموحّدة: `deploy/VERSION.json`. حدّث `[ ]` إلى `[x]` عند الإنجاز.
 
 ---
 
@@ -103,4 +103,4 @@ curl https://api.your-domain.com/api/v1/health/ready
 
 ---
 
-**آخر تحديث:** إصلاح Celery queues، Dockerfile بدون `--reload`، frontend Dockerfile + nginx، مزامنة صحة WhatsApp كل ساعة، CI env vars.
+**آخر تحديث:** نسخ موحّدة Backend `0.28.0` / Frontend `0.32.5` — `deploy/VERSION.json` · Alembic `0058_whatsapp_branding` · commit `1114cae`.

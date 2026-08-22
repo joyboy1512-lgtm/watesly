@@ -1,7 +1,7 @@
 # Watesly v0.28 — Platform Status
 
-**Version:** 0.28.0  
-**Date:** 2026-07-16
+**Version:** Backend `0.28.0` · Frontend `0.32.5` (see `deploy/VERSION.json`)  
+**Date:** 2026-08-22
 
 ## Summary
 
