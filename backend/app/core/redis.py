@@ -23,6 +23,12 @@ async def dispose_redis_client() -> None:
         _redis_client = None
 
 
+def reset_redis_client() -> None:
+    """Drop cached client without awaiting — safe before a fresh event loop."""
+    global _redis_client
+    _redis_client = None
+
+
 class _LazyRedis:
     def __getattr__(self, name: str):
         return getattr(get_redis_client(), name)

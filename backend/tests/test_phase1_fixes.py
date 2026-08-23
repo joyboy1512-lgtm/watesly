@@ -37,6 +37,7 @@ def test_webhook_worker_resets_async_pools() -> None:
     runner = read("app/workers/async_runner.py")
     assert "await engine.dispose()" in runner
     assert "dispose_redis_client" in runner
+    assert "_reset_async_pools" in runner
 
 
 def test_campaign_worker_uses_async_runner() -> None:

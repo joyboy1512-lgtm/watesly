@@ -41,9 +41,11 @@ import app.services.event_handlers  # noqa: F401,E402
 @worker_process_init.connect
 def _reset_db_engine_after_fork(**_kwargs) -> None:
     """Avoid asyncpg 'Future attached to a different loop' in Celery fork workers."""
+    from app.core.redis import reset_redis_client
     from app.db.session import engine
 
     engine.sync_engine.dispose(close=False)
+    reset_redis_client()
 
 celery_app.conf.beat_schedule = {
     "publish-outbox-every-5-seconds": {"task": "watesly.outbox.publish", "schedule": 5.0},

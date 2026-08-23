@@ -13,25 +13,41 @@ from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientSt
 from app.workers.campaign_tasks import run_campaign
 
 STALE_RUNNING_MINUTES = 15
+STALE_SCHEDULED_MINUTES = 3
 
 
 async def recover_stuck_campaigns(*, limit: int = 20) -> dict:
-    cutoff = datetime.now(UTC) - timedelta(minutes=STALE_RUNNING_MINUTES)
+    now = datetime.now(UTC)
+    running_cutoff = now - timedelta(minutes=STALE_RUNNING_MINUTES)
+    scheduled_cutoff = now - timedelta(minutes=STALE_SCHEDULED_MINUTES)
     recovered = 0
     async with AsyncSessionFactory() as db:
-        rows = (
+        running_rows = (
             await db.execute(
                 select(Campaign)
                 .where(
                     Campaign.status == CampaignStatus.RUNNING,
                     Campaign.last_heartbeat_at.is_not(None),
-                    Campaign.last_heartbeat_at < cutoff,
+                    Campaign.last_heartbeat_at < running_cutoff,
                 )
                 .order_by(Campaign.last_heartbeat_at.asc())
                 .limit(limit)
             )
         ).scalars().all()
-        for campaign in rows:
+        scheduled_rows = (
+            await db.execute(
+                select(Campaign)
+                .where(
+                    Campaign.status == CampaignStatus.SCHEDULED,
+                    Campaign.started_at.is_(None),
+                    Campaign.created_at < scheduled_cutoff,
+                )
+                .order_by(Campaign.created_at.asc())
+                .limit(limit)
+            )
+        ).scalars().all()
+        rows = list(running_rows) + [item for item in scheduled_rows if item not in running_rows]
+        for campaign in rows[:limit]:
             campaign.execution_token = uuid4()
             campaign.status = CampaignStatus.SCHEDULED
             campaign.active_task_id = None
