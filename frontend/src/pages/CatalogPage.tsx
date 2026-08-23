@@ -46,6 +46,8 @@ export default function CatalogPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
@@ -94,6 +96,7 @@ export default function CatalogPage() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, debouncedSearch, pageSize]);
 
   const orgMap = useMemo(() => {
@@ -150,6 +153,35 @@ export default function CatalogPage() {
     pageSize === 0
       ? visibleProducts
       : visibleProducts.slice((safePage - 1) * effectivePageSize, safePage * effectivePageSize);
+  const pageIds = pageRows.map((item) => item.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.has(id));
+  const selectedCount = selectedIds.size;
+
+  function toggleRowSelection(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function togglePageSelection() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) {
+        for (const id of pageIds) next.delete(id);
+      } else {
+        for (const id of pageIds) next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
 
   function openEdit(product: CatalogProduct) {
     setEditingProduct(product);
@@ -211,6 +243,84 @@ export default function CatalogPage() {
     await api.patch(`/catalog/${id}`, { is_active: true });
     await client.invalidateQueries({ queryKey: ["catalog"] });
     toastStore.getState().show("تم استرجاع المنتج.", "success");
+  }
+
+  async function bulkArchive() {
+    if (!selectedCount) return;
+    if (!window.confirm(`أرشفة ${selectedCount} منتج؟`)) return;
+    setBulkProcessing(true);
+    try {
+      const results = await Promise.allSettled(
+        [...selectedIds].map((id) => api.delete(`/catalog/${id}`))
+      );
+      const succeeded = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      clearSelection();
+      if (failed === 0) {
+        toastStore.getState().show(`تم أرشفة ${succeeded} منتج.`, "success");
+      } else {
+        toastStore.getState().show(`أُرشف ${succeeded}، فشل ${failed}.`, failed === results.length ? "error" : "success");
+      }
+    } catch {
+      toastStore.getState().show("تعذر أرشفة المنتجات المحدّدة.", "error");
+    } finally {
+      setBulkProcessing(false);
+    }
+  }
+
+  async function bulkRestore() {
+    if (!selectedCount) return;
+    if (!window.confirm(`استرجاع ${selectedCount} منتج؟`)) return;
+    setBulkProcessing(true);
+    try {
+      const results = await Promise.allSettled(
+        [...selectedIds].map((id) => api.patch(`/catalog/${id}`, { is_active: true }))
+      );
+      const succeeded = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      clearSelection();
+      if (failed === 0) {
+        toastStore.getState().show(`تم استرجاع ${succeeded} منتج.`, "success");
+      } else {
+        toastStore.getState().show(`استُرجع ${succeeded}، فشل ${failed}.`, failed === results.length ? "error" : "success");
+      }
+    } catch {
+      toastStore.getState().show("تعذر استرجاع المنتجات المحدّدة.", "error");
+    } finally {
+      setBulkProcessing(false);
+    }
+  }
+
+  async function bulkPurge() {
+    if (!selectedCount) return;
+    if (
+      !window.confirm(
+        `حذف ${selectedCount} منتج نهائياً؟\n\nلن يمكن استرجاعها. إن كانت مزامَنة مع Meta ستُخفى من الكتalog هناك أيضاً.`
+      )
+    ) {
+      return;
+    }
+    setBulkProcessing(true);
+    try {
+      const results = await Promise.allSettled(
+        [...selectedIds].map((id) => api.delete(`/catalog/${id}`, { params: { permanent: true } }))
+      );
+      const succeeded = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      clearSelection();
+      if (failed === 0) {
+        toastStore.getState().show(`تم حذف ${succeeded} منتج نهائياً.`, "success");
+      } else {
+        toastStore.getState().show(`حُذف ${succeeded}، فشل ${failed}.`, failed === results.length ? "error" : "success");
+      }
+    } catch {
+      toastStore.getState().show("تعذر الحذف النهائي للمنتجات المحدّدة.", "error");
+    } finally {
+      setBulkProcessing(false);
+    }
   }
 
   async function uploadProductImage(file: File) {
@@ -381,6 +491,43 @@ export default function CatalogPage() {
             <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={() => setShowPreview((value) => !value)}>
               {showPreview ? "إخفاء المعاينة" : "معاينة WhatsApp"}
             </button>
+            {selectedCount > 0 && (
+              <>
+                <span className="contacts-selection-badge">{selectedCount} محدّد</span>
+                {listTab === "active" ? (
+                  <button
+                    type="button"
+                    className="contacts-erp-btn contacts-erp-btn-danger"
+                    disabled={bulkProcessing}
+                    onClick={() => void bulkArchive()}
+                  >
+                    {bulkProcessing ? "جاري…" : "أرشفة المحدّد"}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="contacts-erp-btn"
+                      disabled={bulkProcessing}
+                      onClick={() => void bulkRestore()}
+                    >
+                      {bulkProcessing ? "جاري…" : "استرجاع المحدّد"}
+                    </button>
+                    <button
+                      type="button"
+                      className="contacts-erp-btn contacts-erp-btn-danger"
+                      disabled={bulkProcessing}
+                      onClick={() => void bulkPurge()}
+                    >
+                      {bulkProcessing ? "جاري…" : "حذف نهائي للمحدّد"}
+                    </button>
+                  </>
+                )}
+                <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={clearSelection}>
+                  إلغاء التحديد
+                </button>
+              </>
+            )}
           </div>
 
           <div className="contacts-erp-meta">
@@ -516,6 +663,17 @@ export default function CatalogPage() {
             <table className="contacts-erp-table catalog-erp-table">
               <thead>
                 <tr>
+                  <th className="contacts-col-check">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      ref={(input) => {
+                        if (input) input.indeterminate = somePageSelected && !allPageSelected;
+                      }}
+                      onChange={togglePageSelection}
+                      aria-label="تحديد الصفحة"
+                    />
+                  </th>
                   <th>#</th>
                   <th>الصورة</th>
                   <th>الاسم</th>
@@ -534,6 +692,14 @@ export default function CatalogPage() {
               <tbody>
                 {pageRows.map((item, index) => (
                   <tr key={item.id} className={item.is_active ? "" : "catalog-row-inactive"}>
+                    <td className="contacts-col-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => toggleRowSelection(item.id)}
+                        aria-label={`تحديد ${item.name}`}
+                      />
+                    </td>
                     <td>{pageStart + index}</td>
                     <td>
                       {item.image_url ? (
