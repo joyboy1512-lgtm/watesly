@@ -2,7 +2,13 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatOrgStatus, orgStatusClass, organizationCreateErrorMessage, slugFromName } from "../lib/orgHelpers";
+import {
+  formatOrgStatus,
+  orgStatusClass,
+  organizationCreateErrorMessage,
+  organizationUpdateErrorMessage,
+  slugFromName
+} from "../lib/orgHelpers";
 import { formatPlanLimit } from "../lib/planLimits";
 import { toastStore } from "../stores/toast";
 
@@ -34,6 +40,10 @@ function parseOptionalLimit(value: string): number {
   return Math.floor(parsed);
 }
 
+function limitInputValue(limit: number): string {
+  return limit > 0 ? String(limit) : "";
+}
+
 export default function OrganizationsPage() {
   const client = useQueryClient();
   const [name, setName] = useState("");
@@ -42,6 +52,11 @@ export default function OrganizationsPage() {
   const [maxChannels, setMaxChannels] = useState("");
   const [branchAdminEmail, setBranchAdminEmail] = useState("");
   const [search, setSearch] = useState("");
+  const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
+  const [editMaxUsers, setEditMaxUsers] = useState("");
+  const [editMaxChannels, setEditMaxChannels] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ["organizations"],
@@ -65,9 +80,59 @@ export default function OrganizationsPage() {
     return {
       total: rows.length,
       active: rows.filter((item) => item.status === "active").length,
+      suspended: rows.filter((item) => item.status === "suspended").length,
       channels: rows.reduce((sum, item) => sum + (item.active_channel_count ?? 0), 0)
     };
   }, [query.data]);
+
+  function openEdit(org: Organization) {
+    setEditingOrg(org);
+    setEditMaxUsers(limitInputValue(org.max_users ?? 0));
+    setEditMaxChannels(limitInputValue(org.max_channels ?? 0));
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editingOrg) return;
+    setSavingEdit(true);
+    try {
+      await api.patch(`/organizations/${editingOrg.id}`, {
+        max_users: parseOptionalLimit(editMaxUsers),
+        max_channels: parseOptionalLimit(editMaxChannels)
+      });
+      await client.invalidateQueries({ queryKey: ["organizations"] });
+      toastStore.getState().show("تم تحديث حدود الفرع.", "success");
+      setEditingOrg(null);
+    } catch (error) {
+      toastStore.getState().show(organizationUpdateErrorMessage(error), "error");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function toggleBranchStatus(org: Organization) {
+    const suspending = org.status === "active";
+    const prompt = suspending
+      ? `إيقاف فرع «${org.name}»؟ لن يتمكن موظفو الفرع من الوصول فوراً.`
+      : `تفعيل فرع «${org.name}» واستعادة الوصول؟`;
+    if (!window.confirm(prompt)) return;
+
+    setTogglingStatusId(org.id);
+    try {
+      await api.patch(`/organizations/${org.id}`, {
+        status: suspending ? "suspended" : "active"
+      });
+      await client.invalidateQueries({ queryKey: ["organizations"] });
+      toastStore.getState().show(
+        suspending ? `تم إيقاف فرع «${org.name}».` : `تم تفعيل فرع «${org.name}».`,
+        "success"
+      );
+    } catch (error) {
+      toastStore.getState().show(organizationUpdateErrorMessage(error), "error");
+    } finally {
+      setTogglingStatusId(null);
+    }
+  }
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -114,12 +179,13 @@ export default function OrganizationsPage() {
     <main className="page">
       <header className="page-header">
         <h1>الفروع</h1>
-        <p>أنشئ فرعاً جديداً مع حدود المستخدمين والقنوات ودعوة مدير الفرع.</p>
+        <p>أنشئ فرعاً جديداً، عدّل حدود المستخدمين والقنوات، أو أوقف الوصول للفرع فوراً.</p>
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">
         <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الفروع</span><strong>{stats.total}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>فروع نشطة</span><strong>{stats.active}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>فروع موقوفة</span><strong>{stats.suspended}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>قنوات مرتبطة</span><strong>{stats.channels}</strong></article>
       </section>
 
@@ -205,14 +271,15 @@ export default function OrganizationsPage() {
                 <th>حد القنوات</th>
                 <th>الدولة</th>
                 <th>الحالة</th>
+                <th>إجراءات</th>
               </tr>
             </thead>
             <tbody>
               {query.isLoading && (
-                <tr><td colSpan={8} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={9} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {!query.isLoading && filtered.length === 0 && (
-                <tr><td colSpan={8} className="admin-table-empty">لا توجد فروع.</td></tr>
+                <tr><td colSpan={9} className="admin-table-empty">لا توجد فروع.</td></tr>
               )}
               {filtered.map((item) => (
                 <tr key={item.id}>
@@ -231,12 +298,77 @@ export default function OrganizationsPage() {
                   <td>
                     <span className={orgStatusClass(item.status)}>{formatOrgStatus(item.status)}</span>
                   </td>
+                  <td>
+                    <div className="admin-actions compact">
+                      <button type="button" className="secondary-button" onClick={() => openEdit(item)}>
+                        تعديل الحدود
+                      </button>
+                      <button
+                        type="button"
+                        className={`secondary-button compact${item.status === "active" ? " danger-text" : ""}`}
+                        disabled={togglingStatusId === item.id}
+                        onClick={() => void toggleBranchStatus(item)}
+                      >
+                        {togglingStatusId === item.id
+                          ? "جاري…"
+                          : item.status === "active"
+                            ? "إيقاف الفرع"
+                            : "تفعيل الفرع"}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </section>
+
+      {editingOrg && (
+        <div className="catalog-edit-overlay" role="dialog" aria-modal="true">
+          <button type="button" className="catalog-edit-backdrop" aria-label="إغلاق" onClick={() => setEditingOrg(null)} />
+          <form className="catalog-edit-panel stack-form" onSubmit={saveEdit}>
+            <div className="catalog-edit-head">
+              <h3>تعديل حدود: {editingOrg.name}</h3>
+              <button type="button" className="panel-close" onClick={() => setEditingOrg(null)}>×</button>
+            </div>
+            <p className="hint-text">
+              الاستخدام الحالي: {editingOrg.active_member_count ?? 0} مستخدم · {editingOrg.active_channel_count ?? 0} قناة
+            </p>
+            <div className="inline-form">
+              <label className="field-label">
+                <span>حد المستخدمين</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={editMaxUsers}
+                  onChange={(e) => setEditMaxUsers(e.target.value)}
+                  placeholder="0 = غير محدود"
+                />
+              </label>
+              <label className="field-label">
+                <span>حد القنوات</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={editMaxChannels}
+                  onChange={(e) => setEditMaxChannels(e.target.value)}
+                  placeholder="0 = غير محدود"
+                />
+              </label>
+            </div>
+            <p className="hint-text" style={{ margin: 0 }}>
+              لا يمكن وضع حد أقل من العدد الحالي للمستخدمين أو القنوات.
+            </p>
+            <div className="catalog-card-actions">
+              <button type="submit" className="whatsapp-button" disabled={savingEdit}>
+                {savingEdit ? "جاري الحفظ…" : "حفظ التعديلات"}
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setEditingOrg(null)}>إلغاء</button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }

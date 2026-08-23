@@ -25,6 +25,14 @@ export function slugFromName(name: string): string {
 }
 
 export function organizationCreateErrorMessage(error: unknown): string {
+  return organizationApiErrorMessage(error, "تعذر إضافة الفرع.");
+}
+
+export function organizationUpdateErrorMessage(error: unknown): string {
+  return organizationApiErrorMessage(error, "تعذر تحديث الفرع.");
+}
+
+function organizationApiErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === "object" && error !== null && "response" in error) {
     const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
     if (typeof detail === "object" && detail !== null && "message" in detail) {
@@ -33,5 +41,5 @@ export function organizationCreateErrorMessage(error: unknown): string {
     }
     if (typeof detail === "string" && detail.trim()) return detail;
   }
-  return "تعذر إضافة الفرع.";
+  return fallback;
 }

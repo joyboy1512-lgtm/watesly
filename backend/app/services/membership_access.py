@@ -108,6 +108,28 @@ async def has_explicit_channel_restrictions(db: AsyncSession, membership_id: UUI
     return bool(await list_membership_channel_ids(db, membership_id))
 
 
+async def resolve_active_organization_ids(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership: Membership,
+) -> list[UUID]:
+    """Return active organization ids accessible to the membership."""
+    accessible = await resolve_accessible_organization_ids(
+        db, account_id=account_id, membership=membership
+    )
+    query = select(Organization.id).where(
+        Organization.account_id == account_id,
+        Organization.status == OrganizationStatus.ACTIVE,
+    )
+    if accessible is not None:
+        if not accessible:
+            return []
+        query = query.where(Organization.id.in_(accessible))
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def ensure_membership_organization_access(
     db: AsyncSession,
     *,
@@ -118,10 +140,14 @@ async def ensure_membership_organization_access(
     allowed = await resolve_accessible_organization_ids(
         db, account_id=account_id, membership=membership
     )
-    if allowed is None:
-        return
-    if organization_id not in allowed:
+    if allowed is not None and organization_id not in allowed:
         raise ValueError("ACCESS_FORBIDDEN")
+
+    organization = await db.get(Organization, organization_id)
+    if organization is None or organization.account_id != account_id:
+        raise ValueError("ACCESS_FORBIDDEN")
+    if organization.status != OrganizationStatus.ACTIVE:
+        raise ValueError("ORGANIZATION_SUSPENDED")
 
 
 async def ensure_whatsapp_account_access(
@@ -200,17 +226,16 @@ async def campaign_list_filters(
     account_id: UUID,
     membership: Membership,
 ) -> list:
-    org_ids = await resolve_accessible_organization_ids(
+    org_ids = await resolve_active_organization_ids(
         db, account_id=account_id, membership=membership
     )
     channel_ids = await resolve_accessible_channel_ids(
         db, account_id=account_id, membership=membership
     )
     filters = []
-    if org_ids is not None:
-        if not org_ids:
-            return [Campaign.id.is_(None)]
-        filters.append(Campaign.organization_id.in_(org_ids))
+    if not org_ids:
+        return [Campaign.id.is_(None)]
+    filters.append(Campaign.organization_id.in_(org_ids))
     if channel_ids is not None:
         if not channel_ids:
             return [Campaign.id.is_(None)]
@@ -228,17 +253,16 @@ async def template_list_filters(
     account_id: UUID,
     membership: Membership,
 ) -> list:
-    org_ids = await resolve_accessible_organization_ids(
+    org_ids = await resolve_active_organization_ids(
         db, account_id=account_id, membership=membership
     )
     channel_ids = await resolve_accessible_channel_ids(
         db, account_id=account_id, membership=membership
     )
     filters = []
-    if org_ids is not None:
-        if not org_ids:
-            return [WhatsAppTemplate.id.is_(None)]
-        filters.append(WhatsAppTemplate.organization_id.in_(org_ids))
+    if not org_ids:
+        return [WhatsAppTemplate.id.is_(None)]
+    filters.append(WhatsAppTemplate.organization_id.in_(org_ids))
     if channel_ids is not None:
         if not channel_ids:
             return [WhatsAppTemplate.id.is_(None)]
@@ -287,12 +311,10 @@ async def organization_scope_clauses(
     membership: Membership,
     organization_column,
 ) -> list:
-    """Return SQLAlchemy filters limiting rows to accessible organizations."""
-    org_ids = await resolve_accessible_organization_ids(
+    """Return SQLAlchemy filters limiting rows to accessible active organizations."""
+    org_ids = await resolve_active_organization_ids(
         db, account_id=account_id, membership=membership
     )
-    if org_ids is None:
-        return []
     if not org_ids:
         return [organization_column.is_(None)]
     return [organization_column.in_(org_ids)]
@@ -303,13 +325,13 @@ async def resolve_membership_organizations(
     *,
     account_id: UUID,
     membership: Membership,
+    include_suspended: bool = False,
 ) -> list[Organization]:
-    result = await db.execute(
-        select(Organization).where(
-            Organization.account_id == account_id,
-            Organization.status == OrganizationStatus.ACTIVE,
-        ).order_by(Organization.name.asc())
-    )
+    query = select(Organization).where(Organization.account_id == account_id)
+    if not include_suspended:
+        query = query.where(Organization.status == OrganizationStatus.ACTIVE)
+    query = query.order_by(Organization.name.asc())
+    result = await db.execute(query)
     organizations = list(result.scalars().all())
     return await filter_organizations_for_membership(
         db,

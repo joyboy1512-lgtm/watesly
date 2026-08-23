@@ -56,6 +56,11 @@ async def post_channel(
     except ValueError as exc:
         if str(exc) == "ACCESS_FORBIDDEN":
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        if str(exc) == "ORGANIZATION_SUSPENDED":
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "ORGANIZATION_SUSPENDED", "message": "الفرع موقوف — لا يمكن إضافة قنوات."},
+            ) from exc
         messages = {
             "INVALID_ORGANIZATION": (400, "Organization is invalid"),
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),

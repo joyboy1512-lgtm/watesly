@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.channel import Channel
 from app.models.membership import Membership, MembershipStatus
-from app.models.organization import Organization
+from app.models.organization import Organization, OrganizationStatus
 from app.models.organization_membership import OrganizationMembership
-from app.schemas.organization import OrganizationCreateRequest, OrganizationResponse
+from app.schemas.organization import OrganizationCreateRequest, OrganizationResponse, OrganizationUpdateRequest
 from app.services.billing import get_active_subscription
 from app.services.plan_limits import is_unlimited, limit_reached, organization_limit_reached
 
@@ -99,6 +99,46 @@ async def create_organization(
         max_channels=payload.max_channels,
     )
     db.add(organization)
+    await db.commit()
+    await db.refresh(organization)
+    return organization
+
+
+async def get_organization_for_account(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    organization_id: UUID,
+) -> Organization | None:
+    organization = await db.get(Organization, organization_id)
+    if organization is None or organization.account_id != account_id:
+        return None
+    return organization
+
+
+async def update_organization(
+    db: AsyncSession,
+    *,
+    organization: Organization,
+    payload: OrganizationUpdateRequest,
+) -> Organization:
+    if payload.max_users is not None:
+        if not is_unlimited(payload.max_users):
+            current_members = await count_organization_members(db, organization.id)
+            if payload.max_users < current_members:
+                raise ValueError("ORG_USER_LIMIT_BELOW_CURRENT")
+        organization.max_users = payload.max_users
+
+    if payload.max_channels is not None:
+        if not is_unlimited(payload.max_channels):
+            current_channels = await count_organization_channels(db, organization.id)
+            if payload.max_channels < current_channels:
+                raise ValueError("ORG_CHANNEL_LIMIT_BELOW_CURRENT")
+        organization.max_channels = payload.max_channels
+
+    if payload.status is not None:
+        organization.status = OrganizationStatus(payload.status)
+
     await db.commit()
     await db.refresh(organization)
     return organization

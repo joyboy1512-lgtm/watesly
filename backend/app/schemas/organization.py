@@ -47,3 +47,16 @@ class OrganizationResponse(BaseModel):
 class OrganizationCreateResponse(OrganizationResponse):
     branch_admin_invitation_sent: bool = False
     branch_admin_email: str | None = None
+
+
+class OrganizationUpdateRequest(BaseModel):
+    max_users: int | None = Field(default=None, ge=0, description="0 = unlimited users for this branch")
+    max_channels: int | None = Field(default=None, ge=0, description="0 = unlimited channels for this branch")
+    status: str | None = Field(default=None, pattern=r"^(active|suspended)$")
+
+    @field_validator("status")
+    @classmethod
+    def normalize_status(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().lower()

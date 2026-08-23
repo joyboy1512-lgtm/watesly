@@ -1,25 +1,43 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import AuthContext, get_auth_context, require_permissions
 from app.core.config import settings
-from app.core.permissions import Permission
+from app.core.permissions import Permission, membership_has_permission
 from app.db.session import get_db
 from app.models.account import Account
 from app.models.membership import Membership, MembershipRole
+from app.models.organization import OrganizationStatus
 from app.schemas.organization import (
     OrganizationCreateRequest,
     OrganizationCreateResponse,
     OrganizationResponse,
+    OrganizationUpdateRequest,
 )
 from app.schemas.team import InviteEmployeeRequest
 from app.services.email import build_invitation_accept_url, is_email_configured, send_team_invitation_email
-from app.services.membership_access import resolve_membership_organizations
-from app.services.organizations import build_organization_response, create_organization
+from app.services.membership_access import (
+    resolve_accessible_organization_ids,
+    resolve_membership_organizations,
+)
+from app.services.organizations import (
+    build_organization_response,
+    create_organization,
+    get_organization_for_account,
+    update_organization,
+)
 from app.services.team import create_invitation
 
 router = APIRouter()
+
+
+def _can_manage_all_organizations(context: AuthContext) -> bool:
+    if not isinstance(context.membership, Membership):
+        return False
+    return context.membership.role in (MembershipRole.OWNER, MembershipRole.ADMIN)
 
 
 @router.get("", response_model=list[OrganizationResponse])
@@ -28,10 +46,15 @@ async def get_organizations(
     db: AsyncSession = Depends(get_db),
 ) -> list[OrganizationResponse]:
     """Return organizations visible to the current membership (branch-scoped when applicable)."""
+    include_suspended = _can_manage_all_organizations(context) and membership_has_permission(
+        context.membership,
+        Permission.ORGANIZATIONS_MANAGE,
+    )
     organizations = await resolve_membership_organizations(
         db,
         account_id=context.account_id,
         membership=context.membership,
+        include_suspended=include_suspended,
     )
     return [await build_organization_response(db, organization) for organization in organizations]
 
@@ -136,3 +159,74 @@ async def add_organization(
         branch_admin_invitation_sent=branch_admin_invitation_sent,
         branch_admin_email=payload.branch_admin_email,
     )
+
+
+@router.patch("/{organization_id}", response_model=OrganizationResponse)
+async def patch_organization(
+    organization_id: UUID,
+    payload: OrganizationUpdateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.ORGANIZATIONS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationResponse:
+    if payload.max_users is None and payload.max_channels is None and payload.status is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "NO_CHANGES", "message": "لم يُرسل أي تعديل."},
+        )
+
+    organization = await get_organization_for_account(
+        db,
+        account_id=context.account_id,
+        organization_id=organization_id,
+    )
+    if organization is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "ORGANIZATION_NOT_FOUND", "message": "الفرع غير موجود."},
+        )
+
+    if isinstance(context.membership, Membership) and not _can_manage_all_organizations(context):
+        allowed = await resolve_accessible_organization_ids(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+        )
+        if allowed is None or organization_id not in allowed:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "ACCESS_FORBIDDEN", "message": "لا تملك صلاحية تعديل هذا الفرع."},
+            )
+        if payload.status is not None:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "ACCESS_FORBIDDEN", "message": "إيقاف الفرع أو تفعيله يتطلب صلاحية مدير الحساب."},
+            )
+        if organization.status != OrganizationStatus.ACTIVE:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "ORGANIZATION_SUSPENDED", "message": "الفرع موقوف ولا يمكن تعديله."},
+            )
+
+    try:
+        organization = await update_organization(db, organization=organization, payload=payload)
+    except ValueError as exc:
+        errors = {
+            "ORG_USER_LIMIT_BELOW_CURRENT": (
+                400,
+                {
+                    "code": "ORG_USER_LIMIT_BELOW_CURRENT",
+                    "message": "حد المستخدمين أقل من العدد الحالي في الفرع.",
+                },
+            ),
+            "ORG_CHANNEL_LIMIT_BELOW_CURRENT": (
+                400,
+                {
+                    "code": "ORG_CHANNEL_LIMIT_BELOW_CURRENT",
+                    "message": "حد القنوات أقل من العدد الحالي في الفرع.",
+                },
+            ),
+        }
+        code, detail = errors.get(str(exc), (400, {"code": "ORGANIZATION_UPDATE_FAILED", "message": "تعذر تحديث الفرع."}))
+        raise HTTPException(status_code=code, detail=detail) from exc
+
+    return await build_organization_response(db, organization)
