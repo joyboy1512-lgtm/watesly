@@ -6,7 +6,7 @@ import {
   type MetaVariantFormState
 } from "../lib/catalogHelpers";
 import { uploadFile } from "../lib/uploads";
-import { whatsappAccountLabel } from "../lib/whatsappHelpers";
+import { whatsappAccountLabel, type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
@@ -15,7 +15,7 @@ type CatalogMetaProductWizardProps = {
   form: MetaGroupFormState;
   setForm: (updater: (current: MetaGroupFormState) => MetaGroupFormState) => void;
   organizations: Organization[];
-  whatsappAccounts: Array<{ channel_id: string; organization_id: string; verified_name?: string | null; display_phone_number?: string; channel_name?: string | null }>;
+  whatsappAccounts: WhatsAppAccountRow[];
   categories: string[];
   variantGroups: string[];
   formId?: string;

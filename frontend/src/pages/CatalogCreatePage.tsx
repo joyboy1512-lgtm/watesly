@@ -36,8 +36,6 @@ export default function CatalogCreatePage() {
   const [importOrganizationId, setImportOrganizationId] = useState("");
   const [importChannelId, setImportChannelId] = useState("");
 
-  const whatsappAccountCount = whatsappAccounts.data?.length ?? 0;
-
   const organizations = useQuery({
     queryKey: ["organizations"],
     queryFn: async () => (await api.get<Organization[]>("/organizations")).data
@@ -57,6 +55,8 @@ export default function CatalogCreatePage() {
     queryKey: ["whatsapp-accounts"],
     queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
   });
+
+  const whatsappAccountCount = whatsappAccounts.data?.length ?? 0;
 
   useEffect(() => {
     const presetCategory = searchParams.get("category")?.trim();
