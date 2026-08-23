@@ -2,7 +2,7 @@
 
 from alembic import op
 
-revision = "0060_catalog_product_channel_backfill"
+revision = "0060_catalog_channel_backfill"
 down_revision = "0059_catalog_product_channel"
 branch_labels = None
 depends_on = None
