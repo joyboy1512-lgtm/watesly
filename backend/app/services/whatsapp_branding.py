@@ -12,10 +12,8 @@ from app.core.encryption import decrypt_secret
 from app.models.whatsapp_account import WhatsAppAccount
 from app.services.catalog_commerce import (
     account_commerce_ready,
-    catalog_id_linked_to_waba,
+    ensure_meta_commerce_active,
     format_meta_sync_error,
-    is_catalog_link_skip_error,
-    is_invalid_partner_catalog_error,
 )
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 from app.services.storage import storage
@@ -41,46 +39,6 @@ def _meta_client(account: WhatsAppAccount) -> MetaWhatsAppClient:
         access_token=decrypt_secret(account.access_token_encrypted),
         phone_number_id=account.phone_number_id,
     )
-
-
-async def _ensure_meta_commerce_active(client: MetaWhatsAppClient, account: WhatsAppAccount) -> dict:
-    catalog_id = (account.meta_catalog_id or "").strip()
-    if not catalog_id:
-        raise ValueError("META_CATALOG_NOT_CONFIGURED")
-
-    linked_catalogs = await client.list_waba_product_catalogs(waba_id=account.waba_id)
-    catalog_already_linked = catalog_id_linked_to_waba(linked_catalogs, catalog_id)
-
-    link_result: dict | None = None
-    if not catalog_already_linked:
-        try:
-            link_result = await client.link_catalog_to_waba(
-                waba_id=account.waba_id,
-                catalog_id=catalog_id,
-            )
-        except MetaAPIError as exc:
-            message = str(exc)
-            if is_catalog_link_skip_error(message):
-                link_result = {"skipped": True, "reason": message}
-            elif is_invalid_partner_catalog_error(message):
-                linked_catalogs = await client.list_waba_product_catalogs(waba_id=account.waba_id)
-                if catalog_id_linked_to_waba(linked_catalogs, catalog_id):
-                    link_result = {"already_linked": True}
-                else:
-                    raise ValueError(format_meta_sync_error(message)) from exc
-            else:
-                raise
-    else:
-        link_result = {"already_linked": True}
-
-    commerce = await client.update_whatsapp_commerce_settings(
-        is_catalog_visible=True,
-        is_cart_enabled=True,
-    )
-    return {
-        "catalog_linked": catalog_already_linked or link_result is not None,
-        "commerce_settings": commerce,
-    }
 
 
 async def _fetch_image_bytes(url: str) -> tuple[bytes, str, str]:
@@ -234,7 +192,7 @@ async def sync_catalog_cover_to_meta(
     catalog_id = (account.meta_catalog_id or "").strip()
     client = _meta_client(account)
     try:
-        commerce_result = await _ensure_meta_commerce_active(client, account)
+        commerce_result = await ensure_meta_commerce_active(client, account)
         await client.update_catalog_default_image(
             catalog_id=catalog_id,
             default_image_url=cover_url,
@@ -307,7 +265,7 @@ async def sync_whatsapp_commerce_to_meta(
 
     client = _meta_client(account)
     try:
-        result = await _ensure_meta_commerce_active(client, account)
+        result = await ensure_meta_commerce_active(client, account)
         account.catalog_synced_at = datetime.now(UTC)
         await db.commit()
         return {"synced": True, **result}

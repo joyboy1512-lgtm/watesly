@@ -298,7 +298,11 @@ export function catalogMetaStatusLabel(product: CatalogProduct): CatalogMetaStat
     case "no_review":
       return { label: "متاح", className: "meta-approved" };
     default:
-      return { label: "مزامَن", className: "meta-synced" };
+      return {
+        label: "مزامَن",
+        className: "meta-synced",
+        detail: "في Meta — اضغط «تحديث حالة Meta» للتأكد من الاعتماد قبل الظهور في WhatsApp"
+      };
   }
 }
 

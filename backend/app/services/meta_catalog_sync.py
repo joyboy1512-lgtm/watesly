@@ -13,6 +13,7 @@ from app.models.catalog_product import CatalogProduct
 from app.models.whatsapp_account import WhatsAppAccount
 from app.services.catalog_commerce import (
     build_meta_catalog_product_payload,
+    ensure_meta_commerce_active,
     format_meta_sync_error,
     meta_sync_error_for_code,
     product_matches_commerce_organization,
@@ -365,7 +366,37 @@ async def sync_catalog_to_meta(
     client = await _build_meta_client(db, account)
     synced = failed = pending = approved = rejected = skipped = 0
     errors: list[str] = []
+    commerce_activation: dict | None = None
     try:
+        try:
+            commerce_activation = await ensure_meta_commerce_active(client, account)
+        except MetaAPIError as exc:
+            activation_error = format_meta_sync_error(str(exc))
+            return {
+                "synced": 0,
+                "failed": 0,
+                "total": len(products),
+                "pending": 0,
+                "approved": 0,
+                "rejected": 0,
+                "skipped": len(products),
+                "errors": [activation_error],
+                "commerce_activation_failed": True,
+            }
+        except ValueError as exc:
+            activation_error = format_meta_sync_error(str(exc))
+            return {
+                "synced": 0,
+                "failed": 0,
+                "total": len(products),
+                "pending": 0,
+                "approved": 0,
+                "rejected": 0,
+                "skipped": len(products),
+                "errors": [activation_error],
+                "commerce_activation_failed": True,
+            }
+
         for product in products:
             if not product.meta_sync_enabled:
                 continue
@@ -443,4 +474,6 @@ async def sync_catalog_to_meta(
         "rejected": rejected,
         "skipped": skipped,
         "errors": errors[:20],
+        "commerce_activated": commerce_activation is not None,
+        "catalog_linked": (commerce_activation or {}).get("catalog_linked"),
     }

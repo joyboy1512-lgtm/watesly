@@ -58,6 +58,14 @@ type CommerceReadiness = {
   has_catalog_management: boolean;
   token_error: string | null;
   products_active: number;
+  catalog_linked?: boolean | null;
+  is_catalog_visible?: boolean | null;
+  commerce_settings_error?: string | null;
+  products_meta_synced?: number;
+  products_meta_pending?: number;
+  products_meta_approved?: number;
+  products_meta_rejected?: number;
+  whatsapp_catalog_ready?: boolean;
 };
 
 export default function WhatsAppConnectPage() {
@@ -658,6 +666,49 @@ export default function WhatsAppConnectPage() {
               Scopes: {readiness.token_scopes.join(", ")}
             </p>
           )}
+        </div>
+      );
+    }
+    if (readiness.catalog_linked === false) {
+      return (
+        <div className="whatsapp-replace-warning" role="alert">
+          <strong>الكتالوج غير مربوط برقم WhatsApp</strong>
+          <p className="hint-text">
+            المنتجات قد تكون في Commerce Manager لكنها لن تظهر في تطبيق WhatsApp حتى تربط الكتالوج بالرقم.
+            اضغط «مزامنة المنتجات → Meta» أو «تفعيل على Meta» لتفعيل الربط تلقائياً.
+          </p>
+        </div>
+      );
+    }
+    if (readiness.is_catalog_visible === false) {
+      return (
+        <div className="whatsapp-replace-warning" role="alert">
+          <strong>كتالوج WhatsApp مخفي</strong>
+          <p className="hint-text">
+            ظهور الكتالوج معطّل على Meta. اضغط «مزامنة المنتجات → Meta» أو «تفعيل على Meta» لإظهاره للعملاء.
+          </p>
+        </div>
+      );
+    }
+    if ((readiness.products_meta_synced ?? 0) > 0 && (readiness.products_meta_approved ?? 0) === 0) {
+      return (
+        <div className="whatsapp-replace-warning" role="alert">
+          <strong>المنتجات قيد مراجعة Meta</strong>
+          <p className="hint-text">
+            تم إرسال {readiness.products_meta_synced} منتج — معتمد {readiness.products_meta_approved ?? 0}،
+            قيد المراجعة {readiness.products_meta_pending ?? 0}.
+            {" "}
+            «مزامَن» في واتسلي لا يعني ظهوراً فورياً؛ Meta قد تحتاج ساعات للموافقة.
+            من صفحة الكتالوج اضغط «تحديث حالة Meta» ثم انتظر حتى تصبح الحالة «معتمد».
+          </p>
+        </div>
+      );
+    }
+    if (readiness.commerce_settings_error) {
+      return (
+        <div className="whatsapp-replace-warning" role="alert">
+          <strong>تعذر قراءة إعدادات Commerce على Meta</strong>
+          <p className="hint-text">{readiness.commerce_settings_error}</p>
         </div>
       );
     }

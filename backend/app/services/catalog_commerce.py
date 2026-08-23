@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalog_product import CatalogProduct
 from app.models.whatsapp_account import WhatsAppAccount
+from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 
 
 def resolve_retailer_id(product: CatalogProduct) -> str:
@@ -179,6 +180,58 @@ def is_invalid_partner_catalog_error(message: str) -> bool:
     return "invalid partner" in message.lower()
 
 
+async def ensure_meta_commerce_active(client: MetaWhatsAppClient, account: WhatsAppAccount) -> dict:
+    """Link catalog to WABA and enable WhatsApp catalog visibility."""
+    catalog_id = (account.meta_catalog_id or "").strip()
+    if not catalog_id:
+        raise ValueError("META_CATALOG_NOT_CONFIGURED")
+
+    linked_catalogs = await client.list_waba_product_catalogs(waba_id=account.waba_id)
+    catalog_already_linked = catalog_id_linked_to_waba(linked_catalogs, catalog_id)
+
+    link_result: dict | None = None
+    if not catalog_already_linked:
+        try:
+            link_result = await client.link_catalog_to_waba(
+                waba_id=account.waba_id,
+                catalog_id=catalog_id,
+            )
+        except MetaAPIError as exc:
+            message = str(exc)
+            if is_catalog_link_skip_error(message):
+                link_result = {"skipped": True, "reason": message}
+            elif is_invalid_partner_catalog_error(message):
+                linked_catalogs = await client.list_waba_product_catalogs(waba_id=account.waba_id)
+                if catalog_id_linked_to_waba(linked_catalogs, catalog_id):
+                    link_result = {"already_linked": True}
+                else:
+                    raise ValueError(format_meta_sync_error(message)) from exc
+            else:
+                raise
+    else:
+        link_result = {"already_linked": True}
+
+    commerce = await client.update_whatsapp_commerce_settings(
+        is_catalog_visible=True,
+        is_cart_enabled=True,
+    )
+    return {
+        "catalog_linked": catalog_already_linked or link_result is not None,
+        "commerce_settings": commerce,
+    }
+
+
+def parse_meta_catalog_visible(settings: dict | None) -> bool | None:
+    if not settings:
+        return None
+    raw = settings.get("is_catalog_visible")
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return None
+    return str(raw).strip().lower() in {"true", "1", "yes"}
+
+
 async def increment_product_usage(db: AsyncSession, *, product: CatalogProduct) -> None:
     product.usage_count = (product.usage_count or 0) + 1
     await db.commit()
@@ -276,6 +329,13 @@ async def commerce_readiness(db: AsyncSession, *, account_id: UUID, whatsapp_acc
     token_valid = None
     token_error: str | None = None
     has_catalog_management = False
+    catalog_linked: bool | None = None
+    is_catalog_visible: bool | None = None
+    commerce_settings_error: str | None = None
+    products_meta_synced = 0
+    products_meta_pending = 0
+    products_meta_approved = 0
+    products_meta_rejected = 0
     try:
         client = MetaWhatsAppClient(
             access_token=decrypt_secret(account.access_token_encrypted),
@@ -295,12 +355,40 @@ async def commerce_readiness(db: AsyncSession, *, account_id: UUID, whatsapp_acc
                 has_catalog_management = any(
                     "catalog" in scope.lower() for scope in token_scopes
                 )
+            if account_commerce_ready(account) and token_valid is not False:
+                try:
+                    linked_catalogs = await client.list_waba_product_catalogs(waba_id=account.waba_id)
+                    catalog_linked = catalog_id_linked_to_waba(linked_catalogs, account.meta_catalog_id or "")
+                    commerce_settings = await client.get_whatsapp_commerce_settings()
+                    is_catalog_visible = parse_meta_catalog_visible(commerce_settings)
+                except MetaAPIError as exc:
+                    commerce_settings_error = format_meta_sync_error(str(exc))
         except MetaAPIError as exc:
             token_error = str(exc)
         finally:
             await client.aclose()
     except Exception as exc:
         token_error = str(exc)
+
+    org_products = (
+        await db.execute(
+            select(CatalogProduct).where(
+                CatalogProduct.account_id == account_id,
+                CatalogProduct.is_active.is_(True),
+                CatalogProduct.organization_id == account.organization_id,
+                CatalogProduct.external_id.is_not(None),
+                CatalogProduct.external_id != "",
+            )
+        )
+    ).scalars().all()
+    for product in org_products:
+        products_meta_synced += 1
+        if product.meta_review_status == "pending":
+            products_meta_pending += 1
+        elif product.meta_review_status in {"approved", "no_review"}:
+            products_meta_approved += 1
+        elif product.meta_review_status == "rejected":
+            products_meta_rejected += 1
 
     return {
         "commerce_enabled": bool(account.commerce_enabled),
@@ -314,6 +402,19 @@ async def commerce_readiness(db: AsyncSession, *, account_id: UUID, whatsapp_acc
         "token_scopes": token_scopes,
         "has_catalog_management": has_catalog_management,
         "token_error": token_error,
+        "catalog_linked": catalog_linked,
+        "is_catalog_visible": is_catalog_visible,
+        "commerce_settings_error": commerce_settings_error,
+        "products_meta_synced": products_meta_synced,
+        "products_meta_pending": products_meta_pending,
+        "products_meta_approved": products_meta_approved,
+        "products_meta_rejected": products_meta_rejected,
+        "whatsapp_catalog_ready": bool(
+            account_commerce_ready(account)
+            and catalog_linked is True
+            and is_catalog_visible is True
+            and products_meta_approved > 0
+        ),
         "top_products": [
             {
                 "id": str(item.id),
