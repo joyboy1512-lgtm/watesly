@@ -258,30 +258,26 @@ async def catalog_scope_clauses(
     channel_column,
     organization_column,
 ) -> list:
-    """Limit catalog rows by branch and optional channel assignment.
+    """Limit catalog rows by branch and channel assignment.
 
-    Products without channel_id keep legacy org-only visibility.
-    Products with channel_id are visible only to users who can access that channel.
+    Owner/admin: org scope only (see all products including unassigned).
+    Other roles: only products explicitly assigned to accessible channels.
     """
-    clauses = await organization_scope_clauses(
+    org_clauses = await organization_scope_clauses(
         db,
         account_id=account_id,
         membership=membership,
         organization_column=organization_column,
     )
+    if membership.role in (MembershipRole.OWNER, MembershipRole.ADMIN):
+        return org_clauses
+
     channel_ids = await resolve_accessible_channel_ids(
         db, account_id=account_id, membership=membership
     )
-    if channel_ids is None:
-        return clauses
     if not channel_ids:
-        return clauses + [channel_column.is_(None)]
-    return clauses + [
-        or_(
-            channel_column.is_(None),
-            channel_column.in_(channel_ids),
-        )
-    ]
+        return org_clauses + [channel_column.is_(None)]
+    return org_clauses + [channel_column.in_(channel_ids)]
 
 
 async def organization_scope_clauses(

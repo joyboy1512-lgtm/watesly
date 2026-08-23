@@ -6,6 +6,7 @@ import {
   type MetaVariantFormState
 } from "../lib/catalogHelpers";
 import { uploadFile } from "../lib/uploads";
+import { whatsappAccountLabel } from "../lib/whatsappHelpers";
 import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
@@ -14,6 +15,7 @@ type CatalogMetaProductWizardProps = {
   form: MetaGroupFormState;
   setForm: (updater: (current: MetaGroupFormState) => MetaGroupFormState) => void;
   organizations: Organization[];
+  whatsappAccounts: Array<{ channel_id: string; organization_id: string; verified_name?: string | null; display_phone_number?: string; channel_name?: string | null }>;
   categories: string[];
   variantGroups: string[];
   formId?: string;
@@ -111,6 +113,7 @@ export default function CatalogMetaProductWizard({
   form,
   setForm,
   organizations,
+  whatsappAccounts,
   categories,
   variantGroups,
   formId = "catalog-meta-wizard",
@@ -118,6 +121,15 @@ export default function CatalogMetaProductWizard({
   saving = false
 }: CatalogMetaProductWizardProps) {
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+
+  function selectChannel(channelId: string) {
+    const account = whatsappAccounts.find((item) => item.channel_id === channelId);
+    setForm((current) => ({
+      ...current,
+      channelId,
+      organizationId: account?.organization_id ?? current.organizationId
+    }));
+  }
 
   function updateVariant(clientKey: string, patch: Partial<MetaVariantFormState>) {
     setForm((current) => ({
@@ -230,6 +242,24 @@ export default function CatalogMetaProductWizard({
         </div>
 
         <div className="catalog-fields-row-fit">
+          {whatsappAccounts.length > 1 ? (
+            <label className="field-label catalog-field-w-md">
+              <span>قناة WhatsApp *</span>
+              <select value={form.channelId} onChange={(e) => selectChannel(e.target.value)} required>
+                <option value="">— اختر القناة —</option>
+                {whatsappAccounts.map((account) => (
+                  <option key={account.channel_id} value={account.channel_id}>
+                    {whatsappAccountLabel(account)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : whatsappAccounts.length === 1 ? (
+            <p className="catalog-branch-label catalog-field-w-md">
+              <span>قناة WhatsApp</span>
+              <strong>{whatsappAccountLabel(whatsappAccounts[0])}</strong>
+            </p>
+          ) : null}
           <label className="field-label catalog-field-w-md">
             <span>الفرع {organizations.length === 1 ? "" : "(مطلوب)"}</span>
             <select

@@ -33,6 +33,10 @@ export type WhatsAppAccountRow = {
   catalog_cover_synced_at?: string | null;
 };
 
+export function whatsappAccountLabel(account: Pick<WhatsAppAccountRow, "verified_name" | "display_phone_number" | "channel_name">): string {
+  return account.verified_name?.trim() || account.display_phone_number?.trim() || account.channel_name?.trim() || "WhatsApp";
+}
+
 export const CONNECTION_METHOD_LABELS: Record<string, string> = {
   embedded: "Embedded Signup",
   manual: "ربط يدوي"

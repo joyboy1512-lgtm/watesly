@@ -121,6 +121,7 @@ class MetaGroupPayload(BaseModel):
     meta_item_group_id: str = Field(min_length=1, max_length=80)
     base_name: str = Field(min_length=1, max_length=200)
     organization_id: UUID | None = None
+    channel_id: UUID | None = None
     category: str | None = None
     description: str | None = None
     product_type: str = Field(default="product", pattern=r"^(product|service)$")
@@ -202,6 +203,7 @@ _META_GROUP_ERRORS = {
     "VARIANTS_REQUIRED": "أضف نسخة واحدة على الأقل.",
     "GROUP_NOT_FOUND": "مجموعة المنتج غير موجودة.",
     "ORGANIZATION_REQUIRED": "اختر الفرع قبل حفظ المنتج",
+    "CHANNEL_REQUIRED": "اختر قناة WhatsApp التي سيظهر فيها المنتج",
     "ACCESS_FORBIDDEN": "لا تملك صلاحية على هذا الفرع",
 }
 
@@ -432,6 +434,7 @@ async def post_meta_group(
             meta_item_group_id=payload.meta_item_group_id,
             base_name=payload.base_name,
             organization_id=payload.organization_id,
+            channel_id=payload.channel_id,
             category=payload.category,
             description=payload.description,
             product_type=payload.product_type,
@@ -462,6 +465,7 @@ async def put_meta_group(
             meta_item_group_id=group_id,
             base_name=payload.base_name,
             organization_id=payload.organization_id,
+            channel_id=payload.channel_id,
             category=payload.category,
             description=payload.description,
             product_type=payload.product_type,
@@ -607,7 +611,10 @@ async def post_catalog_product(
         code = str(exc)
         messages = {
             "ORGANIZATION_REQUIRED": "اختر الفرع قبل حفظ المنتج",
+            "CHANNEL_REQUIRED": "اختر قناة WhatsApp التي سيظهر فيها المنتج",
             "ACCESS_FORBIDDEN": "لا تملك صلاحية على هذا الفرع",
+            "CHANNEL_NOT_FOUND": "القناة غير موجودة",
+            "CHANNEL_ORGANIZATION_MISMATCH": "القناة لا تطابق الفرع المحدد",
         }
         raise HTTPException(status_code=400, detail=messages.get(code, code)) from exc
 
@@ -666,6 +673,7 @@ async def remove_product(
 async def import_catalog(
     file: UploadFile = File(...),
     organization_id: UUID | None = Form(None),
+    channel_id: UUID = Form(...),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -676,6 +684,8 @@ async def import_catalog(
             db,
             account_id=context.account_id,
             organization_id=organization_id,
+            channel_id=channel_id,
+            membership=context.membership,
             content=content,
             filename=filename,
         )

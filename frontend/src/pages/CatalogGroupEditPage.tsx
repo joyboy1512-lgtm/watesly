@@ -12,6 +12,7 @@ import {
   type MetaGroupResponse
 } from "../lib/catalogHelpers";
 import { toastStore } from "../stores/toast";
+import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 
 type Organization = { id: string; name: string };
 
@@ -38,6 +39,13 @@ export default function CatalogGroupEditPage() {
     queryFn: async () => (await api.get<string[]>("/catalog/variant-groups")).data
   });
 
+  const whatsappAccounts = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
+  });
+
+  const whatsappAccountCount = whatsappAccounts.data?.length ?? 1;
+
   const group = useQuery({
     queryKey: ["catalog-meta-group", decodedGroupId],
     queryFn: async () => (await api.get<MetaGroupResponse>(`/catalog/meta-group/${encodeURIComponent(decodedGroupId)}`)).data,
@@ -50,8 +58,8 @@ export default function CatalogGroupEditPage() {
   }, [group.data]);
 
   async function saveGroup() {
-    if (!metaGroupReady(form)) {
-      toastStore.getState().show("أكمل الحقول المطلوبة لكل النسخ.", "error");
+    if (!metaGroupReady(form, whatsappAccountCount)) {
+      toastStore.getState().show("أكمل الحقول المطلوبة — بما فيها قناة WhatsApp.", "error");
       return;
     }
     setSaving(true);
@@ -99,7 +107,7 @@ export default function CatalogGroupEditPage() {
             <button
               type="button"
               className="contacts-erp-btn contacts-erp-btn-primary"
-              disabled={!metaGroupReady(form) || saving || group.isLoading}
+              disabled={!metaGroupReady(form, whatsappAccountCount) || saving || group.isLoading}
               onClick={() => void saveGroup()}
             >
               {saving ? "جاري الحفظ…" : "حفظ التعديلات"}
@@ -123,6 +131,7 @@ export default function CatalogGroupEditPage() {
                 form={form}
                 setForm={setForm}
                 organizations={organizations.data ?? []}
+                whatsappAccounts={whatsappAccounts.data ?? []}
                 categories={categories.data ?? []}
                 variantGroups={variantGroups.data ?? []}
                 onSubmit={() => void saveGroup()}

@@ -33,7 +33,7 @@ async def get_catalog_meta_group(
     meta_item_group_id: str,
     membership=None,
 ) -> dict:
-    from app.services.membership_access import organization_scope_clauses
+    from app.services.membership_access import catalog_scope_clauses
 
     group_id = _normalize_group_id(meta_item_group_id)
     if not group_id:
@@ -45,10 +45,11 @@ async def get_catalog_meta_group(
         CatalogProduct.is_active.is_(True),
     )
     if membership is not None:
-        for clause in await organization_scope_clauses(
+        for clause in await catalog_scope_clauses(
             db,
             account_id=account_id,
             membership=membership,
+            channel_column=CatalogProduct.channel_id,
             organization_column=CatalogProduct.organization_id,
         ):
             query = query.where(clause)
@@ -63,6 +64,7 @@ async def get_catalog_meta_group(
         "meta_item_group_id": group_id,
         "base_name": first.name.split(" — ")[0][:200],
         "organization_id": first.organization_id,
+        "channel_id": first.channel_id,
         "category": first.category,
         "description": first.description,
         "product_type": first.product_type,
@@ -97,6 +99,7 @@ async def create_catalog_meta_group(
     meta_item_group_id: str,
     base_name: str,
     organization_id: UUID | None = None,
+    channel_id: UUID | None = None,
     category: str | None = None,
     description: str | None = None,
     product_type: str = "product",
@@ -125,6 +128,7 @@ async def create_catalog_meta_group(
             account_id=account_id,
             membership=membership,
             organization_id=organization_id,
+            channel_id=channel_id,
             name=name,
             sku=variant.get("sku") or None,
             product_type=product_type,
@@ -159,6 +163,7 @@ async def update_catalog_meta_group(
     meta_item_group_id: str,
     base_name: str,
     organization_id: UUID | None = None,
+    channel_id: UUID | None = None,
     category: str | None = None,
     description: str | None = None,
     product_type: str = "product",
@@ -188,6 +193,7 @@ async def update_catalog_meta_group(
     )
     existing_map = {str(item.id): item for item in existing}
     kept_ids: set[str] = set()
+    resolved_channel_id = channel_id or (existing[0].channel_id if existing else None)
 
     for index, variant in enumerate(variants):
         variant_id = str(variant.get("id") or "").strip()
@@ -200,6 +206,7 @@ async def update_catalog_meta_group(
         price = None if price_type == "quote" or price_raw in (None, "") else Decimal(str(price_raw))
         fields = {
             "organization_id": organization_id,
+            "channel_id": resolved_channel_id,
             "name": name,
             "sku": variant.get("sku") or None,
             "product_type": product_type,

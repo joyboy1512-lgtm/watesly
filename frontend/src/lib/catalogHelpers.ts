@@ -54,6 +54,7 @@ export type CatalogTypeFilter = "all" | "product" | "service";
 
 export type ProductFormState = {
   organizationId: string;
+  channelId: string;
   name: string;
   sku: string;
   productType: "product" | "service";
@@ -77,6 +78,7 @@ export type ProductFormState = {
 export function emptyProductForm(): ProductFormState {
   return {
     organizationId: "",
+    channelId: "",
     name: "",
     sku: "",
     productType: "product",
@@ -101,6 +103,7 @@ export function emptyProductForm(): ProductFormState {
 export function productFormFromCatalog(product: CatalogProduct): ProductFormState {
   return {
     organizationId: product.organization_id ?? "",
+    channelId: product.channel_id ?? "",
     name: product.name,
     sku: product.sku ?? "",
     productType: product.product_type === "service" ? "service" : "product",
@@ -125,6 +128,7 @@ export function productFormFromCatalog(product: CatalogProduct): ProductFormStat
 export function buildProductPayload(form: ProductFormState) {
   return {
     organization_id: form.organizationId || null,
+    channel_id: form.channelId || null,
     name: form.name.trim(),
     sku: form.sku.trim() || null,
     product_type: form.productType,
@@ -150,6 +154,7 @@ export function buildSimpleProductPayload(form: ProductFormState) {
   const price = Number(form.price);
   return {
     organization_id: form.organizationId || null,
+    channel_id: form.channelId || null,
     name: form.name.trim(),
     sku: form.sku.trim() || null,
     product_type: "product" as const,
@@ -171,15 +176,17 @@ export function buildSimpleProductPayload(form: ProductFormState) {
   };
 }
 
-export function simpleProductFormReady(form: ProductFormState, organizationsCount = 1) {
+export function simpleProductFormReady(form: ProductFormState, organizationsCount = 1, whatsappAccountsCount = 1) {
   const price = Number(form.price);
   const hasOrg = organizationsCount <= 1 || Boolean(form.organizationId.trim());
+  const hasChannel = whatsappAccountsCount <= 1 || Boolean(form.channelId.trim());
   return (
     Boolean(form.name.trim()) &&
     Boolean(form.imageUrl.trim()) &&
     Number.isFinite(price) &&
     price > 0 &&
-    hasOrg
+    hasOrg &&
+    hasChannel
   );
 }
 
@@ -371,6 +378,7 @@ export type MetaGroupFormState = {
   metaItemGroupId: string;
   baseName: string;
   organizationId: string;
+  channelId: string;
   category: string;
   description: string;
   productType: "product" | "service";
@@ -384,6 +392,7 @@ export type MetaGroupResponse = {
   meta_item_group_id: string;
   base_name: string;
   organization_id: string | null;
+  channel_id: string | null;
   category: string | null;
   description: string | null;
   product_type: string;
@@ -433,6 +442,7 @@ export function emptyMetaGroupForm(): MetaGroupFormState {
     metaItemGroupId: "",
     baseName: "",
     organizationId: "",
+    channelId: "",
     category: "",
     description: "",
     productType: "product",
@@ -459,6 +469,7 @@ export function metaGroupFormFromResponse(group: MetaGroupResponse): MetaGroupFo
     metaItemGroupId: group.meta_item_group_id,
     baseName: group.base_name,
     organizationId: group.organization_id ?? "",
+    channelId: group.channel_id ?? "",
     category: group.category ?? "",
     description: group.description ?? "",
     productType: group.product_type === "service" ? "service" : "product",
@@ -485,6 +496,7 @@ export function buildMetaGroupPayload(form: MetaGroupFormState) {
     meta_item_group_id: form.metaItemGroupId.trim(),
     base_name: form.baseName.trim(),
     organization_id: form.organizationId || null,
+    channel_id: form.channelId || null,
     category: form.category.trim() || null,
     description: form.description.trim() || null,
     product_type: form.productType,
@@ -505,8 +517,9 @@ export function buildMetaGroupPayload(form: MetaGroupFormState) {
   };
 }
 
-export function metaGroupReady(form: MetaGroupFormState) {
+export function metaGroupReady(form: MetaGroupFormState, whatsappAccountsCount = 1) {
   if (!form.baseName.trim() || !form.metaItemGroupId.trim()) return false;
+  if (whatsappAccountsCount > 1 && !form.channelId.trim()) return false;
   if (!form.variants.length) return false;
   if (form.priceType !== "quote") {
     return form.variants.every((variant) => variant.price.trim());

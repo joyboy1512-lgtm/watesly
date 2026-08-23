@@ -34,6 +34,9 @@ export default function CatalogCreatePage() {
   const [singleForm, setSingleForm] = useState<ProductFormState>(emptyProductForm);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [importOrganizationId, setImportOrganizationId] = useState("");
+  const [importChannelId, setImportChannelId] = useState("");
+
+  const whatsappAccountCount = whatsappAccounts.data?.length ?? 0;
 
   const organizations = useQuery({
     queryKey: ["organizations"],
@@ -69,6 +72,23 @@ export default function CatalogCreatePage() {
   }, [organizations.data]);
 
   useEffect(() => {
+    const accounts = whatsappAccounts.data ?? [];
+    if (accounts.length !== 1) return;
+    const only = accounts[0];
+    setMetaForm((current) =>
+      current.channelId
+        ? current
+        : { ...current, channelId: only.channel_id, organizationId: only.organization_id ?? current.organizationId }
+    );
+    setSingleForm((current) =>
+      current.channelId
+        ? current
+        : { ...current, channelId: only.channel_id, organizationId: only.organization_id ?? current.organizationId }
+    );
+    setImportChannelId((current) => current || only.channel_id);
+  }, [whatsappAccounts.data]);
+
+  useEffect(() => {
     if (mode !== "meta") return;
     if (metaForm.metaItemGroupId.trim()) return;
     const slug = slugifyMetaGroupId(metaForm.baseName);
@@ -94,8 +114,8 @@ export default function CatalogCreatePage() {
   }
 
   async function saveMetaGroup() {
-    if (!metaGroupReady(metaForm)) {
-      toastStore.getState().show("أكمل الحقول المطلوبة لكل النسخ.", "error");
+    if (!metaGroupReady(metaForm, whatsappAccountCount)) {
+      toastStore.getState().show("أكمل الحقول المطلوبة — بما فيها قناة WhatsApp.", "error");
       return;
     }
     setSaving(true);
@@ -125,8 +145,8 @@ export default function CatalogCreatePage() {
 
   async function createSingleProduct(event: FormEvent) {
     event.preventDefault();
-    if (!simpleProductFormReady(singleForm)) {
-      toastStore.getState().show("أكمل: الاسم، السعر، والصورة.", "error");
+    if (!simpleProductFormReady(singleForm, organizations.data?.length ?? 1, whatsappAccountCount)) {
+      toastStore.getState().show("أكمل: القناة، الاسم، السعر، والصورة.", "error");
       return;
     }
     const orgs = organizations.data ?? [];
@@ -170,6 +190,11 @@ export default function CatalogCreatePage() {
     if (importOrganizationId) {
       payload.set("organization_id", importOrganizationId);
     }
+    if (!importChannelId) {
+      toastStore.getState().show("اختر قناة WhatsApp للاستيراد.", "error");
+      return;
+    }
+    payload.set("channel_id", importChannelId);
     try {
       const result = await api.post("/catalog/import", payload, { headers: { "Content-Type": "multipart/form-data" } });
       await client.invalidateQueries({ queryKey: ["catalog"] });
@@ -183,8 +208,8 @@ export default function CatalogCreatePage() {
     }
   }
 
-  const singleReady = simpleProductFormReady(singleForm, organizations.data?.length ?? 1);
-  const metaReady = metaGroupReady(metaForm);
+  const singleReady = simpleProductFormReady(singleForm, organizations.data?.length ?? 1, whatsappAccountCount);
+  const metaReady = metaGroupReady(metaForm, whatsappAccountCount);
   const pageTitle = mode === "single" ? "إضافة منتج" : "منتجات متعددة (Meta)";
 
   return (
@@ -235,6 +260,7 @@ export default function CatalogCreatePage() {
                 form={metaForm}
                 setForm={setMetaForm}
                 organizations={organizations.data ?? []}
+                whatsappAccounts={whatsappAccounts.data ?? []}
                 categories={categories.data ?? []}
                 variantGroups={variantGroups.data ?? []}
                 onSubmit={() => void saveMetaGroup()}
@@ -272,6 +298,17 @@ export default function CatalogCreatePage() {
                   </div>
                 </header>
                 <form className="catalog-wizard-section-body stack-form" onSubmit={(e) => void importCatalog(e)}>
+                  <label className="field-label">
+                    <span>قناة WhatsApp *</span>
+                    <select value={importChannelId} onChange={(e) => setImportChannelId(e.target.value)} required>
+                      <option value="">— اختر القناة —</option>
+                      {(whatsappAccounts.data ?? []).map((account) => (
+                        <option key={account.channel_id} value={account.channel_id}>
+                          {account.verified_name || account.display_phone_number || account.channel_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="field-label">
                     <span>الفرع (اختياري)</span>
                     <select value={importOrganizationId} onChange={(e) => setImportOrganizationId(e.target.value)}>

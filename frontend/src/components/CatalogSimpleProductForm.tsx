@@ -1,5 +1,5 @@
 import { type ProductFormState } from "../lib/catalogHelpers";
-import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
+import { type WhatsAppAccountRow, whatsappAccountLabel } from "../lib/whatsappHelpers";
 
 type Organization = { id: string; name: string };
 
@@ -20,16 +20,43 @@ export default function CatalogSimpleProductForm({
   uploadingImage,
   onUploadImage
 }: CatalogSimpleProductFormProps) {
-  const selectedOrgId = form.organizationId || (organizations.length === 1 ? organizations[0]?.id : "");
-  const branchAccount = whatsappAccounts.find((item) => item.organization_id === selectedOrgId);
+  const selectedAccount = whatsappAccounts.find((item) => item.channel_id === form.channelId);
   const branchCommerceReady = Boolean(
-    branchAccount?.commerce_enabled && branchAccount.meta_catalog_id?.trim()
+    selectedAccount?.commerce_enabled && selectedAccount.meta_catalog_id?.trim()
   );
+
+  function selectChannel(channelId: string) {
+    const account = whatsappAccounts.find((item) => item.channel_id === channelId);
+    setForm((current) => ({
+      ...current,
+      channelId,
+      organizationId: account?.organization_id ?? current.organizationId
+    }));
+  }
 
   return (
     <div className="catalog-simple-form stack-form">
-      {(organizations.length > 0 || branchAccount) && (
+      {(whatsappAccounts.length > 0 || organizations.length > 0) && (
         <div className="catalog-branch-block">
+          {whatsappAccounts.length > 1 ? (
+            <label className="field-label">
+              <span>قناة WhatsApp *</span>
+              <select value={form.channelId} onChange={(e) => selectChannel(e.target.value)} required>
+                <option value="">— اختر القناة —</option>
+                {whatsappAccounts.map((account) => (
+                  <option key={account.channel_id} value={account.channel_id}>
+                    {whatsappAccountLabel(account)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : whatsappAccounts.length === 1 ? (
+            <p className="catalog-branch-label">
+              <span>قناة WhatsApp</span>
+              <strong>{whatsappAccountLabel(whatsappAccounts[0])}</strong>
+            </p>
+          ) : null}
+
           {organizations.length > 1 ? (
             <label className="field-label">
               <span>الفرع *</span>
@@ -52,12 +79,13 @@ export default function CatalogSimpleProductForm({
               <strong>{organizations[0].name}</strong>
             </p>
           ) : null}
+
           <p className={`hint-text catalog-branch-hint ${branchCommerceReady ? "ready" : "warn"}`}>
-            {selectedOrgId
+            {form.channelId
               ? branchCommerceReady
-                ? `يُزامَن المنتج مع كتالوج WhatsApp لهذا الفرع (Catalog ID: ${branchAccount?.meta_catalog_id}).`
-                : "هذا الفرع لا يملك Commerce أو Catalog ID — فعّلهما من صفحة ربط WhatsApp لنفس الفرع."
-              : "اختر الفرع أولاً — كل فرع له رقم WhatsApp وكتالوج منفصل."}
+                ? `سيُعرض المنتج في كتالوج ${whatsappAccountLabel(selectedAccount!)} ويُزامَن مع Meta.`
+                : "هذه القناة لا تملك Commerce أو Catalog ID — فعّلهما من صفحة ربط WhatsApp."
+              : "اختر قناة WhatsApp — كل منتج يجب أن ينتمي لقناة واحدة."}
           </p>
         </div>
       )}
@@ -79,23 +107,26 @@ export default function CatalogSimpleProductForm({
             {uploadingImage ? "جاري الرفع…" : "رفع صورة"}
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               hidden
               disabled={uploadingImage}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
+              onChange={(e) => {
+                const file = e.target.files?.[0];
                 if (file) onUploadImage(file);
-                event.currentTarget.value = "";
+                e.currentTarget.value = "";
               }}
             />
           </label>
-          <input
-            value={form.imageUrl}
-            onChange={(e) => setForm((current) => ({ ...current, imageUrl: e.target.value }))}
-            placeholder="https://…"
-            dir="ltr"
-            required
-          />
+          <label className="field-label">
+            <span>أو رابط HTTPS</span>
+            <input
+              type="url"
+              value={form.imageUrl}
+              onChange={(e) => setForm((current) => ({ ...current, imageUrl: e.target.value }))}
+              placeholder="https://..."
+              dir="ltr"
+            />
+          </label>
         </div>
       </div>
 
@@ -104,64 +135,61 @@ export default function CatalogSimpleProductForm({
         <input
           value={form.name}
           onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
-          placeholder="مثال: جل استحمام دوف 400مل"
+          placeholder="مثال: Shower Gel — Dovey 400ml"
           required
         />
       </label>
 
-      <div className="catalog-fields-row-fit">
-        <label className="field-label catalog-field-w-grow">
+      <div className="catalog-simple-price-row">
+        <label className="field-label">
           <span>السعر *</span>
           <input
+            type="number"
+            min="0"
+            step="0.001"
             value={form.price}
             onChange={(e) => setForm((current) => ({ ...current, price: e.target.value }))}
-            placeholder="0.000"
-            type="number"
-            step="0.001"
-            min="0.001"
-            dir="ltr"
             required
           />
         </label>
-        <label className="field-label catalog-field-w-xs">
+        <label className="field-label">
           <span>العملة</span>
           <input
             value={form.currency}
-            onChange={(e) => setForm((current) => ({ ...current, currency: e.target.value }))}
-            placeholder="KWD"
+            onChange={(e) => setForm((current) => ({ ...current, currency: e.target.value.toUpperCase() }))}
+            maxLength={3}
             dir="ltr"
           />
         </label>
       </div>
 
       <label className="field-label">
-        <span>الوصف</span>
-        <textarea
-          value={form.description}
-          onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
-          placeholder="وصف مختصر يظهر في كتالوج WhatsApp"
-          rows={3}
-        />
-      </label>
-
-      <label className="field-label">
-        <span>SKU / رمز المنتج</span>
+        <span>SKU / retailer ID</span>
         <input
           value={form.sku}
           onChange={(e) => setForm((current) => ({ ...current, sku: e.target.value }))}
-          placeholder="يُستخدم كـ retailer_id في Meta إن وُجد"
+          placeholder="اختياري — يُستخدم في Meta"
           dir="ltr"
         />
       </label>
 
-      <label className="catalog-meta-sync-chip">
+      <label className="field-label">
+        <span>الوصف</span>
+        <textarea
+          rows={3}
+          value={form.description}
+          onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
+          placeholder="يظهر في كتالوج WhatsApp"
+        />
+      </label>
+
+      <label className="checkbox-label">
         <input
           type="checkbox"
           checked={form.metaSyncEnabled}
           onChange={(e) => setForm((current) => ({ ...current, metaSyncEnabled: e.target.checked }))}
         />
-        <span>مزامنة تلقائية مع Meta بعد الحفظ</span>
-        <span className="catalog-meta-sync-state">{form.metaSyncEnabled ? "مفعّلة" : "موقوفة"}</span>
+        <span>مزامنة تلقائية مع Meta عند الحفظ</span>
       </label>
     </div>
   );

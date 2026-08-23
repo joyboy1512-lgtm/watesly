@@ -43,15 +43,7 @@ async def _apply_catalog_channel_filter(
         channel_id=channel_id,
         organization_id=None,
     )
-    return query.where(
-        or_(
-            CatalogProduct.channel_id == channel_id,
-            and_(
-                CatalogProduct.channel_id.is_(None),
-                CatalogProduct.organization_id == channel.organization_id,
-            ),
-        )
-    )
+    return query.where(CatalogProduct.channel_id == channel_id)
 
 
 async def list_catalog_products(
@@ -128,6 +120,11 @@ async def get_catalog_product(
             membership=membership,
             channel_id=item.channel_id,
         )
+    elif membership is not None:
+        from app.models.membership import MembershipRole
+
+        if membership.role not in (MembershipRole.OWNER, MembershipRole.ADMIN):
+            raise ValueError("ACCESS_FORBIDDEN")
     return item
 
 
@@ -147,6 +144,16 @@ async def _prepare_catalog_product_fields(
 
     org_id = fields.get("organization_id")
     channel_id = fields.get("channel_id")
+    if channel_id is not None:
+        channel = await _resolve_channel_for_catalog(
+            db,
+            account_id=account_id,
+            channel_id=channel_id,
+            organization_id=org_id,
+        )
+        if org_id is None and channel is not None:
+            org_id = channel.organization_id
+            fields["organization_id"] = org_id
     if membership is not None:
         allowed_orgs = await resolve_accessible_organization_ids(
             db, account_id=account_id, membership=membership
@@ -179,6 +186,16 @@ async def _prepare_catalog_product_fields(
             if accessible_channels is not None and len(accessible_channels) == 1:
                 channel_id = accessible_channels[0]
                 fields["channel_id"] = channel_id
+                channel = await _resolve_channel_for_catalog(
+                    db,
+                    account_id=account_id,
+                    channel_id=channel_id,
+                    organization_id=org_id,
+                )
+                if org_id is None and channel is not None:
+                    fields["organization_id"] = channel.organization_id
+        if channel_id is None:
+            raise ValueError("CHANNEL_REQUIRED")
         if channel_id is not None:
             await ensure_membership_channel_access(
                 db,
@@ -199,6 +216,8 @@ async def _prepare_catalog_product_fields(
             channel_id=channel_id,
             organization_id=org_id,
         )
+    else:
+        raise ValueError("CHANNEL_REQUIRED")
     return fields
 
 
@@ -469,6 +488,8 @@ async def import_catalog_from_rows(
     *,
     account_id: UUID,
     organization_id: UUID | None,
+    channel_id: UUID,
+    membership=None,
     rows: list[dict[str, str]],
 ) -> dict:
     from app.services.spreadsheet import (
@@ -498,7 +519,9 @@ async def import_catalog_from_rows(
         await create_catalog_product(
             db,
             account_id=account_id,
+            membership=membership,
             organization_id=organization_id,
+            channel_id=channel_id,
             name=name,
             sku=get_row_value(row, "sku") or None,
             product_type=normalize_product_type(get_row_value(row, "product_type") or "product"),
@@ -521,6 +544,8 @@ async def import_catalog_file(
     *,
     account_id: UUID,
     organization_id: UUID | None,
+    channel_id: UUID,
+    membership=None,
     content: bytes,
     filename: str,
 ) -> dict:
@@ -531,6 +556,8 @@ async def import_catalog_file(
         db,
         account_id=account_id,
         organization_id=organization_id,
+        channel_id=channel_id,
+        membership=membership,
         rows=rows,
     )
 

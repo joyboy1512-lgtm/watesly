@@ -153,8 +153,8 @@ export default function CatalogPage() {
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
     if (!editingProduct) return;
-    if (!editingProduct.meta_item_group_id?.trim() && !simpleProductFormReady(editForm, organizations.data?.length ?? 1)) {
-      toastStore.getState().show("أكمل: الفرع، الاسم، السعر، والصورة.", "error");
+    if (!editingProduct.meta_item_group_id?.trim() && !simpleProductFormReady(editForm, organizations.data?.length ?? 1, whatsappAccounts.data?.length ?? 1)) {
+      toastStore.getState().show("أكمل: القناة، الاسم، السعر، والصورة.", "error");
       return;
     }
     try {
