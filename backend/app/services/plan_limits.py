@@ -11,3 +11,10 @@ def organization_limit_reached(*, current_count: int, max_organizations: int) ->
     if is_unlimited(max_organizations):
         return False
     return current_count >= max_organizations
+
+
+def limit_reached(*, current_count: int, max_limit: int) -> bool:
+    if is_unlimited(max_limit):
+        return False
+    return current_count >= max_limit
+

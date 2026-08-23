@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { formatOrgStatus, orgStatusClass, organizationCreateErrorMessage, slugFromName } from "../lib/orgHelpers";
+import { formatPlanLimit } from "../lib/planLimits";
 import { toastStore } from "../stores/toast";
 
 type Organization = {
@@ -14,33 +15,38 @@ type Organization = {
   timezone: string;
   default_language: string;
   status: string;
+  max_users: number;
+  max_channels: number;
+  active_member_count: number;
+  active_channel_count: number;
 };
 
-type Channel = { id: string; organization_id: string };
+type OrganizationCreateResponse = Organization & {
+  branch_admin_invitation_sent?: boolean;
+  branch_admin_email?: string | null;
+};
+
+function parseOptionalLimit(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.floor(parsed);
+}
 
 export default function OrganizationsPage() {
   const client = useQueryClient();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [maxUsers, setMaxUsers] = useState("");
+  const [maxChannels, setMaxChannels] = useState("");
+  const [branchAdminEmail, setBranchAdminEmail] = useState("");
   const [search, setSearch] = useState("");
 
   const query = useQuery({
     queryKey: ["organizations"],
     queryFn: async () => (await api.get<Organization[]>("/organizations")).data
   });
-
-  const channelsQuery = useQuery({
-    queryKey: ["channels"],
-    queryFn: async () => (await api.get<Channel[]>("/channels")).data
-  });
-
-  const channelCountByOrg = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const channel of channelsQuery.data ?? []) {
-      map.set(channel.organization_id, (map.get(channel.organization_id) ?? 0) + 1);
-    }
-    return map;
-  }, [channelsQuery.data]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -59,9 +65,9 @@ export default function OrganizationsPage() {
     return {
       total: rows.length,
       active: rows.filter((item) => item.status === "active").length,
-      channels: (channelsQuery.data ?? []).length
+      channels: rows.reduce((sum, item) => sum + (item.active_channel_count ?? 0), 0)
     };
-  }, [query.data, channelsQuery.data]);
+  }, [query.data]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -70,19 +76,35 @@ export default function OrganizationsPage() {
       toastStore.getState().show("أدخل معرّف فرع بالإنجليزية (مثل three-shiny).", "error");
       return;
     }
+    const adminEmail = branchAdminEmail.trim().toLowerCase();
     try {
-      await api.post("/organizations", {
+      const result = await api.post<OrganizationCreateResponse>("/organizations", {
         name: name.trim(),
         slug: nextSlug,
         country_code: "KW",
         currency_code: "KWD",
         timezone: "Asia/Kuwait",
-        default_language: "ar"
+        default_language: "ar",
+        max_users: parseOptionalLimit(maxUsers),
+        max_channels: parseOptionalLimit(maxChannels),
+        branch_admin_email: adminEmail || null
       });
       setName("");
       setSlug("");
+      setMaxUsers("");
+      setMaxChannels("");
+      setBranchAdminEmail("");
       await client.invalidateQueries({ queryKey: ["organizations"] });
-      toastStore.getState().show("تم إضافة الفرع.", "success");
+      if (adminEmail) {
+        toastStore.getState().show(
+          result.data.branch_admin_invitation_sent
+            ? `تم إنشاء الفرع وإرسال دعوة مدير الفرع إلى ${adminEmail}.`
+            : `تم إنشاء الفرع. أرسل رابط الدعوة يدوياً إلى ${adminEmail}.`,
+          "success"
+        );
+      } else {
+        toastStore.getState().show("تم إضافة الفرع.", "success");
+      }
     } catch (error) {
       toastStore.getState().show(organizationCreateErrorMessage(error), "error");
     }
@@ -92,7 +114,7 @@ export default function OrganizationsPage() {
     <main className="page">
       <header className="page-header">
         <h1>الفروع</h1>
-        <p>جدول منظم لكل فرع مع بياناته التشغيلية وعدد القنوات المرتبطة.</p>
+        <p>أنشئ فرعاً جديداً مع حدود المستخدمين والقنوات ودعوة مدير الفرع.</p>
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">
@@ -103,19 +125,56 @@ export default function OrganizationsPage() {
 
       <section className="card form-card admin-form-card">
         <h2>إضافة فرع</h2>
-        <form className="inline-form" onSubmit={create}>
-          <input
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              if (!slug) setSlug(slugFromName(e.target.value));
-            }}
-            placeholder="اسم الفرع"
-            required
-          />
-          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="three-shiny" required />
+        <form className="stack-form" onSubmit={create}>
+          <div className="inline-form">
+            <input
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (!slug) setSlug(slugFromName(e.target.value));
+              }}
+              placeholder="اسم الفرع"
+              required
+            />
+            <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="three-shiny" required />
+          </div>
           <p className="hint-text" style={{ margin: 0 }}>
             المعرّف بالإنجليزية (حروف صغيرة وأرقام وشرطة). إن كان اسم الفرع عربياً، عدّله يدوياً.
+          </p>
+          <div className="inline-form">
+            <label className="field-label">
+              <span>حد المستخدمين للفرع</span>
+              <input
+                type="number"
+                min={0}
+                value={maxUsers}
+                onChange={(e) => setMaxUsers(e.target.value)}
+                placeholder="0 = غير محدود"
+              />
+            </label>
+            <label className="field-label">
+              <span>حد القنوات للفرع</span>
+              <input
+                type="number"
+                min={0}
+                value={maxChannels}
+                onChange={(e) => setMaxChannels(e.target.value)}
+                placeholder="0 = غير محدود"
+              />
+            </label>
+            <label className="field-label">
+              <span>بريد مدير الفرع</span>
+              <input
+                type="email"
+                value={branchAdminEmail}
+                onChange={(e) => setBranchAdminEmail(e.target.value)}
+                placeholder="admin@example.com"
+                dir="ltr"
+              />
+            </label>
+          </div>
+          <p className="hint-text" style={{ margin: 0 }}>
+            سيُرسَل لمدير الفرع دعوة بصلاحية «مدير فرع» لإدارة هذا الفرع فقط.
           </p>
           <button type="submit">إضافة فرع</button>
         </form>
@@ -140,11 +199,11 @@ export default function OrganizationsPage() {
               <tr>
                 <th>الفرع</th>
                 <th>المعرف</th>
-                <th>الدولة</th>
-                <th>العملة</th>
-                <th>المنطقة الزمنية</th>
-                <th>اللغة</th>
+                <th>المستخدمون</th>
                 <th>القنوات</th>
+                <th>حد المستخدمين</th>
+                <th>حد القنوات</th>
+                <th>الدولة</th>
                 <th>الحالة</th>
               </tr>
             </thead>
@@ -164,13 +223,11 @@ export default function OrganizationsPage() {
                     </div>
                   </td>
                   <td dir="ltr">{item.slug}</td>
+                  <td>{item.active_member_count ?? 0}</td>
+                  <td>{item.active_channel_count ?? 0}</td>
+                  <td>{formatPlanLimit(item.max_users ?? 0)}</td>
+                  <td>{formatPlanLimit(item.max_channels ?? 0)}</td>
                   <td>{item.country_code}</td>
-                  <td>{item.currency_code}</td>
-                  <td dir="ltr">{item.timezone}</td>
-                  <td>{item.default_language === "ar" ? "العربية" : item.default_language}</td>
-                  <td>
-                    <span className="admin-chip">{channelCountByOrg.get(item.id) ?? 0} قناة</span>
-                  </td>
                   <td>
                     <span className={orgStatusClass(item.status)}>{formatOrgStatus(item.status)}</span>
                   </td>

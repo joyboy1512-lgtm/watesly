@@ -60,6 +60,7 @@ async def post_channel(
             "INVALID_ORGANIZATION": (400, "Organization is invalid"),
             "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
             "CHANNEL_LIMIT_REACHED": (403, "Channel limit reached for this plan"),
+            "ORG_CHANNEL_LIMIT_REACHED": (403, "Channel limit reached for this branch"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to create channel"))
         raise HTTPException(status_code=code, detail=detail) from exc

@@ -29,6 +29,8 @@ from app.schemas.team import (
 from app.services.billing import get_active_subscription
 from app.services.membership_channels import replace_membership_channel_access, validate_channel_ids
 from app.services.membership_access import list_membership_organization_ids
+from app.services.organizations import count_organization_members
+from app.services.plan_limits import is_unlimited, limit_reached
 
 
 async def _membership_organization_ids(db: AsyncSession, membership_id: UUID) -> set[UUID]:
@@ -152,7 +154,12 @@ async def create_invitation(
     _validate_branch_scoped_assignment(payload.role, set(payload.organization_ids))
     if actor_membership.role in BRANCH_SCOPED_ROLES and not set(payload.organization_ids).issubset(actor_org_ids):
         raise ValueError("OUT_OF_SCOPE")
-    await _validate_new_member_capacity(db, account_id=account_id, email=payload.email)
+    await _validate_new_member_capacity(
+        db,
+        account_id=account_id,
+        email=payload.email,
+        organization_ids=payload.organization_ids,
+    )
     valid_ids = await _validate_organization_ids(
         db,
         account_id=account_id,
@@ -206,6 +213,7 @@ async def _validate_new_member_capacity(
     *,
     account_id: UUID,
     email: str,
+    organization_ids: list[UUID] | None = None,
 ) -> None:
     subscription_data = await get_active_subscription(db, account_id)
     if subscription_data is None:
@@ -218,8 +226,19 @@ async def _validate_new_member_capacity(
             Membership.status == MembershipStatus.ACTIVE,
         )
     )
-    if (member_count or 0) >= plan.max_users:
+    if not is_unlimited(plan.max_users) and (member_count or 0) >= plan.max_users:
         raise ValueError("USER_LIMIT_REACHED")
+
+    if organization_ids:
+        for organization_id in organization_ids:
+            organization = await db.get(Organization, organization_id)
+            if organization is None or organization.account_id != account_id:
+                raise ValueError("INVALID_ORGANIZATION")
+            if is_unlimited(organization.max_users):
+                continue
+            org_member_count = await count_organization_members(db, organization_id)
+            if limit_reached(current_count=org_member_count, max_limit=organization.max_users):
+                raise ValueError("ORG_USER_LIMIT_REACHED")
 
     existing_membership = await db.execute(
         select(Membership)
@@ -263,7 +282,12 @@ async def create_employee(
         target_org_ids=set(payload.organization_ids),
     )
     _validate_branch_scoped_assignment(payload.role, set(payload.organization_ids))
-    await _validate_new_member_capacity(db, account_id=account_id, email=payload.email)
+    await _validate_new_member_capacity(
+        db,
+        account_id=account_id,
+        email=payload.email,
+        organization_ids=payload.organization_ids,
+    )
     valid_ids = await _validate_organization_ids(
         db,
         account_id=account_id,
@@ -348,6 +372,19 @@ async def accept_invitation(
         if existing_membership.scalar_one_or_none() is not None:
             raise ValueError("ALREADY_MEMBER")
 
+    org_result = await db.execute(
+        select(InvitationOrganization.organization_id).where(
+            InvitationOrganization.invitation_id == invitation.id
+        )
+    )
+    organization_ids = list(org_result.scalars().all())
+    await _validate_new_member_capacity(
+        db,
+        account_id=invitation.account_id,
+        email=invitation.email,
+        organization_ids=organization_ids,
+    )
+
     async with db.begin_nested():
         if user is None:
             user = User(
@@ -374,12 +411,6 @@ async def accept_invitation(
         db.add(membership)
         await db.flush()
 
-        org_result = await db.execute(
-            select(InvitationOrganization.organization_id).where(
-                InvitationOrganization.invitation_id == invitation.id
-            )
-        )
-        organization_ids = list(org_result.scalars().all())
         db.add_all([
             OrganizationMembership(
                 organization_id=organization_id,

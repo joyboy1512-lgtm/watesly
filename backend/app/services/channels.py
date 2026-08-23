@@ -15,6 +15,8 @@ from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
     get_account_mac_summary,
 )
+from app.services.organizations import count_organization_channels
+from app.services.plan_limits import is_unlimited, limit_reached
 
 
 def _enum_str(value) -> str | None:
@@ -47,11 +49,20 @@ async def create_channel(
         raise ValueError("NO_ACTIVE_SUBSCRIPTION")
     subscription, plan = subscription_data
 
-    current_count = await db.scalar(
-        select(func.count(Channel.id)).where(Channel.account_id == account_id, Channel.deleted_at.is_(None))
-    )
-    if (current_count or 0) >= plan.max_channels:
-        raise ValueError("CHANNEL_LIMIT_REACHED")
+    if not is_unlimited(plan.max_channels):
+        account_channel_count = await db.scalar(
+            select(func.count(Channel.id)).where(
+                Channel.account_id == account_id,
+                Channel.deleted_at.is_(None),
+            )
+        )
+        if limit_reached(current_count=account_channel_count or 0, max_limit=plan.max_channels):
+            raise ValueError("CHANNEL_LIMIT_REACHED")
+
+    if not is_unlimited(organization.max_channels):
+        org_channel_count = await count_organization_channels(db, organization.id)
+        if limit_reached(current_count=org_channel_count, max_limit=organization.max_channels):
+            raise ValueError("ORG_CHANNEL_LIMIT_REACHED")
 
     included = effective_included_mac(subscription=subscription, plan=plan)
     billing_cycle = (

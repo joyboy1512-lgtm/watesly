@@ -7,8 +7,13 @@ def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_organization_create_has_no_multi_org_gate() -> None:
-    orgs = read("app/services/organizations.py")
-    billing = read("app/services/billing.py")
-    assert "MULTI_ORGANIZATION_NOT_ALLOWED" not in orgs
-    assert "max_organizations=UNLIMITED" in billing or "max_organizations=0" in billing
+def test_organization_create_has_branch_limits() -> None:
+    org_model = read("app/models/organization.py")
+    org_service = read("app/services/organizations.py")
+    routes = read("app/api/routes/organizations.py")
+    schema = read("app/schemas/organization.py")
+    assert "max_users" in org_model
+    assert "branch_admin_email" in routes
+    assert "branch_admin_email" in schema
+    assert "create_invitation" in routes
+    assert "count_organization_members" in org_service

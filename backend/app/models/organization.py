@@ -2,7 +2,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Enum, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,5 +40,7 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=OrganizationStatus.ACTIVE,
         nullable=False,
     )
+    max_users: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_channels: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     account: Mapped["Account"] = relationship(back_populates="organizations")
