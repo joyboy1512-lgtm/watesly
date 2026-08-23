@@ -50,6 +50,10 @@ export function isBranchAdminRole(role: MembershipRole): boolean {
   return role === "branch_admin";
 }
 
+export function isAccountManager(role?: string | null): boolean {
+  return role === "owner" || role === "admin";
+}
+
 export function inviteableRolesForActor(
   actorRole?: string | null,
   actorPermissions?: ReadonlySet<PermissionKey> | PermissionKey[]

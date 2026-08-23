@@ -10,7 +10,6 @@ from app.core.permissions import Permission, membership_has_permission
 from app.db.session import get_db
 from app.models.account import Account
 from app.models.membership import Membership, MembershipRole
-from app.models.organization import OrganizationStatus
 from app.schemas.organization import (
     OrganizationCreateRequest,
     OrganizationCreateResponse,
@@ -19,10 +18,7 @@ from app.schemas.organization import (
 )
 from app.schemas.team import InviteEmployeeRequest
 from app.services.email import build_invitation_accept_url, is_email_configured, send_team_invitation_email
-from app.services.membership_access import (
-    resolve_accessible_organization_ids,
-    resolve_membership_organizations,
-)
+from app.services.membership_access import resolve_membership_organizations
 from app.services.organizations import (
     build_organization_response,
     create_organization,
@@ -186,26 +182,13 @@ async def patch_organization(
         )
 
     if isinstance(context.membership, Membership) and not _can_manage_all_organizations(context):
-        allowed = await resolve_accessible_organization_ids(
-            db,
-            account_id=context.account_id,
-            membership=context.membership,
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "ACCESS_FORBIDDEN",
+                "message": "تعديل حدود الفرع أو إيقافه يتطلب صلاحية مدير الحساب.",
+            },
         )
-        if allowed is None or organization_id not in allowed:
-            raise HTTPException(
-                status_code=403,
-                detail={"code": "ACCESS_FORBIDDEN", "message": "لا تملك صلاحية تعديل هذا الفرع."},
-            )
-        if payload.status is not None:
-            raise HTTPException(
-                status_code=403,
-                detail={"code": "ACCESS_FORBIDDEN", "message": "إيقاف الفرع أو تفعيله يتطلب صلاحية مدير الحساب."},
-            )
-        if organization.status != OrganizationStatus.ACTIVE:
-            raise HTTPException(
-                status_code=403,
-                detail={"code": "ORGANIZATION_SUSPENDED", "message": "الفرع موقوف ولا يمكن تعديله."},
-            )
 
     try:
         organization = await update_organization(db, organization=organization, payload=payload)

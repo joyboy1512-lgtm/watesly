@@ -20,6 +20,7 @@ def test_organization_create_has_branch_limits() -> None:
     assert "update_organization" in org_service
     assert "OrganizationUpdateRequest" in schema
     assert 'patch("/{organization_id}"' in routes or "@router.patch" in routes
+    assert "_can_manage_all_organizations" in routes
 
 
 def test_suspended_organization_blocks_access() -> None:

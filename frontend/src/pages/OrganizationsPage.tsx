@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { useCurrentUser } from "../hooks/usePermissions";
 import {
   formatOrgStatus,
   orgStatusClass,
@@ -10,6 +11,7 @@ import {
   slugFromName
 } from "../lib/orgHelpers";
 import { formatPlanLimit } from "../lib/planLimits";
+import { isAccountManager } from "../lib/teamHelpers";
 import { toastStore } from "../stores/toast";
 
 type Organization = {
@@ -46,6 +48,8 @@ function limitInputValue(limit: number): string {
 
 export default function OrganizationsPage() {
   const client = useQueryClient();
+  const profile = useCurrentUser();
+  const canManageAccountBranches = isAccountManager(profile.data?.role);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [maxUsers, setMaxUsers] = useState("");
@@ -179,7 +183,11 @@ export default function OrganizationsPage() {
     <main className="page">
       <header className="page-header">
         <h1>الفروع</h1>
-        <p>أنشئ فرعاً جديداً، عدّل حدود المستخدمين والقنوات، أو أوقف الوصول للفرع فوراً.</p>
+        <p>
+          {canManageAccountBranches
+            ? "أنشئ فرعاً جديداً، عدّل حدود المستخدمين والقنوات، أو أوقف الوصول للفرع فوراً."
+            : "عرض الفروع المرتبطة بصلاحياتك. إدارة الموظفين والقنوات تتم من صفحات الفريق والقنوات."}
+        </p>
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">
@@ -189,6 +197,7 @@ export default function OrganizationsPage() {
         <article className="admin-stat-card admin-stat-card-brand"><span>قنوات مرتبطة</span><strong>{stats.channels}</strong></article>
       </section>
 
+      {canManageAccountBranches && (
       <section className="card form-card admin-form-card">
         <h2>إضافة فرع</h2>
         <form className="stack-form" onSubmit={create}>
@@ -245,6 +254,7 @@ export default function OrganizationsPage() {
           <button type="submit">إضافة فرع</button>
         </form>
       </section>
+      )}
 
       <section className="card admin-table-card">
         <div className="admin-table-header">
@@ -271,15 +281,15 @@ export default function OrganizationsPage() {
                 <th>حد القنوات</th>
                 <th>الدولة</th>
                 <th>الحالة</th>
-                <th>إجراءات</th>
+                {canManageAccountBranches && <th>إجراءات</th>}
               </tr>
             </thead>
             <tbody>
               {query.isLoading && (
-                <tr><td colSpan={9} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={canManageAccountBranches ? 9 : 8} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {!query.isLoading && filtered.length === 0 && (
-                <tr><td colSpan={9} className="admin-table-empty">لا توجد فروع.</td></tr>
+                <tr><td colSpan={canManageAccountBranches ? 9 : 8} className="admin-table-empty">لا توجد فروع.</td></tr>
               )}
               {filtered.map((item) => (
                 <tr key={item.id}>
@@ -298,6 +308,7 @@ export default function OrganizationsPage() {
                   <td>
                     <span className={orgStatusClass(item.status)}>{formatOrgStatus(item.status)}</span>
                   </td>
+                  {canManageAccountBranches && (
                   <td>
                     <div className="admin-actions compact">
                       <button type="button" className="secondary-button" onClick={() => openEdit(item)}>
@@ -317,6 +328,7 @@ export default function OrganizationsPage() {
                       </button>
                     </div>
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
