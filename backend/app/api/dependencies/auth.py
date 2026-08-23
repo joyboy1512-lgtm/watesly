@@ -71,7 +71,10 @@ async def get_auth_context(
 
     account = await db.get(Account, account_id)
     if account is None or account.status in _BLOCKED_ACCOUNT_STATUSES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ACCOUNT_NOT_ACTIVE", "message": "الحساب غير نشط. تواصل مع الدعم أو راجع الفوترة."},
+        )
 
     result = await db.execute(
         select(Membership).where(

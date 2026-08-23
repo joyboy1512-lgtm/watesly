@@ -35,6 +35,14 @@ async def list_active_memberships(db:AsyncSession,user_id:UUID)->list[Membership
     return list((await db.execute(select(Membership).where(Membership.user_id==user_id,Membership.status==MembershipStatus.ACTIVE).order_by(Membership.created_at.asc()))).scalars().all())
 
 async def authenticate_user(db:AsyncSession,payload:LoginRequest):
+    from app.models.account import Account, AccountStatus
+
+    blocked_account_statuses = {
+        AccountStatus.SUSPENDED,
+        AccountStatus.CANCELLED,
+        AccountStatus.SCHEDULED_FOR_DELETION,
+        AccountStatus.CLOSED,
+    }
     user=await get_user_by_email(db,payload.email); now=datetime.now(UTC)
     if user is None or (user.locked_until and user.locked_until>now): return None
     if not verify_password(payload.password,user.password_hash):
@@ -49,6 +57,9 @@ async def authenticate_user(db:AsyncSession,payload:LoginRequest):
     if payload.account_id and membership is None: raise ValueError("ACCOUNT_NOT_AVAILABLE")
     membership=membership or (memberships[0] if len(memberships)==1 else None)
     if membership is None: return (user,memberships,None,None)
+    account = await db.get(Account, membership.account_id)
+    if account is None or account.status in blocked_account_statuses:
+        raise ValueError("ACCOUNT_NOT_ACTIVE")
     access,refresh=await issue_token_pair(db,user=user,account_id=membership.account_id); return user,membership,access,refresh
 
 async def rotate_refresh_token(db:AsyncSession,refresh_token:str)->tuple[str,str]|None:

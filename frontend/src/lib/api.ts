@@ -62,7 +62,16 @@ function parseResponseDetail(data: unknown): unknown {
 export function formatApiError(error: unknown, fallback = "تعذر إكمال الطلب."): string {
   if (!axios.isAxiosError(error)) return fallback;
   const detail = parseResponseDetail(error.response?.data);
-  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object" && "message" in detail) {
+    const message = String((detail as { message?: string }).message ?? "").trim();
+    if (message) return message;
+  }
+  if (typeof detail === "string" && detail.trim()) {
+    if (detail === "Account is not active") {
+      return "الحساب غير نشط. تواصل مع الدعم أو راجع الفوترة.";
+    }
+    return detail;
+  }
   if (Array.isArray(detail)) {
     const messages = detail
       .map((item) => {
@@ -107,6 +116,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+function isAccountInactiveError(error: AxiosError): boolean {
+  const detail = parseResponseDetail(error.response?.data);
+  if (typeof detail === "string") return detail === "Account is not active";
+  return Boolean(
+    detail &&
+      typeof detail === "object" &&
+      "code" in detail &&
+      (detail as { code?: string }).code === "ACCOUNT_NOT_ACTIVE"
+  );
+}
+
+let lastAccountInactiveToastAt = 0;
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -128,7 +150,15 @@ api.interceptors.response.use(
           if (status === 429) {
             toastStore.getState().show("طلبات كثيرة. انتظر قليلًا ثم أعد المحاولة.", "error");
           } else if (status >= 400) {
-            toastStore.getState().show(message, "error");
+            if (isAccountInactiveError(error)) {
+              const now = Date.now();
+              if (now - lastAccountInactiveToastAt > 5000) {
+                lastAccountInactiveToastAt = now;
+                toastStore.getState().show(message, "error");
+              }
+            } else {
+              toastStore.getState().show(message, "error");
+            }
           }
         }
         if (!error.response) {

@@ -59,6 +59,11 @@ async def login(payload: LoginRequest, response: Response, request: Request, db:
     except ValueError as exc:
         if str(exc) == "ACCOUNT_NOT_AVAILABLE":
             raise HTTPException(status_code=403, detail="Account is not available") from exc
+        if str(exc) == "ACCOUNT_NOT_ACTIVE":
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "ACCOUNT_NOT_ACTIVE", "message": "الحساب غير نشط. تواصل مع الدعم أو راجع الفوترة."},
+            ) from exc
         raise
     if authenticated is None:
         raise HTTPException(status_code=401, detail="Incorrect email or password", headers={"WWW-Authenticate": "Bearer"})
