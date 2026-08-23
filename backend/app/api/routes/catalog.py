@@ -12,6 +12,9 @@ from app.core.permissions import Permission
 from app.db.session import get_db
 from app.services.catalog import (
     assign_catalog_products_to_channel,
+    bulk_archive_catalog_products,
+    bulk_purge_catalog_products,
+    bulk_restore_catalog_products,
     create_catalog_product,
     delete_catalog_product,
     export_catalog_csv,
@@ -219,6 +222,10 @@ class CatalogAssignChannelRequest(BaseModel):
     only_unassigned: bool = True
 
 
+class CatalogBulkIdsRequest(BaseModel):
+    product_ids: list[UUID] = Field(min_length=1, max_length=200)
+
+
 @router.get("")
 async def get_catalog(
     include_inactive: bool = Query(False),
@@ -262,6 +269,48 @@ async def post_catalog_assign_channel(
             "CONVERSATION_FORBIDDEN": "لا تملك صلاحية على هذه القناة",
         }
         raise HTTPException(status_code=400 if code in messages else 404, detail=messages.get(code, code)) from exc
+
+
+@router.post("/bulk-archive")
+async def post_bulk_archive_catalog(
+    payload: CatalogBulkIdsRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await bulk_archive_catalog_products(
+        db,
+        account_id=context.account_id,
+        product_ids=payload.product_ids,
+        membership=context.membership,
+    )
+
+
+@router.post("/bulk-restore")
+async def post_bulk_restore_catalog(
+    payload: CatalogBulkIdsRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await bulk_restore_catalog_products(
+        db,
+        account_id=context.account_id,
+        product_ids=payload.product_ids,
+        membership=context.membership,
+    )
+
+
+@router.post("/bulk-purge")
+async def post_bulk_purge_catalog(
+    payload: CatalogBulkIdsRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await bulk_purge_catalog_products(
+        db,
+        account_id=context.account_id,
+        product_ids=payload.product_ids,
+        membership=context.membership,
+    )
 
 
 @router.get("/search")

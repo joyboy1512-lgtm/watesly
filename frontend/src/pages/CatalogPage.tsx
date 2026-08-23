@@ -250,17 +250,16 @@ export default function CatalogPage() {
     if (!window.confirm(`أرشفة ${selectedCount} منتج؟`)) return;
     setBulkProcessing(true);
     try {
-      const results = await Promise.allSettled(
-        [...selectedIds].map((id) => api.delete(`/catalog/${id}`))
-      );
-      const succeeded = results.filter((result) => result.status === "fulfilled").length;
-      const failed = results.length - succeeded;
+      const result = await api.post<{ succeeded: number; failed: number }>("/catalog/bulk-archive", {
+        product_ids: [...selectedIds]
+      });
       await client.invalidateQueries({ queryKey: ["catalog"] });
       clearSelection();
+      const { succeeded, failed } = result.data;
       if (failed === 0) {
         toastStore.getState().show(`تم أرشفة ${succeeded} منتج.`, "success");
       } else {
-        toastStore.getState().show(`أُرشف ${succeeded}، فشل ${failed}.`, failed === results.length ? "error" : "success");
+        toastStore.getState().show(`أُرشف ${succeeded}، فشل ${failed}.`, failed === succeeded + failed ? "error" : "success");
       }
     } catch {
       toastStore.getState().show("تعذر أرشفة المنتجات المحدّدة.", "error");
@@ -274,17 +273,16 @@ export default function CatalogPage() {
     if (!window.confirm(`استرجاع ${selectedCount} منتج؟`)) return;
     setBulkProcessing(true);
     try {
-      const results = await Promise.allSettled(
-        [...selectedIds].map((id) => api.patch(`/catalog/${id}`, { is_active: true }))
-      );
-      const succeeded = results.filter((result) => result.status === "fulfilled").length;
-      const failed = results.length - succeeded;
+      const result = await api.post<{ succeeded: number; failed: number }>("/catalog/bulk-restore", {
+        product_ids: [...selectedIds]
+      });
       await client.invalidateQueries({ queryKey: ["catalog"] });
       clearSelection();
+      const { succeeded, failed } = result.data;
       if (failed === 0) {
         toastStore.getState().show(`تم استرجاع ${succeeded} منتج.`, "success");
       } else {
-        toastStore.getState().show(`استُرجع ${succeeded}، فشل ${failed}.`, failed === results.length ? "error" : "success");
+        toastStore.getState().show(`استُرجع ${succeeded}، فشل ${failed}.`, failed === succeeded + failed ? "error" : "success");
       }
     } catch {
       toastStore.getState().show("تعذر استرجاع المنتجات المحدّدة.", "error");
@@ -304,17 +302,16 @@ export default function CatalogPage() {
     }
     setBulkProcessing(true);
     try {
-      const results = await Promise.allSettled(
-        [...selectedIds].map((id) => api.delete(`/catalog/${id}`, { params: { permanent: true } }))
-      );
-      const succeeded = results.filter((result) => result.status === "fulfilled").length;
-      const failed = results.length - succeeded;
+      const result = await api.post<{ succeeded: number; failed: number }>("/catalog/bulk-purge", {
+        product_ids: [...selectedIds]
+      });
       await client.invalidateQueries({ queryKey: ["catalog"] });
       clearSelection();
+      const { succeeded, failed } = result.data;
       if (failed === 0) {
         toastStore.getState().show(`تم حذف ${succeeded} منتج نهائياً.`, "success");
       } else {
-        toastStore.getState().show(`حُذف ${succeeded}، فشل ${failed}.`, failed === results.length ? "error" : "success");
+        toastStore.getState().show(`حُذف ${succeeded}، فشل ${failed}.`, failed === succeeded + failed ? "error" : "success");
       }
     } catch {
       toastStore.getState().show("تعذر الحذف النهائي للمنتجات المحدّدة.", "error");
@@ -495,14 +492,24 @@ export default function CatalogPage() {
               <>
                 <span className="contacts-selection-badge">{selectedCount} محدّد</span>
                 {listTab === "active" ? (
-                  <button
-                    type="button"
-                    className="contacts-erp-btn contacts-erp-btn-danger"
-                    disabled={bulkProcessing}
-                    onClick={() => void bulkArchive()}
-                  >
-                    {bulkProcessing ? "جاري…" : "أرشفة المحدّد"}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="contacts-erp-btn contacts-erp-btn-danger"
+                      disabled={bulkProcessing}
+                      onClick={() => void bulkArchive()}
+                    >
+                      {bulkProcessing ? "جاري…" : "أرشفة المحدّد"}
+                    </button>
+                    <button
+                      type="button"
+                      className="contacts-erp-btn contacts-erp-btn-danger"
+                      disabled={bulkProcessing}
+                      onClick={() => void bulkPurge()}
+                    >
+                      {bulkProcessing ? "جاري…" : "حذف نهائي للمحدّد"}
+                    </button>
+                  </>
                 ) : (
                   <>
                     <button

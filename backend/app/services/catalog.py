@@ -319,6 +319,76 @@ async def purge_catalog_product(
     await db.commit()
 
 
+async def bulk_archive_catalog_products(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product_ids: list[UUID],
+    membership=None,
+) -> dict[str, int]:
+    succeeded = 0
+    failed = 0
+    for product_id in product_ids:
+        try:
+            await delete_catalog_product(
+                db,
+                account_id=account_id,
+                product_id=product_id,
+                membership=membership,
+            )
+            succeeded += 1
+        except ValueError:
+            failed += 1
+    return {"succeeded": succeeded, "failed": failed}
+
+
+async def bulk_restore_catalog_products(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product_ids: list[UUID],
+    membership=None,
+) -> dict[str, int]:
+    succeeded = 0
+    failed = 0
+    for product_id in product_ids:
+        try:
+            await update_catalog_product(
+                db,
+                account_id=account_id,
+                product_id=product_id,
+                membership=membership,
+                is_active=True,
+            )
+            succeeded += 1
+        except ValueError:
+            failed += 1
+    return {"succeeded": succeeded, "failed": failed}
+
+
+async def bulk_purge_catalog_products(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product_ids: list[UUID],
+    membership=None,
+) -> dict[str, int]:
+    succeeded = 0
+    failed = 0
+    for product_id in product_ids:
+        try:
+            await purge_catalog_product(
+                db,
+                account_id=account_id,
+                product_id=product_id,
+                membership=membership,
+            )
+            succeeded += 1
+        except ValueError:
+            failed += 1
+    return {"succeeded": succeeded, "failed": failed}
+
+
 async def search_catalog_products(
     db: AsyncSession,
     account_id: UUID,
