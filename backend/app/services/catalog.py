@@ -305,6 +305,20 @@ async def delete_catalog_product(
     await db.commit()
 
 
+async def purge_catalog_product(
+    db: AsyncSession, *, account_id: UUID, product_id: UUID, membership=None
+) -> None:
+    item = await get_catalog_product(
+        db, account_id=account_id, product_id=product_id, membership=membership
+    )
+    if item.external_id:
+        from app.services.meta_catalog_sync import unpublish_catalog_product_from_meta
+
+        await unpublish_catalog_product_from_meta(db, account_id=account_id, product=item)
+    await db.delete(item)
+    await db.commit()
+
+
 async def search_catalog_products(
     db: AsyncSession,
     account_id: UUID,

@@ -20,6 +20,7 @@ from app.services.catalog import (
     import_catalog_file,
     list_catalog_products,
     preview_catalog_reply,
+    purge_catalog_product,
     search_catalog_products,
     update_catalog_product,
 )
@@ -655,16 +656,25 @@ async def patch_product(
 @router.delete("/{product_id}", status_code=204)
 async def remove_product(
     product_id: UUID,
+    permanent: bool = Query(False),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await delete_catalog_product(
-            db,
-            account_id=context.account_id,
-            product_id=product_id,
-            membership=context.membership,
-        )
+        if permanent:
+            await purge_catalog_product(
+                db,
+                account_id=context.account_id,
+                product_id=product_id,
+                membership=context.membership,
+            )
+        else:
+            await delete_catalog_product(
+                db,
+                account_id=context.account_id,
+                product_id=product_id,
+                membership=context.membership,
+            )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

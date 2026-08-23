@@ -31,7 +31,8 @@ import { toastStore } from "../stores/toast";
 
 type Organization = { id: string; name: string };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 0] as const;
+const DEFAULT_PAGE_SIZE = 50;
 
 export default function CatalogPage() {
   const client = useQueryClient();
@@ -44,6 +45,7 @@ export default function CatalogPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [showPreview, setShowPreview] = useState(false);
 
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
@@ -92,7 +94,7 @@ export default function CatalogPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, debouncedSearch]);
+  }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, debouncedSearch, pageSize]);
 
   const orgMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -139,11 +141,15 @@ export default function CatalogPage() {
   }, [products.data, listTab, typeFilter]);
 
   const total = visibleProducts.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const effectivePageSize = pageSize === 0 ? total || 1 : pageSize;
+  const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(total / effectivePageSize));
   const safePage = Math.min(page, totalPages);
-  const pageStart = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
-  const pageEnd = Math.min(safePage * PAGE_SIZE, total);
-  const pageRows = visibleProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageStart = total === 0 ? 0 : (safePage - 1) * effectivePageSize + 1;
+  const pageEnd = pageSize === 0 ? total : Math.min(safePage * effectivePageSize, total);
+  const pageRows =
+    pageSize === 0
+      ? visibleProducts
+      : visibleProducts.slice((safePage - 1) * effectivePageSize, safePage * effectivePageSize);
 
   function openEdit(product: CatalogProduct) {
     setEditingProduct(product);
@@ -185,6 +191,20 @@ export default function CatalogPage() {
     await api.delete(`/catalog/${id}`);
     await client.invalidateQueries({ queryKey: ["catalog"] });
     toastStore.getState().show("تم أرشفة المنتج.", "success");
+  }
+
+  async function purgeProduct(id: string, name: string) {
+    const confirmed = window.confirm(
+      `حذف «${name}» نهائياً؟\n\nلن يمكن استرجاعه. إن كان مزامناً مع Meta سيُخفى من الكتالوج هناك أيضاً.`
+    );
+    if (!confirmed) return;
+    try {
+      await api.delete(`/catalog/${id}`, { params: { permanent: true } });
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      toastStore.getState().show("تم حذف المنتج نهائياً.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الحذف النهائي.", "error");
+    }
   }
 
   async function restoreProduct(id: string) {
@@ -433,11 +453,32 @@ export default function CatalogPage() {
               />
             </div>
             <div className="contacts-erp-pagination">
-              <span>{total === 0 ? "0 / 0" : `${pageStart}-${pageEnd} / ${total}`}</span>
-              <button type="button" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="السابق">
+              <span>
+                {total === 0
+                  ? "0 منتج"
+                  : pageSize === 0
+                    ? `${total} منتج`
+                    : `${pageStart}-${pageEnd} من ${total} · صفحة ${safePage}/${totalPages}`}
+              </span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="contacts-erp-channel-filter"
+                aria-label="عدد المنتجات في الصفحة"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size === 0 ? "عرض الكل" : `${size} / صفحة`}
+                  </option>
+                ))}
+              </select>
+              <button type="button" disabled={safePage <= 1 || pageSize === 0} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="السابق">
                 ‹
               </button>
-              <button type="button" disabled={safePage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="التالي">
+              <button type="button" disabled={safePage >= totalPages || pageSize === 0} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="التالي">
                 ›
               </button>
             </div>
@@ -570,9 +611,18 @@ export default function CatalogPage() {
                             أرشفة
                           </button>
                         ) : (
-                          <button type="button" className="contacts-erp-btn" onClick={() => void restoreProduct(item.id)}>
-                            استرجاع
-                          </button>
+                          <>
+                            <button type="button" className="contacts-erp-btn" onClick={() => void restoreProduct(item.id)}>
+                              استرجاع
+                            </button>
+                            <button
+                              type="button"
+                              className="contacts-erp-btn contacts-erp-btn-danger"
+                              onClick={() => void purgeProduct(item.id, item.name)}
+                            >
+                              حذف نهائي
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
