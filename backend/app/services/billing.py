@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.plan import Plan, PlanStatus
 from app.models.subscription import BillingCycle, Subscription, SubscriptionStatus
+from app.services.plan_limits import UNLIMITED
 
 
 async def get_or_create_trial_plan(db: AsyncSession) -> Plan:
@@ -20,8 +21,8 @@ async def get_or_create_trial_plan(db: AsyncSession) -> Plan:
         monthly_price=0,
         yearly_price=0,
         max_users=3,
-        max_organizations=5,
-        max_channels=3,
+        max_organizations=UNLIMITED,
+        max_channels=UNLIMITED,
         included_mac=100,
         over_mac_price_per_100=12,
         trial_days=14,

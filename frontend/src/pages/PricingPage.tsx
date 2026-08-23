@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import BrandLogo from "../components/BrandLogo";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { api } from "../lib/api";
+import { formatPlanLimit } from "../lib/planLimits";
 
 type PublicPlan = {
   code: string;
@@ -23,12 +24,13 @@ function planFeatures(plan: PublicPlan, t: (key: string) => string): string[] {
   return [
     t("pricing.featureInbox"),
     `${plan.included_mac.toLocaleString()} MAC / ${t("pricing.macCycle")}`,
-    `${plan.max_users} ${t("pricing.users")}`,
-    `${plan.max_channels} ${t("pricing.channels")}`,
+    `${formatPlanLimit(plan.max_users)} ${t("pricing.users")}`,
+    `${formatPlanLimit(plan.max_organizations, t("pricing.unlimitedBranches"))} ${t("pricing.branches")}`,
+    `${formatPlanLimit(plan.max_channels)} ${t("pricing.channels")}`,
     `${t("pricing.overMac")}: $${plan.over_mac_price_per_100}/100 MAC`,
     t("pricing.featureCampaigns"),
     t("pricing.featureCrm"),
-    plan.allow_multi_organization ? t("pricing.multiOrg") : t("pricing.featureTeam")
+    t("pricing.multiOrg")
   ];
 }
 

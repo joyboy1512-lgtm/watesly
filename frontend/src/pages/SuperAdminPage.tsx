@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { formatPlanLimit } from "../lib/planLimits";
 
 type Account = {
   id: string;
@@ -47,12 +48,12 @@ export default function SuperAdminPage() {
       monthly_price: 0,
       yearly_price: 0,
       max_users: 5,
-      max_organizations: 1,
-      max_channels: 1,
+      max_organizations: 0,
+      max_channels: 0,
       included_mac: 1000,
       over_mac_price_per_100: 12,
       trial_days: 14,
-      allow_multi_organization: false,
+      allow_multi_organization: true,
       status: "active"
     });
     setCode("");
@@ -129,8 +130,8 @@ export default function SuperAdminPage() {
                 <td>{item.name}</td>
                 <td>{item.code}</td>
                 <td>{item.max_users}</td>
-                <td>{item.max_organizations}</td>
-                <td>{item.max_channels}</td>
+                <td>{formatPlanLimit(item.max_organizations)}</td>
+                <td>{formatPlanLimit(item.max_channels)}</td>
                 <td>{item.included_mac?.toLocaleString("ar") ?? "-"}</td>
                 <td>${item.over_mac_price_per_100 ?? 0}/100</td>
               </tr>

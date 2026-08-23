@@ -43,14 +43,7 @@ async def add_organization(
                 403,
                 {
                     "code": "ORGANIZATION_LIMIT_REACHED",
-                    "message": "وصلت للحد الأقصى من الفروع في خطتك. راجع الفوترة للترقية.",
-                },
-            ),
-            "MULTI_ORGANIZATION_NOT_ALLOWED": (
-                403,
-                {
-                    "code": "MULTI_ORGANIZATION_NOT_ALLOWED",
-                    "message": "خطتك لا تدعم أكثر من فرع واحد. راجع الفوترة لتفعيل تعدد الفروع.",
+                    "message": "وصلت للحد الأقصى من الفروع في خطتك. راجع الفوترة.",
                 },
             ),
         }

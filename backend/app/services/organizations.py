@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.organization import Organization
 from app.schemas.organization import OrganizationCreateRequest
 from app.services.billing import get_active_subscription
+from app.services.plan_limits import organization_limit_reached
 
 
 async def list_organizations(db: AsyncSession, account_id: UUID) -> list[Organization]:
@@ -34,10 +35,11 @@ async def create_organization(
     if current_count is None:
         current_count = 0
 
-    if current_count >= plan.max_organizations:
+    if organization_limit_reached(
+        current_count=current_count,
+        max_organizations=plan.max_organizations,
+    ):
         raise ValueError("ORGANIZATION_LIMIT_REACHED")
-    if current_count >= 1 and not plan.allow_multi_organization:
-        raise ValueError("MULTI_ORGANIZATION_NOT_ALLOWED")
 
     organization = Organization(account_id=account_id, **payload.model_dump())
     db.add(organization)

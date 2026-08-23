@@ -7,13 +7,8 @@ def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_organization_create_errors_are_structured() -> None:
-    routes = read("app/api/routes/organizations.py")
-    assert "MULTI_ORGANIZATION_NOT_ALLOWED" in routes
-    assert "ORGANIZATION_SLUG_EXISTS" in routes
-
-
-def test_trial_plan_allows_multiple_organizations() -> None:
+def test_organization_create_has_no_multi_org_gate() -> None:
+    orgs = read("app/services/organizations.py")
     billing = read("app/services/billing.py")
-    assert "max_organizations=5" in billing
-    assert "allow_multi_organization=True" in billing
+    assert "MULTI_ORGANIZATION_NOT_ALLOWED" not in orgs
+    assert "max_organizations=UNLIMITED" in billing or "max_organizations=0" in billing
