@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.account import Account
+from app.models.account import Account, AccountStatus
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.schemas.admin import (
@@ -24,13 +24,47 @@ async def list_accounts(db: AsyncSession) -> list[tuple[Account, Subscription | 
     return list(result.all())
 
 
+_BLOCKED_ACCOUNT_STATUSES = {
+    AccountStatus.SUSPENDED,
+    AccountStatus.CANCELLED,
+    AccountStatus.SCHEDULED_FOR_DELETION,
+    AccountStatus.CLOSED,
+}
+
+
 async def update_account_status(
-    db: AsyncSession, account_id: UUID, status
+    db: AsyncSession,
+    account_id: UUID,
+    status: AccountStatus,
+    *,
+    actor_user_id: UUID | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ) -> Account:
+    from app.services.trust import append_audit_log
+
     account = await db.get(Account, account_id)
     if account is None:
         raise ValueError("ACCOUNT_NOT_FOUND")
+    previous_status = account.status
+    if previous_status == status:
+        return account
     account.status = status
+    await append_audit_log(
+        db,
+        account_id=account_id,
+        actor_user_id=actor_user_id,
+        action="account_status_changed",
+        resource_type="account",
+        resource_id=str(account_id),
+        ip_address=ip_address,
+        user_agent=user_agent,
+        metadata={
+            "account_name": account.name,
+            "previous_status": str(previous_status),
+            "new_status": str(status),
+        },
+    )
     await db.commit()
     await db.refresh(account)
     return account

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.admin import require_super_admin
@@ -16,6 +16,7 @@ from app.schemas.admin import (
     AdminSubscriptionUpdateRequest,
 )
 from app.services.admin import (
+    _BLOCKED_ACCOUNT_STATUSES,
     create_plan,
     list_accounts,
     list_plans,
@@ -50,11 +51,27 @@ async def get_accounts(
 async def patch_account(
     account_id: UUID,
     payload: AdminAccountUpdateRequest,
-    _: AuthContext = Depends(require_super_admin),
+    request: Request,
+    context: AuthContext = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminAccountResponse:
+    if payload.status in _BLOCKED_ACCOUNT_STATUSES and not payload.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "ACCOUNT_SUSPEND_CONFIRM_REQUIRED",
+                "message": "تأكيد مطلوب قبل إيقاف حساب عميل.",
+            },
+        )
     try:
-        account = await update_account_status(db, account_id, payload.status)
+        account = await update_account_status(
+            db,
+            account_id,
+            payload.status,
+            actor_user_id=context.user.id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Account not found") from exc
 

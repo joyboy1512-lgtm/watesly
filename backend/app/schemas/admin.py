@@ -19,6 +19,7 @@ class AdminAccountResponse(BaseModel):
 
 class AdminAccountUpdateRequest(BaseModel):
     status: AccountStatus
+    confirm: bool = False
 
 
 class AdminPlanCreateRequest(BaseModel):

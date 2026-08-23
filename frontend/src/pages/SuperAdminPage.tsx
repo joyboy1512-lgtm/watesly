@@ -60,9 +60,21 @@ export default function SuperAdminPage() {
     client.invalidateQueries({ queryKey: ["admin-plans"] });
   }
 
+  function isAccountActive(status: string) {
+    return status.toLowerCase() === "active";
+  }
+
   async function toggleAccount(item: Account) {
+    const activating = !isAccountActive(item.status);
+    if (!activating) {
+      const confirmed = window.confirm(
+        `إيقاف حساب «${item.name}»؟\n\nسيتوقف الدخول للموقع بالكامل (Dashboard، Inbox، الكتalog…) حتى يُفعَّل مجدداً.\n\nتأكد أن هذا مقصود.`
+      );
+      if (!confirmed) return;
+    }
     await api.patch(`/admin/accounts/${item.id}`, {
-      status: item.status === "active" ? "suspended" : "active"
+      status: activating ? "active" : "suspended",
+      confirm: !activating
     });
     client.invalidateQueries({ queryKey: ["admin-accounts"] });
   }
@@ -97,8 +109,8 @@ export default function SuperAdminPage() {
                 <td>{item.subscription_status || "-"}</td>
                 <td>{item.status}</td>
                 <td>
-                  <button className="secondary-button" onClick={() => toggleAccount(item)}>
-                    {item.status === "active" ? "إيقاف" : "تفعيل"}
+                  <button type="button" className="secondary-button" onClick={() => void toggleAccount(item)}>
+                    {isAccountActive(item.status) ? "إيقاف" : "تفعيل"}
                   </button>
                 </td>
               </tr>
