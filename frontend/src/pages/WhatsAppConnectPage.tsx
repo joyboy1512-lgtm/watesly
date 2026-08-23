@@ -470,6 +470,26 @@ export default function WhatsAppConnectPage() {
     }
   }
 
+  async function assignCatalogToChannel(accountId: string) {
+    try {
+      const result = await api.post<{ updated: number; channel_id: string }>("/catalog/assign-channel", {
+        whatsapp_account_id: accountId,
+        only_unassigned: true
+      });
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      toastStore
+        .getState()
+        .show(
+          result.data.updated > 0
+            ? `تم ربط ${result.data.updated} منتج بهذه القناة — لن تتأثر منتجات الفروع الأخرى.`
+            : "لا توجد منتجات غير مربوطة في فرع هذا الرقم.",
+          result.data.updated > 0 ? "success" : "error"
+        );
+    } catch (error: unknown) {
+      toastStore.getState().show(extractApiDetail(error, "تعذر ربط المنتجات بالقناة."), "error");
+    }
+  }
+
   function extractApiDetail(error: unknown, fallback: string): string {
     if (
       typeof error === "object" &&
@@ -880,7 +900,20 @@ export default function WhatsAppConnectPage() {
                   >
                     مزامنة المنتجات → Meta
                   </button>
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    onClick={() => void assignCatalogToChannel(account.id)}
+                    disabled={!savedCatalogId}
+                    title="يربط منتجات فرع هذا الرقم بهذه القناة فقط — دون المساس بمنتجات الفروع الأخرى"
+                  >
+                    ربط منتجات الفرع بالقناة
+                  </button>
                 </div>
+                <p className="hint-text">
+                  «ربط منتجات الفرع بالقناة» يخصّص منتجات فرع هذا الرقم (مثل ثري شايني) لهذه القناة فقط.
+                  المنتجات الأخرى في الحساب تبقى كما هي.
+                </p>
               </article>
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-branding">
                 <div className="whatsapp-branding-head">

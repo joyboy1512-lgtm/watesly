@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import decrypt_secret
@@ -111,6 +111,7 @@ async def _get_commerce_whatsapp_account(
     account_id: UUID,
     whatsapp_account_id: UUID | None = None,
     organization_id: UUID | None = None,
+    channel_id: UUID | None = None,
 ) -> WhatsAppAccount:
     if whatsapp_account_id is not None:
         account = await db.get(WhatsAppAccount, whatsapp_account_id)
@@ -118,7 +119,22 @@ async def _get_commerce_whatsapp_account(
             raise ValueError("WHATSAPP_ACCOUNT_NOT_AVAILABLE")
         if organization_id is not None and account.organization_id != organization_id:
             raise ValueError("ORGANIZATION_CATALOG_MISMATCH")
+        if channel_id is not None and account.channel_id != channel_id:
+            raise ValueError("CHANNEL_CATALOG_MISMATCH")
         _ensure_commerce_account_ready(account)
+        return account
+
+    if channel_id is not None:
+        query = select(WhatsAppAccount).where(
+            WhatsAppAccount.account_id == account_id,
+            WhatsAppAccount.channel_id == channel_id,
+            WhatsAppAccount.commerce_enabled.is_(True),
+            WhatsAppAccount.meta_catalog_id.is_not(None),
+            WhatsAppAccount.meta_catalog_id != "",
+        )
+        account = (await db.execute(query.limit(1))).scalar_one_or_none()
+        if account is None:
+            raise ValueError("META_CATALOG_NOT_CONFIGURED_FOR_CHANNEL")
         return account
 
     query = select(WhatsAppAccount).where(
@@ -218,6 +234,7 @@ async def sync_catalog_product_to_meta(
         account_id=account_id,
         whatsapp_account_id=whatsapp_account_id,
         organization_id=organization_id,
+        channel_id=product.channel_id,
     )
     return await sync_catalog_to_meta(
         db,
@@ -291,6 +308,10 @@ async def refresh_catalog_meta_status(
         CatalogProduct.organization_id == account.organization_id,
         CatalogProduct.external_id.is_not(None),
         CatalogProduct.external_id != "",
+        or_(
+            CatalogProduct.channel_id.is_(None),
+            CatalogProduct.channel_id == account.channel_id,
+        ),
     )
     if product_ids:
         query = query.where(CatalogProduct.id.in_(product_ids))
@@ -356,6 +377,10 @@ async def sync_catalog_to_meta(
         CatalogProduct.is_active.is_(True),
         CatalogProduct.meta_sync_enabled.is_(True),
         CatalogProduct.organization_id == account.organization_id,
+        or_(
+            CatalogProduct.channel_id.is_(None),
+            CatalogProduct.channel_id == account.channel_id,
+        ),
     )
     if product_ids:
         query = query.where(CatalogProduct.id.in_(product_ids))

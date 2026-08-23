@@ -4,10 +4,54 @@ from uuid import UUID
 import csv
 import io
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalog_product import CatalogProduct
+from app.models.channel import Channel
+
+
+async def _resolve_channel_for_catalog(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    channel_id: UUID | None,
+    organization_id: UUID | None,
+) -> Channel | None:
+    if channel_id is None:
+        return None
+    channel = await db.get(Channel, channel_id)
+    if channel is None or channel.account_id != account_id:
+        raise ValueError("CHANNEL_NOT_FOUND")
+    if organization_id is not None and channel.organization_id != organization_id:
+        raise ValueError("CHANNEL_ORGANIZATION_MISMATCH")
+    return channel
+
+
+async def _apply_catalog_channel_filter(
+    query,
+    *,
+    db: AsyncSession,
+    account_id: UUID,
+    channel_id: UUID | None,
+):
+    if channel_id is None:
+        return query
+    channel = await _resolve_channel_for_catalog(
+        db,
+        account_id=account_id,
+        channel_id=channel_id,
+        organization_id=None,
+    )
+    return query.where(
+        or_(
+            CatalogProduct.channel_id == channel_id,
+            and_(
+                CatalogProduct.channel_id.is_(None),
+                CatalogProduct.organization_id == channel.organization_id,
+            ),
+        )
+    )
 
 
 async def list_catalog_products(
@@ -17,18 +61,20 @@ async def list_catalog_products(
     membership=None,
     active_only: bool = True,
     organization_id: UUID | None = None,
+    channel_id: UUID | None = None,
     category: str | None = None,
 ) -> list[CatalogProduct]:
-    from app.services.membership_access import organization_scope_clauses
+    from app.services.membership_access import catalog_scope_clauses
 
     query = select(CatalogProduct).where(CatalogProduct.account_id == account_id)
     if active_only:
         query = query.where(CatalogProduct.is_active.is_(True))
     if membership is not None:
-        for clause in await organization_scope_clauses(
+        for clause in await catalog_scope_clauses(
             db,
             account_id=account_id,
             membership=membership,
+            channel_column=CatalogProduct.channel_id,
             organization_column=CatalogProduct.organization_id,
         ):
             query = query.where(clause)
@@ -36,6 +82,12 @@ async def list_catalog_products(
         query = query.where(CatalogProduct.organization_id == organization_id)
     if category:
         query = query.where(CatalogProduct.category == category)
+    query = await _apply_catalog_channel_filter(
+        query,
+        db=db,
+        account_id=account_id,
+        channel_id=channel_id,
+    )
     query = query.order_by(CatalogProduct.sort_order.asc(), CatalogProduct.name.asc())
     return list((await db.execute(query)).scalars().all())
 
@@ -47,7 +99,11 @@ async def get_catalog_product(
     product_id: UUID,
     membership=None,
 ) -> CatalogProduct:
-    from app.services.membership_access import ensure_membership_organization_access
+    from app.services.membership_access import (
+        ensure_membership_channel_access,
+        ensure_membership_organization_access,
+        resolve_accessible_organization_ids,
+    )
 
     item = await db.get(CatalogProduct, product_id)
     if item is None or item.account_id != account_id:
@@ -60,35 +116,42 @@ async def get_catalog_product(
             organization_id=item.organization_id,
         )
     elif membership is not None and item.organization_id is None:
-        from app.services.membership_access import resolve_accessible_organization_ids
-
         allowed_orgs = await resolve_accessible_organization_ids(
             db, account_id=account_id, membership=membership
         )
         if allowed_orgs is not None:
             raise ValueError("ACCESS_FORBIDDEN")
+    if membership is not None and item.channel_id is not None:
+        await ensure_membership_channel_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            channel_id=item.channel_id,
+        )
     return item
 
 
-async def create_catalog_product(
+async def _prepare_catalog_product_fields(
     db: AsyncSession,
     *,
     account_id: UUID,
-    membership=None,
-    **fields,
-) -> CatalogProduct:
+    membership,
+    fields: dict,
+) -> dict:
     from app.services.membership_access import (
+        ensure_membership_channel_access,
         ensure_membership_organization_access,
+        resolve_accessible_channel_ids,
         resolve_accessible_organization_ids,
     )
 
     org_id = fields.get("organization_id")
+    channel_id = fields.get("channel_id")
     if membership is not None:
         allowed_orgs = await resolve_accessible_organization_ids(
             db, account_id=account_id, membership=membership
         )
         if allowed_orgs is None:
-            # Owner/admin may save account-wide catalog entries.
             if org_id is not None:
                 await ensure_membership_organization_access(
                     db,
@@ -109,6 +172,49 @@ async def create_catalog_product(
                 membership=membership,
                 organization_id=org_id,
             )
+        if channel_id is None:
+            accessible_channels = await resolve_accessible_channel_ids(
+                db, account_id=account_id, membership=membership
+            )
+            if accessible_channels is not None and len(accessible_channels) == 1:
+                channel_id = accessible_channels[0]
+                fields["channel_id"] = channel_id
+        if channel_id is not None:
+            await ensure_membership_channel_access(
+                db,
+                account_id=account_id,
+                membership=membership,
+                channel_id=channel_id,
+            )
+            await _resolve_channel_for_catalog(
+                db,
+                account_id=account_id,
+                channel_id=channel_id,
+                organization_id=org_id,
+            )
+    elif channel_id is not None:
+        await _resolve_channel_for_catalog(
+            db,
+            account_id=account_id,
+            channel_id=channel_id,
+            organization_id=org_id,
+        )
+    return fields
+
+
+async def create_catalog_product(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership=None,
+    **fields,
+) -> CatalogProduct:
+    fields = await _prepare_catalog_product_fields(
+        db,
+        account_id=account_id,
+        membership=membership,
+        fields=dict(fields),
+    )
     item = CatalogProduct(account_id=account_id, **fields)
     db.add(item)
     await db.commit()
@@ -139,8 +245,17 @@ async def update_catalog_product(
         item.meta_sync_enabled = bool(new_enabled)
     if "variant_attributes" in fields:
         item.variant_attributes = fields.pop("variant_attributes") or {}
+    next_org_id = fields.get("organization_id", item.organization_id)
+    next_channel_id = fields.get("channel_id", item.channel_id)
+    if "organization_id" in fields or "channel_id" in fields:
+        await _prepare_catalog_product_fields(
+            db,
+            account_id=account_id,
+            membership=membership,
+            fields={"organization_id": next_org_id, "channel_id": next_channel_id},
+        )
     for key, value in fields.items():
-        if value is not None and hasattr(item, key):
+        if hasattr(item, key):
             setattr(item, key, value)
     if unpublish_from_meta:
         from app.services.meta_catalog_sync import unpublish_catalog_product_from_meta
@@ -179,6 +294,7 @@ async def search_catalog_products(
     limit: int = 8,
     active_only: bool = True,
     organization_id: UUID | None = None,
+    channel_id: UUID | None = None,
     category: str | None = None,
     membership=None,
 ) -> list[CatalogProduct]:
@@ -190,6 +306,7 @@ async def search_catalog_products(
             membership=membership,
             active_only=active_only,
             organization_id=organization_id,
+            channel_id=channel_id,
             category=category,
         )
 
@@ -209,23 +326,27 @@ async def search_catalog_products(
     if category:
         filters.append(CatalogProduct.category == category)
     if membership is not None:
-        from app.services.membership_access import organization_scope_clauses
+        from app.services.membership_access import catalog_scope_clauses
 
-        for clause in await organization_scope_clauses(
+        for clause in await catalog_scope_clauses(
             db,
             account_id=account_id,
             membership=membership,
+            channel_column=CatalogProduct.channel_id,
             organization_column=CatalogProduct.organization_id,
         ):
             filters.append(clause)
 
-    result = await db.execute(
-        select(CatalogProduct)
-        .where(*filters)
-        .order_by(CatalogProduct.sort_order.asc(), CatalogProduct.name.asc())
-        .limit(limit)
+    stmt = select(CatalogProduct).where(*filters).order_by(
+        CatalogProduct.sort_order.asc(), CatalogProduct.name.asc()
+    ).limit(limit)
+    stmt = await _apply_catalog_channel_filter(
+        stmt,
+        db=db,
+        account_id=account_id,
+        channel_id=channel_id,
     )
-    items = list(result.scalars().all())
+    items = list((await db.execute(stmt)).scalars().all())
     if items:
         return items
     return (
@@ -234,8 +355,50 @@ async def search_catalog_products(
             account_id,
             membership=membership,
             active_only=active_only,
+            channel_id=channel_id,
         )
     )[:limit]
+
+
+async def assign_catalog_products_to_channel(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    whatsapp_account_id: UUID,
+    membership=None,
+    only_unassigned: bool = True,
+) -> dict:
+    from app.services.membership_access import ensure_whatsapp_account_access
+
+    wa = await ensure_whatsapp_account_access(
+        db,
+        account_id=account_id,
+        membership=membership,
+        whatsapp_account_id=whatsapp_account_id,
+    )
+    query = select(CatalogProduct).where(
+        CatalogProduct.account_id == account_id,
+        CatalogProduct.organization_id == wa.organization_id,
+        CatalogProduct.is_active.is_(True),
+    )
+    if only_unassigned:
+        query = query.where(CatalogProduct.channel_id.is_(None))
+    products = list((await db.execute(query)).scalars().all())
+    for product in products:
+        product.channel_id = wa.channel_id
+    await db.commit()
+    return {
+        "updated": len(products),
+        "channel_id": str(wa.channel_id),
+        "organization_id": str(wa.organization_id),
+        "whatsapp_account_id": str(wa.id),
+    }
+
+
+def product_matches_conversation_channel(product: CatalogProduct, *, channel_id: UUID) -> bool:
+    if product.channel_id is None:
+        return True
+    return product.channel_id == channel_id
 
 
 def format_price(product: CatalogProduct) -> str:

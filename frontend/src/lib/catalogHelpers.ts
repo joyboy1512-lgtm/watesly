@@ -3,6 +3,7 @@ import { api } from "./api";
 export type CatalogProduct = {
   id: string;
   organization_id: string | null;
+  channel_id: string | null;
   name: string;
   sku: string | null;
   product_type: string;

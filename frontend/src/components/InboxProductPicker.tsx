@@ -14,6 +14,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   disabled?: boolean;
+  channelId?: string | null;
   onInsert: (text: string, product: MatchedCatalogProduct) => void;
   onSendImage?: (product: MatchedCatalogProduct) => void;
   onSendProductCard?: (product: MatchedCatalogProduct) => void;
@@ -37,7 +38,7 @@ function formatSpecs(specs: Record<string, string>) {
   return entries.map(([key, value]) => `${key}: ${value}`).join(" · ");
 }
 
-export default function InboxProductPicker({ open, onClose, disabled, onInsert, onSendImage, onSendProductCard }: Props) {
+export default function InboxProductPicker({ open, onClose, disabled, channelId, onInsert, onSendImage, onSendProductCard }: Props) {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -45,13 +46,17 @@ export default function InboxProductPicker({ open, onClose, disabled, onInsert, 
   }, [open]);
 
   const products = useQuery({
-    queryKey: ["catalog-picker", query],
+    queryKey: ["catalog-picker", query, channelId],
     enabled: open,
     queryFn: async () => {
+      const params: Record<string, string | number> = {};
+      if (channelId) params.channel_id = channelId;
       if (query.trim()) {
-        return (await api.get<CatalogProduct[]>("/catalog/search", { params: { q: query.trim(), limit: 12 } })).data;
+        params.q = query.trim();
+        params.limit = 12;
+        return (await api.get<CatalogProduct[]>("/catalog/search", { params })).data;
       }
-      return (await api.get<CatalogProduct[]>("/catalog")).data.slice(0, 12);
+      return (await api.get<CatalogProduct[]>("/catalog", { params })).data.slice(0, 12);
     }
   });
 

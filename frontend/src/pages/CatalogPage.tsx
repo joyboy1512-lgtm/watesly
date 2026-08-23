@@ -39,6 +39,7 @@ export default function CatalogPage() {
   const [listTab, setListTab] = useState<CatalogListTab>("active");
   const [typeFilter, setTypeFilter] = useState<CatalogTypeFilter>("all");
   const [filterOrganizationId, setFilterOrganizationId] = useState("");
+  const [filterChannelId, setFilterChannelId] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -91,7 +92,7 @@ export default function CatalogPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [listTab, typeFilter, filterOrganizationId, filterCategory, debouncedSearch]);
+  }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, debouncedSearch]);
 
   const orgMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -101,12 +102,22 @@ export default function CatalogPage() {
     return map;
   }, [organizations.data]);
 
+  const channelOptions = useMemo(
+    () =>
+      (whatsappAccounts.data ?? []).map((account) => ({
+        id: account.channel_id,
+        label: account.verified_name || account.display_phone_number || account.channel_name || "WhatsApp"
+      })),
+    [whatsappAccounts.data]
+  );
+
   const products = useQuery({
-    queryKey: ["catalog", listTab, filterOrganizationId, filterCategory, debouncedSearch] as const,
+    queryKey: ["catalog", listTab, filterOrganizationId, filterChannelId, filterCategory, debouncedSearch] as const,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (listTab === "inactive") params.set("include_inactive", "true");
       if (filterOrganizationId) params.set("organization_id", filterOrganizationId);
+      if (filterChannelId) params.set("channel_id", filterChannelId);
       if (filterCategory) params.set("category", filterCategory);
 
       if (debouncedSearch) {
@@ -378,6 +389,17 @@ export default function CatalogPage() {
               <option value="">كل الفروع</option>
               {(organizations.data ?? []).map((org) => (
                 <option key={org.id} value={org.id}>{org.name}</option>
+              ))}
+            </select>
+            <select
+              value={filterChannelId}
+              onChange={(e) => setFilterChannelId(e.target.value)}
+              className="contacts-erp-channel-filter"
+              aria-label="تصفية حسب القناة"
+            >
+              <option value="">كل القنوات</option>
+              {channelOptions.map((channel) => (
+                <option key={channel.id} value={channel.id}>{channel.label}</option>
               ))}
             </select>
             <select

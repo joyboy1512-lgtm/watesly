@@ -462,12 +462,15 @@ async def send_conversation_product(
     from app.models.whatsapp_account import WhatsAppAccount
     from app.services.catalog import format_price
     from app.services.catalog_commerce import resolve_retailer_id
+    from app.services.catalog import product_matches_conversation_channel
     from app.services.meta_client import MetaAPIError
     from app.services.whatsapp import send_product_message
 
     product = await db.get(CatalogProduct, payload.product_id)
     if product is None or product.account_id != context.account_id or not product.is_active:
         raise HTTPException(status_code=404, detail="Product not found")
+    if not product_matches_conversation_channel(product, channel_id=conversation.channel_id):
+        raise HTTPException(status_code=403, detail="Product is not available for this channel")
 
     wa = (
         await db.execute(select(WhatsAppAccount).where(WhatsAppAccount.channel_id == conversation.channel_id))
@@ -533,6 +536,7 @@ async def send_conversation_product_list(
     from app.models.catalog_product import CatalogProduct
     from app.models.contact import Contact
     from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.catalog import product_matches_conversation_channel
     from app.services.catalog_commerce import build_product_list_sections
     from app.services.meta_client import MetaAPIError
     from app.services.whatsapp import send_product_list_message
@@ -540,7 +544,12 @@ async def send_conversation_product_list(
     products: list[CatalogProduct] = []
     for product_id in payload.product_ids:
         item = await db.get(CatalogProduct, product_id)
-        if item is not None and item.account_id == context.account_id and item.is_active:
+        if (
+            item is not None
+            and item.account_id == context.account_id
+            and item.is_active
+            and product_matches_conversation_channel(item, channel_id=conversation.channel_id)
+        ):
             products.append(item)
     if not products:
         raise HTTPException(status_code=400, detail="No catalog products selected")

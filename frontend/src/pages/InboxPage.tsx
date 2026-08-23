@@ -1255,6 +1255,7 @@ export default function InboxPage() {
             open={productPickerOpen}
             onClose={() => setProductPickerOpen(false)}
             disabled={!selectedId || isArchived || uploading}
+            channelId={selectedConversation?.channel_id ?? null}
             onInsert={(line) => insertCatalogProduct(line)}
             onSendImage={(product) => void sendProductImage(product)}
             onSendProductCard={(product) => void sendProductCard(product)}

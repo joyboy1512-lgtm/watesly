@@ -18,6 +18,9 @@ class CatalogProduct(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL")
     )
+    channel_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("channels.id", ondelete="SET NULL"), index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     sku: Mapped[str | None] = mapped_column(String(80))
     product_type: Mapped[str] = mapped_column(String(20), nullable=False, default="product")

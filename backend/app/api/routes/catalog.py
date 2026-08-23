@@ -11,6 +11,7 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.core.permissions import Permission
 from app.db.session import get_db
 from app.services.catalog import (
+    assign_catalog_products_to_channel,
     create_catalog_product,
     delete_catalog_product,
     export_catalog_csv,
@@ -41,6 +42,7 @@ XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 class CatalogProductCreate(BaseModel):
     organization_id: UUID | None = None
+    channel_id: UUID | None = None
     name: str = Field(min_length=1, max_length=200)
     sku: str | None = None
     product_type: str = Field(default="product", pattern=r"^(product|service)$")
@@ -66,6 +68,7 @@ class CatalogProductCreate(BaseModel):
 
 class CatalogProductUpdate(BaseModel):
     organization_id: UUID | None = None
+    channel_id: UUID | None = None
     name: str | None = None
     sku: str | None = None
     product_type: str | None = None
@@ -208,10 +211,16 @@ def _meta_group_http_error(exc: ValueError) -> HTTPException:
     return HTTPException(status_code=400 if code in _META_GROUP_ERRORS else 404, detail=_META_GROUP_ERRORS.get(code, code))
 
 
+class CatalogAssignChannelRequest(BaseModel):
+    whatsapp_account_id: UUID
+    only_unassigned: bool = True
+
+
 @router.get("")
 async def get_catalog(
     include_inactive: bool = Query(False),
     organization_id: UUID | None = Query(None),
+    channel_id: UUID | None = Query(None),
     category: str | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
@@ -222,8 +231,34 @@ async def get_catalog(
         membership=context.membership,
         active_only=not include_inactive,
         organization_id=organization_id,
+        channel_id=channel_id,
         category=category,
     )
+
+
+@router.post("/assign-channel")
+async def post_catalog_assign_channel(
+    payload: CatalogAssignChannelRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await assign_catalog_products_to_channel(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=payload.whatsapp_account_id,
+            membership=context.membership,
+            only_unassigned=payload.only_unassigned,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        messages = {
+            "WHATSAPP_ACCOUNT_NOT_AVAILABLE": "حساب WhatsApp غير متاح",
+            "INVALID_WHATSAPP_ACCOUNT": "حساب WhatsApp غير متاح",
+            "ACCESS_FORBIDDEN": "لا تملك صلاحية على هذا الفرع",
+            "CONVERSATION_FORBIDDEN": "لا تملك صلاحية على هذه القناة",
+        }
+        raise HTTPException(status_code=400 if code in messages else 404, detail=messages.get(code, code)) from exc
 
 
 @router.get("/search")
@@ -231,6 +266,7 @@ async def search_catalog(
     q: str = Query(min_length=1),
     include_inactive: bool = Query(False),
     organization_id: UUID | None = Query(None),
+    channel_id: UUID | None = Query(None),
     category: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
@@ -243,6 +279,7 @@ async def search_catalog(
         limit=limit,
         active_only=not include_inactive,
         organization_id=organization_id,
+        channel_id=channel_id,
         category=category,
         membership=context.membership,
     )
