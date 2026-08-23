@@ -35,12 +35,30 @@ async def add_organization(
         return await create_organization(db, account_id=context.account_id, payload=payload)
     except ValueError as exc:
         errors = {
-            "NO_ACTIVE_SUBSCRIPTION": (402, "An active subscription is required"),
-            "ORGANIZATION_LIMIT_REACHED": (403, "Organization limit reached for this plan"),
-            "MULTI_ORGANIZATION_NOT_ALLOWED": (403, "Multi-organization is not enabled for this plan"),
+            "NO_ACTIVE_SUBSCRIPTION": (
+                402,
+                {"code": "NO_ACTIVE_SUBSCRIPTION", "message": "يلزم اشتراك نشط لإضافة فرع."},
+            ),
+            "ORGANIZATION_LIMIT_REACHED": (
+                403,
+                {
+                    "code": "ORGANIZATION_LIMIT_REACHED",
+                    "message": "وصلت للحد الأقصى من الفروع في خطتك. راجع الفوترة للترقية.",
+                },
+            ),
+            "MULTI_ORGANIZATION_NOT_ALLOWED": (
+                403,
+                {
+                    "code": "MULTI_ORGANIZATION_NOT_ALLOWED",
+                    "message": "خطتك لا تدعم أكثر من فرع واحد. راجع الفوترة لتفعيل تعدد الفروع.",
+                },
+            ),
         }
-        code, detail = errors.get(str(exc), (400, "Unable to create organization"))
+        code, detail = errors.get(str(exc), (400, {"code": "ORGANIZATION_CREATE_FAILED", "message": "تعذر إنشاء الفرع."}))
         raise HTTPException(status_code=code, detail=detail) from exc
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Organization slug already exists") from exc
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "ORGANIZATION_SLUG_EXISTS", "message": "معرّف الفرع مستخدم مسبقاً. جرّب اسماً آخر."},
+        ) from exc

@@ -2,7 +2,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatOrgStatus, orgStatusClass, slugFromName } from "../lib/orgHelpers";
+import { formatOrgStatus, orgStatusClass, organizationCreateErrorMessage, slugFromName } from "../lib/orgHelpers";
+import { toastStore } from "../stores/toast";
 
 type Organization = {
   id: string;
@@ -64,17 +65,27 @@ export default function OrganizationsPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    await api.post("/organizations", {
-      name,
-      slug: slug || slugFromName(name),
-      country_code: "KW",
-      currency_code: "KWD",
-      timezone: "Asia/Kuwait",
-      default_language: "ar"
-    });
-    setName("");
-    setSlug("");
-    client.invalidateQueries({ queryKey: ["organizations"] });
+    const nextSlug = (slug || slugFromName(name)).trim();
+    if (nextSlug.length < 2) {
+      toastStore.getState().show("أدخل معرّف فرع بالإنجليزية (مثل three-shiny).", "error");
+      return;
+    }
+    try {
+      await api.post("/organizations", {
+        name: name.trim(),
+        slug: nextSlug,
+        country_code: "KW",
+        currency_code: "KWD",
+        timezone: "Asia/Kuwait",
+        default_language: "ar"
+      });
+      setName("");
+      setSlug("");
+      await client.invalidateQueries({ queryKey: ["organizations"] });
+      toastStore.getState().show("تم إضافة الفرع.", "success");
+    } catch (error) {
+      toastStore.getState().show(organizationCreateErrorMessage(error), "error");
+    }
   }
 
   return (
@@ -102,7 +113,10 @@ export default function OrganizationsPage() {
             placeholder="اسم الفرع"
             required
           />
-          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="branch-kuwait" required />
+          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="three-shiny" required />
+          <p className="hint-text" style={{ margin: 0 }}>
+            المعرّف بالإنجليزية (حروف صغيرة وأرقام وشرطة). إن كان اسم الفرع عربياً، عدّله يدوياً.
+          </p>
           <button type="submit">إضافة فرع</button>
         </form>
       </section>

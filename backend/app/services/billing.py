@@ -20,12 +20,12 @@ async def get_or_create_trial_plan(db: AsyncSession) -> Plan:
         monthly_price=0,
         yearly_price=0,
         max_users=3,
-        max_organizations=1,
-        max_channels=1,
+        max_organizations=5,
+        max_channels=3,
         included_mac=100,
         over_mac_price_per_100=12,
         trial_days=14,
-        allow_multi_organization=False,
+        allow_multi_organization=True,
     )
     db.add(plan)
     await db.flush()
