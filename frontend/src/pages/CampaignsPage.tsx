@@ -12,6 +12,7 @@ import {
   type TemplateComponent
 } from "../lib/templateMedia";
 import { uploadFile, type UploadedFile } from "../lib/uploads";
+import { downloadContactsImportTemplate } from "../lib/contactHelpers";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   AUDIENCE_GENDER_OPTIONS,
@@ -385,17 +386,28 @@ export default function CampaignsPage() {
     form.set("organization_id", organizationId);
     form.set("channel_id", channelId);
     try {
-      const result = await api.post("/campaigns/import-audience", form, { headers: { "Content-Type": "multipart/form-data" } });
+      const result = await api.post<{
+        contact_ids?: string[];
+        created: number;
+        existing: number;
+        skipped?: number;
+        invalid?: number;
+      }>("/campaigns/import-audience", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 300000
+      });
       const ids: string[] = result.data.contact_ids ?? [];
       setSelectedContacts(ids);
+      const skipped = result.data.skipped ?? 0;
+      const invalid = result.data.invalid ?? 0;
       toastStore.getState().show(
-        `تم تحميل ${ids.length} عميل (${result.data.created} جديد، ${result.data.existing} موجود).`,
+        `تم تحميل ${ids.length} عميل للحملة (${result.data.created} جديد، ${result.data.existing} موجود${invalid ? `، ${invalid} رقم غير صالح` : ""}${skipped ? `، ${skipped} فارغ` : ""}).`,
         "success"
       );
       await client.invalidateQueries({ queryKey: ["contacts"] });
       event.currentTarget.reset();
-    } catch {
-      toastStore.getState().show("تعذر استيراد ملف العملاء. استخدم Excel (.xlsx) أو CSV.", "error");
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error, "تعذر استيراد ملف العملاء. استخدم Excel (.xlsx) أو CSV."), "error");
     }
   }
 
@@ -777,8 +789,19 @@ export default function CampaignsPage() {
                   disabled={!organizationId || !channelId}
                 />
               </label>
-              <p className="hint-text">الأعمدة: phone (رقم) · name (اسم)</p>
-              <button type="submit" disabled={!organizationId || !channelId}>تحميل العملاء</button>
+              <p className="hint-text">
+                الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> (ar/en)
+              </p>
+              <div className="campaigns-panel-actions">
+                <button type="submit" disabled={!organizationId || !channelId}>تحميل العملاء</button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void downloadContactsImportTemplate().catch(() => toastStore.getState().show("تعذر تحميل القالب.", "error"))}
+                >
+                  تحميل قالب Excel
+                </button>
+              </div>
               {channelScopedSelectedContacts.length > 0 && (
                 <p className="hint-text">✓ {channelScopedSelectedContacts.length} عميل محدّد للحملة</p>
               )}
