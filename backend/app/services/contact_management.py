@@ -805,47 +805,100 @@ async def import_contacts_from_rows(
     channel_id: UUID,
     rows: list[dict[str, str]],
 ) -> dict:
-    from app.services.contacts import create_contact
+    from app.services.gender_inference import infer_gender_from_name
+    from app.services.phone_normalize import normalize_whatsapp_phone
     from app.services.spreadsheet import get_row_value
 
-    created = skipped = existing = 0
+    channel = await db.get(Channel, channel_id)
+    if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
+        raise ValueError("INVALID_CHANNEL")
+    if channel.organization_id != organization_id:
+        raise ValueError("CHANNEL_ORGANIZATION_MISMATCH")
+
+    existing_rows = (
+        await db.execute(
+            select(Contact.id, Contact.external_address).where(
+                Contact.organization_id == organization_id,
+                Contact.channel_id == channel_id,
+                Contact.deleted_at.is_(None),
+            )
+        )
+    ).all()
+    existing_by_phone = {row.external_address: row.id for row in existing_rows}
+
+    created = skipped = existing = invalid = 0
     contact_ids: list[str] = []
+    batch_count = 0
+
     for row in rows:
-        phone = get_row_value(row, "phone")
-        if not phone:
+        raw_phone = get_row_value(row, "phone")
+        if not raw_phone:
             skipped += 1
             continue
 
-        already = (
-            await db.execute(
-                select(Contact.id).where(
-                    Contact.organization_id == organization_id,
-                    Contact.channel_id == channel_id,
-                    Contact.external_address == phone,
-                    Contact.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
-
-        payload = ContactCreateRequest(
-            organization_id=organization_id,
-            channel_id=channel_id,
-            external_address=phone,
-            display_name=get_row_value(row, "name") or None,
-            email=get_row_value(row, "email") or None,
-            language=get_row_value(row, "language") or "ar",
-            country_code=get_row_value(row, "country_code") or "KW",
+        country_raw = get_row_value(row, "country_code") or "KW"
+        dial = {"KW": "965", "SA": "966", "AE": "971", "QA": "974", "BH": "973", "OM": "968"}.get(
+            country_raw.upper(), "965"
         )
-        contact = await create_contact(db, account_id=account_id, payload=payload)
-        contact_ids.append(str(contact.id))
-        if already:
+        phone = normalize_whatsapp_phone(raw_phone, country_code=dial)
+        if not phone:
+            invalid += 1
+            continue
+
+        name = get_row_value(row, "name") or None
+        email_raw = get_row_value(row, "email")
+        email = email_raw if email_raw and "@" in email_raw and "." in email_raw.split("@")[-1] else None
+        language = get_row_value(row, "language") or "ar"
+        country_code = country_raw.upper()[:2] if len(country_raw.strip()) >= 2 else "KW"
+        gender = infer_gender_from_name(name)
+        already_id = existing_by_phone.get(phone)
+
+        if already_id:
+            contact = await db.get(Contact, already_id)
+            if contact is not None:
+                if name:
+                    contact.display_name = name
+                    contact.gender = gender
+                if email is not None:
+                    contact.email = email
+                if language:
+                    contact.language = language
+                contact.country_code = country_code
+                contact.updated_at = datetime.now(UTC)
             existing += 1
+            if contact is not None:
+                contact_ids.append(str(contact.id))
         else:
+            contact = Contact(
+                account_id=account_id,
+                organization_id=organization_id,
+                channel_id=channel_id,
+                external_address=phone,
+                display_name=name,
+                email=email,
+                language=language,
+                country_code=country_code,
+                gender=gender,
+            )
+            db.add(contact)
+            await db.flush()
+            existing_by_phone[phone] = contact.id
+            contact_ids.append(str(contact.id))
             created += 1
+
+        batch_count += 1
+        if batch_count >= 100:
+            await db.commit()
+            batch_count = 0
+
+    if batch_count:
+        await db.commit()
+
     return {
         "created": created,
         "existing": existing,
         "skipped": skipped,
+        "invalid": invalid,
         "total": len(contact_ids),
         "contact_ids": contact_ids,
     }

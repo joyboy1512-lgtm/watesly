@@ -43,20 +43,31 @@ export default function ContactImportPage() {
     form.set("channel_id", channelId);
     setUploading(true);
     try {
-      const result = await api.post<{ created: number; existing: number; skipped: number }>(
+      const result = await api.post<{ created: number; existing: number; skipped: number; invalid?: number }>(
         "/contacts/import",
         form,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        { headers: { "Content-Type": "multipart/form-data" }, timeout: 300000 }
       );
-      const { created, existing, skipped } = result.data;
+      const { created, existing, skipped, invalid = 0 } = result.data;
       toastStore.getState().show(
-        `تم الاستيراد: ${created} جديد، ${existing} موجود مسبقاً، ${skipped} تم تخطيه.`,
+        `تم الاستيراد: ${created} جديد، ${existing} موجود مسبقاً، ${skipped} فارغ، ${invalid} رقم غير صالح.`,
         "success"
       );
       await refreshContactsAfterMutation(client);
       navigate("/contacts", { replace: true, state: { fromCreate: true } });
-    } catch {
-      toastStore.getState().show("تعذر استيراد الملف. استخدم Excel (.xlsx) أو CSV.", "error");
+    } catch (error) {
+      const message =
+        typeof error === "object" && error !== null && "response" in error
+          ? String((error as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? "")
+          : "";
+      toastStore.getState().show(
+        message.includes("10 MB") || message.includes("كبير")
+          ? message
+          : message.includes("صيغة") || message.includes("format")
+            ? "صيغة الملف غير مدعومة. استخدم Excel (.xlsx) أو CSV."
+            : message || "تعذر استيراد الملف. تأكد من الأعمدة: phone, name, language",
+        "error"
+      );
     } finally {
       setUploading(false);
     }
@@ -118,7 +129,7 @@ export default function ContactImportPage() {
             </label>
             {fileName && <p className="hint-text">الملف: {fileName}</p>}
             <p className="hint-text">
-              الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">email</strong>
+              الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> (ar/en) · <strong dir="ltr">email</strong>
             </p>
             <button
               type="button"

@@ -240,8 +240,10 @@ async def import_contacts(
     except ValueError as exc:
         code = str(exc)
         messages = {
-            "UNSUPPORTED_FILE_FORMAT": "Unsupported file format. Use .xlsx or .csv",
-            "FILE_TOO_LARGE": "File is too large (max 10 MB)",
+            "UNSUPPORTED_FILE_FORMAT": "صيغة الملف غير مدعومة. استخدم .xlsx أو .csv",
+            "FILE_TOO_LARGE": "حجم الملف كبير جداً (الحد الأقصى 10 MB)",
+            "INVALID_CHANNEL": "القناة غير صالحة.",
+            "CHANNEL_ORGANIZATION_MISMATCH": "القناة لا تتبع الفرع المختار.",
         }
         raise HTTPException(status_code=400, detail=messages.get(code, code)) from exc
 
