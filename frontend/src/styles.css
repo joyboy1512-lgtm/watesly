@@ -4054,6 +4054,25 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-color: #1877f2;
   color: #1565c0;
 }
+.catalog-create-mode-tabs button.active.tone-offer {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.14) 0%, rgba(245, 158, 11, 0.18) 100%);
+  border-color: #d97706;
+  color: #b45309;
+}
+.catalog-wizard-section-card.tone-offer .catalog-wizard-section-header {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(245, 158, 11, 0.12) 100%);
+  border-bottom-color: rgba(217, 119, 6, 0.22);
+}
+.catalog-offer-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.catalog-offer-advanced-toggle {
+  align-self: flex-start;
+  font-size: 12px;
+}
 .catalog-simple-form {
   display: flex;
   flex-direction: column;

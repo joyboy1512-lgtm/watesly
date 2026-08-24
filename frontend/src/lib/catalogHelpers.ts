@@ -352,6 +352,7 @@ export async function downloadCatalogExport(options: CatalogExportOptions = {}) 
 export type MetaVariantFormState = {
   clientKey: string;
   id: string;
+  name: string;
   sku: string;
   metaRetailerId: string;
   variantSize: string;
@@ -360,6 +361,30 @@ export type MetaVariantFormState = {
   price: string;
   imageUrl: string;
   sortOrder: string;
+};
+
+export const OFFER_VARIANT_ATTR_KEY = "الباقة";
+
+export type OfferVariantFormState = {
+  clientKey: string;
+  id: string;
+  offerLabel: string;
+  price: string;
+  imageUrl: string;
+  sku: string;
+  sortOrder: string;
+};
+
+export type OfferGroupFormState = {
+  metaItemGroupId: string;
+  baseName: string;
+  organizationId: string;
+  category: string;
+  description: string;
+  currency: string;
+  priceType: "fixed" | "from" | "quote";
+  metaSyncEnabled: boolean;
+  variants: OfferVariantFormState[];
 };
 
 export type MetaGroupFormState = {
@@ -412,6 +437,7 @@ export function emptyMetaVariant(index = 0): MetaVariantFormState {
   return {
     clientKey: newMetaVariantKey(),
     id: "",
+    name: "",
     sku: "",
     metaRetailerId: "",
     variantSize: "",
@@ -420,6 +446,32 @@ export function emptyMetaVariant(index = 0): MetaVariantFormState {
     price: "",
     imageUrl: "",
     sortOrder: String(index)
+  };
+}
+
+export function emptyOfferVariant(index = 0): OfferVariantFormState {
+  return {
+    clientKey: newMetaVariantKey(),
+    id: "",
+    offerLabel: "",
+    price: "",
+    imageUrl: "",
+    sku: "",
+    sortOrder: String(index)
+  };
+}
+
+export function emptyOfferGroupForm(): OfferGroupFormState {
+  return {
+    metaItemGroupId: "",
+    baseName: "",
+    organizationId: "",
+    category: "عروض",
+    description: "",
+    currency: "KWD",
+    priceType: "fixed",
+    metaSyncEnabled: true,
+    variants: [emptyOfferVariant(0)]
   };
 }
 
@@ -463,6 +515,7 @@ export function metaGroupFormFromResponse(group: MetaGroupResponse): MetaGroupFo
     variants: group.variants.map((variant, index) => ({
       clientKey: newMetaVariantKey(),
       id: variant.id,
+      name: variant.name ?? "",
       sku: variant.sku ?? "",
       metaRetailerId: variant.meta_retailer_id ?? "",
       variantSize: variant.variant_size ?? "",
@@ -473,6 +526,56 @@ export function metaGroupFormFromResponse(group: MetaGroupResponse): MetaGroupFo
       sortOrder: String(variant.sort_order ?? index)
     }))
   };
+}
+
+function offerLabelFromVariant(
+  baseName: string,
+  variant: MetaGroupResponse["variants"][number]
+): string {
+  const fromAttributes = variant.variant_attributes?.[OFFER_VARIANT_ATTR_KEY]?.trim();
+  if (fromAttributes) return fromAttributes;
+  const prefix = `${baseName.trim()} — `;
+  if (variant.name?.startsWith(prefix)) {
+    return variant.name.slice(prefix.length).trim();
+  }
+  return variant.name?.trim() ?? "";
+}
+
+export function offerGroupFormFromResponse(group: MetaGroupResponse): OfferGroupFormState {
+  return {
+    metaItemGroupId: group.meta_item_group_id,
+    baseName: group.base_name,
+    organizationId: group.organization_id ?? "",
+    category: group.category ?? "عروض",
+    description: group.description ?? "",
+    currency: group.currency || "KWD",
+    priceType: (group.price_type as OfferGroupFormState["priceType"]) || "fixed",
+    metaSyncEnabled: group.meta_sync_enabled !== false,
+    variants: group.variants.map((variant, index) => ({
+      clientKey: newMetaVariantKey(),
+      id: variant.id,
+      offerLabel: offerLabelFromVariant(group.base_name, variant),
+      price: variant.price ?? "",
+      imageUrl: variant.image_url ?? "",
+      sku: variant.sku ?? "",
+      sortOrder: String(variant.sort_order ?? index)
+    }))
+  };
+}
+
+export function isOfferMetaGroup(group: MetaGroupResponse): boolean {
+  const category = group.category?.trim() ?? "";
+  if (/عرض/i.test(category)) return true;
+  if (!group.variants.length) return false;
+  return group.variants.every(
+    (variant) =>
+      !variant.variant_size?.trim() &&
+      !variant.variant_color?.trim() &&
+      Boolean(
+        variant.variant_attributes?.[OFFER_VARIANT_ATTR_KEY]?.trim() ||
+          offerLabelFromVariant(group.base_name, variant)
+      )
+  );
 }
 
 export function buildMetaGroupPayload(form: MetaGroupFormState) {
@@ -488,6 +591,7 @@ export function buildMetaGroupPayload(form: MetaGroupFormState) {
     meta_sync_enabled: form.metaSyncEnabled,
     variants: form.variants.map((variant, index) => ({
       ...(variant.id ? { id: variant.id } : {}),
+      ...(variant.name.trim() ? { name: variant.name.trim() } : {}),
       sku: variant.sku.trim() || null,
       meta_retailer_id: variant.metaRetailerId.trim() || null,
       variant_size: variant.variantSize.trim() || null,
@@ -498,6 +602,48 @@ export function buildMetaGroupPayload(form: MetaGroupFormState) {
       sort_order: Number(variant.sortOrder) || index
     }))
   };
+}
+
+export function buildOfferGroupPayload(form: OfferGroupFormState) {
+  const baseName = form.baseName.trim();
+  return {
+    meta_item_group_id: form.metaItemGroupId.trim(),
+    base_name: baseName,
+    organization_id: form.organizationId || null,
+    category: form.category.trim() || "عروض",
+    description: form.description.trim() || null,
+    product_type: "product" as const,
+    currency: form.currency.trim() || "KWD",
+    price_type: form.priceType,
+    meta_sync_enabled: form.metaSyncEnabled,
+    variants: form.variants.map((variant, index) => {
+      const offerLabel = variant.offerLabel.trim();
+      const variantName = offerLabel ? `${baseName} — ${offerLabel}`.slice(0, 200) : null;
+      return {
+        ...(variant.id ? { id: variant.id } : {}),
+        ...(variantName ? { name: variantName } : {}),
+        sku: variant.sku.trim() || null,
+        meta_retailer_id: variant.sku.trim() || null,
+        variant_size: null,
+        variant_color: null,
+        variant_attributes: offerLabel ? { [OFFER_VARIANT_ATTR_KEY]: offerLabel } : {},
+        price: form.priceType === "quote" ? null : variant.price.trim() ? Number(variant.price) : null,
+        image_url: variant.imageUrl.trim() || null,
+        sort_order: Number(variant.sortOrder) || index
+      };
+    })
+  };
+}
+
+export function offerGroupReady(form: OfferGroupFormState) {
+  if (!form.baseName.trim() || !form.metaItemGroupId.trim()) return false;
+  if (!form.variants.length) return false;
+  return form.variants.every((variant) => {
+    if (!variant.offerLabel.trim() || !variant.imageUrl.trim()) return false;
+    if (form.priceType === "quote") return true;
+    const price = Number(variant.price);
+    return Number.isFinite(price) && price > 0;
+  });
 }
 
 export function metaGroupReady(form: MetaGroupFormState) {

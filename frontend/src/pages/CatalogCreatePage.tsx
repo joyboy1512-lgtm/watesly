@@ -3,15 +3,19 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import CatalogMetaProductWizard from "../components/CatalogMetaProductWizard";
+import CatalogOfferWizard from "../components/CatalogOfferWizard";
 import CatalogSimpleProductForm from "../components/CatalogSimpleProductForm";
 import {
   buildMetaGroupPayload,
+  buildOfferGroupPayload,
   buildSimpleProductPayload,
   catalogMetaAutoSyncMessage,
   emptyMetaGroupForm,
+  emptyOfferGroupForm,
   emptyProductForm,
   metaGroupReady,
   metaGroupSyncMessages,
+  offerGroupReady,
   slugifyMetaGroupId,
   simpleProductFormReady,
   type MetaGroupResponse,
@@ -22,15 +26,27 @@ import { toastStore } from "../stores/toast";
 import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 
 type Organization = { id: string; name: string };
-type CreateMode = "single" | "meta";
+type CreateMode = "single" | "offer" | "meta";
+
+function isOfferCategoryName(value: string) {
+  return /عرض/i.test(value.trim());
+}
 
 export default function CatalogCreatePage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<CreateMode>("single");
+  const [mode, setMode] = useState<CreateMode>(() => {
+    const requestedMode = searchParams.get("mode")?.trim();
+    if (requestedMode === "offer" || requestedMode === "meta" || requestedMode === "single") {
+      return requestedMode;
+    }
+    const presetCategory = searchParams.get("category")?.trim();
+    return presetCategory && isOfferCategoryName(presetCategory) ? "offer" : "single";
+  });
   const [saving, setSaving] = useState(false);
   const [metaForm, setMetaForm] = useState(emptyMetaGroupForm);
+  const [offerForm, setOfferForm] = useState(emptyOfferGroupForm);
   const [singleForm, setSingleForm] = useState<ProductFormState>(emptyProductForm);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [importOrganizationId, setImportOrganizationId] = useState("");
@@ -59,22 +75,32 @@ export default function CatalogCreatePage() {
     const presetCategory = searchParams.get("category")?.trim();
     if (!presetCategory) return;
     setMetaForm((current) => ({ ...current, category: presetCategory }));
+    setOfferForm((current) => ({
+      ...current,
+      category: isOfferCategoryName(presetCategory) ? presetCategory : current.category || "عروض"
+    }));
   }, [searchParams]);
 
   useEffect(() => {
     const orgs = organizations.data ?? [];
     if (orgs.length !== 1) return;
     setMetaForm((current) => (current.organizationId ? current : { ...current, organizationId: orgs[0].id }));
+    setOfferForm((current) => (current.organizationId ? current : { ...current, organizationId: orgs[0].id }));
     setSingleForm((current) => (current.organizationId ? current : { ...current, organizationId: orgs[0].id }));
   }, [organizations.data]);
 
   useEffect(() => {
-    if (mode !== "meta") return;
-    if (metaForm.metaItemGroupId.trim()) return;
-    const slug = slugifyMetaGroupId(metaForm.baseName);
+    if (mode !== "meta" && mode !== "offer") return;
+    const activeForm = mode === "offer" ? offerForm : metaForm;
+    if (activeForm.metaItemGroupId.trim()) return;
+    const slug = slugifyMetaGroupId(activeForm.baseName);
     if (!slug) return;
+    if (mode === "offer") {
+      setOfferForm((current) => ({ ...current, metaItemGroupId: slug }));
+      return;
+    }
     setMetaForm((current) => ({ ...current, metaItemGroupId: slug }));
-  }, [metaForm.baseName, metaForm.metaItemGroupId, mode]);
+  }, [metaForm.baseName, metaForm.metaItemGroupId, mode, offerForm.baseName, offerForm.metaItemGroupId]);
 
   async function uploadProductImage(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -123,9 +149,39 @@ export default function CatalogCreatePage() {
     }
   }
 
+  async function saveOfferGroup() {
+    if (!offerGroupReady(offerForm)) {
+      toastStore.getState().show("أكمل: اسم العرض، الباقات الفرعية، الصور، والأسعار.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await api.post<MetaGroupResponse>("/catalog/meta-group", buildOfferGroupPayload(offerForm));
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      await client.invalidateQueries({ queryKey: ["catalog-categories"] });
+      await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
+      toastStore.getState().show(`تم حفظ ${response.data.variants.length} عرض فرعي.`, "success");
+      for (const message of metaGroupSyncMessages(response.data)) {
+        toastStore.getState().show(message, message.includes("رفض") || message.includes("تعذر") ? "error" : "success");
+      }
+      navigate("/catalog", { replace: true });
+    } catch (error: unknown) {
+      const detail =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
+          ? (error as { response: { data: { detail: string } } }).response.data.detail
+          : null;
+      toastStore.getState().show(detail ?? "تعذر حفظ العرض.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createSingleProduct(event: FormEvent) {
     event.preventDefault();
-    if (!simpleProductFormReady(singleForm)) {
+    if (!simpleProductFormReady(singleForm, organizations.data?.length ?? 1)) {
       toastStore.getState().show("أكمل: الاسم، السعر، والصورة.", "error");
       return;
     }
@@ -185,7 +241,9 @@ export default function CatalogCreatePage() {
 
   const singleReady = simpleProductFormReady(singleForm, organizations.data?.length ?? 1);
   const metaReady = metaGroupReady(metaForm);
-  const pageTitle = mode === "single" ? "إضافة منتج" : "منتجات متعددة (Meta)";
+  const offerReady = offerGroupReady(offerForm);
+  const pageTitle =
+    mode === "single" ? "إضافة منتج" : mode === "offer" ? "إنشاء عرض" : "منتجات متعددة (Meta)";
 
   return (
     <main className="page catalog-page contacts-erp-page">
@@ -205,6 +263,15 @@ export default function CatalogCreatePage() {
               >
                 {saving ? "جاري الحفظ…" : "حفظ المجموعة"}
               </button>
+            ) : mode === "offer" ? (
+              <button
+                type="button"
+                className="contacts-erp-btn contacts-erp-btn-primary"
+                disabled={!offerReady || saving}
+                onClick={() => void saveOfferGroup()}
+              >
+                {saving ? "جاري الحفظ…" : "حفظ العرض"}
+              </button>
             ) : (
               <button
                 type="submit"
@@ -223,6 +290,9 @@ export default function CatalogCreatePage() {
           <button type="button" className={mode === "single" ? "active tone-single" : ""} onClick={() => setMode("single")}>
             منتج واحد
           </button>
+          <button type="button" className={mode === "offer" ? "active tone-offer" : ""} onClick={() => setMode("offer")}>
+            عرض + عروض فرعية
+          </button>
           <button type="button" className={mode === "meta" ? "active tone-meta" : ""} onClick={() => setMode("meta")}>
             نسخ متعددة (Meta)
           </button>
@@ -230,7 +300,17 @@ export default function CatalogCreatePage() {
 
         <div className="catalog-create-shell">
           <div className="catalog-create-main">
-            {mode === "meta" ? (
+            {mode === "offer" ? (
+              <CatalogOfferWizard
+                form={offerForm}
+                setForm={setOfferForm}
+                organizations={organizations.data ?? []}
+                categories={categories.data ?? []}
+                variantGroups={variantGroups.data ?? []}
+                onSubmit={() => void saveOfferGroup()}
+                saving={saving}
+              />
+            ) : mode === "meta" ? (
               <CatalogMetaProductWizard
                 form={metaForm}
                 setForm={setMetaForm}

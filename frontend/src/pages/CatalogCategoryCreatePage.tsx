@@ -42,7 +42,8 @@ export default function CatalogCategoryCreatePage() {
       return;
     }
     toastStore.getState().show("تم تسجيل الصنف — أضف أول منتج له.", "success");
-    navigate(`/catalog/new?category=${encodeURIComponent(name)}`, { replace: true });
+    const mode = /عرض/i.test(name) ? "offer" : "single";
+    navigate(`/catalog/new?mode=${mode}&category=${encodeURIComponent(name)}`, { replace: true });
   }
 
   return (
@@ -104,7 +105,10 @@ export default function CatalogCategoryCreatePage() {
                         <td>{category}</td>
                         <td>{categoryCounts.get(category) ?? 0}</td>
                         <td>
-                          <Link to={`/catalog/new?category=${encodeURIComponent(category)}`} className="contacts-erp-btn">
+                          <Link
+                            to={`/catalog/new?mode=${/عرض/i.test(category) ? "offer" : "single"}&category=${encodeURIComponent(category)}`}
+                            className="contacts-erp-btn"
+                          >
                             إضافة منتج
                           </Link>
                         </td>

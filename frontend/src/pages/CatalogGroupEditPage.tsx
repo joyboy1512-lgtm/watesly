@@ -3,12 +3,18 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import CatalogMetaProductWizard from "../components/CatalogMetaProductWizard";
+import CatalogOfferWizard from "../components/CatalogOfferWizard";
 import {
   buildMetaGroupPayload,
+  buildOfferGroupPayload,
   emptyMetaGroupForm,
+  emptyOfferGroupForm,
+  isOfferMetaGroup,
   metaGroupFormFromResponse,
   metaGroupReady,
   metaGroupSyncMessages,
+  offerGroupFormFromResponse,
+  offerGroupReady,
   type MetaGroupResponse
 } from "../lib/catalogHelpers";
 import { toastStore } from "../stores/toast";
@@ -20,7 +26,9 @@ export default function CatalogGroupEditPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const decodedGroupId = decodeURIComponent(groupKey);
-  const [form, setForm] = useState(emptyMetaGroupForm);
+  const [metaForm, setMetaForm] = useState(emptyMetaGroupForm);
+  const [offerForm, setOfferForm] = useState(emptyOfferGroupForm);
+  const [editAsOffer, setEditAsOffer] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const organizations = useQuery({
@@ -46,24 +54,37 @@ export default function CatalogGroupEditPage() {
 
   useEffect(() => {
     if (!group.data) return;
-    setForm(metaGroupFormFromResponse(group.data));
+    const asOffer = isOfferMetaGroup(group.data);
+    setEditAsOffer(asOffer);
+    if (asOffer) {
+      setOfferForm(offerGroupFormFromResponse(group.data));
+      return;
+    }
+    setMetaForm(metaGroupFormFromResponse(group.data));
   }, [group.data]);
 
   async function saveGroup() {
-    if (!metaGroupReady(form)) {
-      toastStore.getState().show("أكمل الحقول المطلوبة لكل النسخ.", "error");
+    const ready = editAsOffer ? offerGroupReady(offerForm) : metaGroupReady(metaForm);
+    if (!ready) {
+      toastStore.getState().show("أكمل الحقول المطلوبة.", "error");
       return;
     }
     setSaving(true);
     try {
+      const payload = editAsOffer ? buildOfferGroupPayload(offerForm) : buildMetaGroupPayload(metaForm);
       const response = await api.put<MetaGroupResponse>(
         `/catalog/meta-group/${encodeURIComponent(decodedGroupId)}`,
-        buildMetaGroupPayload(form)
+        payload
       );
       await client.invalidateQueries({ queryKey: ["catalog"] });
       await client.invalidateQueries({ queryKey: ["catalog-variant-groups"] });
       await client.invalidateQueries({ queryKey: ["catalog-meta-group", decodedGroupId] });
-      toastStore.getState().show(`تم تحديث ${response.data.variants.length} نسخة.`, "success");
+      toastStore.getState().show(
+        editAsOffer
+          ? `تم تحديث ${response.data.variants.length} عرض فرعي.`
+          : `تم تحديث ${response.data.variants.length} نسخة.`,
+        "success"
+      );
       for (const message of metaGroupSyncMessages(response.data)) {
         toastStore.getState().show(message, message.includes("رفض") || message.includes("تعذر") ? "error" : "success");
       }
@@ -86,23 +107,25 @@ export default function CatalogGroupEditPage() {
     }
   }
 
+  const formReady = editAsOffer ? offerGroupReady(offerForm) : metaGroupReady(metaForm);
+
   return (
     <main className="page catalog-page contacts-erp-page">
       <section className="contacts-erp-shell contacts-form-shell">
         <header className="contacts-form-topbar">
           <div className="contacts-erp-title-block">
             <Link to="/catalog" className="contacts-back-link">← المنتجات والخدمات</Link>
-            <h1>تعديل مجموعة Meta</h1>
+            <h1>{editAsOffer ? "تعديل عرض" : "تعديل مجموعة Meta"}</h1>
             {decodedGroupId && <p className="hint-text" dir="ltr">{decodedGroupId}</p>}
           </div>
           <div className="contacts-form-topbar-actions">
             <button
               type="button"
               className="contacts-erp-btn contacts-erp-btn-primary"
-              disabled={!metaGroupReady(form) || saving || group.isLoading}
+              disabled={!formReady || saving || group.isLoading}
               onClick={() => void saveGroup()}
             >
-              {saving ? "جاري الحفظ…" : "حفظ التعديلات"}
+              {saving ? "جاري الحفظ…" : editAsOffer ? "حفظ العرض" : "حفظ التعديلات"}
             </button>
             <Link to="/catalog" className="contacts-erp-btn">إلغاء</Link>
           </div>
@@ -119,15 +142,27 @@ export default function CatalogGroupEditPage() {
         {group.data && (
           <div className="catalog-create-shell catalog-create-shell-single">
             <div className="catalog-create-main">
-              <CatalogMetaProductWizard
-                form={form}
-                setForm={setForm}
-                organizations={organizations.data ?? []}
-                categories={categories.data ?? []}
-                variantGroups={variantGroups.data ?? []}
-                onSubmit={() => void saveGroup()}
-                saving={saving}
-              />
+              {editAsOffer ? (
+                <CatalogOfferWizard
+                  form={offerForm}
+                  setForm={setOfferForm}
+                  organizations={organizations.data ?? []}
+                  categories={categories.data ?? []}
+                  variantGroups={variantGroups.data ?? []}
+                  onSubmit={() => void saveGroup()}
+                  saving={saving}
+                />
+              ) : (
+                <CatalogMetaProductWizard
+                  form={metaForm}
+                  setForm={setMetaForm}
+                  organizations={organizations.data ?? []}
+                  categories={categories.data ?? []}
+                  variantGroups={variantGroups.data ?? []}
+                  onSubmit={() => void saveGroup()}
+                  saving={saving}
+                />
+              )}
             </div>
           </div>
         )}

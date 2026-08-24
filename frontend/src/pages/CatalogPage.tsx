@@ -330,6 +330,9 @@ export default function CatalogPage() {
             <Link to="/catalog/new" className="contacts-erp-btn contacts-erp-btn-primary">
               إضافة منتج
             </Link>
+            <Link to="/catalog/new?mode=offer" className="contacts-erp-btn">
+              إنشاء عرض
+            </Link>
             <Link to="/catalog/category/new" className="contacts-erp-btn">
               إنشاء صنف
             </Link>
