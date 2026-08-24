@@ -792,7 +792,7 @@ export default function CampaignsPage() {
               <p className="hint-text">
                 الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> (ar/en)
               </p>
-              <div className="campaigns-panel-actions">
+              <div className="admin-actions compact">
                 <button type="submit" disabled={!organizationId || !channelId}>تحميل العملاء</button>
                 <button
                   type="button"
