@@ -8,7 +8,7 @@ import { toastStore } from "../stores/toast";
 import { useHasPermission } from "../hooks/usePermissions";
 import { uploadFile } from "../lib/uploads";
 import { formatWindowExpiry } from "../lib/serviceWindow";
-import { formatWaitingMinutes, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
+import { formatWaitingMinutes, INBOX_CONVERSATIONS_LIMIT, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
 import { formatAppTime } from "../lib/language";
 import { insertReplyVariable, REPLY_VARIABLES, type ConversationContext } from "../lib/replyVariables";
 import {
@@ -98,7 +98,10 @@ export default function InboxPage() {
   const conversationsQuery = useQuery({
     queryKey: ["conversations", showArchived, channelFilter],
     queryFn: async ({ signal }) => {
-      const params: Record<string, string | boolean> = { archived: showArchived };
+      const params: Record<string, string | boolean | number> = {
+        archived: showArchived,
+        limit: INBOX_CONVERSATIONS_LIMIT
+      };
       if (channelFilter) params.channel_id = channelFilter;
       return (
         await api.get<Conversation[]>("/conversations", {
@@ -902,6 +905,11 @@ export default function InboxPage() {
             </button>
           ))}
         </div>
+        {conversations.length >= INBOX_CONVERSATIONS_LIMIT && (
+          <p className="hint-text inbox-list-limit-hint">
+            يُعرض حتى {INBOX_CONVERSATIONS_LIMIT.toLocaleString("ar")} محادثة — استخدم البحث أو فلتر القناة للوصول لباقي العملاء.
+          </p>
+        )}
         <div className="conversation-scroll">
           {conversationsQuery.isLoading && Array.from({ length: 6 }).map((_, index) => <div className="conversation-skeleton" key={index}><span /><div><b /><i /></div></div>)}
           {conversationsQuery.isError && <div className="inbox-state error"><strong>تعذر تحميل المحادثات</strong><button onClick={() => conversationsQuery.refetch()}>إعادة المحاولة</button></div>}

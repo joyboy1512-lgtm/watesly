@@ -14,6 +14,15 @@ def test_conversation_list_supports_channel_filter() -> None:
     assert "channel_id: UUID | None = None" in service
     assert "ensure_conversation_channel_access" in service
     assert "channel_id: UUID | None = Query(None)" in routes
+    assert "_LIST_LIMIT_MAX = 5000" in service
+    assert "Query(5000, ge=1, le=5000)" in routes
+
+
+def test_inbox_page_requests_full_conversation_limit() -> None:
+    page = read("../frontend/src/pages/InboxPage.tsx")
+    helpers = read("../frontend/src/lib/inboxHelpers.ts")
+    assert "INBOX_CONVERSATIONS_LIMIT = 5000" in helpers
+    assert "limit: INBOX_CONVERSATIONS_LIMIT" in page
 
 
 def test_contact_phone_normalization_on_create_and_inbound() -> None:

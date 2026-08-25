@@ -1,5 +1,8 @@
 import { api } from "./api";
 
+/** Must match backend GET /conversations limit validation (le=5000). */
+export const INBOX_CONVERSATIONS_LIMIT = 5000;
+
 const DEFAULT_COUNTRY_CODE = "965";
 
 export function normalizeWhatsAppPhone(value: string, countryCode = DEFAULT_COUNTRY_CODE): string {

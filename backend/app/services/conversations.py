@@ -18,6 +18,8 @@ from app.services.membership_access import (
 )
 from app.schemas.conversation import ConversationUpdateRequest, ConversationResponse
 
+_LIST_LIMIT_MAX = 5000
+
 
 async def _accessible_channel_ids(
     db: AsyncSession,
@@ -146,7 +148,7 @@ async def list_conversations(
             Contact.deleted_at.is_(None),
         )
         .order_by(desc(Conversation.last_message_at))
-        .limit(min(max(limit, 1), 200))
+        .limit(min(max(limit, 1), _LIST_LIMIT_MAX))
     )
     if archived_only:
         query = query.where(Conversation.archived_at.is_not(None))

@@ -76,7 +76,7 @@ async def _mask_conversation_list(
 
 @router.get("", response_model=list[ConversationResponse])
 async def get_conversations(
-    limit: int = Query(100, ge=1, le=200),
+    limit: int = Query(5000, ge=1, le=5000),
     starred: bool = Query(False),
     archived: bool = Query(False),
     channel_id: UUID | None = Query(None),
