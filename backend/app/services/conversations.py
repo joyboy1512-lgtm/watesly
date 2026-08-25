@@ -8,7 +8,7 @@ from app.models.contact import Contact
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.conversation_event import ConversationEvent
 from app.models.conversation_read_state import ConversationReadState
-from app.models.membership import Membership
+from app.models.membership import Membership, MembershipRole
 from app.models.message import Message, MessageDirection
 from app.services.notifications import create_notification
 from app.services.whatsapp_window import compute_service_window
@@ -43,6 +43,11 @@ async def ensure_conversation_channel_access(
         membership=membership,
         channel_id=channel_id,
     )
+
+
+def _limited_to_assigned_conversations(membership: Membership) -> bool:
+    """Viewers only see assigned threads; agents see all accessible channel conversations."""
+    return membership.role == MembershipRole.VIEWER
 
 
 def build_conversation_response(
@@ -157,7 +162,7 @@ async def list_conversations(
         if accessible is not None and channel_id not in accessible:
             return []
         query = query.where(Conversation.channel_id == channel_id)
-    if membership.role.value in {"agent", "viewer"}:
+    if _limited_to_assigned_conversations(membership):
         query = query.where(Conversation.assigned_membership_id == membership.id)
     rows = list((await db.execute(query)).all())
     result = []
@@ -176,7 +181,7 @@ async def list_messages(
     conversation = await db.get(Conversation, conversation_id)
     if conversation is None or conversation.account_id != account_id or conversation.deleted_at is not None:
         raise ValueError("CONVERSATION_NOT_FOUND")
-    if membership.role.value in {"agent", "viewer"}:
+    if _limited_to_assigned_conversations(membership):
         if conversation.assigned_membership_id != membership.id:
             raise ValueError("CONVERSATION_FORBIDDEN")
     await ensure_conversation_channel_access(
@@ -293,7 +298,7 @@ async def get_conversation_for_send(
     conversation = await db.get(Conversation, conversation_id)
     if conversation is None or conversation.account_id != account_id or conversation.deleted_at is not None:
         raise ValueError("CONVERSATION_NOT_FOUND")
-    if membership.role.value in {"agent", "viewer"}:
+    if _limited_to_assigned_conversations(membership):
         if conversation.assigned_membership_id != membership.id:
             raise ValueError("CONVERSATION_FORBIDDEN")
     await ensure_conversation_channel_access(
