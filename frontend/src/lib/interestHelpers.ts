@@ -31,7 +31,7 @@ export function slugifyInterestLabel(label: string): string {
 export function buildAudienceResolvePayload(input: AudienceFilterInput) {
   const payload: Record<string, unknown> = {
     marketing_opt_in_only: input.marketingOptInOnly ?? true,
-    limit: 500
+    limit: 5000
   };
   if (input.organizationId) payload.organization_id = input.organizationId;
   if (input.channelId) payload.channel_id = input.channelId;

@@ -15,7 +15,7 @@ from app.services.interests import apply_contact_interests
 from app.services.gender_inference import infer_gender_from_name, infer_gender_with_llm_fallback
 from app.services.phone_normalize import normalize_whatsapp_phone, phones_match
 
-_LIST_LIMIT_MAX = 500
+_LIST_LIMIT_MAX = 5000
 
 
 async def find_contact_on_channel_by_phone(

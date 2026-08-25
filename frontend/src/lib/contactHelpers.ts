@@ -113,6 +113,7 @@ export function formatLifecycleStage(stage: string | undefined | null): string {
 }
 /** Must match backend GET /contacts limit validation (le=500). */
 export const CONTACTS_LIST_LIMIT = 500;
+export const CAMPAIGN_AUDIENCE_LIMIT = 5000;
 /** Client-side table page size on ContactsPage. */
 export const CONTACTS_PAGE_SIZE = 25;
 

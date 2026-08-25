@@ -297,19 +297,27 @@ async def resolve_audience_contacts(
     *,
     account_id: UUID,
     filters: dict,
-    limit: int = 500,
+    limit: int = 5000,
 ) -> list[Contact]:
     query = select(Contact).where(Contact.account_id == account_id, Contact.deleted_at.is_(None))
     query = _apply_segment_filters(query, filters)
-    result = await db.execute(query.distinct().order_by(Contact.created_at.desc()).limit(min(max(limit, 1), 500)))
+    result = await db.execute(query.distinct().order_by(Contact.created_at.desc()).limit(min(max(limit, 1), 5000)))
     return list(result.scalars().all())
 
 
-async def resolve_segment_contacts(db: AsyncSession, *, account_id: UUID, segment: Segment) -> list[Contact]:
-    filters = segment.filter_json or {}
+async def resolve_segment_contacts(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    segment: Segment,
+    channel_id: UUID | None = None,
+) -> list[Contact]:
+    filters = dict(segment.filter_json or {})
+    if channel_id is not None:
+        filters["channel_id"] = str(channel_id)
     query = select(Contact).where(Contact.account_id == account_id, Contact.deleted_at.is_(None))
     query = _apply_segment_filters(query, filters)
-    result = await db.execute(query.distinct().limit(500))
+    result = await db.execute(query.distinct().limit(5000))
     return list(result.scalars().all())
 
 

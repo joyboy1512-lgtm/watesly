@@ -124,7 +124,7 @@ class AudienceResolveRequest(BaseModel):
     interest_ids: list[UUID] = Field(default_factory=list)
     lifecycle_stage: str | None = None
     marketing_opt_in_only: bool = True
-    limit: int = Field(default=500, ge=1, le=500)
+    limit: int = Field(default=5000, ge=1, le=5000)
 
 
 class CustomFieldCreateRequest(BaseModel):
@@ -257,6 +257,7 @@ async def post_segment(
 @router.get("/segments/{segment_id}/contacts")
 async def get_segment_contacts(
     segment_id: UUID,
+    channel_id: UUID | None = None,
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -265,7 +266,12 @@ async def get_segment_contacts(
     segment = await db.get(Segment, segment_id)
     if segment is None or segment.account_id != context.account_id:
         raise HTTPException(status_code=404, detail="Segment not found")
-    contacts = await resolve_segment_contacts(db, account_id=context.account_id, segment=segment)
+    contacts = await resolve_segment_contacts(
+        db,
+        account_id=context.account_id,
+        segment=segment,
+        channel_id=channel_id,
+    )
     return [{"id": str(c.id), "name": c.display_name, "phone": c.external_address} for c in contacts]
 
 

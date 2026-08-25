@@ -12,7 +12,7 @@ import {
   type TemplateComponent
 } from "../lib/templateMedia";
 import { uploadFile, type UploadedFile } from "../lib/uploads";
-import { downloadContactsImportTemplate } from "../lib/contactHelpers";
+import { downloadContactsImportTemplate, CAMPAIGN_AUDIENCE_LIMIT } from "../lib/contactHelpers";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   AUDIENCE_GENDER_OPTIONS,
@@ -166,7 +166,20 @@ export default function CampaignsPage() {
   const channels = useQuery({ queryKey: ["channels"], queryFn: async () => (await api.get<Channel[]>("/channels")).data });
   const accounts = useQuery({ queryKey: ["whatsapp-accounts"], queryFn: async () => (await api.get<WhatsAppAccount[]>("/whatsapp/accounts")).data });
   const templates = useQuery({ queryKey: ["templates"], queryFn: async () => (await api.get<Template[]>("/templates")).data });
-  const contacts = useQuery({ queryKey: ["contacts"], queryFn: async () => (await api.get<Contact[]>("/contacts")).data });
+  const audienceChannelId = useMemo(() => {
+    const account = (accounts.data ?? []).find((item) => item.id === accountId);
+    return account?.channel_id || channelId || "";
+  }, [accounts.data, accountId, channelId]);
+  const contacts = useQuery({
+    queryKey: ["contacts", "campaign-audience", organizationId, audienceChannelId],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { limit: CAMPAIGN_AUDIENCE_LIMIT };
+      if (organizationId) params.organization_id = organizationId;
+      if (audienceChannelId) params.channel_id = audienceChannelId;
+      return (await api.get<Contact[]>("/contacts", { params })).data;
+    },
+    enabled: Boolean(organizationId)
+  });
   const segments = useQuery({
     queryKey: ["segments"],
     queryFn: async () => (await api.get<Segment[]>("/platform/segments")).data
@@ -319,9 +332,11 @@ export default function CampaignsPage() {
   });
   const channelScopedSelectedContacts = useMemo(() => {
     if (!selectedAccountChannelId) return selectedContacts;
-    return selectedContacts.filter(
-      (id) => contactById.get(id)?.channel_id === selectedAccountChannelId
-    );
+    return selectedContacts.filter((id) => {
+      const contact = contactById.get(id);
+      if (!contact) return true;
+      return contact.channel_id === selectedAccountChannelId;
+    });
   }, [selectedContacts, selectedAccountChannelId, contactById]);
   const hiddenSelectedCount = selectedContacts.length - channelScopedSelectedContacts.length;
   const visibleSelectedCount = filteredContacts.filter((item) =>
@@ -459,11 +474,13 @@ export default function CampaignsPage() {
   async function loadSegmentAudience() {
     if (!selectedSegmentId) return;
     try {
-      const result = await api.get<{ id: string }[]>(`/platform/segments/${selectedSegmentId}/contacts`);
-      let ids = result.data.map((item) => item.id);
-      if (selectedAccountChannelId) {
-        ids = ids.filter((id) => contactById.get(id)?.channel_id === selectedAccountChannelId);
-      }
+      const params: Record<string, string> = {};
+      if (selectedAccountChannelId) params.channel_id = selectedAccountChannelId;
+      const result = await api.get<{ id: string }[]>(
+        `/platform/segments/${selectedSegmentId}/contacts`,
+        { params }
+      );
+      const ids = result.data.map((item) => item.id);
       setSelectedContacts(ids);
       toastStore.getState().show(`تم تحميل ${ids.length} عميل من الشريحة.`, "success");
     } catch {
@@ -1109,6 +1126,11 @@ export default function CampaignsPage() {
                 </span>
               )}
             </div>
+            {(contacts.data?.length ?? 0) >= CAMPAIGN_AUDIENCE_LIMIT && (
+              <p className="hint-text campaigns-audience-warning" role="status">
+                يُعرض حتى {CAMPAIGN_AUDIENCE_LIMIT.toLocaleString("ar")} عميل في القائمة — للجمهور الأكبر استخدم استيراد Excel أعلاه.
+              </p>
+            )}
             <div className="contact-picker campaigns-contact-picker">
               {filteredContacts.map((item) => (
                 <label key={item.id} className="checkbox-row">

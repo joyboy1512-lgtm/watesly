@@ -92,7 +92,7 @@ async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) ->
 
 @router.get("", response_model=list[ContactResponse])
 async def get_contacts(
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=5000),
     q: str | None = None,
     channel_id: UUID | None = None,
     organization_id: UUID | None = None,
