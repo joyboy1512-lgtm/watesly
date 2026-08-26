@@ -1,7 +1,8 @@
 import { Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, formatApiError } from "../lib/api";
 import {
+  approveAndStartCampaign,
   CAMPAIGN_STATUS_LABELS,
   campaignReportNeedsRefresh,
   campaignResultToneClass,
@@ -244,6 +245,7 @@ type CampaignRowActions = {
   onArchive?: (campaignId: string) => void;
   onUnarchive?: (campaignId: string) => void;
   onDeleteDraft?: (campaignId: string) => void;
+  onStartDraft?: (campaignId: string) => void;
   showArchived?: boolean;
   actionBusyId?: string | null;
 };
@@ -277,6 +279,7 @@ export function CampaignReportRow({
   const sentCount = campaignSentCount(liveReport);
   const showDetails = expanded || isActive || needsRefresh || ["completed", "completed_with_errors", "failed"].includes(item.status);
   const canFollowUp = ["completed", "completed_with_errors", "failed"].includes(item.status);
+  const canStartDraft = item.status === "draft";
   const canArchive = ARCHIVABLE_STATUSES.has(item.status) && !item.archived_at;
   const canUnarchive = Boolean(item.archived_at);
   const canDeleteDraft = item.status === "draft";
@@ -376,6 +379,16 @@ export function CampaignReportRow({
                 onClick={() => actions.onUnarchive?.(item.id)}
               >
                 استعادة
+              </button>
+            )}
+            {canStartDraft && actions?.onStartDraft && !actions.showArchived && (
+              <button
+                type="button"
+                className="whatsapp-button compact"
+                disabled={busy}
+                onClick={() => actions.onStartDraft?.(item.id)}
+              >
+                اعتماد وإرسال
               </button>
             )}
             {canDeleteDraft && actions?.onDeleteDraft && !actions.showArchived && (
@@ -523,5 +536,26 @@ export function useCampaignActions() {
     }
   }
 
-  return { pauseCampaign, cancelCampaign, archiveCampaign, unarchiveCampaign, deleteDraftCampaign };
+  async function startDraftCampaign(campaignId: string) {
+    try {
+      await approveAndStartCampaign(campaignId, { skipGlobalErrorToast: true });
+      toastStore.getState().show("تم بدء الإرسال.", "success");
+      await client.invalidateQueries({ queryKey: ["campaigns"] });
+      await client.invalidateQueries({ queryKey: ["campaign-report", campaignId] });
+    } catch (error) {
+      toastStore.getState().show(
+        formatApiError(error, "تعذر بدء الحملة. تحقق من صلاحية اعتماد الحملات."),
+        "error"
+      );
+    }
+  }
+
+  return {
+    pauseCampaign,
+    cancelCampaign,
+    archiveCampaign,
+    unarchiveCampaign,
+    deleteDraftCampaign,
+    startDraftCampaign
+  };
 }

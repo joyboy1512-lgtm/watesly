@@ -1,3 +1,4 @@
+import { api } from "./api";
 import { formatAppTime } from "./language";
 
 export type CampaignReportLike = {
@@ -155,6 +156,15 @@ export function formatReadRate(rate: number | undefined, report?: CampaignReport
   const delivered = report.delivered + report.read;
   if (delivered === 0) return "—";
   return `${Math.round((report.read / delivered) * 100)}%`;
+}
+
+export async function approveAndStartCampaign(
+  campaignId: string,
+  options?: { skipGlobalErrorToast?: boolean }
+) {
+  const requestOptions = options?.skipGlobalErrorToast ? { skipGlobalErrorToast: true as const } : undefined;
+  await api.post(`/campaigns/${campaignId}/approve`, undefined, requestOptions);
+  await api.post(`/campaigns/${campaignId}/start`, undefined, requestOptions);
 }
 
 export function computeCampaignStats(items: { status: string }[]) {

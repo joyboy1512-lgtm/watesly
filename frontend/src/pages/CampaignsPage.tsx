@@ -2,7 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, formatApiError } from "../lib/api";
-import { computeCampaignStats } from "../lib/campaignHelpers";
+import { approveAndStartCampaign, computeCampaignStats } from "../lib/campaignHelpers";
 import { type PreflightCheck } from "../lib/growthFeatures";
 import {
   buildSendComponents,
@@ -131,7 +131,14 @@ export default function CampaignsPage() {
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const createRef = useRef<HTMLElement | null>(null);
-  const { pauseCampaign, cancelCampaign, archiveCampaign, unarchiveCampaign, deleteDraftCampaign } = useCampaignActions();
+  const {
+    pauseCampaign,
+    cancelCampaign,
+    archiveCampaign,
+    unarchiveCampaign,
+    deleteDraftCampaign,
+    startDraftCampaign
+  } = useCampaignActions();
 
   const [activeTab, setActiveTab] = useState<PageTab>("list");
   const [search, setSearch] = useState("");
@@ -428,14 +435,36 @@ export default function CampaignsPage() {
 
   async function createFollowUp(campaignId: string, followUpType: "not_delivered" | "not_read" | "failed") {
     setActionBusyId(campaignId);
+    const requestOptions = { skipGlobalErrorToast: true } as const;
     try {
-      const response = await api.post(`/campaigns/${campaignId}/follow-up`, { follow_up_type: followUpType });
-      toastStore.getState().show("تم إنشاء حملة متابعة (مسودة).", "success");
-      setExpandedCampaignId(response.data.id as string);
+      const response = await api.post(
+        `/campaigns/${campaignId}/follow-up`,
+        { follow_up_type: followUpType },
+        requestOptions
+      );
+      const followUpId = response.data.id as string;
+      setExpandedCampaignId(followUpId);
+      setHighlightCampaignId(followUpId);
       setActiveTab("list");
+      try {
+        await approveAndStartCampaign(followUpId, requestOptions);
+        await waitForCampaignReport(client, followUpId);
+        toastStore.getState().show("تم بدء حملة المتابعة — تظهر النتيجة في الجدول.", "success");
+      } catch (startError) {
+        toastStore.getState().show(
+          formatApiError(
+            startError,
+            "تم إنشاء مسودة المتابعة — اضغط «اعتماد وإرسال» في الجدول أو اطلب اعتمادًا من المدير."
+          ),
+          "error"
+        );
+      }
       await client.invalidateQueries({ queryKey: ["campaigns"] });
-    } catch {
-      toastStore.getState().show("فعّل «حملات متابعة» من Developer → ميزات Watesly.", "error");
+    } catch (error) {
+      toastStore.getState().show(
+        formatApiError(error, "تعذر إنشاء المتابعة. فعّل «حملات متابعة» من Developer → ميزات Watesly."),
+        "error"
+      );
     } finally {
       setActionBusyId(null);
     }
@@ -591,8 +620,7 @@ export default function CampaignsPage() {
         }))
       }, requestOptions);
       const campaignId = response.data.id as string;
-      await api.post(`/campaigns/${campaignId}/approve`, undefined, requestOptions);
-      await api.post(`/campaigns/${campaignId}/start`, undefined, requestOptions);
+      await approveAndStartCampaign(campaignId, requestOptions);
       setName("");
       setSelectedContacts([]);
       setCampaignMediaOverride(null);
@@ -755,6 +783,7 @@ export default function CampaignsPage() {
                 onArchive: handleArchive,
                 onUnarchive: handleUnarchive,
                 onDeleteDraft: handleDeleteDraft,
+                onStartDraft: archiveFilter === "active" ? startDraftCampaign : undefined,
                 showArchived: archiveFilter === "archived",
                 actionBusyId
               }}
