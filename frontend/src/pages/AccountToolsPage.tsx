@@ -291,7 +291,7 @@ export default function AccountToolsPage() {
         <div className="at-page-title-card">
           <span className="eyebrow whatsapp-eyebrow">أدوات الحساب</span>
           <h1>أدوات حساب واتساب</h1>
-          <p>الرؤى وتسعير الرسائل/المكالمات والحدود القصوى والفلوز — كما في WhatsApp Manager.</p>
+          <p>الرؤى وتسعير الرسائل/المكالمات والحدود القصوى وFlows — كما في WhatsApp Manager.</p>
         </div>
         <Link to="/whatsapp-connect" className="secondary-button">الحسابات المربوطة ←</Link>
       </header>
@@ -321,7 +321,6 @@ export default function AccountToolsPage() {
               {formatQualityRating(selectedAccount.quality_rating)}
             </span>
             <span className="admin-chip">{formatMessagingLimit(selectedAccount)}</span>
-            <small>WABA {selectedAccount.waba_id}</small>
           </div>
         )}
       </section>
@@ -334,7 +333,7 @@ export default function AccountToolsPage() {
           الحدود القصوى للرسائل
         </button>
         <button type="button" className={toolTab === "flows" ? "whatsapp-tab active" : "whatsapp-tab"} onClick={() => setToolTab("flows")}>
-          الفلوز
+          Flows
         </button>
       </div>
 
@@ -616,18 +615,20 @@ export default function AccountToolsPage() {
         <section className="card account-tools-panel">
           <div className="admin-table-header">
             <div>
-              <h2>الفلوز (WhatsApp Flows)</h2>
+              <h2>Flows</h2>
               <small>{flows.data?.note_ar || "نماذج تفاعلية من Meta — ليست أتمتة واتسلي"}</small>
             </div>
           </div>
 
           {flows.data?.meta_error && (
-            <p className="account-tools-warning">تعذر جلب الفلوز: {flows.data.meta_error}</p>
+            <p className="account-tools-warning">تعذر جلب Flows: {flows.data.meta_error}</p>
           )}
 
           <div className="at-metric-grid at-metric-grid-flows">
             <article className="at-metric-card">
-              <h3 className="at-metric-card-title">إنشاء Flow</h3>
+              <h3 className="at-metric-card-title">
+                <span className="at-title-chip">إنشاء Flow</span>
+              </h3>
               <div className="account-tools-form">
                 <input
                   value={flowName}
@@ -661,7 +662,9 @@ export default function AccountToolsPage() {
             </article>
 
             <article className="at-metric-card">
-              <h3 className="at-metric-card-title">قائمة الفلوز</h3>
+              <h3 className="at-metric-card-title">
+                <span className="at-title-chip">قائمة Flows</span>
+              </h3>
               {flows.isLoading && <p className="muted">جاري التحميل…</p>}
               <ul className="at-metric-rows">
                 {(flows.data?.flows?.length ? flows.data.flows : []).map((flow) => (
