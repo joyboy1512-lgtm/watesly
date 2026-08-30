@@ -423,7 +423,7 @@ async def list_account_flows(*, whatsapp_account: WhatsAppAccount) -> dict:
         "waba_id": whatsapp_account.waba_id,
         "flows": flows,
         "meta_error": meta_error,
-        "note_ar": "الفلوز هنا هي WhatsApp Flows من Meta — مختلفة عن أتمتة واتسلي.",
+        "note_ar": "Flows هنا من Meta — مختلفة عن أتمتة واتسلي.",
     }
 
 

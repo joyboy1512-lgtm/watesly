@@ -644,7 +644,9 @@ export default function AccountToolsPage() {
                   إنشاء في Meta
                 </button>
               </div>
-              <h3 className="at-metric-card-title">إرسال Flow</h3>
+              <h3 className="at-metric-card-title">
+                <span className="at-title-chip">إرسال Flow</span>
+              </h3>
               <div className="account-tools-form" style={{ marginBottom: 0 }}>
                 <input value={sendTo} onChange={(e) => setSendTo(e.target.value)} placeholder="رقم المستلم" />
                 <input value={sendFlowId} onChange={(e) => setSendFlowId(e.target.value)} placeholder="Flow ID" />
