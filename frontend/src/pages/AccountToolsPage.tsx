@@ -109,6 +109,48 @@ function usagePercent(ratio: number | null | undefined): number {
   return Math.max(0, Math.min(100, Math.round(ratio * 100)));
 }
 
+type MetricRow = { label: string; value: string | number };
+
+function MetricCard({ title, rows, emphasizeFirst = false }: { title: string; rows: MetricRow[]; emphasizeFirst?: boolean }) {
+  return (
+    <article className="at-metric-card">
+      <h3 className="at-metric-card-title">{title}</h3>
+      <ul className="at-metric-rows">
+        {rows.map((row, index) => (
+          <li key={`${row.label}-${index}`} className={emphasizeFirst && index === 0 ? "at-metric-row at-metric-row-total" : "at-metric-row"}>
+            <span className="at-metric-label">{row.label}</span>
+            <span className="at-metric-dots" aria-hidden="true" />
+            <strong className="at-metric-value">{row.value}</strong>
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+const CATEGORY_ORDER = [
+  "MARKETING",
+  "MARKETING_LITE",
+  "UTILITY",
+  "AUTHENTICATION",
+  "AUTHENTICATION_INTERNATIONAL",
+  "SERVICE",
+  "REFERRAL_CONVERSION"
+];
+
+function categoryMap(rows: PricingCategoryRow[]): Map<string, PricingCategoryRow> {
+  return new Map(rows.map((row) => [row.key, row]));
+}
+
+function orderedCategoryRows(rows: PricingCategoryRow[], keys = CATEGORY_ORDER): PricingCategoryRow[] {
+  const map = categoryMap(rows);
+  const ordered = keys
+    .map((key) => map.get(key) ?? { key, label_ar: key, volume: 0, cost: 0 })
+    .filter((row) => map.has(row.key) || row.volume > 0 || row.cost > 0);
+  const extras = rows.filter((row) => !keys.includes(row.key));
+  return [...ordered, ...extras];
+}
+
 export default function AccountToolsPage() {
   const queryClient = useQueryClient();
   const [toolTab, setToolTab] = useState<ToolTab>("insights");
@@ -294,82 +336,69 @@ export default function AccountToolsPage() {
               {messagePricing.data?.meta_error && (
                 <p className="account-tools-warning">تعذر جلب بيانات Meta: {messagePricing.data.meta_error}</p>
               )}
-              {messagePricing.data && (
-                <>
-                  <div className="admin-stats-row admin-stats-row-brand">
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>مرسل (محلي)</span>
-                      <strong>{messagePricing.data.local_messages.sent}</strong>
-                    </article>
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>مسلّم (Meta)</span>
-                      <strong>{messagePricing.data.meta.delivered_total}</strong>
-                    </article>
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>مجاني</span>
-                      <strong>{messagePricing.data.meta.delivered_free}</strong>
-                    </article>
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>مدفوع</span>
-                      <strong>{messagePricing.data.meta.delivered_paid}</strong>
-                    </article>
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>رسوم تقريبية</span>
-                      <strong>{money(messagePricing.data.meta.approximate_cost, messagePricing.data.meta.currency)}</strong>
-                    </article>
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>وارد (محلي)</span>
-                      <strong>{messagePricing.data.local_messages.received}</strong>
-                    </article>
-                  </div>
-
-                  <div className="account-tools-split">
-                    <div>
-                      <h3>حسب الفئة</h3>
-                      <table className="admin-erp-table">
-                        <thead>
-                          <tr>
-                            <th>الفئة</th>
-                            <th>الكمية</th>
-                            <th>التكلفة</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(messagePricing.data.meta.by_category.length ? messagePricing.data.meta.by_category : [{ key: "-", label_ar: "لا بيانات", volume: 0, cost: 0 }]).map((row) => (
-                            <tr key={row.key}>
-                              <td>{row.label_ar}</td>
-                              <td>{row.volume}</td>
-                              <td>{money(row.cost, messagePricing.data.meta.currency)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+              {messagePricing.data && (() => {
+                const currency = messagePricing.data.meta.currency;
+                const categories = orderedCategoryRows(messagePricing.data.meta.by_category);
+                const freeTypes = messagePricing.data.meta.by_pricing_type.filter((row) => row.key.startsWith("FREE"));
+                const paidCategories = categories.filter((row) => row.key !== "SERVICE" && row.key !== "REFERRAL_CONVERSION");
+                return (
+                  <>
+                    <div className="at-metric-grid at-metric-grid-top">
+                      <MetricCard
+                        title="كل الرسائل"
+                        rows={[
+                          { label: "الرسائل المرسلة", value: messagePricing.data.local_messages.sent },
+                          { label: "الرسائل التي تم تسليمها", value: messagePricing.data.meta.delivered_total },
+                          { label: "الرسائل الواردة", value: messagePricing.data.local_messages.received }
+                        ]}
+                      />
+                      <MetricCard
+                        title="الرسائل التي تم تسليمها"
+                        emphasizeFirst
+                        rows={[
+                          { label: "الإجمالي", value: messagePricing.data.meta.delivered_total },
+                          ...categories.map((row) => ({ label: row.label_ar, value: row.volume }))
+                        ]}
+                      />
+                      <MetricCard
+                        title="الرسائل المجانية التي تم تسليمها"
+                        emphasizeFirst
+                        rows={[
+                          { label: "الإجمالي", value: messagePricing.data.meta.delivered_free },
+                          ...(freeTypes.length
+                            ? freeTypes.map((row) => ({ label: row.label_ar, value: row.volume }))
+                            : [
+                                { label: "مجاني — خدمة عملاء", value: 0 },
+                                { label: "مجاني — نقطة دخول", value: 0 }
+                              ])
+                        ]}
+                      />
                     </div>
-                    <div>
-                      <h3>مجاني / مدفوع</h3>
-                      <table className="admin-erp-table">
-                        <thead>
-                          <tr>
-                            <th>النوع</th>
-                            <th>الكمية</th>
-                            <th>التكلفة</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(messagePricing.data.meta.by_pricing_type.length ? messagePricing.data.meta.by_pricing_type : [{ key: "-", label_ar: "لا بيانات", volume: 0, cost: 0 }]).map((row) => (
-                            <tr key={row.key}>
-                              <td>{row.label_ar}</td>
-                              <td>{row.volume}</td>
-                              <td>{money(row.cost, messagePricing.data.meta.currency)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="at-metric-grid at-metric-grid-bottom">
+                      <MetricCard
+                        title="الرسائل المدفوعة التي تم تسليمها"
+                        emphasizeFirst
+                        rows={[
+                          { label: "الإجمالي", value: messagePricing.data.meta.delivered_paid },
+                          ...paidCategories.map((row) => ({ label: row.label_ar, value: row.volume }))
+                        ]}
+                      />
+                      <MetricCard
+                        title="إجمالي الرسوم التقريبية"
+                        emphasizeFirst
+                        rows={[
+                          { label: "الإجمالي", value: money(messagePricing.data.meta.approximate_cost, currency) },
+                          ...categories.map((row) => ({
+                            label: row.label_ar,
+                            value: money(row.cost, currency)
+                          }))
+                        ]}
+                      />
                     </div>
-                  </div>
-                  <p className="muted">{messagePricing.data.note_ar}</p>
-                </>
-              )}
+                    <p className="muted">{messagePricing.data.note_ar}</p>
+                  </>
+                );
+              })()}
             </>
           )}
 
@@ -381,37 +410,35 @@ export default function AccountToolsPage() {
               )}
               {callPricing.data && (
                 <>
-                  <div className="admin-stats-row admin-stats-row-brand">
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>إجمالي المكالمات</span>
-                      <strong>{callPricing.data.meta.calls_total}</strong>
-                    </article>
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>رسوم تقريبية</span>
-                      <strong>{money(callPricing.data.meta.approximate_cost, callPricing.data.meta.currency)}</strong>
-                    </article>
-                    <article className="admin-stat-card admin-stat-card-brand">
-                      <span>متوسط المدة (ث)</span>
-                      <strong>{callPricing.data.meta.average_duration_seconds ?? "—"}</strong>
-                    </article>
-                  </div>
-                  <div className="account-tools-split">
-                    <div>
-                      <h3>حسب الاتجاه</h3>
-                      <ul className="account-tools-list">
-                        {(callPricing.data.meta.by_direction.length ? callPricing.data.meta.by_direction : [{ key: "لا بيانات", count: 0 }]).map((row) => (
-                          <li key={row.key}><span>{row.key}</span><strong>{row.count}</strong></li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h3>حسب النوع</h3>
-                      <ul className="account-tools-list">
-                        {(callPricing.data.meta.by_type.length ? callPricing.data.meta.by_type : [{ key: "لا بيانات", count: 0 }]).map((row) => (
-                          <li key={row.key}><span>{row.key}</span><strong>{row.count}</strong></li>
-                        ))}
-                      </ul>
-                    </div>
+                  <div className="at-metric-grid at-metric-grid-top">
+                    <MetricCard
+                      title="ملخص المكالمات"
+                      rows={[
+                        { label: "إجمالي المكالمات", value: callPricing.data.meta.calls_total },
+                        {
+                          label: "متوسط المدة (ث)",
+                          value: callPricing.data.meta.average_duration_seconds ?? "—"
+                        },
+                        {
+                          label: "رسوم تقريبية",
+                          value: money(callPricing.data.meta.approximate_cost, callPricing.data.meta.currency)
+                        }
+                      ]}
+                    />
+                    <MetricCard
+                      title="حسب الاتجاه"
+                      rows={(callPricing.data.meta.by_direction.length
+                        ? callPricing.data.meta.by_direction
+                        : [{ key: "لا بيانات", count: 0 }]
+                      ).map((row) => ({ label: row.key, value: row.count }))}
+                    />
+                    <MetricCard
+                      title="حسب النوع"
+                      rows={(callPricing.data.meta.by_type.length
+                        ? callPricing.data.meta.by_type
+                        : [{ key: "لا بيانات", count: 0 }]
+                      ).map((row) => ({ label: row.key, value: row.count }))}
+                    />
                   </div>
                   <p className="muted">{callPricing.data.note_ar}</p>
                 </>
@@ -441,33 +468,50 @@ export default function AccountToolsPage() {
           {limits.isLoading && <p className="muted">جاري التحميل…</p>}
           {limits.data && (
             <>
-              <div className="admin-stats-row admin-stats-row-brand">
-                <article className="admin-stat-card admin-stat-card-brand">
-                  <span>المستوى</span>
-                  <strong>{limits.data.messaging_limit_tier || "—"}</strong>
-                </article>
-                <article className="admin-stat-card admin-stat-card-brand">
-                  <span>الحد / 24س</span>
-                  <strong>{limits.data.messaging_limit?.toLocaleString("ar") ?? "غير محدود"}</strong>
-                </article>
-                <article className="admin-stat-card admin-stat-card-brand">
-                  <span>مستخدم (تقديري)</span>
-                  <strong>{limits.data.used_unique_contacts_24h.toLocaleString("ar")}</strong>
-                </article>
-                <article className="admin-stat-card admin-stat-card-brand">
-                  <span>متبقي</span>
-                  <strong>
-                    {limits.data.remaining_unique_contacts_24h == null
-                      ? "—"
-                      : limits.data.remaining_unique_contacts_24h.toLocaleString("ar")}
-                  </strong>
-                </article>
-                <article className="admin-stat-card admin-stat-card-brand">
-                  <span>الجودة</span>
-                  <strong>{limits.data.quality_label_ar || "—"}</strong>
-                </article>
+              <div className="at-metric-grid at-metric-grid-top">
+                <MetricCard
+                  title="حد الإرسال"
+                  rows={[
+                    { label: "المستوى", value: limits.data.messaging_limit_tier || "—" },
+                    {
+                      label: "الحد / 24س",
+                      value: limits.data.messaging_limit?.toLocaleString("ar") ?? "غير محدود"
+                    },
+                    { label: "الجودة", value: limits.data.quality_label_ar || "—" }
+                  ]}
+                />
+                <MetricCard
+                  title="الاستخدام التقديري"
+                  emphasizeFirst
+                  rows={[
+                    { label: "نسبة الاستخدام", value: `${percent}%` },
+                    {
+                      label: "مستخدم (جهات فريدة / 24س)",
+                      value: limits.data.used_unique_contacts_24h.toLocaleString("ar")
+                    },
+                    {
+                      label: "متبقي",
+                      value:
+                        limits.data.remaining_unique_contacts_24h == null
+                          ? "—"
+                          : limits.data.remaining_unique_contacts_24h.toLocaleString("ar")
+                    }
+                  ]}
+                />
+                <MetricCard
+                  title="حالة Meta"
+                  rows={[
+                    { label: "الإرسال", value: limits.data.meta_can_send_message || "—" },
+                    { label: "حالة الرقم", value: limits.data.meta_phone_status || "—" },
+                    {
+                      label: "آخر مزامنة",
+                      value: limits.data.health_synced_at
+                        ? new Date(limits.data.health_synced_at).toLocaleString("ar")
+                        : "—"
+                    }
+                  ]}
+                />
               </div>
-
               <div className="account-tools-progress">
                 <div className="account-tools-progress-bar" style={{ width: `${percent}%` }} />
               </div>
@@ -494,9 +538,9 @@ export default function AccountToolsPage() {
             <p className="account-tools-warning">تعذر جلب الفلوز: {flows.data.meta_error}</p>
           )}
 
-          <div className="account-tools-split">
-            <div>
-              <h3>إنشاء Flow</h3>
+          <div className="at-metric-grid at-metric-grid-flows">
+            <article className="at-metric-card">
+              <h3 className="at-metric-card-title">إنشاء Flow</h3>
               <div className="account-tools-form">
                 <input
                   value={flowName}
@@ -512,9 +556,8 @@ export default function AccountToolsPage() {
                   إنشاء في Meta
                 </button>
               </div>
-
-              <h3>إرسال Flow</h3>
-              <div className="account-tools-form">
+              <h3 className="at-metric-card-title">إرسال Flow</h3>
+              <div className="account-tools-form" style={{ marginBottom: 0 }}>
                 <input value={sendTo} onChange={(e) => setSendTo(e.target.value)} placeholder="رقم المستلم" />
                 <input value={sendFlowId} onChange={(e) => setSendFlowId(e.target.value)} placeholder="Flow ID" />
                 <input value={sendCta} onChange={(e) => setSendCta(e.target.value)} placeholder="نص الزر" />
@@ -528,41 +571,30 @@ export default function AccountToolsPage() {
                   إرسال
                 </button>
               </div>
-            </div>
+            </article>
 
-            <div>
-              <h3>القائمة</h3>
+            <article className="at-metric-card">
+              <h3 className="at-metric-card-title">قائمة الفلوز</h3>
               {flows.isLoading && <p className="muted">جاري التحميل…</p>}
-              <table className="admin-erp-table">
-                <thead>
-                  <tr>
-                    <th>الاسم</th>
-                    <th>الحالة</th>
-                    <th>ID</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(flows.data?.flows?.length ? flows.data.flows : []).map((flow) => (
-                    <tr key={flow.id}>
-                      <td>
-                        <button
-                          type="button"
-                          className="linkish"
-                          onClick={() => setSendFlowId(flow.id)}
-                        >
-                          {flow.name || flow.id}
-                        </button>
-                      </td>
-                      <td>{flow.status || "—"}</td>
-                      <td><code>{flow.id}</code></td>
-                    </tr>
-                  ))}
-                  {!flows.isLoading && !(flows.data?.flows?.length) && (
-                    <tr><td colSpan={3} className="admin-table-empty">لا توجد Flows بعد.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+              <ul className="at-metric-rows">
+                {(flows.data?.flows?.length ? flows.data.flows : []).map((flow) => (
+                  <li key={flow.id} className="at-metric-row">
+                    <button type="button" className="linkish at-metric-label" onClick={() => setSendFlowId(flow.id)}>
+                      {flow.name || flow.id}
+                    </button>
+                    <span className="at-metric-dots" aria-hidden="true" />
+                    <strong className="at-metric-value">{flow.status || "—"}</strong>
+                  </li>
+                ))}
+                {!flows.isLoading && !(flows.data?.flows?.length) && (
+                  <li className="at-metric-row">
+                    <span className="at-metric-label">لا توجد Flows بعد</span>
+                    <span className="at-metric-dots" aria-hidden="true" />
+                    <strong className="at-metric-value">0</strong>
+                  </li>
+                )}
+              </ul>
+            </article>
           </div>
         </section>
       )}

@@ -5668,6 +5668,76 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   padding: 0;
   text-decoration: underline;
 }
+.account-tools-page .at-metric-grid {
+  display: grid;
+  gap: 14px;
+}
+.account-tools-page .at-metric-grid-top {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.account-tools-page .at-metric-grid-bottom {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.account-tools-page .at-metric-grid-flows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.account-tools-page .at-metric-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px 14px;
+  min-height: 100%;
+}
+.account-tools-page .at-metric-card-title {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+}
+.account-tools-page .at-metric-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.account-tools-page .at-metric-row {
+  display: grid;
+  grid-template-columns: auto minmax(12px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  min-height: 22px;
+}
+.account-tools-page .at-metric-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.account-tools-page .at-metric-dots {
+  border-bottom: 1px dotted color-mix(in srgb, var(--line) 85%, var(--muted));
+  transform: translateY(-4px);
+}
+.account-tools-page .at-metric-value {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.account-tools-page .at-metric-row-total .at-metric-label,
+.account-tools-page .at-metric-row-total .at-metric-value {
+  color: var(--text);
+  font-weight: 800;
+}
+@media (max-width: 980px) {
+  .account-tools-page .at-metric-grid-top,
+  .account-tools-page .at-metric-grid-bottom,
+  .account-tools-page .at-metric-grid-flows {
+    grid-template-columns: 1fr;
+  }
+}
 .whatsapp-connect-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
