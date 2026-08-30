@@ -561,7 +561,12 @@ export default function AccountToolsPage() {
                     { label: "المستوى", value: limits.data.messaging_limit_tier || "—" },
                     {
                       label: "الحد / 24س",
-                      value: limits.data.messaging_limit?.toLocaleString("ar") ?? "غير محدود"
+                      value:
+                        limits.data.messaging_limit_tier === "TIER_UNLIMITED"
+                          ? "غير محدود"
+                          : limits.data.messaging_limit != null
+                            ? limits.data.messaging_limit.toLocaleString("ar")
+                            : "—"
                     },
                     { label: "الجودة", value: limits.data.quality_label_ar || "—" }
                   ]}

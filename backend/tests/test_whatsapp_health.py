@@ -97,9 +97,25 @@ def test_derive_account_status_approved_after_rename() -> None:
 
 def test_tier_to_daily_limit() -> None:
     assert tier_to_daily_limit("TIER_10K") == 10_000
+    assert tier_to_daily_limit("TIER_2K") == 2_000
     assert tier_to_daily_limit("TIER_UNLIMITED") is None
 
 
 def test_format_tier_hint() -> None:
     hint = format_tier_hint("TIER_1K", 1000)
     assert "1,000" in hint
+    assert "افتراضي قبل المزامنة" not in format_tier_hint(None, None)
+    assert "مزامنة" in format_tier_hint(None, None)
+
+
+def test_parse_phone_health_uses_business_manager_limit_2k() -> None:
+    parsed = parse_phone_health({
+        "display_phone_number": "+96550000000",
+        "verified_name": "Shop",
+        "quality_rating": "GREEN",
+        "whatsapp_business_manager_messaging_limit": "TIER_2K",
+        "status": "CONNECTED",
+        "name_status": "APPROVED",
+    })
+    assert parsed["messaging_limit_tier"] == "TIER_2K"
+    assert parsed["messaging_limit"] == 2_000

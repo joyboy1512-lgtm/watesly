@@ -13,7 +13,8 @@ from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 TIER_DAILY_LIMITS: dict[str, int | None] = {
     "TIER_50": 50,
     "TIER_250": 250,
-    "TIER_1K": 1_000,
+    "TIER_1K": 1_000,  # legacy / transitional
+    "TIER_2K": 2_000,
     "TIER_10K": 10_000,
     "TIER_100K": 100_000,
     "TIER_UNLIMITED": None,
@@ -32,15 +33,25 @@ META_HEALTH_STALE_AFTER = timedelta(minutes=10)
 def tier_to_daily_limit(tier: str | None) -> int | None:
     if not tier:
         return None
-    return TIER_DAILY_LIMITS.get(tier.upper())
+    key = tier.upper().strip()
+    if key in TIER_DAILY_LIMITS:
+        return TIER_DAILY_LIMITS[key]
+    # Accept numeric strings Meta may return in some payloads.
+    if key.isdigit():
+        return int(key)
+    return None
 
 
 def format_tier_hint(tier: str | None, limit: int | None) -> str:
-    if tier and limit:
-        return f"{tier}: حتى {limit:,} محادثة فريدة/24س"
-    if tier == "TIER_UNLIMITED":
+    if tier == "TIER_UNLIMITED" or (tier and limit is None and tier.upper() == "TIER_UNLIMITED"):
         return "TIER_UNLIMITED: بدون حد يومي عملي"
-    return "Tier 1: حتى 1,000 محادثة فريدة/24س (افتراضي قبل المزامنة)"
+    if tier and limit is not None:
+        return f"{tier}: حتى {limit:,} محادثة فريدة/24س"
+    if limit is not None:
+        return f"حتى {limit:,} محادثة فريدة/24س"
+    if tier:
+        return f"{tier}: لم يُعرف الحد الرقمي بعد"
+    return "لم تُزامَن الحدود من Meta بعد — اضغط مزامنة"
 
 
 def resolve_effective_name_status(
@@ -64,12 +75,21 @@ def resolve_effective_name_status(
 
 
 def parse_phone_health(data: dict) -> dict:
-    tier = data.get("messaging_limit_tier") or data.get("messaging_limit")
-    tier_str = str(tier).upper() if tier else None
+    # Meta deprecated messaging_limit_tier in favor of portfolio-level field.
+    tier = (
+        data.get("whatsapp_business_manager_messaging_limit")
+        or data.get("messaging_limit_tier")
+        or data.get("messaging_limit")
+    )
+    tier_str = str(tier).upper().strip() if tier is not None and str(tier).strip() else None
+    numeric_limit: int | None = None
     if tier_str and tier_str.isdigit():
+        numeric_limit = int(tier_str)
         tier_str = None
     quality = data.get("quality_rating")
-    limit = tier_to_daily_limit(tier_str) if tier_str else None
+    limit = numeric_limit if numeric_limit is not None else (
+        tier_to_daily_limit(tier_str) if tier_str else None
+    )
     phone_status = data.get("status")
     name_status = data.get("name_status")
     new_name_status = data.get("new_name_status")

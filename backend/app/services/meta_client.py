@@ -81,7 +81,8 @@ class MetaWhatsAppClient:
         headers = {"Authorization": f"Bearer {self.access_token}"}
         params = {
             "fields": (
-                "display_phone_number,verified_name,quality_rating,messaging_limit_tier,status,"
+                "display_phone_number,verified_name,quality_rating,messaging_limit_tier,"
+                "whatsapp_business_manager_messaging_limit,status,"
                 "name_status,new_name_status,code_verification_status"
             ),
         }
