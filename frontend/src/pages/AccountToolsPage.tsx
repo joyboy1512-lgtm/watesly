@@ -114,7 +114,9 @@ type MetricRow = { label: string; value: string | number };
 function MetricCard({ title, rows, emphasizeFirst = false }: { title: string; rows: MetricRow[]; emphasizeFirst?: boolean }) {
   return (
     <article className="at-metric-card">
-      <h3 className="at-metric-card-title">{title}</h3>
+      <h3 className="at-metric-card-title">
+        <span className="at-title-chip">{title}</span>
+      </h3>
       <ul className="at-metric-rows">
         {rows.map((row, index) => (
           <li key={`${row.label}-${index}`} className={emphasizeFirst && index === 0 ? "at-metric-row at-metric-row-total" : "at-metric-row"}>
@@ -127,6 +129,13 @@ function MetricCard({ title, rows, emphasizeFirst = false }: { title: string; ro
     </article>
   );
 }
+
+type TemplateOption = {
+  id: string;
+  name: string;
+  whatsapp_account_id: string;
+  status?: string;
+};
 
 const CATEGORY_ORDER = [
   "MARKETING",
@@ -164,6 +173,7 @@ export default function AccountToolsPage() {
   const [sendFlowId, setSendFlowId] = useState("");
   const [sendCta, setSendCta] = useState("افتح");
   const [sendBody, setSendBody] = useState("أكمل النموذج");
+  const [templateName, setTemplateName] = useState("");
 
   const accounts = useQuery({
     queryKey: ["whatsapp-accounts"],
@@ -174,6 +184,21 @@ export default function AccountToolsPage() {
   const selectedAccount = accounts.data?.find((item) => item.id === selectedId) ?? null;
   const isoRange = useMemo(() => toIsoRange(startDate, endDate), [startDate, endDate]);
 
+  const templates = useQuery({
+    queryKey: ["templates", "account-tools"],
+    queryFn: async () => (await api.get<TemplateOption[]>("/templates")).data,
+    enabled: toolTab === "insights" && insightsTab === "message-pricing"
+  });
+
+  const accountTemplates = useMemo(() => {
+    const rows = (templates.data ?? []).filter((item) => item.whatsapp_account_id === selectedId);
+    const unique = new Map<string, TemplateOption>();
+    for (const row of rows) {
+      if (!unique.has(row.name)) unique.set(row.name, row);
+    }
+    return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name, "ar"));
+  }, [templates.data, selectedId]);
+
   const limits = useQuery({
     queryKey: ["whatsapp-messaging-limits", selectedId],
     enabled: Boolean(selectedId) && toolTab === "limits",
@@ -182,13 +207,19 @@ export default function AccountToolsPage() {
   });
 
   const messagePricing = useQuery({
-    queryKey: ["whatsapp-message-pricing", selectedId, isoRange.start, isoRange.end],
+    queryKey: ["whatsapp-message-pricing", selectedId, isoRange.start, isoRange.end, templateName],
     enabled: Boolean(selectedId) && toolTab === "insights" && insightsTab === "message-pricing",
     queryFn: async () =>
       (
         await api.get<MessagePricingInsights>(
           `/whatsapp/accounts/${selectedId}/insights/message-pricing`,
-          { params: { start: isoRange.start, end: isoRange.end } }
+          {
+            params: {
+              start: isoRange.start,
+              end: isoRange.end,
+              ...(templateName ? { template_name: templateName } : {})
+            }
+          }
         )
       ).data
   });
@@ -256,10 +287,10 @@ export default function AccountToolsPage() {
 
   return (
     <main className="page whatsapp-connect-page account-tools-page">
-      <header className="page-header">
-        <div>
+      <header className="page-header at-page-header">
+        <div className="at-page-title-card">
           <span className="eyebrow whatsapp-eyebrow">أدوات الحساب</span>
-          <h1>أدوات حساب WhatsApp</h1>
+          <h1>أدوات حساب واتساب</h1>
           <p>الرؤى وتسعير الرسائل/المكالمات والحدود القصوى والفلوز — كما في WhatsApp Manager.</p>
         </div>
         <Link to="/whatsapp-connect" className="secondary-button">الحسابات المربوطة ←</Link>
@@ -268,7 +299,14 @@ export default function AccountToolsPage() {
       <section className="card account-tools-toolbar">
         <label className="field-label">
           <span>رقم / حساب WhatsApp</span>
-          <select value={selectedId} onChange={(e) => setAccountId(e.target.value)} disabled={!accounts.data?.length}>
+          <select
+            value={selectedId}
+            onChange={(e) => {
+              setAccountId(e.target.value);
+              setTemplateName("");
+            }}
+            disabled={!accounts.data?.length}
+          >
             {!accounts.data?.length && <option value="">لا توجد حسابات مربوطة</option>}
             {(accounts.data ?? []).map((account) => (
               <option key={account.id} value={account.id}>
@@ -328,6 +366,19 @@ export default function AccountToolsPage() {
               إلى
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </label>
+            {insightsTab === "message-pricing" && (
+              <label>
+                القالب
+                <select value={templateName} onChange={(e) => setTemplateName(e.target.value)}>
+                  <option value="">كل القوالب</option>
+                  {accountTemplates.map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
 
           {insightsTab === "message-pricing" && (
@@ -341,8 +392,44 @@ export default function AccountToolsPage() {
                 const categories = orderedCategoryRows(messagePricing.data.meta.by_category);
                 const freeTypes = messagePricing.data.meta.by_pricing_type.filter((row) => row.key.startsWith("FREE"));
                 const paidCategories = categories.filter((row) => row.key !== "SERVICE" && row.key !== "REFERRAL_CONVERSION");
+                const allMessagesTotal =
+                  messagePricing.data.local_messages.sent +
+                  messagePricing.data.meta.delivered_total +
+                  messagePricing.data.local_messages.received;
                 return (
                   <>
+                    <div className="admin-stats-row admin-stats-row-brand at-summary-row">
+                      <article className="admin-stat-card admin-stat-card-brand">
+                        <span className="at-summary-label-chip">كل الرسائل</span>
+                        <strong>{allMessagesTotal.toLocaleString("ar")}</strong>
+                        <small>
+                          مرسل {messagePricing.data.local_messages.sent.toLocaleString("ar")} · مسلّم{" "}
+                          {messagePricing.data.meta.delivered_total.toLocaleString("ar")} · وارد{" "}
+                          {messagePricing.data.local_messages.received.toLocaleString("ar")}
+                        </small>
+                      </article>
+                      <article className="admin-stat-card admin-stat-card-brand">
+                        <span className="at-summary-label-chip">الرسائل التي تم تسليمها</span>
+                        <strong>{messagePricing.data.meta.delivered_total.toLocaleString("ar")}</strong>
+                        <small>حسب Meta للفترة المحددة</small>
+                      </article>
+                      <article className="admin-stat-card admin-stat-card-brand">
+                        <span className="at-summary-label-chip">الرسائل المجانية التي تم تسليمها</span>
+                        <strong>{messagePricing.data.meta.delivered_free.toLocaleString("ar")}</strong>
+                        <small>خدمة مجانية / نقطة دخول</small>
+                      </article>
+                      <article className="admin-stat-card admin-stat-card-brand">
+                        <span className="at-summary-label-chip">الرسائل المدفوعة التي تم تسليمها</span>
+                        <strong>{messagePricing.data.meta.delivered_paid.toLocaleString("ar")}</strong>
+                        <small>تسويق / مساعدة / مصادقة</small>
+                      </article>
+                      <article className="admin-stat-card admin-stat-card-brand">
+                        <span className="at-summary-label-chip">إجمالي الرسوم التقريبية</span>
+                        <strong>{money(messagePricing.data.meta.approximate_cost, currency)}</strong>
+                        <small>{templateName ? `فلتر القالب: ${templateName}` : "كل القوالب"}</small>
+                      </article>
+                    </div>
+
                     <div className="at-metric-grid at-metric-grid-top">
                       <MetricCard
                         title="كل الرسائل"

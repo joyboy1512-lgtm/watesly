@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import decrypt_secret
-from app.models.message import Message, MessageDirection, MessageStatus
+from app.models.message import Message, MessageDirection, MessageStatus, MessageType
 from app.models.whatsapp_account import WhatsAppAccount
 from app.services.meta_client import MetaAPIError, MetaWhatsAppClient
 from app.services.whatsapp_health import (
@@ -203,51 +203,47 @@ async def count_local_outbound_messages(
     channel_id: UUID,
     since: datetime,
     until: datetime,
+    template_name: str | None = None,
 ) -> dict[str, int]:
-    sent = int(
-        (
-            await db.scalar(
-                select(func.count(Message.id)).where(
-                    Message.account_id == account_id,
-                    Message.channel_id == channel_id,
-                    Message.direction == MessageDirection.OUTBOUND,
-                    Message.created_at >= since,
-                    Message.created_at < until,
-                )
-            )
+    outbound_filters = [
+        Message.account_id == account_id,
+        Message.channel_id == channel_id,
+        Message.direction == MessageDirection.OUTBOUND,
+        Message.created_at >= since,
+        Message.created_at < until,
+    ]
+    if template_name:
+        outbound_filters.extend(
+            [
+                Message.type == MessageType.TEMPLATE,
+                Message.provider_payload.contains({"template_name": template_name}),
+            ]
         )
-        or 0
-    )
-    inbound = int(
-        (
-            await db.scalar(
-                select(func.count(Message.id)).where(
-                    Message.account_id == account_id,
-                    Message.channel_id == channel_id,
-                    Message.direction == MessageDirection.INBOUND,
-                    Message.created_at >= since,
-                    Message.created_at < until,
-                )
-            )
-        )
-        or 0
-    )
+
+    sent = int((await db.scalar(select(func.count(Message.id)).where(*outbound_filters))) or 0)
     delivered = int(
         (
             await db.scalar(
                 select(func.count(Message.id)).where(
-                    Message.account_id == account_id,
-                    Message.channel_id == channel_id,
-                    Message.direction == MessageDirection.OUTBOUND,
+                    *outbound_filters,
                     Message.status.in_([MessageStatus.DELIVERED, MessageStatus.READ]),
-                    Message.created_at >= since,
-                    Message.created_at < until,
                 )
             )
         )
         or 0
     )
-    return {"sent": sent, "delivered": delivered, "received": inbound}
+    inbound_filters = [
+        Message.account_id == account_id,
+        Message.channel_id == channel_id,
+        Message.direction == MessageDirection.INBOUND,
+        Message.created_at >= since,
+        Message.created_at < until,
+    ]
+    # Inbound is not template-scoped; keep full received unless a template filter is active.
+    received = 0 if template_name else int(
+        (await db.scalar(select(func.count(Message.id)).where(*inbound_filters))) or 0
+    )
+    return {"sent": sent, "delivered": delivered, "received": received}
 
 
 async def get_messaging_limits_snapshot(
@@ -308,6 +304,7 @@ async def get_message_pricing_insights(
     end: datetime,
     country_codes: list[str] | None = None,
     phone_numbers: list[str] | None = None,
+    template_name: str | None = None,
 ) -> dict:
     local_counts = await count_local_outbound_messages(
         db,
@@ -315,12 +312,15 @@ async def get_message_pricing_insights(
         channel_id=whatsapp_account.channel_id,
         since=start,
         until=end,
+        template_name=template_name,
     )
     client = _client_for(whatsapp_account)
     meta_error: str | None = None
     summary = summarize_pricing_points([])
     raw_points: list[dict] = []
     try:
+        # Meta pricing analytics is WABA-scoped (not per-template). Keep full account
+        # breakdown when browsing all templates; still return it for context when filtered.
         phones = phone_numbers
         if not phones and whatsapp_account.display_phone_number:
             digits = "".join(ch for ch in whatsapp_account.display_phone_number if ch.isdigit())
@@ -339,19 +339,27 @@ async def get_message_pricing_insights(
     finally:
         await client.aclose()
 
+    note = (
+        "رسوم Meta تقريبية حسب تسعير الرسائل. فوترة MAC داخل واتسلي منفصلة ولا تشمل رسوم Meta."
+    )
+    if template_name:
+        note = (
+            f"فلترة القالب «{template_name}»: بطاقات الإجمالي تعتمد على الإرسال المحلي لهذا القالب. "
+            "تفصيل فئات Meta يبقى على مستوى الحساب لأن تسعير Meta لا يُقسَّم حسب اسم القالب."
+        )
+
     return {
         "whatsapp_account_id": whatsapp_account.id,
         "waba_id": whatsapp_account.waba_id,
         "display_phone_number": whatsapp_account.display_phone_number,
         "start": start,
         "end": end,
+        "template_name": template_name,
         "local_messages": local_counts,
         "meta": summary,
         "meta_error": meta_error,
         "source": "meta_pricing_analytics" if not meta_error else "local_fallback",
-        "note_ar": (
-            "رسوم Meta تقريبية حسب تسعير الرسائل. فوترة MAC داخل واتسلي منفصلة ولا تشمل رسوم Meta."
-        ),
+        "note_ar": note,
     }
 
 

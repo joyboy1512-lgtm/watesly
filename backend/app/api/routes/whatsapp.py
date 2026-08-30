@@ -380,6 +380,7 @@ async def get_insights_message_pricing(
     end: datetime | None = None,
     country_codes: str | None = None,
     phone_numbers: str | None = None,
+    template_name: str | None = None,
     context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -393,6 +394,7 @@ async def get_insights_message_pricing(
     range_start = start or (range_end - timedelta(days=7))
     countries = [c.strip().upper() for c in (country_codes or "").split(",") if c.strip()]
     phones = [p.strip() for p in (phone_numbers or "").split(",") if p.strip()]
+    selected_template = template_name.strip() if template_name and template_name.strip() else None
     return await get_message_pricing_insights(
         db,
         whatsapp_account=item,
@@ -400,6 +402,7 @@ async def get_insights_message_pricing(
         end=range_end,
         country_codes=countries or None,
         phone_numbers=phones or None,
+        template_name=selected_template,
     )
 
 
