@@ -1,22 +1,24 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-08-22T01:10:00Z",
+  "updated_at": "2026-08-30T16:57:01Z",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
     "site": "https://www.watesly.com",
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
-    "git_branch": "cursor/production-unified-813f",
-    "git_commit": "1114cae",
-    "git_commit_message": "Redesign knowledge base as horizontal rules table",
+    "git_branch": "main",
+    "git_commit": "66e0b10",
+    "git_commit_message": "Add WhatsApp Account Tools + fix stale CI tests",
     "alembic_head": "0058_whatsapp_branding",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
       "js": "index-DD45zkrQ.js",
       "css": "index-B4sBDhS-.css"
-    }
+    },
+    "pending_server_deploy": true,
+    "deploy_blocker": "DEPLOY_SSH_PRIVATE_KEY missing in GitHub Actions secrets; Cloud Agent has no SSH access to 64.226.69.159"
   },
   "versions": {
     "backend": "0.28.0",
