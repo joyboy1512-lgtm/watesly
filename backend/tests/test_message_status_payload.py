@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -31,7 +32,7 @@ def test_extract_message_media_preserves_media_with_delivery_status() -> None:
 @pytest.mark.asyncio
 async def test_enrich_message_media_falls_back_to_recent_upload() -> None:
     account_id = uuid4()
-    created_at = SimpleNamespace()
+    created_at = datetime.now(UTC)
     message = SimpleNamespace(
         id=uuid4(),
         account_id=account_id,

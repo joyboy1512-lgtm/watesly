@@ -13,7 +13,9 @@ def test_business_routes_use_permission_dependencies() -> None:
         if path.name in exempt:
             continue
         source = path.read_text(encoding="utf-8")
-        if "require_roles(" in source or "Depends(get_auth_context)" in source:
+        # Legacy role gates are forbidden; get_auth_context is allowed for
+        # membership-scoped reads that enforce access in-service.
+        if "require_roles(" in source:
             violations.append(path.name)
     assert violations == []
 

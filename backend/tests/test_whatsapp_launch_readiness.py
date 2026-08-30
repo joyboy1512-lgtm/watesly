@@ -21,15 +21,15 @@ def test_storage_upload_returns_public_url() -> None:
 
 def test_whatsapp_media_service_exists() -> None:
     source = read("app/services/whatsapp_media.py")
-    whatsapp = read("app/services/whatsapp.py")
+    inbound = read("app/services/inbound_whatsapp.py")
     assert "store_inbound_whatsapp_media" in source
-    assert "store_inbound_whatsapp_media" in whatsapp
+    assert "store_inbound_whatsapp_media" in inbound
 
 
 def test_message_media_uses_object_key() -> None:
     source = read("app/services/message_media.py")
     assert "object_key" in source
-    assert "create_presigned_download_url" in source
+    assert "resolve_accessible_url" in source
 
 
 def test_token_update_endpoint_exists() -> None:

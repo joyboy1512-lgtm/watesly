@@ -47,5 +47,5 @@ def test_reports_page_component_exists() -> None:
     if not page_path.exists():
         return
     source = page_path.read_text(encoding="utf-8")
-    assert "التقارير" in source
+    assert 't("pages.reports")' in source or "التقارير" in source
     assert "engagement" in source
