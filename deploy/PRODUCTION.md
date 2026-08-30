@@ -16,6 +16,16 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-08-30) — Account Tools live
+
+| Item | Value |
+|------|-------|
+| Commit | `53dd811` |
+| Alembic | `0061_organization_branch_limits` |
+| Live assets | `index-qXe1YU0r.js`, `index-DQqT_K6S.css` |
+| Server backup | `/opt/watesly/backups/20260830-170118` |
+| Snapshot record | `deploy/production-snapshot-20260830-account-tools.json` |
+
 ### Production snapshot (2026-08-30) — pre Account Tools backup
 
 | Item | Value |

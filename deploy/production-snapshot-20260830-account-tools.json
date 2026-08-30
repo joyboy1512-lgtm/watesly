@@ -1,0 +1,25 @@
+{
+  "created_at": "2026-08-30T17:03:19Z",
+  "domain": "watesly.com",
+  "server_host": "64.226.69.159",
+  "app_path": "/opt/watesly",
+  "git_branch": "cursor/production-unified-813f",
+  "git_commit": "53dd811",
+  "git_commit_message": "Account Tools live deploy",
+  "previous_commit": "47c7721",
+  "alembic_head": "0061_organization_branch_limits",
+  "backend_version": "0.28.0",
+  "frontend_version": "0.32.5",
+  "live_assets": {
+    "js": "index-qXe1YU0r.js",
+    "css": "index-DQqT_K6S.css"
+  },
+  "server_backup": "/opt/watesly/backups/20260830-170118",
+  "deploy_includes": [
+    "WhatsApp Account Tools page (/whatsapp-account-tools)",
+    "Message pricing + call pricing insights",
+    "Messaging limits + Flows",
+    "Pre-deploy server backup 20260830-170118"
+  ],
+  "notes": "Deployed via SSH upgrade-production.sh after backup-server.sh. Live verified via api health + frontend asset strings."
+}
