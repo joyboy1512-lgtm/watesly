@@ -868,3 +868,181 @@ class MetaWhatsAppClient:
                 response_data=data,
             )
         return data if isinstance(data, dict) else {}
+
+    def _waba_url(self, waba_id: str, edge: str | None = None) -> str:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        path = f"{base}/{version}/{waba_id}"
+        if edge:
+            return f"{path}/{edge}"
+        return path
+
+    async def get_pricing_analytics(
+        self,
+        *,
+        waba_id: str,
+        start: int,
+        end: int,
+        granularity: str = "DAILY",
+        phone_numbers: list[str] | None = None,
+        country_codes: list[str] | None = None,
+        dimensions: list[str] | None = None,
+    ) -> dict:
+        """Fetch Meta per-message pricing analytics for a WABA."""
+        dims = dimensions or ["PRICING_CATEGORY", "PRICING_TYPE"]
+        field = (
+            f"pricing_analytics.start({start}).end({end}).granularity({granularity})"
+            f".dimensions({','.join(dims)})"
+            ".metric_types(COST,VOLUME)"
+        )
+        if phone_numbers:
+            field += f".phone_numbers({','.join(phone_numbers)})"
+        if country_codes:
+            field += f".country_codes({','.join(country_codes)})"
+        url = self._waba_url(waba_id)
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params={"fields": field})
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch WhatsApp pricing analytics",
+        )
+
+    async def get_call_analytics(
+        self,
+        *,
+        waba_id: str,
+        start: int,
+        end: int,
+        granularity: str = "DAILY",
+        phone_numbers: list[str] | None = None,
+        country_codes: list[str] | None = None,
+        dimensions: list[str] | None = None,
+    ) -> dict:
+        """Fetch Meta call analytics / call pricing for a WABA."""
+        dims = dimensions or ["COUNTRY", "PHONE", "DIRECTION", "CALL_TYPE"]
+        field = (
+            f"call_analytics.start({start}).end({end}).granularity({granularity})"
+            f".dimensions({','.join(dims)})"
+            ".metric_types(COUNT,COST,AVERAGE_DURATION)"
+        )
+        if phone_numbers:
+            field += f".phone_numbers({','.join(phone_numbers)})"
+        if country_codes:
+            field += f".country_codes({','.join(country_codes)})"
+        url = self._waba_url(waba_id)
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params={"fields": field})
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch WhatsApp call analytics",
+        )
+
+    async def list_flows(self, *, waba_id: str, limit: int = 50) -> list[dict]:
+        url = self._waba_url(waba_id, "flows")
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        collected: list[dict] = []
+        after: str | None = None
+        while True:
+            params: dict[str, Any] = {
+                "limit": min(max(limit, 1), 100),
+                "fields": "id,name,status,categories,validation_errors,endpoint_uri,preview",
+            }
+            if after:
+                params["after"] = after
+            response = await client.get(url, headers=headers, params=params)
+            data = await self._parse_graph_response(
+                response,
+                default_message="Unable to list WhatsApp Flows",
+            )
+            rows = data.get("data", []) if isinstance(data, dict) else []
+            collected.extend(row for row in rows if isinstance(row, dict))
+            if len(collected) >= limit:
+                break
+            paging = data.get("paging", {}) if isinstance(data, dict) else {}
+            cursors = paging.get("cursors", {}) if isinstance(paging, dict) else {}
+            after = cursors.get("after") if isinstance(cursors, dict) else None
+            if not after or not paging.get("next"):
+                break
+        return collected[:limit]
+
+    async def get_flow(self, *, flow_id: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{flow_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        params = {
+            "fields": "id,name,status,categories,validation_errors,endpoint_uri,preview,json_version",
+        }
+        client = self._get_client()
+        response = await client.get(url, headers=headers, params=params)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to fetch WhatsApp Flow",
+        )
+
+    async def create_flow(
+        self,
+        *,
+        waba_id: str,
+        name: str,
+        categories: list[str] | None = None,
+        endpoint_uri: str | None = None,
+    ) -> dict:
+        url = self._waba_url(waba_id, "flows")
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        payload: dict[str, Any] = {
+            "name": name,
+            "categories": categories or ["OTHER"],
+        }
+        if endpoint_uri:
+            payload["endpoint_uri"] = endpoint_uri
+        client = self._get_client()
+        response = await client.post(url, headers=headers, json=payload)
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to create WhatsApp Flow",
+        )
+
+    async def send_flow_message(
+        self,
+        *,
+        to: str,
+        flow_id: str,
+        flow_cta: str,
+        body_text: str,
+        flow_token: str | None = None,
+        screen: str | None = None,
+        header_text: str | None = None,
+        footer_text: str | None = None,
+    ) -> dict:
+        parameters: dict[str, Any] = {
+            "flow_message_version": "3",
+            "flow_id": flow_id,
+            "flow_cta": flow_cta,
+            "flow_action": "navigate",
+        }
+        if flow_token:
+            parameters["flow_token"] = flow_token
+        if screen:
+            parameters["flow_action_payload"] = {"screen": screen}
+        interactive: dict[str, Any] = {
+            "type": "flow",
+            "body": {"text": body_text},
+            "action": {"name": "flow", "parameters": parameters},
+        }
+        if header_text:
+            interactive["header"] = {"type": "text", "text": header_text}
+        if footer_text:
+            interactive["footer"] = {"text": footer_text}
+        return await self._send_payload(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": "interactive",
+                "interactive": interactive,
+            }
+        )

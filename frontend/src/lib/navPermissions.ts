@@ -30,6 +30,7 @@ export const APP_NAV_PAGES: AppNavPage[] = [
   { path: "/channels", label: "القنوات", permission: "channels.view" },
   { path: "/billing", label: "الفوترة", permission: "billing.view" },
   { path: "/whatsapp-connect", label: "ربط WhatsApp", permission: "channels.manage" },
+  { path: "/whatsapp-account-tools", label: "أدوات الحساب", permission: "channels.view" },
   { path: "/templates", label: "القوالب", permission: "templates.view" },
   { path: "/campaigns", label: "الحملات", permission: "campaigns.view" },
   { path: "/automations", label: "الأتمتة", permission: "automations.view" },

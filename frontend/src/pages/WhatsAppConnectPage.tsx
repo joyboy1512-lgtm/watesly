@@ -1143,7 +1143,10 @@ export default function WhatsAppConnectPage() {
           <h1>WhatsApp Business</h1>
           <p>جدول مرتب لكل قناة — صف واحد مختصر مع تفاصيل كاملة وإعدادات عند الطلب.</p>
         </div>
-        <Link to="/channels" className="secondary-button">إدارة القنوات ←</Link>
+        <div className="page-header-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link to="/channels" className="secondary-button">إدارة القنوات ←</Link>
+          <Link to="/whatsapp-account-tools" className="primary-button">أدوات الحساب</Link>
+        </div>
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">

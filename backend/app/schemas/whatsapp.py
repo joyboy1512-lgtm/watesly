@@ -118,3 +118,54 @@ class SendMessageResponse(BaseModel):
     local_message_id: UUID
     external_message_id: str | None
     status: str
+
+
+class WhatsAppMessagingLimitsResponse(BaseModel):
+    whatsapp_account_id: UUID
+    display_phone_number: str
+    verified_name: str | None = None
+    quality_rating: str | None = None
+    quality_label_ar: str | None = None
+    messaging_limit_tier: str | None = None
+    messaging_limit: int | None = None
+    tier_hint_ar: str | None = None
+    used_unique_contacts_24h: int = 0
+    remaining_unique_contacts_24h: int | None = None
+    usage_ratio: float | None = None
+    meta_phone_status: str | None = None
+    meta_can_send_message: str | None = None
+    meta_status_message: str | None = None
+    health_synced_at: datetime | None = None
+    usage_note_ar: str | None = None
+
+
+class WhatsAppInsightsQuery(BaseModel):
+    start: datetime | None = None
+    end: datetime | None = None
+    country_codes: list[str] = Field(default_factory=list)
+    phone_numbers: list[str] = Field(default_factory=list)
+
+
+class WhatsAppFlowCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    categories: list[str] = Field(default_factory=lambda: ["OTHER"])
+    endpoint_uri: str | None = Field(default=None, max_length=2048)
+
+
+class WhatsAppFlowSendRequest(BaseModel):
+    to: str = Field(min_length=7, max_length=30)
+    flow_id: str = Field(min_length=2, max_length=80)
+    flow_cta: str = Field(min_length=1, max_length=30)
+    body_text: str = Field(min_length=1, max_length=1024)
+    flow_token: str | None = Field(default=None, max_length=200)
+    screen: str | None = Field(default=None, max_length=80)
+    header_text: str | None = Field(default=None, max_length=60)
+    footer_text: str | None = Field(default=None, max_length=60)
+
+    @field_validator("to")
+    @classmethod
+    def normalize_recipient(cls, value: str) -> str:
+        normalized = "".join(ch for ch in value if ch.isdigit())
+        if len(normalized) < 7:
+            raise ValueError("Invalid recipient number")
+        return normalized

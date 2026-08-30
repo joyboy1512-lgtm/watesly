@@ -5579,6 +5579,95 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: var(--primary-darker);
   font-weight: 700;
 }
+.account-tools-page .account-tools-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: end;
+  justify-content: space-between;
+}
+.account-tools-page .account-tools-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.account-tools-page .account-tools-panel {
+  display: grid;
+  gap: 16px;
+}
+.account-tools-page .account-tools-subtabs {
+  margin-bottom: 4px;
+}
+.account-tools-page .account-tools-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.account-tools-page .account-tools-filters label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.account-tools-page .account-tools-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+.account-tools-page .account-tools-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.account-tools-page .account-tools-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+}
+.account-tools-page .account-tools-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.account-tools-page .account-tools-progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 80%, transparent);
+  overflow: hidden;
+}
+.account-tools-page .account-tools-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 55%, #1f8f5f));
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+.account-tools-page .account-tools-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #c45c26 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, #c45c26 30%, var(--line));
+  color: #8a3a12;
+}
+.account-tools-page button.linkish {
+  background: none;
+  border: none;
+  color: var(--primary-darker);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
 .whatsapp-connect-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

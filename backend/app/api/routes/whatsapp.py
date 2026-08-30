@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -18,6 +19,9 @@ from app.schemas.whatsapp import (
     WhatsAppCommerceSettingsRequest,
     WhatsAppEmbeddedSignupConfigResponse,
     WhatsAppEmbeddedSignupRequest,
+    WhatsAppFlowCreateRequest,
+    WhatsAppFlowSendRequest,
+    WhatsAppMessagingLimitsResponse,
     WhatsAppTokenStatusResponse,
     WhatsAppTokenUpdateRequest,
     WhatsAppWebhookStatusResponse,
@@ -61,6 +65,14 @@ from app.services.whatsapp_branding import (
     update_whatsapp_branding_settings,
 )
 from app.services.meta_setup import ensure_whatsapp_account_webhook, get_waba_webhook_status
+from app.services.whatsapp_account_tools import (
+    create_account_flow,
+    get_call_pricing_insights,
+    get_message_pricing_insights,
+    get_messaging_limits_snapshot,
+    list_account_flows,
+    send_account_flow_message,
+)
 
 router = APIRouter()
 
@@ -319,6 +331,165 @@ async def post_sync_account_health(
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return _response(item)
+
+
+async def _load_accessible_whatsapp_account(
+    db: AsyncSession,
+    *,
+    context: AuthContext,
+    whatsapp_account_id: UUID,
+):
+    from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.membership_access import resolve_accessible_channel_ids
+
+    item = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if item is None or item.account_id != context.account_id:
+        raise HTTPException(status_code=404, detail="WhatsApp account not found")
+    accessible = await resolve_accessible_channel_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if accessible is not None and item.channel_id not in set(accessible):
+        raise HTTPException(status_code=404, detail="WhatsApp account not found")
+    return item
+
+
+@router.get(
+    "/accounts/{whatsapp_account_id}/messaging-limits",
+    response_model=WhatsAppMessagingLimitsResponse,
+)
+async def get_messaging_limits(
+    whatsapp_account_id: UUID,
+    refresh: bool = False,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await _load_accessible_whatsapp_account(
+        db, context=context, whatsapp_account_id=whatsapp_account_id
+    )
+    try:
+        snapshot = await get_messaging_limits_snapshot(db, whatsapp_account=item, refresh=refresh)
+    except MetaAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return WhatsAppMessagingLimitsResponse(**snapshot)
+
+
+@router.get("/accounts/{whatsapp_account_id}/insights/message-pricing")
+async def get_insights_message_pricing(
+    whatsapp_account_id: UUID,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    country_codes: str | None = None,
+    phone_numbers: str | None = None,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import UTC, datetime, timedelta
+
+    item = await _load_accessible_whatsapp_account(
+        db, context=context, whatsapp_account_id=whatsapp_account_id
+    )
+    now = datetime.now(UTC)
+    range_end = end or now
+    range_start = start or (range_end - timedelta(days=7))
+    countries = [c.strip().upper() for c in (country_codes or "").split(",") if c.strip()]
+    phones = [p.strip() for p in (phone_numbers or "").split(",") if p.strip()]
+    return await get_message_pricing_insights(
+        db,
+        whatsapp_account=item,
+        start=range_start,
+        end=range_end,
+        country_codes=countries or None,
+        phone_numbers=phones or None,
+    )
+
+
+@router.get("/accounts/{whatsapp_account_id}/insights/call-pricing")
+async def get_insights_call_pricing(
+    whatsapp_account_id: UUID,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    country_codes: str | None = None,
+    phone_numbers: str | None = None,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import UTC, datetime, timedelta
+
+    item = await _load_accessible_whatsapp_account(
+        db, context=context, whatsapp_account_id=whatsapp_account_id
+    )
+    now = datetime.now(UTC)
+    range_end = end or now
+    range_start = start or (range_end - timedelta(days=7))
+    countries = [c.strip().upper() for c in (country_codes or "").split(",") if c.strip()]
+    phones = [p.strip() for p in (phone_numbers or "").split(",") if p.strip()]
+    return await get_call_pricing_insights(
+        whatsapp_account=item,
+        start=range_start,
+        end=range_end,
+        country_codes=countries or None,
+        phone_numbers=phones or None,
+    )
+
+
+@router.get("/accounts/{whatsapp_account_id}/flows")
+async def get_account_flows(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await _load_accessible_whatsapp_account(
+        db, context=context, whatsapp_account_id=whatsapp_account_id
+    )
+    return await list_account_flows(whatsapp_account=item)
+
+
+@router.post("/accounts/{whatsapp_account_id}/flows", status_code=status.HTTP_201_CREATED)
+async def post_account_flow(
+    whatsapp_account_id: UUID,
+    payload: WhatsAppFlowCreateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await _load_accessible_whatsapp_account(
+        db, context=context, whatsapp_account_id=whatsapp_account_id
+    )
+    try:
+        return await create_account_flow(
+            whatsapp_account=item,
+            name=payload.name,
+            categories=payload.categories,
+            endpoint_uri=payload.endpoint_uri,
+        )
+    except MetaAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/accounts/{whatsapp_account_id}/flows/send")
+async def post_send_flow_message(
+    whatsapp_account_id: UUID,
+    payload: WhatsAppFlowSendRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await _load_accessible_whatsapp_account(
+        db, context=context, whatsapp_account_id=whatsapp_account_id
+    )
+    try:
+        result = await send_account_flow_message(
+            whatsapp_account=item,
+            to=payload.to,
+            flow_id=payload.flow_id,
+            flow_cta=payload.flow_cta,
+            body_text=payload.body_text,
+            flow_token=payload.flow_token,
+            screen=payload.screen,
+            header_text=payload.header_text,
+            footer_text=payload.footer_text,
+        )
+    except MetaAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"status": "sent", "provider_response": result}
 
 
 @router.post("/accounts/{whatsapp_account_id}/disconnect", response_model=WhatsAppAccountResponse)

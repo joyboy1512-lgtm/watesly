@@ -16,7 +16,17 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
-### Production snapshot (2026-08-22) — current baseline
+### Production snapshot (2026-08-30) — pre Account Tools backup
+
+| Item | Value |
+|------|-------|
+| Commit | `47c7721` |
+| Git backup tag | `backup/published-pre-account-tools-20260830-164059` |
+| Live assets | `index-DYQS9EAZ.js`, `index-BYWFz4_-.css` |
+| Snapshot record | `deploy/production-snapshot-20260830.json` |
+| Server DB backup | Run on VPS: `bash /opt/watesly/deploy/backup-server.sh` (SSH not available from Cloud Agent) |
+
+### Production snapshot (2026-08-22) — previous documented baseline
 
 | Item | Value |
 |------|-------|
