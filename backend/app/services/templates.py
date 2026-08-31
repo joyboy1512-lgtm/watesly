@@ -129,17 +129,6 @@ async def resubmit_template_to_meta(
         raise ValueError("META_SUBMIT_FAILED") from exc
 
 
-async def list_templates(db: AsyncSession, account_id: UUID) -> list[WhatsAppTemplate]:
-    result = await db.execute(
-        select(WhatsAppTemplate)
-        .where(WhatsAppTemplate.account_id == account_id)
-        .order_by(WhatsAppTemplate.created_at.desc())
-    )
-    templates = list(result.scalars().all())
-    await refresh_pending_template_statuses(db, account_id=account_id, templates=templates)
-    return templates
-
-
 def _status_str(status: TemplateStatus | str) -> str:
     return status.value if isinstance(status, TemplateStatus) else str(status)
 
@@ -222,10 +211,16 @@ async def list_templates(
     account_id: UUID,
     *,
     membership=None,
+    include_archived: bool = False,
+    archived_only: bool = False,
 ) -> list[WhatsAppTemplate]:
     from app.services.membership_access import template_list_filters
 
     query = select(WhatsAppTemplate).where(WhatsAppTemplate.account_id == account_id)
+    if archived_only:
+        query = query.where(WhatsAppTemplate.archived_at.is_not(None))
+    elif not include_archived:
+        query = query.where(WhatsAppTemplate.archived_at.is_(None))
     if membership is not None:
         for clause in await template_list_filters(
             db, account_id=account_id, membership=membership
@@ -237,6 +232,55 @@ async def list_templates(
     templates = list(result.scalars().all())
     await refresh_pending_template_statuses(db, account_id=account_id, templates=templates)
     return templates
+
+
+async def archive_template(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    template_id: UUID,
+    membership=None,
+) -> WhatsAppTemplate:
+    from datetime import UTC, datetime
+
+    from app.services.membership_access import ensure_template_access
+
+    template = await db.get(WhatsAppTemplate, template_id)
+    if template is None or template.account_id != account_id:
+        raise ValueError("TEMPLATE_NOT_FOUND")
+    if membership is not None:
+        await ensure_template_access(
+            db, account_id=account_id, membership=membership, template=template
+        )
+    if template.archived_at is None:
+        template.archived_at = datetime.now(UTC)
+        await db.commit()
+        await db.refresh(template)
+    return template
+
+
+async def unarchive_template(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    template_id: UUID,
+    membership=None,
+) -> WhatsAppTemplate:
+    from app.services.membership_access import ensure_template_access
+
+    template = await db.get(WhatsAppTemplate, template_id)
+    if template is None or template.account_id != account_id:
+        raise ValueError("TEMPLATE_NOT_FOUND")
+    if membership is not None:
+        await ensure_template_access(
+            db, account_id=account_id, membership=membership, template=template
+        )
+    if template.archived_at is None:
+        raise ValueError("TEMPLATE_NOT_ARCHIVED")
+    template.archived_at = None
+    await db.commit()
+    await db.refresh(template)
+    return template
 
 
 async def sync_templates_from_meta(
