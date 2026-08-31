@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-08-30T17:03:19Z",
+  "updated_at": "2026-08-31",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -25,7 +25,9 @@
     "platform_label": "v0.28"
   },
   "sources": {
-    "backend": "backend/app/core/config.py → app_version",
-    "frontend": "frontend/package.json → version"
-  }
+    "backend": "backend/app/core/config.py \u2192 app_version",
+    "frontend": "frontend/package.json \u2192 version"
+  },
+  "commit": "3bf1cfb",
+  "notes": "Channel archive + single-row channels table"
 }

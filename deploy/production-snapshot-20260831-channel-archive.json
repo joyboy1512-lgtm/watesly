@@ -1,0 +1,17 @@
+{
+  "date": "2026-08-31",
+  "commit": "3bf1cfb",
+  "branch": "cursor/production-unified-813f",
+  "alembic": "0061_organization_branch_limits",
+  "frontend_assets": {
+    "js": "index-BnJ7jveZ.js",
+    "css": "index-D0WOOoCb.css"
+  },
+  "server_backup": "/opt/watesly/backups/20260831-154935",
+  "features": [
+    "channel soft-delete archive POST /channels/{id}/archive",
+    "channels table single-row layout",
+    "archive button on Channels page"
+  ],
+  "notes": "Deployed via SSH upgrade-production.sh after backup-server.sh. Live verified via openapi archive path + frontend asset strings."
+}
