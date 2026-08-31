@@ -49,10 +49,32 @@ class InstagramChannelAdapter(ChannelAdapter):
     channel_type = "instagram"
 
     async def send_text(self, *, to: str, text: str, **kwargs: Any) -> dict:
-        raise NotImplementedError("Instagram adapter requires Meta channel setup")
+        from app.services.meta_instagram import MetaInstagramClient
+
+        client: MetaInstagramClient = kwargs["client"]
+        return await client.send_text(to=to, text=text)
 
     async def parse_inbound_webhook(self, payload: dict) -> list[dict]:
-        return []
+        events: list[dict] = []
+        for entry in payload.get("entry", []) or []:
+            if not isinstance(entry, dict):
+                continue
+            messaging = entry.get("messaging") or []
+            for item in messaging:
+                if not isinstance(item, dict):
+                    continue
+                message = item.get("message") or {}
+                if message.get("is_echo"):
+                    continue
+                events.append(
+                    {
+                        "channel_type": "instagram",
+                        "ig_id": entry.get("id"),
+                        "sender_id": (item.get("sender") or {}).get("id"),
+                        "message": message,
+                    }
+                )
+        return events
 
 
 class MessengerChannelAdapter(ChannelAdapter):

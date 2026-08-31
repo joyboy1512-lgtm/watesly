@@ -127,6 +127,8 @@ export default function ChannelsPage() {
       toastStore.getState().show("تمت إضافة القناة بنجاح", "success");
       if (type === "whatsapp") {
         navigate(`/whatsapp-connect?channel=${response.data.id}`);
+      } else if (type === "instagram") {
+        navigate(`/instagram-connect?channel=${response.data.id}`);
       }
     } catch (error) {
       const detail = formatApiError(error);
@@ -483,6 +485,11 @@ export default function ChannelsPage() {
                       {item.channel_type === "whatsapp" && canManage && (
                         <Link to={`/whatsapp-connect?channel=${item.channel_id}`} className="secondary-button">
                           {item.whatsapp_phone ? "الربط" : "ربط"}
+                        </Link>
+                      )}
+                      {item.channel_type === "instagram" && canManage && (
+                        <Link to={`/instagram-connect?channel=${item.channel_id}`} className="secondary-button">
+                          ربط IG
                         </Link>
                       )}
                       <Link to="/inbox" className="secondary-button">الوارد</Link>

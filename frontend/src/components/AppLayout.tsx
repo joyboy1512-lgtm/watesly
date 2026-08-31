@@ -51,6 +51,7 @@ export default function AppLayout() {
     ["/channels", t("nav.channels"), "channel"],
     ["/billing", t("nav.billing"), "dashboard"],
     ["/whatsapp-connect", t("nav.whatsapp"), "whatsapp"],
+    ["/instagram-connect", t("nav.instagram", { defaultValue: "ربط Instagram" }), "channel"],
     ["/whatsapp-account-tools", t("nav.accountTools"), "dashboard"],
     ["/templates", t("nav.templates"), "template"],
     ["/campaigns", t("nav.campaigns"), "campaign"],

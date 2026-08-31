@@ -13,7 +13,7 @@ DEFAULT_FLAGS = {
     "ai_agent_auto_reply": True,
     "sla_monitoring": True,
     "privacy_mask_agents": True,
-    "instagram_channel": False,
+    "instagram_channel": True,
     "messenger_channel": False,
     "marketplace_installs": True,
     "http_automation_requests": True,

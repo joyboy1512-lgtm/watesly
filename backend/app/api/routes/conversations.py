@@ -289,19 +289,16 @@ async def send_conversation_text(
         raise HTTPException(status_code=code, detail="Conversation is not available") from exc
 
     from sqlalchemy import select
+    from app.models.channel import Channel, ChannelType
     from app.models.whatsapp_account import WhatsAppAccount
+    from app.models.instagram_account import InstagramAccount, InstagramAccountStatus
     from app.schemas.whatsapp import SendTextMessageRequest
     from app.services.whatsapp import send_text_message
+    from app.services.instagram import send_instagram_text_message
     from app.services.meta_client import MetaAPIError
 
-    result = await db.execute(
-        select(WhatsAppAccount).where(
-            WhatsAppAccount.channel_id == conversation.channel_id
-        )
-    )
-    wa = result.scalar_one_or_none()
-    if wa is None:
-        raise HTTPException(status_code=400, detail="Conversation channel is not connected")
+    channel = await db.get(Channel, conversation.channel_id)
+    channel_type = channel.type if channel else None
 
     from app.models.contact import Contact
     contact = await db.get(Contact, conversation.contact_id)
@@ -321,18 +318,50 @@ async def send_conversation_text(
         )
 
     try:
-        message = await send_text_message(
-            db,
-            account_id=context.account_id,
-            whatsapp_account_id=wa.id,
-            payload=SendTextMessageRequest(
+        if channel_type == ChannelType.INSTAGRAM:
+            ig = (
+                await db.execute(
+                    select(InstagramAccount).where(
+                        InstagramAccount.channel_id == conversation.channel_id,
+                        InstagramAccount.status == InstagramAccountStatus.ACTIVE,
+                    )
+                )
+            ).scalar_one_or_none()
+            if ig is None:
+                raise HTTPException(status_code=400, detail="Conversation channel is not connected")
+            message = await send_instagram_text_message(
+                db,
+                account_id=context.account_id,
+                instagram_account_id=ig.id,
                 to=contact.external_address,
                 text=rendered_text,
-            ),
-            record_mac=True,
-        )
+                record_mac=True,
+            )
+        else:
+            result = await db.execute(
+                select(WhatsAppAccount).where(
+                    WhatsAppAccount.channel_id == conversation.channel_id
+                )
+            )
+            wa = result.scalar_one_or_none()
+            if wa is None:
+                raise HTTPException(status_code=400, detail="Conversation channel is not connected")
+            message = await send_text_message(
+                db,
+                account_id=context.account_id,
+                whatsapp_account_id=wa.id,
+                payload=SendTextMessageRequest(
+                    to=contact.external_address,
+                    text=rendered_text,
+                ),
+                record_mac=True,
+            )
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     await publish_event(
         context.account_id,

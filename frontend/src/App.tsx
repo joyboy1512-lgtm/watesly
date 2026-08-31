@@ -29,6 +29,7 @@ import CatalogCategoryCreatePage from "./pages/CatalogCategoryCreatePage";
 import CatalogOrdersPage from "./pages/CatalogOrdersPage";
 import CatalogOrderDetailPage from "./pages/CatalogOrderDetailPage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
+import InstagramConnectPage from "./pages/InstagramConnectPage";
 import AccountToolsPage from "./pages/AccountToolsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import SiteContentPage from "./pages/SiteContentPage";
@@ -98,6 +99,7 @@ export default function App() {
         <Route path="/trust-center" element={<TrustCenterPage />} />
         <Route path="/core-health" element={<CoreHealthPage />} />
         <Route path="/whatsapp-connect" element={<WhatsAppConnectPage />} />
+        <Route path="/instagram-connect" element={<InstagramConnectPage />} />
         <Route path="/whatsapp-account-tools" element={<AccountToolsPage />} />
         <Route path="/admin" element={<SuperAdminPage />} />
         <Route path="/admin/site-content" element={<SiteContentPage />} />

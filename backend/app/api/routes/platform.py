@@ -1110,14 +1110,13 @@ async def channel_integrations(
     flags = await get_feature_flags(db, account_id=context.account_id)
     from app.services.channel_adapters import ADAPTERS
 
-    instagram_status = "beta" if flags.get("instagram_channel") else "planned"
     messenger_status = "beta" if flags.get("messenger_channel") else "planned"
     return {
         "adapters": sorted(ADAPTERS.keys()),
         "whatsapp": {"status": "active", "note": "WhatsApp Business API — مدمج بالكامل"},
         "instagram": {
-            "status": instagram_status,
-            "note": "Meta Instagram Messaging — جاهز عبر Channel Adapters",
+            "status": "active" if flags.get("instagram_channel") else "planned",
+            "note": "Meta Instagram Messaging — ربط Page + استقبال Direct والرد من الوارد",
             "enabled": flags.get("instagram_channel", False),
         },
         "messenger": {

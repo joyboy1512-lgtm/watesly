@@ -30,6 +30,7 @@ from app.api.routes.trust import router as trust_router
 from app.api.routes.templates import router as templates_router
 from app.api.routes.uploads import router as uploads_router
 from app.api.routes.whatsapp import router as whatsapp_router
+from app.api.routes.instagram import router as instagram_router
 from app.api.routes.growth_webhooks import router as growth_webhooks_router
 
 api_router = APIRouter()
@@ -54,6 +55,7 @@ api_router.include_router(external_router, prefix="/external", tags=["external-a
 api_router.include_router(conversations_router, prefix="/conversations", tags=["conversations"])
 api_router.include_router(inbox_tools_router, prefix="/inbox-tools", tags=["inbox-tools"])
 api_router.include_router(whatsapp_router, prefix="/whatsapp", tags=["whatsapp"])
+api_router.include_router(instagram_router, prefix="/instagram", tags=["instagram"])
 api_router.include_router(realtime_router, prefix="/realtime", tags=["realtime"])
 api_router.include_router(reports_router, prefix="/reports", tags=["reports"])
 api_router.include_router(knowledge_router, prefix="/knowledge", tags=["knowledge"])

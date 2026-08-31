@@ -42,6 +42,7 @@ from app.models.uploaded_file import UploadedFile
 from app.models.user import User
 from app.models.webhook_event import WebhookEvent
 from app.models.whatsapp_account import WhatsAppAccount
+from app.models.instagram_account import InstagramAccount
 from app.models.whatsapp_template import WhatsAppTemplate
 
 from app.models.platform_site_config import PlatformSiteConfig
@@ -70,7 +71,7 @@ __all__ = [
     "Invitation", "InvitationOrganization", "InvitationChannelAccess",
     "MembershipChannelAccess", "MonthlyActiveContact",
     "RefreshSession", "Plan", "Subscription",
-    "Channel", "WhatsAppAccount", "WebhookEvent", "Message", "Contact", "Conversation",
+    "Channel", "WhatsAppAccount", "InstagramAccount", "WebhookEvent", "Message", "Contact", "Conversation",
     "ConversationEvent", "Tag", "ConversationTag", "ConversationNote", "QuickReply",
     "WhatsAppTemplate", "Campaign", "CampaignRecipient", "UploadedFile", "Notification",
     "Team", "TeamMember", "AssignmentRule",

@@ -121,22 +121,38 @@ export default function InboxPage() {
     queryKey: ["whatsapp-accounts"],
     queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
   });
+  const instagramAccountsQuery = useQuery({
+    queryKey: ["instagram-accounts"],
+    queryFn: async () =>
+      (
+        await api.get<
+          Array<{ id: string; channel_id: string; channel_name?: string | null; username?: string | null; page_name?: string | null; status: string }>
+        >("/instagram/accounts")
+      ).data
+  });
   const conversations = conversationsQuery.data ?? [];
   const channelOptions = useMemo<ChannelOption[]>(() => {
-    const accountByChannel = new Map(
-      (whatsappAccountsQuery.data ?? []).map((item) => [item.channel_id, item])
-    );
+    const waByChannel = new Map((whatsappAccountsQuery.data ?? []).map((item) => [item.channel_id, item]));
+    const igByChannel = new Map((instagramAccountsQuery.data ?? []).map((item) => [item.channel_id, item]));
     return (channelsQuery.data ?? [])
-      .filter((item) => item.type === "whatsapp")
+      .filter((item) => item.type === "whatsapp" || item.type === "instagram")
       .map((item) => {
-        const account = accountByChannel.get(item.id);
+        if (item.type === "instagram") {
+          const account = igByChannel.get(item.id);
+          return {
+            id: item.id,
+            name: account?.channel_name ?? item.name,
+            phone: account?.username ? `@${account.username}` : account?.page_name ?? null
+          };
+        }
+        const account = waByChannel.get(item.id);
         return {
           id: item.id,
           name: account?.channel_name ?? item.name,
           phone: account?.display_phone_number ?? null
         };
       });
-  }, [channelsQuery.data, whatsappAccountsQuery.data]);
+  }, [channelsQuery.data, whatsappAccountsQuery.data, instagramAccountsQuery.data]);
   const channelLabelById = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of channelOptions) {
