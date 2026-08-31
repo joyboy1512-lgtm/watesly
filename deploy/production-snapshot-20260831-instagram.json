@@ -1,0 +1,17 @@
+{
+  "date": "2026-08-31",
+  "commit": "03d4fe4",
+  "branch": "cursor/production-unified-813f",
+  "alembic": "0062_instagram_accounts",
+  "frontend_assets": {
+    "js": "index-BqGmoyPu.js",
+    "css": "index-D0WOOoCb.css"
+  },
+  "server_backup": "/opt/watesly/backups/20260831-160546",
+  "features": [
+    "Instagram Messaging connect/list/disconnect",
+    "Instagram Direct inbound webhook",
+    "Inbox reply for Instagram channels"
+  ],
+  "notes": "Deployed via SSH upgrade-production.sh. Migration 0062 applied. Live verified via openapi + frontend asset strings."
+}

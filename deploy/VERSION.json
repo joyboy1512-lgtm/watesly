@@ -8,16 +8,16 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "53dd811",
-    "git_commit_message": "Account Tools live deploy",
-    "alembic_head": "0061_organization_branch_limits",
+    "git_commit": "03d4fe4",
+    "git_commit_message": "Instagram Messaging connect and inbox",
+    "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-qXe1YU0r.js",
-      "css": "index-DQqT_K6S.css"
+      "js": "index-BqGmoyPu.js",
+      "css": "index-D0WOOoCb.css"
     },
-    "server_backup": "/opt/watesly/backups/20260830-170118"
+    "server_backup": "/opt/watesly/backups/20260831-160546"
   },
   "versions": {
     "backend": "0.28.0",
@@ -25,9 +25,9 @@
     "platform_label": "v0.28"
   },
   "sources": {
-    "backend": "backend/app/core/config.py \u2192 app_version",
-    "frontend": "frontend/package.json \u2192 version"
+    "backend": "backend/app/core/config.py → app_version",
+    "frontend": "frontend/package.json → version"
   },
-  "commit": "3bf1cfb",
-  "notes": "Channel archive + single-row channels table"
+  "commit": "03d4fe4",
+  "notes": "Instagram Messaging live"
 }
