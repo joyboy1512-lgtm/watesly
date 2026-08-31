@@ -1,11 +1,13 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.channel import Channel
+from app.models.channel import Channel, ChannelStatus
+from app.models.membership import Membership
 from app.models.organization import Organization
-from app.models.whatsapp_account import WhatsAppAccount
+from app.models.whatsapp_account import WhatsAppAccount, WhatsAppAccountStatus
 from app.schemas.channel import ChannelCreateRequest
 from app.schemas.mac import ChannelUsageBoardItem, ChannelUsageBoardResponse
 from app.services.billing import get_active_subscription
@@ -15,6 +17,7 @@ from app.services.mac_tracking import (
     count_campaign_messages_for_channel,
     get_account_mac_summary,
 )
+from app.services.membership_access import ensure_membership_channel_access
 from app.services.organizations import count_organization_channels
 from app.services.plan_limits import is_unlimited, limit_reached
 
@@ -83,6 +86,45 @@ async def create_channel(
         included_mac=included,
     )
     db.add(channel)
+    await db.commit()
+    await db.refresh(channel)
+    return channel
+
+
+async def archive_channel(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    channel_id: UUID,
+    membership: Membership | None = None,
+) -> Channel:
+    channel = await db.get(Channel, channel_id)
+    if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
+        raise ValueError("CHANNEL_NOT_FOUND")
+
+    if membership is not None:
+        await ensure_membership_channel_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            channel_id=channel.id,
+        )
+
+    now = datetime.now(UTC)
+    channel.deleted_at = now
+    channel.status = ChannelStatus.DISCONNECTED
+
+    wa = (
+        await db.execute(
+            select(WhatsAppAccount).where(
+                WhatsAppAccount.account_id == account_id,
+                WhatsAppAccount.channel_id == channel.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if wa is not None and wa.status != WhatsAppAccountStatus.DISCONNECTED:
+        wa.status = WhatsAppAccountStatus.DISCONNECTED
+
     await db.commit()
     await db.refresh(channel)
     return channel

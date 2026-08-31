@@ -11,7 +11,12 @@ from app.schemas.channel import ChannelCreateRequest, ChannelResponse
 from app.schemas.mac import ChannelUsageBoardResponse
 from app.services.billing_provider import update_channel_billing
 from app.services.membership_access import ensure_membership_organization_access
-from app.services.channels import create_channel, get_channel_usage_board, list_channels
+from app.services.channels import (
+    archive_channel,
+    create_channel,
+    get_channel_usage_board,
+    list_channels,
+)
 from app.services.membership_access import filter_channels_for_membership
 
 router = APIRouter()
@@ -69,6 +74,28 @@ async def post_channel(
         }
         code, detail = messages.get(str(exc), (400, "Unable to create channel"))
         raise HTTPException(status_code=code, detail=detail) from exc
+
+
+@router.post("/{channel_id}/archive", response_model=ChannelResponse)
+async def post_archive_channel(
+    channel_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> ChannelResponse:
+    try:
+        return await archive_channel(
+            db,
+            account_id=context.account_id,
+            channel_id=channel_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "CHANNEL_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Channel not found") from exc
+        if code in {"ACCESS_FORBIDDEN", "CONVERSATION_FORBIDDEN"}:
+            raise HTTPException(status_code=403, detail=code) from exc
+        raise HTTPException(status_code=400, detail=code) from exc
 
 
 @router.patch("/{channel_id}/billing", response_model=ChannelUsageBoardResponse)

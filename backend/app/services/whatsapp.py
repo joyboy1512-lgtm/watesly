@@ -430,7 +430,10 @@ async def list_whatsapp_accounts(
         select(WhatsAppAccount, Channel.name, Organization.name)
         .join(Channel, WhatsAppAccount.channel_id == Channel.id)
         .join(Organization, WhatsAppAccount.organization_id == Organization.id)
-        .where(WhatsAppAccount.account_id == account_id)
+        .where(
+            WhatsAppAccount.account_id == account_id,
+            Channel.deleted_at.is_(None),
+        )
         .order_by(WhatsAppAccount.created_at.asc())
     )
     return list(result.all())

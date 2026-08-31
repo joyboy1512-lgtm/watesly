@@ -146,6 +146,28 @@ export default function ChannelsPage() {
     }
   }
 
+  async function archiveChannel(channel: ChannelRow) {
+    if (!canManage) {
+      toastStore.getState().show("ليس لديك صلاحية أرشفة القنوات.", "error");
+      return;
+    }
+    const confirmed = window.confirm(
+      `أرشفة القناة "${channel.channel_name}"؟\nستختفي من القائمة ويُفصل ربط WhatsApp إن وُجد. المحادثات والسجلات تبقى محفوظة.`
+    );
+    if (!confirmed) return;
+    try {
+      await api.post(`/channels/${channel.channel_id}/archive`);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["channels"] }),
+        client.invalidateQueries({ queryKey: ["channels-usage-board"] }),
+        client.invalidateQueries({ queryKey: ["whatsapp-accounts"] })
+      ]);
+      toastStore.getState().show("تمت أرشفة القناة.", "success");
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error) || "تعذر أرشفة القناة.", "error");
+    }
+  }
+
   function renderWhatsAppCell(channel: ChannelRow) {
     if (channel.channel_type !== "whatsapp") return <span className="admin-chip admin-chip-muted">—</span>;
     if (!channel.whatsapp_phone) {
@@ -464,6 +486,15 @@ export default function ChannelsPage() {
                         </Link>
                       )}
                       <Link to="/inbox" className="secondary-button">الوارد</Link>
+                      {canManage && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => void archiveChannel(item)}
+                        >
+                          أرشفة
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
