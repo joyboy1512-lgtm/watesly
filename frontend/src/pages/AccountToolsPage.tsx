@@ -391,20 +391,18 @@ export default function AccountToolsPage() {
                 const categories = orderedCategoryRows(messagePricing.data.meta.by_category);
                 const freeTypes = messagePricing.data.meta.by_pricing_type.filter((row) => row.key.startsWith("FREE"));
                 const paidCategories = categories.filter((row) => row.key !== "SERVICE" && row.key !== "REFERRAL_CONVERSION");
-                const allMessagesTotal =
-                  messagePricing.data.local_messages.sent +
-                  messagePricing.data.meta.delivered_total +
-                  messagePricing.data.local_messages.received;
+                const sentCount = messagePricing.data.local_messages.sent;
+                const deliveredCount = messagePricing.data.meta.delivered_total;
+                const receivedCount = messagePricing.data.local_messages.received;
                 return (
                   <>
                     <div className="admin-stats-row admin-stats-row-brand at-summary-row">
                       <article className="admin-stat-card admin-stat-card-brand">
                         <span className="at-summary-label-chip">كل الرسائل</span>
-                        <strong>{allMessagesTotal.toLocaleString("ar")}</strong>
+                        <strong>{sentCount.toLocaleString("ar")}</strong>
                         <small>
-                          مرسل {messagePricing.data.local_messages.sent.toLocaleString("ar")} · مسلّم{" "}
-                          {messagePricing.data.meta.delivered_total.toLocaleString("ar")} · وارد{" "}
-                          {messagePricing.data.local_messages.received.toLocaleString("ar")}
+                          مرسل {sentCount.toLocaleString("ar")} · مسلّم {deliveredCount.toLocaleString("ar")} · وارد{" "}
+                          {receivedCount.toLocaleString("ar")}
                         </small>
                       </article>
                       <article className="admin-stat-card admin-stat-card-brand">
