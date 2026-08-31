@@ -3359,6 +3359,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .channels-filter-card { padding: 0; overflow: hidden; }
 .channels-form-card { display: grid; gap: 12px; }
 .channels-table-card { overflow: hidden; padding: 0; }
+.channels-table-card .admin-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .channels-table-card .admin-table-header.assignments-table-title {
   display: flex;
   justify-content: center;
