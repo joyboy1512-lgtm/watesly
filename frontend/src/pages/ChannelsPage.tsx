@@ -461,8 +461,8 @@ export default function ChannelsPage() {
               {filtered.map((item) => (
                 <tr key={item.channel_id}>
                   <td>
-                    <div className="admin-cell-main channels-name-cell">
-                      <strong>{item.channel_name}</strong>
+                    <div className="channels-name-cell">
+                      <strong title={item.channel_name}>{item.channel_name}</strong>
                       {item.whatsapp_phone && <small dir="ltr">{item.whatsapp_phone}</small>}
                     </div>
                   </td>
@@ -482,14 +482,14 @@ export default function ChannelsPage() {
                       </Link>
                       {item.channel_type === "whatsapp" && canManage && (
                         <Link to={`/whatsapp-connect?channel=${item.channel_id}`} className="secondary-button">
-                          {item.whatsapp_phone ? "إدارة الربط" : "ربط"}
+                          {item.whatsapp_phone ? "الربط" : "ربط"}
                         </Link>
                       )}
                       <Link to="/inbox" className="secondary-button">الوارد</Link>
                       {canManage && (
                         <button
                           type="button"
-                          className="secondary-button"
+                          className="secondary-button channels-archive-btn"
                           onClick={() => void archiveChannel(item)}
                         >
                           أرشفة
