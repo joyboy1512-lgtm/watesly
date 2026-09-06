@@ -6469,12 +6469,23 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .templates-row-actions,
 .templates-erp-table .admin-actions {
-  flex-wrap: wrap;
+  display: inline-flex;
+  flex-wrap: nowrap;
   gap: 6px;
+  white-space: nowrap;
 }
 .templates-row-actions .secondary-button.compact {
   padding: 6px 10px;
   font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.templates-row-actions .templates-delete-btn {
+  color: var(--danger);
+  border-color: rgba(185, 28, 28, 0.28);
+}
+.templates-erp-table tbody td:last-child {
+  min-width: 280px;
 }
 .templates-expand-row td {
   background: color-mix(in srgb, var(--primary) 4%, var(--panel-soft));
