@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     refresh_cookie_samesite: str = "lax"
     refresh_cookie_domain: str | None = None
     invitation_token_expire_hours: int = 72
+    password_reset_token_expire_hours: int = 1
     app_public_url: str = "http://localhost:5173"
     public_api_base_url: str = "http://localhost:8000"
     smtp_host: str | None = None

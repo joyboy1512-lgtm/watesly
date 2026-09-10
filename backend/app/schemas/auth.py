@@ -37,6 +37,24 @@ class LoginRequest(BaseModel):
         return str(value).strip().lower()
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=2048)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str | None = Field(default=None, min_length=40)
 

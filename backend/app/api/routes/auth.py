@@ -9,8 +9,31 @@ from app.core.rate_limit import enforce_rate_limit
 from app.db.session import get_db
 from app.models.user import User
 from app.models.membership import Membership
-from app.schemas.auth import AccountChoice, AccountChoicesResponse, CurrentUserResponse, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, RegistrationResponse, TokenResponse
-from app.services.auth import authenticate_user, issue_token_pair, list_active_memberships, register_owner, revoke_refresh_token, rotate_refresh_token
+from app.schemas.auth import (
+    AccountChoice,
+    AccountChoicesResponse,
+    CurrentUserResponse,
+    ForgotPasswordRequest,
+    LoginRequest,
+    LogoutRequest,
+    MessageResponse,
+    RefreshRequest,
+    RegisterRequest,
+    RegistrationResponse,
+    ResetPasswordRequest,
+    TokenResponse,
+)
+from app.services.auth import (
+    FORGOT_PASSWORD_GENERIC_MESSAGE,
+    authenticate_user,
+    issue_token_pair,
+    list_active_memberships,
+    register_owner,
+    request_password_reset,
+    reset_password_with_token,
+    revoke_refresh_token,
+    rotate_refresh_token,
+)
 
 router = APIRouter()
 
@@ -77,6 +100,50 @@ async def login(payload: LoginRequest, response: Response, request: Request, db:
         raise HTTPException(status_code=409,detail={"code":"ACCOUNT_SELECTION_REQUIRED","accounts":choices})
     _set_refresh_cookie(response, refresh_token)
     return TokenResponse(access_token=access_token, expires_in=settings.access_token_expire_minutes * 60)
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    await enforce_rate_limit(
+        request,
+        bucket="forgot_password",
+        limit=5,
+        window_seconds=60,
+        identity=f"{request.client.host if request.client else 'unknown'}:{payload.email}",
+    )
+    await request_password_reset(db, email=payload.email)
+    return MessageResponse(message=FORGOT_PASSWORD_GENERIC_MESSAGE)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    await enforce_rate_limit(
+        request,
+        bucket="reset_password",
+        limit=10,
+        window_seconds=60,
+    )
+    try:
+        await reset_password_with_token(db, token=payload.token, password=payload.password)
+    except ValueError as exc:
+        if str(exc) == "INVALID_OR_EXPIRED_TOKEN":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "INVALID_OR_EXPIRED_TOKEN",
+                    "message": "رابط إعادة التعيين غير صالح أو منتهٍ. اطلب رابطاً جديداً.",
+                },
+            ) from exc
+        raise
+    return MessageResponse(message="تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.")
 
 
 @router.post("/refresh", response_model=TokenResponse)

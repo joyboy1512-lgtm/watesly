@@ -1,9 +1,21 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
+import logging
+
+import jwt
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
-from app.core.security import create_access_token, create_refresh_token_value, hash_opaque_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    create_password_reset_token,
+    create_refresh_token_value,
+    decode_password_reset_token,
+    hash_opaque_token,
+    hash_password,
+    verify_password,
+)
 from app.models.account import Account
 from app.models.membership import Membership, MembershipRole, MembershipStatus
 from app.models.organization import Organization
@@ -12,6 +24,9 @@ from app.models.refresh_session import RefreshSession
 from app.models.user import User, UserStatus
 from app.schemas.auth import LoginRequest, RegisterRequest
 from app.services.billing import create_trial_subscription
+from app.services.email import build_password_reset_url, send_password_reset_email
+
+logger = logging.getLogger(__name__)
 
 async def get_user_by_email(db: AsyncSession,email:str)->User|None:
     return (await db.execute(select(User).where(User.email==email))).scalar_one_or_none()
@@ -87,3 +102,53 @@ async def revoke_all_user_sessions(db:AsyncSession,user_id)->int:
     items=list((await db.execute(select(RefreshSession).where(RefreshSession.user_id==user_id,RefreshSession.revoked_at.is_(None)))).scalars().all()); now=datetime.now(UTC)
     for x in items:x.revoked_at=now
     await db.commit(); return len(items)
+
+
+FORGOT_PASSWORD_GENERIC_MESSAGE = (
+    "إذا كان هذا البريد مسجّلاً لدينا، ستصلك رسالة برابط إعادة تعيين كلمة المرور خلال لحظات."
+)
+
+
+async def request_password_reset(db: AsyncSession, *, email: str) -> bool:
+    """Always safe to call publicly. Returns whether an email was attempted successfully."""
+    user = await get_user_by_email(db, email)
+    if user is None or user.status != UserStatus.ACTIVE:
+        return False
+
+    token = create_password_reset_token(
+        user_id=user.id,
+        password_changed_at=user.password_changed_at,
+    )
+    reset_url = build_password_reset_url(token)
+    sent = await send_password_reset_email(
+        to=user.email,
+        reset_url=reset_url,
+        expires_hours=settings.password_reset_token_expire_hours,
+        full_name=user.full_name,
+    )
+    if not sent:
+        logger.warning("Password reset email was not sent for user_id=%s (email unconfigured or failed)", user.id)
+    return sent
+
+
+async def reset_password_with_token(db: AsyncSession, *, token: str, password: str) -> None:
+    try:
+        user_id, token_pwd = decode_password_reset_token(token)
+    except jwt.InvalidTokenError as exc:
+        raise ValueError("INVALID_OR_EXPIRED_TOKEN") from exc
+
+    user = await db.get(User, user_id)
+    if user is None or user.status != UserStatus.ACTIVE:
+        raise ValueError("INVALID_OR_EXPIRED_TOKEN")
+
+    current_pwd = int(user.password_changed_at.timestamp()) if user.password_changed_at else 0
+    if token_pwd != current_pwd:
+        raise ValueError("INVALID_OR_EXPIRED_TOKEN")
+
+    now = datetime.now(UTC)
+    user.password_hash = hash_password(password)
+    user.password_changed_at = now
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    await db.flush()
+    await revoke_all_user_sessions(db, user.id)

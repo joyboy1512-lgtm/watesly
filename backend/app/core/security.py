@@ -26,3 +26,23 @@ def decode_invitation_token(token: str) -> UUID:
     payload=jwt.decode(token,settings.app_secret_key.get_secret_value(),algorithms=[ALGORITHM]);
     if payload.get("type")!="invitation": raise jwt.InvalidTokenError("Wrong token type")
     return UUID(payload["sub"])
+
+def create_password_reset_token(*, user_id: UUID, password_changed_at: datetime | None = None) -> str:
+    now = datetime.now(UTC)
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "pwd": int(password_changed_at.timestamp()) if password_changed_at else 0,
+            "iat": now,
+            "exp": now + timedelta(hours=settings.password_reset_token_expire_hours),
+            "type": "password_reset",
+        },
+        settings.app_secret_key.get_secret_value(),
+        algorithm=ALGORITHM,
+    )
+
+def decode_password_reset_token(token: str) -> tuple[UUID, int]:
+    payload = jwt.decode(token, settings.app_secret_key.get_secret_value(), algorithms=[ALGORITHM])
+    if payload.get("type") != "password_reset":
+        raise jwt.InvalidTokenError("Wrong token type")
+    return UUID(payload["sub"]), int(payload.get("pwd", 0))
