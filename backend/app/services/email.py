@@ -47,6 +47,12 @@ def build_invitation_accept_url(token: str) -> str:
     return f"{base}/invite?{query}"
 
 
+def build_password_reset_url(token: str) -> str:
+    base = settings.app_public_url.rstrip("/")
+    query = urlencode({"token": token})
+    return f"{base}/reset-password?{query}"
+
+
 def _sender_payload() -> dict[str, str]:
     from_email = settings.smtp_from_email or ""
     from_name = settings.smtp_from_name.strip() or "Watesly"
@@ -213,4 +219,53 @@ async def send_team_invitation_email(
         return True
     except Exception:
         logger.exception("Failed to send team invitation email to %s", to)
+        return False
+
+
+async def send_password_reset_email(
+    *,
+    to: str,
+    reset_url: str,
+    expires_hours: int,
+    full_name: str | None = None,
+) -> bool:
+    if not is_email_configured():
+        return False
+
+    greeting = f"مرحباً {full_name}،" if full_name and full_name.strip() else "مرحباً،"
+    subject = "إعادة تعيين كلمة المرور — Watesly"
+    text_body = (
+        f"{greeting}\n\n"
+        f"طلبت إعادة تعيين كلمة المرور لحسابك على Watesly.\n"
+        f"اضغط الرابط التالي لاختيار كلمة مرور جديدة:\n\n"
+        f"{reset_url}\n\n"
+        f"الرابط صالح لمدة {expires_hours} ساعة.\n"
+        f"إذا لم تطلب ذلك، تجاهل هذه الرسالة ولن يتغير شيء في حسابك.\n"
+    )
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <body style="font-family:Arial,sans-serif;line-height:1.7;color:#111b21;background:#f6faf8;padding:24px;">
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e6ece9;border-radius:16px;padding:28px;">
+      <h1 style="margin:0 0 12px;font-size:22px;color:#075e54;">إعادة تعيين كلمة المرور</h1>
+      <p style="margin:0 0 16px;">{greeting}</p>
+      <p style="margin:0 0 20px;">طلبت إعادة تعيين كلمة المرور لحسابك على Watesly. اضغط الزر أدناه لاختيار كلمة مرور جديدة:</p>
+      <p style="margin:0 0 24px;">
+        <a href="{reset_url}" style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:10px;">
+          تعيين كلمة مرور جديدة
+        </a>
+      </p>
+      <p style="margin:0 0 12px;font-size:13px;color:#667781;">الرابط صالح لمدة {expires_hours} ساعة.</p>
+      <p style="margin:0 0 12px;font-size:13px;color:#667781;">إذا لم تطلب ذلك، تجاهل هذه الرسالة.</p>
+      <p style="margin:0;font-size:12px;color:#667781;word-break:break-all;" dir="ltr">{reset_url}</p>
+    </div>
+  </body>
+</html>
+"""
+
+    try:
+        await send_email(to=to, subject=subject, text_body=text_body, html_body=html_body)
+        return True
+    except Exception:
+        logger.exception("Failed to send password reset email to %s", to)
         return False

@@ -14,6 +14,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const invitedSuccess = searchParams.get("invited") === "1";
+  const resetSuccess = searchParams.get("reset") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -78,6 +79,7 @@ export default function LoginPage() {
           {invitedSuccess && (
             <p className="form-success">تم تفعيل حسابك. سجّل الدخول ببريدك وكلمة المرور الجديدة.</p>
           )}
+          {resetSuccess && <p className="form-success">{t("login.resetSuccess")}</p>}
           <form onSubmit={handleSubmit}>
             <label className="field-label">
               <span>{t("login.email")}</span>
@@ -98,6 +100,9 @@ export default function LoginPage() {
                 </button>
               </div>
             </label>
+            <div className="login-forgot-row">
+              <Link to="/forgot-password">{t("login.forgotPassword")}</Link>
+            </div>
             {error && <p className="form-error">{error}</p>}
             <button type="submit" className="whatsapp-button" disabled={loading}>
               {loading ? t("login.loading") : t("login.submit")}
