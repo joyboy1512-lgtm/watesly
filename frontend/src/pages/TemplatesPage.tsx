@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, Fragment, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { hasNavPermission } from "../lib/navPermissions";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   buildStoredComponents,
@@ -40,6 +41,7 @@ type Template = {
   body_text: string | null;
   components: TemplateComponent[] | null;
   meta_status_detail?: string | null;
+  archived_at?: string | null;
 };
 
 type PageTab = "list" | "create" | "sync";
@@ -63,16 +65,29 @@ export default function TemplatesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
+
+  const profile = useQuery({
+    queryKey: ["current-user"],
+    queryFn: async () => (await api.get<{ permissions?: string[] }>("/auth/me")).data
+  });
+  const canManage = hasNavPermission(profile.data?.permissions, "templates.manage");
 
   const accounts = useQuery({
     queryKey: ["whatsapp-accounts"],
     queryFn: async () => (await api.get<WhatsAppAccount[]>("/whatsapp/accounts")).data
   });
   const templates = useQuery({
-    queryKey: ["templates"],
-    queryFn: async () => (await api.get<Template[]>("/templates")).data,
+    queryKey: ["templates", showArchived ? "archived" : "active"],
+    queryFn: async () =>
+      (
+        await api.get<Template[]>("/templates", {
+          params: showArchived ? { archived_only: true } : {}
+        })
+      ).data,
     refetchInterval: (query) => {
       const rows = query.state.data ?? [];
       return rows.some((item) => item.status === "pending") ? 30_000 : false;
@@ -199,7 +214,12 @@ export default function TemplatesPage() {
   }
 
   async function deleteTemplate(id: string) {
-    if (!window.confirm("حذف هذا القالب؟")) return;
+    if (!canManage) {
+      toastStore.getState().show("ليس لديك صلاحية إدارة القوالب.", "error");
+      return;
+    }
+    if (!window.confirm("حذف هذا القالب نهائياً؟ إن وُجد في Meta سيُحاول حذفه من هناك أيضاً.")) return;
+    setActionBusyId(id);
     try {
       await api.delete(`/templates/${id}`);
       await client.invalidateQueries({ queryKey: ["templates"] });
@@ -207,6 +227,43 @@ export default function TemplatesPage() {
       toastStore.getState().show("تم حذف القالب.", "success");
     } catch {
       toastStore.getState().show("تعذر حذف القالب.", "error");
+    } finally {
+      setActionBusyId(null);
+    }
+  }
+
+  async function archiveTemplate(id: string) {
+    if (!canManage) {
+      toastStore.getState().show("ليس لديك صلاحية إدارة القوالب.", "error");
+      return;
+    }
+    if (!window.confirm("أرشفة هذا القالب؟ سيختفي من القائمة الرئيسية مع بقائه في Meta.")) return;
+    setActionBusyId(id);
+    try {
+      await api.post(`/templates/${id}/archive`);
+      await client.invalidateQueries({ queryKey: ["templates"] });
+      toastStore.getState().show("تمت أرشفة القالب.", "success");
+    } catch {
+      toastStore.getState().show("تعذر أرشفة القالب.", "error");
+    } finally {
+      setActionBusyId(null);
+    }
+  }
+
+  async function unarchiveTemplate(id: string) {
+    if (!canManage) {
+      toastStore.getState().show("ليس لديك صلاحية إدارة القوالب.", "error");
+      return;
+    }
+    setActionBusyId(id);
+    try {
+      await api.post(`/templates/${id}/unarchive`);
+      await client.invalidateQueries({ queryKey: ["templates"] });
+      toastStore.getState().show("تمت استعادة القالب من الأرشيف.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إلغاء الأرشفة.", "error");
+    } finally {
+      setActionBusyId(null);
     }
   }
 
@@ -291,9 +348,18 @@ export default function TemplatesPage() {
         <section className="card admin-table-card">
           <div className="admin-table-header">
             <div>
-              <h2>جدول القوالب</h2>
-              <small>{filtered.length} قالب · معتمدة للحملات والأتمتة</small>
+              <h2>{showArchived ? "أرشيف القوالب" : "جدول القوالب"}</h2>
+              <small>
+                {filtered.length} قالب · {showArchived ? "مؤرشفة" : "معتمدة للحملات والأتمتة"}
+              </small>
             </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setShowArchived((value) => !value)}
+            >
+              {showArchived ? "عرض النشطة" : "عرض الأرشيف"}
+            </button>
           </div>
 
           <div className="admin-toolbar" style={{ padding: "12px 16px 0" }}>
@@ -403,22 +469,46 @@ export default function TemplatesPage() {
                               >
                                 نافذة
                               </button>
-                              {(item.status === "rejected" || item.status === "draft") && (
+                              {canManage && !showArchived && (item.status === "rejected" || item.status === "draft") && (
                                 <button
                                   type="button"
                                   className="secondary-button compact"
+                                  disabled={actionBusyId === item.id}
                                   onClick={() => void resubmitTemplate(item.id)}
                                 >
                                   إعادة إرسال
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                className="secondary-button compact"
-                                onClick={() => void deleteTemplate(item.id)}
-                              >
-                                حذف
-                              </button>
+                              {canManage && !showArchived && (
+                                <button
+                                  type="button"
+                                  className="secondary-button compact"
+                                  disabled={actionBusyId === item.id}
+                                  onClick={() => void archiveTemplate(item.id)}
+                                >
+                                  أرشفة
+                                </button>
+                              )}
+                              {canManage && showArchived && (
+                                <button
+                                  type="button"
+                                  className="secondary-button compact"
+                                  disabled={actionBusyId === item.id}
+                                  onClick={() => void unarchiveTemplate(item.id)}
+                                >
+                                  إلغاء الأرشفة
+                                </button>
+                              )}
+                              {canManage && (
+                                <button
+                                  type="button"
+                                  className="secondary-button compact templates-delete-btn"
+                                  disabled={actionBusyId === item.id}
+                                  onClick={() => void deleteTemplate(item.id)}
+                                >
+                                  حذف
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
