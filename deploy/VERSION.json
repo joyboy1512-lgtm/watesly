@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-08-31",
+  "updated_at": "2026-09-10",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,16 +8,16 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "03d4fe4",
-    "git_commit_message": "Instagram Messaging connect and inbox",
+    "git_commit": "76ee6ad",
+    "git_commit_message": "Forgot-password email reset live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BqGmoyPu.js",
-      "css": "index-D0WOOoCb.css"
+      "js": "index-BDO3lewv.js",
+      "css": "index-B8Zc_O7B.css"
     },
-    "server_backup": "/opt/watesly/backups/20260831-160546"
+    "server_backup": "/opt/watesly/backups/20260910-091231"
   },
   "versions": {
     "backend": "0.28.0",
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "03d4fe4",
-  "notes": "Instagram Messaging live"
+  "commit": "76ee6ad",
+  "notes": "Forgot-password / email reset live"
 }

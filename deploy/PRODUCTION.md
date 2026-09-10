@@ -16,6 +16,18 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-09-10) — Forgot password live
+
+| Item | Value |
+|------|-------|
+| Commit | `76ee6ad` |
+| Alembic | `0062_instagram_accounts` |
+| Live assets | `index-BDO3lewv.js`, `index-B8Zc_O7B.css` |
+| Server backup | `/opt/watesly/backups/20260910-091231` |
+| Snapshot record | `deploy/production-snapshot-20260910-forgot-password.json` |
+
+**Includes:** self-service forgot/reset password via email (PR #122).
+
 ### Production snapshot (2026-08-30) — Account Tools live
 
 | Item | Value |
