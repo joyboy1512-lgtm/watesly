@@ -1,0 +1,7 @@
+{
+  "date": "2026-09-19",
+  "commit": "3b9185d",
+  "branch": "cursor/production-unified-813f",
+  "notes": "Hotfix NameError ensure_conversation_channel_access import on POST /conversations/start",
+  "server_backup": "skipped-hotfix"
+}

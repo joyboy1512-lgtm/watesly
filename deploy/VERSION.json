@@ -8,8 +8,8 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "8c22655",
-    "git_commit_message": "Inbox +conversation start fix live",
+    "git_commit": "3b9185d",
+    "git_commit_message": "conversations/start NameError hotfix",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
@@ -25,9 +25,9 @@
     "platform_label": "v0.28"
   },
   "sources": {
-    "backend": "backend/app/core/config.py → app_version",
-    "frontend": "frontend/package.json → version"
+    "backend": "backend/app/core/config.py \u2192 app_version",
+    "frontend": "frontend/package.json \u2192 version"
   },
-  "commit": "8c22655",
-  "notes": "Inbox +conversation unarchive/unsnooze fix live"
+  "commit": "3b9185d",
+  "notes": "Fixed 500 NameError on +conversation start"
 }
