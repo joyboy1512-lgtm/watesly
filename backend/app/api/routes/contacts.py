@@ -333,7 +333,7 @@ async def post_contact_conversation(
 ):
     try:
         conversation, created = await get_or_create_conversation_for_contact(
-            db, account_id=context.account_id, contact_id=contact_id
+            db, account_id=context.account_id, contact_id=contact_id, reactivate=True
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
