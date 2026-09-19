@@ -704,6 +704,7 @@ async def start_conversation_on_channel(
 ) -> tuple[Conversation, Contact, bool]:
     from app.models.channel import ChannelType
     from app.services.contacts import create_contact
+    from app.services.phone_normalize import normalize_whatsapp_phone
 
     channel = await db.get(Channel, channel_id)
     if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
