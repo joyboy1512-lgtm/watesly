@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,11 +10,13 @@ from app.core.permissions import Permission
 from app.models.whatsapp_template import WhatsAppTemplate
 from app.schemas.template import TemplateCreateRequest, TemplateResponse, TemplateUpdateRequest
 from app.services.templates import (
+    archive_template,
     create_template,
     delete_template,
     list_templates,
     resubmit_template_to_meta,
     sync_templates_from_meta,
+    unarchive_template,
     update_template,
 )
 
@@ -23,10 +25,18 @@ router = APIRouter()
 
 @router.get("", response_model=list[TemplateResponse])
 async def get_templates(
+    include_archived: bool = Query(False),
+    archived_only: bool = Query(False),
     context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_templates(db, context.account_id, membership=context.membership)
+    return await list_templates(
+        db,
+        context.account_id,
+        membership=context.membership,
+        include_archived=include_archived,
+        archived_only=archived_only,
+    )
 
 
 @router.post("", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
@@ -115,6 +125,47 @@ async def patch_template(
     except ValueError as exc:
         if str(exc) == "ACCESS_FORBIDDEN":
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Template not found") from exc
+
+
+@router.post("/{template_id}/archive", response_model=TemplateResponse)
+async def post_archive_template(
+    template_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await archive_template(
+            db,
+            account_id=context.account_id,
+            template_id=template_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        if str(exc) == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Template not found") from exc
+
+
+@router.post("/{template_id}/unarchive", response_model=TemplateResponse)
+async def post_unarchive_template(
+    template_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await unarchive_template(
+            db,
+            account_id=context.account_id,
+            template_id=template_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=code) from exc
+        if code == "TEMPLATE_NOT_ARCHIVED":
+            raise HTTPException(status_code=409, detail="Template is not archived") from exc
         raise HTTPException(status_code=404, detail="Template not found") from exc
 
 
