@@ -30,6 +30,7 @@ from app.realtime.event_bus import publish_event
 from app.schemas.message import MessageResponse
 from app.services.conversations import (
     build_conversation_response,
+    ensure_conversation_channel_access,
     list_conversations,
     list_messages,
     update_conversation,

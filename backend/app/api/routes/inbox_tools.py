@@ -191,7 +191,7 @@ async def post_quick_reply_suggest(
 ):
     return await suggest_quick_replies(
         db,
-        context.account_id,
+        account_id=context.account_id,
         query=payload.query,
         organization_id=payload.organization_id,
         channel_id=payload.channel_id,
