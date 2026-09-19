@@ -19,3 +19,18 @@ def test_contacts_are_scoped_per_channel() -> None:
     contact_model = read("app/models/contact.py")
     assert "uq_contacts_org_channel_address" in contact_model
     assert "channel_id" in contact_model
+
+
+def test_start_conversation_reactivates_archived_and_requires_whatsapp() -> None:
+    management = read("app/services/contact_management.py")
+    routes = read("app/api/routes/conversations.py")
+    page = read("../frontend/src/pages/InboxPage.tsx")
+    helpers = read("../frontend/src/lib/inboxHelpers.ts")
+
+    assert "reactivate" in management
+    assert "archived_at = None" in management or "conversation.archived_at = None" in management
+    assert "CHANNEL_NOT_WHATSAPP" in management
+    assert "CHANNEL_NOT_WHATSAPP" in routes
+    assert "whatsappChannelOptions" in page
+    assert "formatApiError" in page
+    assert "skipGlobalErrorToast: true" in helpers

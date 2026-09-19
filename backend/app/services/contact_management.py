@@ -639,19 +639,46 @@ async def get_or_create_conversation_for_contact(
     *,
     account_id: UUID,
     contact_id: UUID,
+    reactivate: bool = False,
 ) -> tuple[Conversation, bool]:
     contact = await get_contact_or_raise(db, account_id=account_id, contact_id=contact_id)
 
-    conv_result = await db.execute(
-        select(Conversation).where(
+    active_result = await db.execute(
+        select(Conversation)
+        .where(
+            Conversation.contact_id == contact.id,
+            Conversation.channel_id == contact.channel_id,
+            Conversation.deleted_at.is_(None),
+            Conversation.archived_at.is_(None),
+            Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+        )
+        .order_by(Conversation.last_message_at.desc().nullslast())
+    )
+    conversation = active_result.scalars().first()
+    if conversation is not None:
+        if reactivate and conversation.snoozed_until is not None:
+            conversation.snoozed_until = None
+            await db.commit()
+            await db.refresh(conversation)
+        return conversation, False
+
+    # Reuse archived/snoozed open thread instead of failing unique (contact, channel, status).
+    dormant_result = await db.execute(
+        select(Conversation)
+        .where(
             Conversation.contact_id == contact.id,
             Conversation.channel_id == contact.channel_id,
             Conversation.deleted_at.is_(None),
             Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
         )
+        .order_by(Conversation.last_message_at.desc().nullslast())
     )
-    conversation = conv_result.scalars().first()
+    conversation = dormant_result.scalars().first()
     if conversation is not None:
+        conversation.archived_at = None
+        conversation.snoozed_until = None
+        await db.commit()
+        await db.refresh(conversation)
         return conversation, False
 
     conversation = Conversation(
@@ -675,11 +702,14 @@ async def start_conversation_on_channel(
     external_address: str,
     display_name: str | None = None,
 ) -> tuple[Conversation, Contact, bool]:
+    from app.models.channel import ChannelType
     from app.services.contacts import create_contact
 
     channel = await db.get(Channel, channel_id)
     if channel is None or channel.account_id != account_id or channel.deleted_at is not None:
         raise ValueError("INVALID_CHANNEL")
+    if channel.type != ChannelType.WHATSAPP:
+        raise ValueError("CHANNEL_NOT_WHATSAPP")
 
     phone = normalize_whatsapp_phone(external_address.strip())
     if len(phone) < 3:
@@ -699,6 +729,7 @@ async def start_conversation_on_channel(
         db,
         account_id=account_id,
         contact_id=contact.id,
+        reactivate=True,
     )
     return conversation, contact, created
 

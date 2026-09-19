@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, silentRequest } from "../lib/api";
+import { api, formatApiError, silentRequest } from "../lib/api";
 import { authStore } from "../stores/auth";
 import { toastStore } from "../stores/toast";
 import { useHasPermission } from "../hooks/usePermissions";
@@ -153,6 +153,16 @@ export default function InboxPage() {
         };
       });
   }, [channelsQuery.data, whatsappAccountsQuery.data, instagramAccountsQuery.data]);
+  const whatsappChannelOptions = useMemo(
+    () =>
+      (channelsQuery.data ?? [])
+        .filter((item) => item.type === "whatsapp")
+        .map((item) => {
+          const option = channelOptions.find((row) => row.id === item.id);
+          return option ?? { id: item.id, name: item.name, phone: null };
+        }),
+    [channelsQuery.data, channelOptions]
+  );
   const channelLabelById = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of channelOptions) {
@@ -264,8 +274,8 @@ export default function InboxPage() {
         result.created ? "تم فتح محادثة جديدة على هذه القناة." : "تم فتح المحادثة على هذه القناة.",
         "success"
       );
-    } catch {
-      toastStore.getState().show("تعذر فتح المحادثة على هذه القناة.", "error");
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error, "تعذر فتح المحادثة على هذه القناة."), "error");
     } finally {
       setSwitchingChannelId(null);
     }
@@ -278,14 +288,23 @@ export default function InboxPage() {
       toastStore.getState().show("اختر القناة وأدخل رقم WhatsApp.", "error");
       return;
     }
+    const normalizedPhone = normalizeWhatsAppPhone(phone);
+    if (normalizedPhone.length < 8) {
+      toastStore.getState().show("رقم WhatsApp غير صالح. أدخل الرقم مع مفتاح الدولة.", "error");
+      return;
+    }
     setStartingConversation(true);
     try {
+      if (filter === "archived") {
+        setFilter("all");
+      }
       const result = await startConversationOnChannel({
         channel_id: newConversationChannelId,
-        external_address: normalizeWhatsAppPhone(phone),
+        external_address: normalizedPhone,
         display_name: newConversationName.trim() || null
       });
       await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      await queryClient.refetchQueries({ queryKey: ["conversations"] });
       setNewConversationOpen(false);
       setNewConversationPhone("");
       setNewConversationName("");
@@ -294,9 +313,12 @@ export default function InboxPage() {
       next.set("conversation", result.conversation_id);
       next.set("channel_id", result.channel_id);
       setSearchParams(next, { replace: true });
-      toastStore.getState().show("تم فتح المحادثة.", "success");
-    } catch {
-      toastStore.getState().show("تعذر بدء المحادثة.", "error");
+      toastStore.getState().show(
+        result.created ? "تم فتح محادثة جديدة." : "تم فتح المحادثة.",
+        "success"
+      );
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error, "تعذر بدء المحادثة."), "error");
     } finally {
       setStartingConversation(false);
     }
@@ -840,8 +862,12 @@ export default function InboxPage() {
               className="secondary-button compact inbox-new-conversation-button"
               onClick={() => {
                 setNewConversationOpen((value) => !value);
-                if (!newConversationChannelId && channelOptions[0]) {
-                  setNewConversationChannelId(channelFilter || channelOptions[0].id);
+                if (!newConversationChannelId && whatsappChannelOptions[0]) {
+                  setNewConversationChannelId(
+                    channelFilter && whatsappChannelOptions.some((item) => item.id === channelFilter)
+                      ? channelFilter
+                      : whatsappChannelOptions[0].id
+                  );
                 }
               }}
             >
@@ -859,8 +885,8 @@ export default function InboxPage() {
                 onChange={(e) => setNewConversationChannelId(e.target.value)}
                 required
               >
-                <option value="">اختر القناة</option>
-                {channelOptions.map((item) => (
+                <option value="">اختر قناة WhatsApp</option>
+                {whatsappChannelOptions.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.phone ? `${item.name} · ${item.phone}` : item.name}
                   </option>
