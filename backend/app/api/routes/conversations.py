@@ -134,6 +134,7 @@ async def post_start_conversation(
         messages = {
             "INVALID_CHANNEL": (400, "Channel is invalid"),
             "INVALID_PHONE": (400, "Phone number is invalid"),
+            "CHANNEL_NOT_WHATSAPP": (400, "اختر قناة WhatsApp لبدء محادثة برقم هاتف."),
             "CONVERSATION_FORBIDDEN": (403, "You cannot access this channel"),
         }
         code, detail = messages.get(str(exc), (400, "Unable to start conversation"))

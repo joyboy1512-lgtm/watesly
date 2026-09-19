@@ -69,6 +69,6 @@ export async function startConversationOnChannel(payload: {
     channel_id: string;
     contact_id: string;
     created: boolean;
-  }>("/conversations/start", payload);
+  }>("/conversations/start", payload, { skipGlobalErrorToast: true });
   return response.data;
 }
