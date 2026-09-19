@@ -1,7 +1,8 @@
 from enum import StrEnum
 from uuid import UUID
+from datetime import datetime
 
-from sqlalchemy import ForeignKey, JSON, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,3 +54,6 @@ class WhatsAppTemplate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     body_text: Mapped[str | None] = mapped_column(Text)
     components: Mapped[list | None] = mapped_column(JSON)
     meta_status_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )

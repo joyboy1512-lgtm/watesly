@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,3 +38,4 @@ class TemplateResponse(BaseModel):
     body_text: str | None
     components: list | None
     meta_status_detail: str | None = None
+    archived_at: datetime | None = None
