@@ -16,6 +16,18 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-09-19) — Inbox +conversation fix live
+
+| Item | Value |
+|------|-------|
+| Commit | `8c22655` |
+| Alembic | `0062_instagram_accounts` |
+| Live assets | `index-B-yy-DwN.js`, `index-B8Zc_O7B.css` |
+| Server backup | `/opt/watesly/backups/20260919-180139` |
+| Snapshot record | `deploy/production-snapshot-20260919-inbox-start.json` |
+
+**Includes:** PR #123 inbox start for archived/snoozed threads.
+
 ### Production snapshot (2026-09-10) — Forgot password live
 
 | Item | Value |

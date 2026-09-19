@@ -1,0 +1,17 @@
+{
+  "date": "2026-09-19",
+  "commit": "8c22655",
+  "branch": "cursor/production-unified-813f",
+  "alembic": "0062_instagram_accounts",
+  "frontend_assets": {
+    "js": "index-B-yy-DwN.js",
+    "css": "index-B8Zc_O7B.css"
+  },
+  "server_backup": "/opt/watesly/backups/20260919-180139",
+  "features": [
+    "Reactivate archived/snoozed threads on +conversation start",
+    "WhatsApp-only channel picker for phone start",
+    "Clearer start-conversation API errors"
+  ],
+  "notes": "Deployed via SSH upgrade-production.sh. PR #123."
+}
