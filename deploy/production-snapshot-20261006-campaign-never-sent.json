@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-06",
+  "commit": "0aeeb60",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DtppAWDx.js",
+    "css": "index-B8Zc_O7B.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261006-172727",
+  "features": [
+    "Campaign only_never_sent filter",
+    "Preflight never_sent / previously_sent stats",
+    "Isolate selection button for never-sent contacts"
+  ],
+  "notes": "Deployed via SSH. PR #124."
+}

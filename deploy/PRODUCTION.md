@@ -16,6 +16,18 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-10-06) — Campaign never-sent isolation live
+
+| Item | Value |
+|------|-------|
+| Commit | `0aeeb60` |
+| Alembic | `0062_instagram_accounts` |
+| Live assets | `index-DtppAWDx.js`, `index-B8Zc_O7B.css` |
+| Server backup | `/opt/watesly/backups/20261006-172727` |
+| Snapshot record | `deploy/production-snapshot-20261006-campaign-never-sent.json` |
+
+**Includes:** PR #124 campaign filter for contacts never messaged before.
+
 ### Production snapshot (2026-09-19) — Inbox +conversation fix live
 
 | Item | Value |

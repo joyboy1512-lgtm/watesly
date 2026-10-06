@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-09-19",
+  "updated_at": "2026-10-06",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,16 +8,16 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "3b9185d",
-    "git_commit_message": "conversations/start NameError hotfix",
+    "git_commit": "0aeeb60",
+    "git_commit_message": "Campaign never-sent contact isolation live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-B-yy-DwN.js",
+      "js": "index-DtppAWDx.js",
       "css": "index-B8Zc_O7B.css"
     },
-    "server_backup": "/opt/watesly/backups/20260919-180139"
+    "server_backup": "/opt/watesly/backups/20261006-172727"
   },
   "versions": {
     "backend": "0.28.0",
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py \u2192 app_version",
     "frontend": "frontend/package.json \u2192 version"
   },
-  "commit": "3b9185d",
-  "notes": "Fixed 500 NameError on +conversation start"
+  "commit": "0aeeb60",
+  "notes": "Campaign only_never_sent / new contacts isolation live"
 }
