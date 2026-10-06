@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, formatApiError, silentRequest } from "../lib/api";
 import {
   INVITABLE_ROLES,
   assignableRolesForEmployee,
@@ -63,6 +63,11 @@ export default function TeamPage() {
   const [accessOrgDraft, setAccessOrgDraft] = useState<Set<string>>(new Set());
   const [accessChannelDraft, setAccessChannelDraft] = useState<Set<string>>(new Set());
   const [savingAccess, setSavingAccess] = useState(false);
+  const [passwordEditor, setPasswordEditor] = useState<Employee | null>(null);
+  const [passwordDraft, setPasswordDraft] = useState("");
+  const [passwordConfirmDraft, setPasswordConfirmDraft] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [showPasswordDraft, setShowPasswordDraft] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["current-user"],
@@ -443,6 +448,58 @@ export default function TeamPage() {
     }
   }
 
+  function canEditEmployeePassword(item: Employee): boolean {
+    if (!canManagePermissions) return false;
+    if (item.role === "owner") return profileQuery.data?.role === "owner";
+    return true;
+  }
+
+  function openPasswordEditor(item: Employee) {
+    setPasswordEditor(item);
+    setPasswordDraft("");
+    setPasswordConfirmDraft("");
+    setShowPasswordDraft(false);
+  }
+
+  function closePasswordEditor() {
+    setPasswordEditor(null);
+    setPasswordDraft("");
+    setPasswordConfirmDraft("");
+    setShowPasswordDraft(false);
+  }
+
+  async function savePassword() {
+    if (!passwordEditor) return;
+    if (passwordDraft.length < 6) {
+      toastStore.getState().show("كلمة المرور يجب أن تكون 6 أحرف على الأقل.", "error");
+      return;
+    }
+    if (passwordDraft !== passwordConfirmDraft) {
+      toastStore.getState().show("كلمتا المرور غير متطابقتين.", "error");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const response = await api.post<{ message?: string }>(
+        `/team/employees/${passwordEditor.membership_id}/password`,
+        { password: passwordDraft },
+        silentRequest
+      );
+      closePasswordEditor();
+      toastStore.getState().show(
+        response.data.message ?? "تم تحديث كلمة المرور. يمكن للموظف تسجيل الدخول بالمرور الجديدة.",
+        "success"
+      );
+    } catch (error) {
+      toastStore.getState().show(
+        formatApiError(error, "تعذر تحديث كلمة المرور."),
+        "error"
+      );
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
   function renderWorkspaces(item: Employee) {
     const linked = getEmployeeWorkspaces(item, workspaces);
     if (linked.length === 0) {
@@ -657,6 +714,16 @@ export default function TeamPage() {
                           </button>
                         </>
                       )}
+                      {canEditEmployeePassword(item) && (
+                        <button
+                          type="button"
+                          className="secondary-button compact"
+                          onClick={() => openPasswordEditor(item)}
+                          title="تعديل كلمة المرور"
+                        >
+                          كلمة المرور
+                        </button>
+                      )}
                       {item.role !== "owner" && (
                         <button type="button" className="secondary-button compact" onClick={() => void toggleStatus(item)}>
                           {item.status === "active" ? "تعطيل" : "تفعيل"}
@@ -772,6 +839,60 @@ export default function TeamPage() {
               </button>
               <button type="button" disabled={savingPermissions} onClick={() => void savePermissions()}>
                 {savingPermissions ? "جاري الحفظ…" : "حفظ الصلاحيات"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordEditor && (
+        <div className="modal-overlay" onClick={closePasswordEditor}>
+          <div className="modal-card admin-permissions-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="modal-header">
+              <div>
+                <h2>تعديل كلمة المرور</h2>
+                <small>{passwordEditor.full_name} · {passwordEditor.email}</small>
+              </div>
+              <button type="button" className="secondary-button" onClick={closePasswordEditor}>إغلاق</button>
+            </header>
+            <p className="hint-text">
+              سيتم تعيين كلمة مرور جديدة وإنهاء جلسات تسجيل الدخول الحالية للموظف.
+            </p>
+            <label className="team-field">
+              <span>كلمة المرور الجديدة</span>
+              <div className="password-field">
+                <input
+                  type={showPasswordDraft ? "text" : "password"}
+                  value={passwordDraft}
+                  onChange={(e) => setPasswordDraft(e.target.value)}
+                  placeholder="6 أحرف على الأقل"
+                  minLength={6}
+                  autoComplete="new-password"
+                  dir="ltr"
+                />
+                <button type="button" className="password-toggle" onClick={() => setShowPasswordDraft((v) => !v)}>
+                  {showPasswordDraft ? "إخفاء" : "إظهار"}
+                </button>
+              </div>
+            </label>
+            <label className="team-field" style={{ marginTop: 12 }}>
+              <span>تأكيد كلمة المرور</span>
+              <input
+                type={showPasswordDraft ? "text" : "password"}
+                value={passwordConfirmDraft}
+                onChange={(e) => setPasswordConfirmDraft(e.target.value)}
+                placeholder="أعد إدخال كلمة المرور"
+                minLength={6}
+                autoComplete="new-password"
+                dir="ltr"
+              />
+            </label>
+            <div className="admin-actions" style={{ marginTop: 16 }}>
+              <button type="button" className="secondary-button" onClick={closePasswordEditor}>
+                إلغاء
+              </button>
+              <button type="button" disabled={savingPassword} onClick={() => void savePassword()}>
+                {savingPassword ? "جاري الحفظ…" : "حفظ كلمة المرور"}
               </button>
             </div>
           </div>
