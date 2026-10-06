@@ -56,6 +56,14 @@ class EmployeeUpdateRequest(BaseModel):
     permissions: list[str] | None = None
 
 
+class SetEmployeePasswordRequest(BaseModel):
+    password: str = Field(min_length=6, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class EmployeeResponse(BaseModel):
     user_id: UUID
     membership_id: UUID

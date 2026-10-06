@@ -14,12 +14,15 @@ from app.schemas.team import (
     EmployeeUpdateRequest,
     InvitationResponse,
     InviteEmployeeRequest,
+    MessageResponse,
+    SetEmployeePasswordRequest,
 )
 from app.services.team import (
     accept_invitation,
     create_employee,
     create_invitation,
     list_employees,
+    set_employee_password,
     update_employee,
 )
 from app.services.membership_channels import list_membership_channel_ids
@@ -216,3 +219,30 @@ async def patch_employee(
         user=user,
         organization_ids=organization_ids,
     )
+
+
+@router.post("/employees/{membership_id}/password", response_model=MessageResponse)
+async def post_employee_password(
+    membership_id,
+    payload: SetEmployeePasswordRequest,
+    context: AuthContext = Depends(require_permissions(Permission.USERS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    try:
+        await set_employee_password(
+            db,
+            account_id=context.account_id,
+            membership_id=membership_id,
+            actor_membership=context.membership,
+            payload=payload,
+        )
+    except ValueError as exc:
+        messages = {
+            "EMPLOYEE_NOT_FOUND": (404, "Employee not found"),
+            "FORBIDDEN": (403, "You cannot change this employee's password"),
+            "OUT_OF_SCOPE": (403, "You can only manage employees in your branch"),
+        }
+        code, detail = messages.get(str(exc), (400, "Unable to update password"))
+        raise HTTPException(status_code=code, detail=detail) from exc
+
+    return MessageResponse(message="تم تحديث كلمة المرور. يمكن للموظف تسجيل الدخول بالمرور الجديدة.")

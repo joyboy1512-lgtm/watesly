@@ -25,6 +25,7 @@ from app.schemas.team import (
     CreateEmployeeRequest,
     EmployeeUpdateRequest,
     InviteEmployeeRequest,
+    SetEmployeePasswordRequest,
 )
 from app.services.billing import get_active_subscription
 from app.services.membership_channels import replace_membership_channel_access, validate_channel_ids
@@ -584,3 +585,43 @@ async def update_employee(
         )
     )
     return membership, user, list(org_result.scalars().all())
+
+
+async def set_employee_password(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership_id: UUID,
+    actor_membership: Membership,
+    payload: SetEmployeePasswordRequest,
+) -> User:
+    membership = await db.get(Membership, membership_id)
+    if membership is None or membership.account_id != account_id:
+        raise ValueError("EMPLOYEE_NOT_FOUND")
+
+    actor_org_ids = await _membership_organization_ids(db, actor_membership.id)
+    target_org_ids = await _membership_organization_ids(db, membership.id)
+    _assert_actor_can_manage_target(
+        actor_role=actor_membership.role,
+        actor_org_ids=actor_org_ids,
+        target_role=membership.role,
+        target_org_ids=target_org_ids,
+    )
+    if membership.role == MembershipRole.OWNER and actor_membership.role != MembershipRole.OWNER:
+        raise ValueError("FORBIDDEN")
+
+    user = await db.get(User, membership.user_id)
+    if user is None:
+        raise ValueError("EMPLOYEE_NOT_FOUND")
+
+    now = datetime.now(UTC)
+    user.password_hash = hash_password(payload.password)
+    user.password_changed_at = now
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    await db.flush()
+
+    from app.services.auth import revoke_all_user_sessions
+
+    await revoke_all_user_sessions(db, user.id)
+    return user
