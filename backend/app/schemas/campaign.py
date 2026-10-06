@@ -22,6 +22,7 @@ class CampaignCreateRequest(BaseModel):
     exclude_marketing_opt_out: bool = True
     exclude_unreachable: bool = True
     exclude_risky: bool = False
+    only_never_sent: bool = False
 
 
 class CampaignPreflightRequest(BaseModel):
@@ -31,6 +32,7 @@ class CampaignPreflightRequest(BaseModel):
     include_opt_out_option: bool = True
     exclude_unreachable: bool = True
     exclude_risky: bool = False
+    only_never_sent: bool = False
 
 
 class CampaignResponse(BaseModel):

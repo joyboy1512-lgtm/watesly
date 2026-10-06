@@ -164,6 +164,65 @@ async def summarize_reachability(
     }
 
 
+async def get_previously_sent_contact_ids(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_ids: list[UUID],
+) -> set[UUID]:
+    """Contacts we already messaged (outbound inbox or prior campaign send)."""
+    if not contact_ids:
+        return set()
+
+    from app.models.campaign import Campaign
+    from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
+    from app.models.message import Message, MessageDirection
+
+    sent_statuses = {
+        CampaignRecipientStatus.QUEUED,
+        CampaignRecipientStatus.SENDING,
+        CampaignRecipientStatus.SENT,
+        CampaignRecipientStatus.DELIVERED,
+        CampaignRecipientStatus.READ,
+    }
+
+    outbound_rows = await db.execute(
+        select(Message.contact_id)
+        .where(
+            Message.account_id == account_id,
+            Message.contact_id.in_(contact_ids),
+            Message.direction == MessageDirection.OUTBOUND,
+        )
+        .distinct()
+    )
+    previously = {row[0] for row in outbound_rows.all() if row[0] is not None}
+
+    campaign_rows = await db.execute(
+        select(CampaignRecipient.contact_id)
+        .join(Campaign, Campaign.id == CampaignRecipient.campaign_id)
+        .where(
+            Campaign.account_id == account_id,
+            CampaignRecipient.contact_id.in_(contact_ids),
+            CampaignRecipient.status.in_(sent_statuses),
+        )
+        .distinct()
+    )
+    previously.update(row[0] for row in campaign_rows.all() if row[0] is not None)
+    return previously
+
+
+async def filter_never_sent_contact_ids(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_ids: list[UUID],
+) -> list[UUID]:
+    previously = await get_previously_sent_contact_ids(
+        db, account_id=account_id, contact_ids=contact_ids
+    )
+    return [contact_id for contact_id in contact_ids if contact_id not in previously]
+
+
 async def count_campaign_eligible(
     db: AsyncSession,
     *,

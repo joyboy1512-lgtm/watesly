@@ -95,11 +95,14 @@ async def campaign_audience_preflight(
     include_opt_out_option: bool = True,
     exclude_unreachable: bool = True,
     exclude_risky: bool = False,
+    only_never_sent: bool = False,
 ) -> dict:
     from app.models.contact import Contact
     from app.models.whatsapp_account import WhatsAppAccount
     from app.services.contact_reachability import (
         count_campaign_eligible,
+        filter_never_sent_contact_ids,
+        get_previously_sent_contact_ids,
         summarize_reachability,
     )
     from app.services.marketing_compliance import (
@@ -108,32 +111,52 @@ async def campaign_audience_preflight(
     )
     from app.services.whatsapp_health import format_tier_hint
 
-    marketing_opt_in = int(
-        (
-            await db.scalar(
-                select(func.count(Contact.id)).where(
-                    Contact.account_id == account_id,
-                    Contact.id.in_(contact_ids),
-                    Contact.deleted_at.is_(None),
-                    Contact.marketing_opt_in.is_(True),
+    original_contact_ids = list(contact_ids)
+    previously_sent_ids = await get_previously_sent_contact_ids(
+        db, account_id=account_id, contact_ids=original_contact_ids
+    )
+    previously_sent = len(previously_sent_ids)
+    never_sent = len(original_contact_ids) - previously_sent
+    never_sent_contact_ids = [
+        contact_id for contact_id in original_contact_ids if contact_id not in previously_sent_ids
+    ]
+    if only_never_sent:
+        contact_ids = await filter_never_sent_contact_ids(
+            db, account_id=account_id, contact_ids=original_contact_ids
+        )
+    else:
+        contact_ids = original_contact_ids
+
+    if not contact_ids:
+        marketing_opt_in = 0
+        marketing_opt_out = 0
+    else:
+        marketing_opt_in = int(
+            (
+                await db.scalar(
+                    select(func.count(Contact.id)).where(
+                        Contact.account_id == account_id,
+                        Contact.id.in_(contact_ids),
+                        Contact.deleted_at.is_(None),
+                        Contact.marketing_opt_in.is_(True),
+                    )
                 )
             )
+            or 0
         )
-        or 0
-    )
-    marketing_opt_out = int(
-        (
-            await db.scalar(
-                select(func.count(Contact.id)).where(
-                    Contact.account_id == account_id,
-                    Contact.id.in_(contact_ids),
-                    Contact.deleted_at.is_(None),
-                    Contact.marketing_opt_in.is_(False),
+        marketing_opt_out = int(
+            (
+                await db.scalar(
+                    select(func.count(Contact.id)).where(
+                        Contact.account_id == account_id,
+                        Contact.id.in_(contact_ids),
+                        Contact.deleted_at.is_(None),
+                        Contact.marketing_opt_in.is_(False),
+                    )
                 )
             )
+            or 0
         )
-        or 0
-    )
     eligible_recipients = marketing_opt_in
 
     last_inbound = await get_last_inbound_by_contact(db, account_id=account_id, contact_ids=contact_ids)
@@ -166,6 +189,15 @@ async def campaign_audience_preflight(
 
     warnings: list[str] = []
     category = (template_category or "").lower()
+    if only_never_sent:
+        warnings.append(
+            f"عزل مفعّل: الإرسال فقط لمن لم يُرسل لهم من قبل "
+            f"({never_sent} جديد / {previously_sent} سبق إرسالهم واستُبعدوا)."
+        )
+    elif previously_sent:
+        warnings.append(
+            f"{previously_sent} عميل سبق إرسال رسالة لهم — فعّل «عملاء جدد فقط» لعزلهم."
+        )
     if reachability["unreachable"]:
         warnings.append(
             f"{reachability['unreachable']} عميل غير قابل للوصول — سيتم استبعادهم تلقائياً (فشل سابق أو رقم غير صالح)."
@@ -223,7 +255,11 @@ async def campaign_audience_preflight(
                 warnings.append("جودة الحساب YELLOW — راقب معدل الحظر والتقارير.")
 
     return {
-        "total": len(contact_ids),
+        "total": len(original_contact_ids),
+        "selected_after_isolation": len(contact_ids),
+        "previously_sent": previously_sent,
+        "never_sent": never_sent,
+        "never_sent_contact_ids": [str(item) for item in never_sent_contact_ids],
         "never_messaged": never_messaged,
         "window_open": window_open,
         "window_closed": window_closed,
@@ -236,6 +272,7 @@ async def campaign_audience_preflight(
         "invalid_phone": reachability["invalid_phone"],
         "cold_audience": reachability["cold_audience"],
         "warm_audience": reachability["warm_audience"],
+        "only_never_sent": only_never_sent,
         "template_has_opt_out_button": has_opt_out_button,
         "template_has_opt_out_footer": has_opt_out_footer,
         "include_opt_out_option": include_opt_out_option,
