@@ -52,6 +52,11 @@ type Segment = { id: string; name: string };
 type CampaignPreflight = {
   total: number;
   never_messaged: number;
+  previously_sent?: number;
+  never_sent?: number;
+  never_sent_contact_ids?: string[];
+  selected_after_isolation?: number;
+  only_never_sent?: boolean;
   window_open: number;
   window_closed: number;
   marketing_opt_in?: number;
@@ -165,6 +170,7 @@ export default function CampaignsPage() {
   const [includeOptOutOption, setIncludeOptOutOption] = useState(true);
   const [excludeUnreachable, setExcludeUnreachable] = useState(true);
   const [excludeRisky, setExcludeRisky] = useState(false);
+  const [onlyNeverSent, setOnlyNeverSent] = useState(false);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
   const [linkCampaignId, setLinkCampaignId] = useState("");
@@ -385,11 +391,12 @@ export default function CampaignsPage() {
         whatsapp_account_id: accountId || null,
         include_opt_out_option: includeOptOutOption,
         exclude_unreachable: excludeUnreachable,
-        exclude_risky: excludeRisky
+        exclude_risky: excludeRisky,
+        only_never_sent: onlyNeverSent
       })
       .then((res) => setPreflight(res.data as CampaignPreflight))
       .catch(() => setPreflight(null));
-  }, [templateId, channelScopedSelectedContacts, accountId, includeOptOutOption, excludeUnreachable, excludeRisky]);
+  }, [templateId, channelScopedSelectedContacts, accountId, includeOptOutOption, excludeUnreachable, excludeRisky, onlyNeverSent]);
 
   function onOrganizationChange(value: string) {
     setOrganizationId(value);
@@ -614,6 +621,7 @@ export default function CampaignsPage() {
         exclude_marketing_opt_out: true,
         exclude_unreachable: excludeUnreachable,
         exclude_risky: excludeRisky,
+        only_never_sent: onlyNeverSent,
         recipients: channelScopedSelectedContacts.map((contact_id) => ({
           contact_id,
           template_parameters: templateParameters
@@ -1003,6 +1011,8 @@ export default function CampaignsPage() {
                     <div><strong>{preflight.marketing_opt_out ?? 0}</strong><span>عدم الإزعاج</span></div>
                     <div><strong>{preflight.cold_audience ?? preflight.never_messaged}</strong><span>بدون تفاعل</span></div>
                     <div><strong>{preflight.warm_audience ?? preflight.window_open + preflight.window_closed}</strong><span>تفاعل سابق</span></div>
+                    <div><strong>{preflight.never_sent ?? 0}</strong><span>لم يُرسل لهم</span></div>
+                    <div><strong>{preflight.previously_sent ?? 0}</strong><span>سبق إرسالهم</span></div>
                   </div>
                   {preflight.warnings.map((warning) => (
                     <p key={warning} className="campaign-warning">⚠ {warning}</p>
@@ -1054,6 +1064,34 @@ export default function CampaignsPage() {
                 />
                 <span>استبعاد العملاء بدون تفاعل سابق (محفوف بالمخاطر)</span>
               </label>
+              <label className="field-label checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={onlyNeverSent}
+                  onChange={(event) => setOnlyNeverSent(event.target.checked)}
+                />
+                <span>عملاء جدد فقط — من لم يُرسل لهم رسالة من قبل (عزل من سبق إرسالهم)</span>
+              </label>
+              {Boolean(preflight?.never_sent_contact_ids?.length) && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    const ids = (preflight?.never_sent_contact_ids ?? []).filter((id) =>
+                      channelScopedSelectedContacts.includes(id)
+                    );
+                    if (!ids.length) {
+                      toastStore.getState().show("لا يوجد ضمن التحديد عملاء لم يُرسل لهم من قبل.", "error");
+                      return;
+                    }
+                    setSelectedContacts(ids);
+                    setOnlyNeverSent(true);
+                    toastStore.getState().show(`تم عزل ${ids.length} عميلاً جديداً فقط.`, "success");
+                  }}
+                >
+                  عزل التحديد: اختر فقط من لم يُرسل لهم ({preflight?.never_sent ?? 0})
+                </button>
+              )}
               <button
                 type="submit"
                 className="whatsapp-button"

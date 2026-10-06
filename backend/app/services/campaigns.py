@@ -115,6 +115,20 @@ async def create_campaign(
     if not recipients:
         raise ValueError("ALL_RECIPIENTS_UNREACHABLE")
 
+    if payload.only_never_sent:
+        from app.services.contact_reachability import filter_never_sent_contact_ids
+
+        never_sent_ids = set(
+            await filter_never_sent_contact_ids(
+                db,
+                account_id=account_id,
+                contact_ids=[item.contact_id for item in recipients],
+            )
+        )
+        recipients = [item for item in recipients if item.contact_id in never_sent_ids]
+        if not recipients:
+            raise ValueError("ALL_RECIPIENTS_PREVIOUSLY_SENT")
+
     campaign = Campaign(
         account_id=account_id,
         organization_id=payload.organization_id,
