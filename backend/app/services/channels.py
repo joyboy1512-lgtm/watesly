@@ -123,6 +123,18 @@ async def archive_channel(
         )
     ).scalar_one_or_none()
     if wa is not None and wa.status != WhatsAppAccountStatus.DISCONNECTED:
+        from app.services.whatsapp import _waba_has_other_active_accounts
+        from app.services.meta_setup import maybe_unsubscribe_whatsapp_account_webhook
+
+        other_active = await _waba_has_other_active_accounts(
+            db,
+            waba_id=wa.waba_id,
+            except_account_id=wa.id,
+        )
+        await maybe_unsubscribe_whatsapp_account_webhook(
+            whatsapp_account=wa,
+            other_active_on_waba=other_active,
+        )
         wa.status = WhatsAppAccountStatus.DISCONNECTED
 
     await db.commit()

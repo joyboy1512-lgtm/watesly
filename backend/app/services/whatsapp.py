@@ -439,6 +439,56 @@ async def list_whatsapp_accounts(
     return list(result.all())
 
 
+async def _waba_has_other_active_accounts(
+    db: AsyncSession,
+    *,
+    waba_id: str | None,
+    except_account_id: UUID,
+) -> bool:
+    if not waba_id:
+        return False
+    result = await db.execute(
+        select(WhatsAppAccount.id).where(
+            WhatsAppAccount.waba_id == waba_id,
+            WhatsAppAccount.status == WhatsAppAccountStatus.ACTIVE,
+            WhatsAppAccount.id != except_account_id,
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def disconnect_whatsapp_account(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    whatsapp_account_id: UUID,
+) -> tuple[WhatsAppAccount, dict]:
+    item = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if item is None or item.account_id != account_id:
+        raise ValueError("WHATSAPP_ACCOUNT_NOT_FOUND")
+
+    other_active = await _waba_has_other_active_accounts(
+        db,
+        waba_id=item.waba_id,
+        except_account_id=item.id,
+    )
+    from app.services.meta_setup import maybe_unsubscribe_whatsapp_account_webhook
+
+    teardown = await maybe_unsubscribe_whatsapp_account_webhook(
+        whatsapp_account=item,
+        other_active_on_waba=other_active,
+    )
+
+    item.status = WhatsAppAccountStatus.DISCONNECTED
+    channel = await db.get(Channel, item.channel_id)
+    if channel is not None and channel.account_id == account_id:
+        channel.status = ChannelStatus.DISCONNECTED
+
+    await db.commit()
+    await db.refresh(item)
+    return item, teardown
+
+
 async def send_text_message(
     db: AsyncSession,
     *,
@@ -592,6 +642,13 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                 )
                 whatsapp_account = result.scalar_one_or_none()
 
+            # Disconnected/archived numbers must not land in inbox even if Meta
+            # still delivers webhooks (e.g. shared WABA or number moved elsewhere).
+            account_active = (
+                whatsapp_account is not None
+                and whatsapp_account.status == WhatsAppAccountStatus.ACTIVE
+            )
+
             event = WebhookEvent(
                 provider="meta_whatsapp",
                 account_id=whatsapp_account.account_id if whatsapp_account else None,
@@ -600,14 +657,14 @@ async def store_and_process_webhook(db: AsyncSession, payload: dict) -> dict[str
                 payload={"entry": entry, "change": change},
                 status=(
                     WebhookEventStatus.RECEIVED
-                    if whatsapp_account
+                    if account_active
                     else WebhookEventStatus.IGNORED
                 ),
             )
             db.add(event)
             await db.flush()
 
-            if whatsapp_account and event_type == "message":
+            if account_active and event_type == "message":
                 from app.services.inbound_whatsapp import (
                     persist_inbound_message,
                     process_inbound_side_effects,
