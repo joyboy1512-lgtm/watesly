@@ -39,6 +39,7 @@ from app.services.whatsapp import (
     _account_to_response,
     create_whatsapp_account,
     create_whatsapp_account_from_embedded,
+    disconnect_whatsapp_account,
     list_whatsapp_accounts,
     send_text_message,
     send_media_message,
@@ -508,14 +509,16 @@ async def post_disconnect_whatsapp_account(
     context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.whatsapp_account import WhatsAppAccount, WhatsAppAccountStatus
-
-    item = await db.get(WhatsAppAccount, whatsapp_account_id)
-    if item is None or item.account_id != context.account_id:
-        raise HTTPException(status_code=404, detail="WhatsApp account not found")
-    item.status = WhatsAppAccountStatus.DISCONNECTED
-    await db.commit()
-    await db.refresh(item)
+    try:
+        item, _teardown = await disconnect_whatsapp_account(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    except ValueError as exc:
+        if str(exc) == "WHATSAPP_ACCOUNT_NOT_FOUND":
+            raise HTTPException(status_code=404, detail="WhatsApp account not found") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _response(item)
 
 
