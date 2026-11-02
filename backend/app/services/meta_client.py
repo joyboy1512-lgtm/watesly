@@ -265,6 +265,18 @@ class MetaWhatsAppClient:
             response, default_message="Unable to subscribe WABA to app webhooks"
         )
 
+    async def unsubscribe_waba_webhooks(self, *, waba_id: str) -> dict:
+        """Remove this Meta app from the WABA subscribed_apps list."""
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        waba_url = f"{base}/{version}/{waba_id}/subscribed_apps"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.delete(waba_url, headers=headers)
+        return await self._parse_graph_response(
+            response, default_message="Unable to unsubscribe WABA from app webhooks"
+        )
+
     async def _send_payload(self, payload: dict) -> dict:
         headers = {
             "Authorization": f"Bearer {self.access_token}",

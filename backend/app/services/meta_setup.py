@@ -142,3 +142,59 @@ async def ensure_whatsapp_account_webhook(*, whatsapp_account: WhatsAppAccount) 
         "callback_url": callback_url,
         "error": status.get("error"),
     }
+
+
+async def unsubscribe_waba_webhook_subscription(
+    *,
+    access_token: str,
+    waba_id: str,
+) -> dict:
+    client = MetaWhatsAppClient(access_token=access_token, phone_number_id="0")
+    try:
+        return await client.unsubscribe_waba_webhooks(waba_id=waba_id)
+    finally:
+        await client.aclose()
+
+
+async def maybe_unsubscribe_whatsapp_account_webhook(
+    *,
+    whatsapp_account: WhatsAppAccount,
+    other_active_on_waba: bool,
+) -> dict:
+    """Best-effort Meta teardown when no other active Watesly number shares this WABA."""
+    from app.core.encryption import decrypt_secret
+
+    callback_url = whatsapp_webhook_callback_url()
+    if other_active_on_waba:
+        return {
+            "unsubscribed": False,
+            "skipped": True,
+            "reason": "other_active_on_waba",
+            "callback_url": callback_url,
+        }
+    if not whatsapp_account.waba_id or not whatsapp_account.access_token_encrypted:
+        return {
+            "unsubscribed": False,
+            "skipped": True,
+            "reason": "missing_credentials",
+            "callback_url": callback_url,
+        }
+    try:
+        await unsubscribe_waba_webhook_subscription(
+            access_token=decrypt_secret(whatsapp_account.access_token_encrypted),
+            waba_id=whatsapp_account.waba_id,
+        )
+        return {"unsubscribed": True, "skipped": False, "callback_url": callback_url}
+    except MetaAPIError as exc:
+        logger.warning(
+            "Meta webhook unsubscribe failed for waba_id=%s phone_number_id=%s: %s",
+            whatsapp_account.waba_id,
+            whatsapp_account.phone_number_id,
+            exc,
+        )
+        return {
+            "unsubscribed": False,
+            "skipped": False,
+            "callback_url": callback_url,
+            "error": str(exc),
+        }

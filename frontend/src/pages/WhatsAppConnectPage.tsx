@@ -589,10 +589,16 @@ export default function WhatsAppConnectPage() {
   }
 
   async function disconnectAccount(accountId: string) {
+    const confirmed = window.confirm(
+      "فصل هذا الرقم من Watesly؟\n\n" +
+        "لن تُستلم رسائله هنا بعد الفصل.\n" +
+        "إذا ربطت الرقم بمنصة أخرى، تأكد أيضاً من إزالة تطبيق Watesly من اشتراكات Meta لهذا الرقم."
+    );
+    if (!confirmed) return;
     try {
       await api.post(`/whatsapp/accounts/${accountId}/disconnect`);
       await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-      toastStore.getState().show("تم فصل الحساب.", "success");
+      toastStore.getState().show("تم فصل الحساب. رسائل هذا الرقم لن تظهر في الصندوق.", "success");
       if (panelState?.accountId === accountId) setPanelState(null);
     } catch {
       toastStore.getState().show("تعذر فصل الحساب.", "error");
