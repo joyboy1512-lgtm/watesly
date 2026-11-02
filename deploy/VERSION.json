@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-10-06",
+  "updated_at": "2026-11-02",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,16 +8,16 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "af091e2",
-    "git_commit_message": "Admin set-employee-password live",
+    "git_commit": "ae1e7dc",
+    "git_commit_message": "WhatsApp disconnect webhook fix live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-Cl_J_m0K.js",
+      "js": "index-CTKfJa_b.js",
       "css": "index-B8Zc_O7B.css"
     },
-    "server_backup": "/opt/watesly/backups/20261006-175356"
+    "server_backup": "/opt/watesly/backups/20261102-123801"
   },
   "versions": {
     "backend": "0.28.0",
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py \u2192 app_version",
     "frontend": "frontend/package.json \u2192 version"
   },
-  "commit": "af091e2",
-  "notes": "Admin set employee password from Team page live"
+  "commit": "ae1e7dc",
+  "notes": "Disconnected WhatsApp numbers no longer receive inbox messages"
 }

@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-02",
+  "commit": "ae1e7dc",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CTKfJa_b.js",
+    "css": "index-B8Zc_O7B.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261102-123801",
+  "features": [
+    "Ignore inbound webhooks for disconnected WhatsApp accounts",
+    "Unsubscribe Meta WABA webhooks on disconnect when unused",
+    "Disconnect confirm warning in WhatsApp UI"
+  ],
+  "notes": "Deployed via SSH upgrade-production.sh. PR #126."
+}
