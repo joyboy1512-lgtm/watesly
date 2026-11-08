@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-08",
+  "commit": "9a72c02",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-UUXX8TPv.js",
+    "css": "index-Mo0CaflK.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261108-172306",
+  "features": [
+    "Campaign date-range exclude filter",
+    "Exclude contacts messaged in selected prior campaigns",
+    "Preflight period campaign groups and isolate button"
+  ],
+  "notes": "Deployed via SSH upgrade-production.sh. PR #127."
+}
