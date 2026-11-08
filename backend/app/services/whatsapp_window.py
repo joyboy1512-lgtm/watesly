@@ -96,13 +96,20 @@ async def campaign_audience_preflight(
     exclude_unreachable: bool = True,
     exclude_risky: bool = False,
     only_never_sent: bool = False,
+    exclude_sent_in_period: bool = False,
+    exclude_sent_from=None,
+    exclude_sent_to=None,
+    exclude_campaign_ids: list | None = None,
 ) -> dict:
     from app.models.contact import Contact
     from app.models.whatsapp_account import WhatsAppAccount
     from app.services.contact_reachability import (
         count_campaign_eligible,
+        filter_exclude_campaign_sent_in_period,
         filter_never_sent_contact_ids,
+        get_campaign_sent_contact_ids_in_period,
         get_previously_sent_contact_ids,
+        list_campaigns_in_period,
         summarize_reachability,
     )
     from app.services.marketing_compliance import (
@@ -120,12 +127,46 @@ async def campaign_audience_preflight(
     never_sent_contact_ids = [
         contact_id for contact_id in original_contact_ids if contact_id not in previously_sent_ids
     ]
+
+    period_active = bool(
+        exclude_sent_in_period
+        or exclude_campaign_ids
+        or exclude_sent_from is not None
+        or exclude_sent_to is not None
+    )
+    sent_in_period_ids: set = set()
+    campaigns_in_period: list[dict] = []
+    if period_active:
+        sent_in_period_ids = await get_campaign_sent_contact_ids_in_period(
+            db,
+            account_id=account_id,
+            contact_ids=original_contact_ids,
+            sent_from=exclude_sent_from,
+            sent_to=exclude_sent_to,
+            campaign_ids=exclude_campaign_ids or None,
+        )
+        campaigns_in_period = await list_campaigns_in_period(
+            db,
+            account_id=account_id,
+            sent_from=exclude_sent_from,
+            sent_to=exclude_sent_to,
+            contact_ids=original_contact_ids,
+        )
+
+    contact_ids = original_contact_ids
     if only_never_sent:
         contact_ids = await filter_never_sent_contact_ids(
-            db, account_id=account_id, contact_ids=original_contact_ids
+            db, account_id=account_id, contact_ids=contact_ids
         )
-    else:
-        contact_ids = original_contact_ids
+    if exclude_sent_in_period or exclude_campaign_ids:
+        contact_ids = await filter_exclude_campaign_sent_in_period(
+            db,
+            account_id=account_id,
+            contact_ids=contact_ids,
+            sent_from=exclude_sent_from,
+            sent_to=exclude_sent_to,
+            campaign_ids=exclude_campaign_ids or None,
+        )
 
     if not contact_ids:
         marketing_opt_in = 0
@@ -198,6 +239,16 @@ async def campaign_audience_preflight(
         warnings.append(
             f"{previously_sent} عميل سبق إرسال رسالة لهم — فعّل «عملاء جدد فقط» لعزلهم."
         )
+    if exclude_sent_in_period or exclude_campaign_ids:
+        warnings.append(
+            f"استبعاد حسب الحملة/الفترة مفعّل: "
+            f"{len(sent_in_period_ids)} عميل ضمن الفترة أو الحملات المحددة تم استبعادهم."
+        )
+    elif sent_in_period_ids:
+        warnings.append(
+            f"{len(sent_in_period_ids)} عميل أُرسل لهم ضمن الفترة المحددة — "
+            f"فعّل الاستبعاد لعزلهم عن هذه الحملة."
+        )
     if reachability["unreachable"]:
         warnings.append(
             f"{reachability['unreachable']} عميل غير قابل للوصول — سيتم استبعادهم تلقائياً (فشل سابق أو رقم غير صالح)."
@@ -260,6 +311,13 @@ async def campaign_audience_preflight(
         "previously_sent": previously_sent,
         "never_sent": never_sent,
         "never_sent_contact_ids": [str(item) for item in never_sent_contact_ids],
+        "sent_in_period": len(sent_in_period_ids),
+        "sent_in_period_contact_ids": [str(item) for item in sent_in_period_ids],
+        "kept_after_period_exclude_contact_ids": [
+            str(item) for item in original_contact_ids if item not in sent_in_period_ids
+        ],
+        "campaigns_in_period": campaigns_in_period,
+        "exclude_sent_in_period": bool(exclude_sent_in_period or exclude_campaign_ids),
         "never_messaged": never_messaged,
         "window_open": window_open,
         "window_closed": window_closed,

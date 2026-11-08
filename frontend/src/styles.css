@@ -2376,6 +2376,29 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaign-preflight-stats strong { display: block; font-size: 18px; }
 .campaign-preflight-stats span { font-size: 11px; color: var(--muted); }
 .campaign-warning { color: #b54708; font-size: 13px; margin: 0; }
+.campaign-period-filter {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.campaign-period-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+.campaign-period-groups {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
 .knowledge-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

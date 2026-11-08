@@ -49,12 +49,27 @@ type Template = {
 };
 type Contact = { id: string; display_name: string | null; external_address: string; channel_id: string };
 type Segment = { id: string; name: string };
+type CampaignPeriodGroup = {
+  id: string;
+  name: string;
+  started_at: string | null;
+  completed_at: string | null;
+  status: string;
+  sent_count: number;
+  first_sent_at: string | null;
+  last_sent_at: string | null;
+};
 type CampaignPreflight = {
   total: number;
   never_messaged: number;
   previously_sent?: number;
   never_sent?: number;
   never_sent_contact_ids?: string[];
+  sent_in_period?: number;
+  sent_in_period_contact_ids?: string[];
+  kept_after_period_exclude_contact_ids?: string[];
+  campaigns_in_period?: CampaignPeriodGroup[];
+  exclude_sent_in_period?: boolean;
   selected_after_isolation?: number;
   only_never_sent?: boolean;
   window_open: number;
@@ -171,6 +186,10 @@ export default function CampaignsPage() {
   const [excludeUnreachable, setExcludeUnreachable] = useState(true);
   const [excludeRisky, setExcludeRisky] = useState(false);
   const [onlyNeverSent, setOnlyNeverSent] = useState(false);
+  const [excludeSentInPeriod, setExcludeSentInPeriod] = useState(false);
+  const [excludeSentFrom, setExcludeSentFrom] = useState("");
+  const [excludeSentTo, setExcludeSentTo] = useState("");
+  const [excludeCampaignIds, setExcludeCampaignIds] = useState<string[]>([]);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
   const [linkCampaignId, setLinkCampaignId] = useState("");
@@ -392,11 +411,27 @@ export default function CampaignsPage() {
         include_opt_out_option: includeOptOutOption,
         exclude_unreachable: excludeUnreachable,
         exclude_risky: excludeRisky,
-        only_never_sent: onlyNeverSent
+        only_never_sent: onlyNeverSent,
+        exclude_sent_in_period: excludeSentInPeriod,
+        exclude_sent_from: excludeSentFrom ? `${excludeSentFrom}T00:00:00` : null,
+        exclude_sent_to: excludeSentTo ? `${excludeSentTo}T00:00:00` : null,
+        exclude_campaign_ids: excludeCampaignIds
       })
       .then((res) => setPreflight(res.data as CampaignPreflight))
       .catch(() => setPreflight(null));
-  }, [templateId, channelScopedSelectedContacts, accountId, includeOptOutOption, excludeUnreachable, excludeRisky, onlyNeverSent]);
+  }, [
+    templateId,
+    channelScopedSelectedContacts,
+    accountId,
+    includeOptOutOption,
+    excludeUnreachable,
+    excludeRisky,
+    onlyNeverSent,
+    excludeSentInPeriod,
+    excludeSentFrom,
+    excludeSentTo,
+    excludeCampaignIds
+  ]);
 
   function onOrganizationChange(value: string) {
     setOrganizationId(value);
@@ -622,6 +657,10 @@ export default function CampaignsPage() {
         exclude_unreachable: excludeUnreachable,
         exclude_risky: excludeRisky,
         only_never_sent: onlyNeverSent,
+        exclude_sent_in_period: excludeSentInPeriod,
+        exclude_sent_from: excludeSentFrom ? `${excludeSentFrom}T00:00:00` : null,
+        exclude_sent_to: excludeSentTo ? `${excludeSentTo}T00:00:00` : null,
+        exclude_campaign_ids: excludeCampaignIds,
         recipients: channelScopedSelectedContacts.map((contact_id) => ({
           contact_id,
           template_parameters: templateParameters
@@ -1013,6 +1052,7 @@ export default function CampaignsPage() {
                     <div><strong>{preflight.warm_audience ?? preflight.window_open + preflight.window_closed}</strong><span>تفاعل سابق</span></div>
                     <div><strong>{preflight.never_sent ?? 0}</strong><span>لم يُرسل لهم</span></div>
                     <div><strong>{preflight.previously_sent ?? 0}</strong><span>سبق إرسالهم</span></div>
+                    <div><strong>{preflight.sent_in_period ?? 0}</strong><span>أُرسل لهم في الفترة</span></div>
                   </div>
                   {preflight.warnings.map((warning) => (
                     <p key={warning} className="campaign-warning">⚠ {warning}</p>
@@ -1072,6 +1112,95 @@ export default function CampaignsPage() {
                 />
                 <span>عملاء جدد فقط — من لم يُرسل لهم رسالة من قبل (عزل من سبق إرسالهم)</span>
               </label>
+              <div className="campaign-period-filter">
+                <strong>فلتر حسب الحملة / التاريخ</strong>
+                <p className="hint-text">
+                  استبعد من أُرسل لهم ضمن فترة معيّنة، أو اختر حملات سابقة من القائمة.
+                </p>
+                <div className="campaign-period-dates">
+                  <label className="field-label">
+                    <span>من تاريخ</span>
+                    <input
+                      type="date"
+                      value={excludeSentFrom}
+                      onChange={(event) => setExcludeSentFrom(event.target.value)}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>إلى تاريخ</span>
+                    <input
+                      type="date"
+                      value={excludeSentTo}
+                      onChange={(event) => setExcludeSentTo(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className="field-label checkbox-inline">
+                  <input
+                    type="checkbox"
+                    checked={excludeSentInPeriod}
+                    onChange={(event) => setExcludeSentInPeriod(event.target.checked)}
+                    disabled={!excludeSentFrom && !excludeSentTo && excludeCampaignIds.length === 0}
+                  />
+                  <span>استبعاد من أُرسل لهم في الفترة أو الحملات المحددة</span>
+                </label>
+                {(() => {
+                  const periodGroups = preflight?.campaigns_in_period?.length
+                    ? preflight.campaigns_in_period
+                    : (campaigns.data ?? [])
+                        .filter((item) => !item.archived_at && (item.report.sent + item.report.delivered + item.report.read) > 0)
+                        .slice(0, 30)
+                        .map((item) => ({
+                          id: item.id,
+                          name: item.name,
+                          started_at: item.started_at,
+                          completed_at: item.completed_at,
+                          status: item.status,
+                          sent_count: item.report.sent + item.report.delivered + item.report.read,
+                          first_sent_at: item.started_at,
+                          last_sent_at: item.completed_at || item.started_at
+                        }));
+                  if (!periodGroups.length) return null;
+                  return (
+                    <div className="campaign-period-groups">
+                      <small className="hint-text">
+                        {preflight?.campaigns_in_period?.length
+                          ? "حملات في الفترة — اختر للاستبعاد:"
+                          : "حملات سابقة حسب التاريخ — اختر جروب حملة للاستبعاد:"}
+                      </small>
+                      {periodGroups.map((item) => {
+                        const checked = excludeCampaignIds.includes(item.id);
+                        const when = item.last_sent_at || item.started_at;
+                        const labelDate = when
+                          ? new Date(when).toLocaleDateString("ar-KW", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric"
+                            })
+                          : "—";
+                        return (
+                          <label key={item.id} className="field-label checkbox-inline">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setExcludeCampaignIds((current) =>
+                                  checked
+                                    ? current.filter((id) => id !== item.id)
+                                    : [...current, item.id]
+                                );
+                              }}
+                            />
+                            <span>
+                              {item.name} · {labelDate} · {item.sent_count} مستلم
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
               {Boolean(preflight?.never_sent_contact_ids?.length) && (
                 <button
                   type="button"
@@ -1090,6 +1219,29 @@ export default function CampaignsPage() {
                   }}
                 >
                   عزل التحديد: اختر فقط من لم يُرسل لهم ({preflight?.never_sent ?? 0})
+                </button>
+              )}
+              {Boolean(preflight?.sent_in_period) && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    const kept = (preflight?.kept_after_period_exclude_contact_ids ?? []).filter((id) =>
+                      channelScopedSelectedContacts.includes(id)
+                    );
+                    if (!kept.length) {
+                      toastStore.getState().show("بعد الاستبعاد لا يتبقى أحد ضمن التحديد.", "error");
+                      return;
+                    }
+                    setSelectedContacts(kept);
+                    setExcludeSentInPeriod(true);
+                    toastStore.getState().show(
+                      `تم استبعاد ${(preflight?.sent_in_period ?? 0)} عميلاً — تبقّى ${kept.length}.`,
+                      "success"
+                    );
+                  }}
+                >
+                  عزل التحديد: استبعد من أُرسل لهم في الفترة ({preflight?.sent_in_period ?? 0})
                 </button>
               )}
               <button
