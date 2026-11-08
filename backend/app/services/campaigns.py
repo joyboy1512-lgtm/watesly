@@ -129,6 +129,23 @@ async def create_campaign(
         if not recipients:
             raise ValueError("ALL_RECIPIENTS_PREVIOUSLY_SENT")
 
+    if payload.exclude_sent_in_period or payload.exclude_campaign_ids:
+        from app.services.contact_reachability import filter_exclude_campaign_sent_in_period
+
+        kept_ids = set(
+            await filter_exclude_campaign_sent_in_period(
+                db,
+                account_id=account_id,
+                contact_ids=[item.contact_id for item in recipients],
+                sent_from=payload.exclude_sent_from,
+                sent_to=payload.exclude_sent_to,
+                campaign_ids=payload.exclude_campaign_ids or None,
+            )
+        )
+        recipients = [item for item in recipients if item.contact_id in kept_ids]
+        if not recipients:
+            raise ValueError("ALL_RECIPIENTS_SENT_IN_PERIOD")
+
     campaign = Campaign(
         account_id=account_id,
         organization_id=payload.organization_id,

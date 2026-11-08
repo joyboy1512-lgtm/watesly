@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
@@ -221,6 +221,179 @@ async def filter_never_sent_contact_ids(
         db, account_id=account_id, contact_ids=contact_ids
     )
     return [contact_id for contact_id in contact_ids if contact_id not in previously]
+
+
+_CAMPAIGN_SENT_STATUSES = None
+
+
+def _campaign_sent_statuses():
+    global _CAMPAIGN_SENT_STATUSES
+    if _CAMPAIGN_SENT_STATUSES is None:
+        from app.models.campaign_recipient import CampaignRecipientStatus
+
+        _CAMPAIGN_SENT_STATUSES = {
+            CampaignRecipientStatus.QUEUED,
+            CampaignRecipientStatus.SENDING,
+            CampaignRecipientStatus.SENT,
+            CampaignRecipientStatus.DELIVERED,
+            CampaignRecipientStatus.READ,
+        }
+    return _CAMPAIGN_SENT_STATUSES
+
+
+def _normalize_period_bounds(
+    sent_from: datetime | None,
+    sent_to: datetime | None,
+) -> tuple[datetime | None, datetime | None]:
+    """Inclusive calendar-day bounds in UTC when dates arrive without timezone."""
+    start = sent_from
+    end = sent_to
+    if start is not None and start.tzinfo is None:
+        start = start.replace(tzinfo=UTC)
+    if end is not None and end.tzinfo is None:
+        end = end.replace(tzinfo=UTC)
+    if end is not None and end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
+        end = end + timedelta(days=1) - timedelta(microseconds=1)
+    return start, end
+
+
+async def get_campaign_sent_contact_ids_in_period(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_ids: list[UUID],
+    sent_from: datetime | None = None,
+    sent_to: datetime | None = None,
+    campaign_ids: list[UUID] | None = None,
+) -> set[UUID]:
+    """Contacts who received a campaign send within an optional date/campaign filter."""
+    if not contact_ids:
+        return set()
+    if sent_from is None and sent_to is None and not campaign_ids:
+        return set()
+
+    from app.models.campaign import Campaign
+    from app.models.campaign_recipient import CampaignRecipient
+    from sqlalchemy import func
+
+    start, end = _normalize_period_bounds(sent_from, sent_to)
+    sent_at = func.coalesce(
+        CampaignRecipient.sending_started_at,
+        Campaign.started_at,
+        CampaignRecipient.updated_at,
+        CampaignRecipient.created_at,
+    )
+    conditions = [
+        Campaign.account_id == account_id,
+        CampaignRecipient.contact_id.in_(contact_ids),
+        CampaignRecipient.status.in_(_campaign_sent_statuses()),
+    ]
+    if campaign_ids:
+        conditions.append(CampaignRecipient.campaign_id.in_(campaign_ids))
+    if start is not None:
+        conditions.append(sent_at >= start)
+    if end is not None:
+        conditions.append(sent_at <= end)
+
+    rows = await db.execute(
+        select(CampaignRecipient.contact_id)
+        .join(Campaign, Campaign.id == CampaignRecipient.campaign_id)
+        .where(*conditions)
+        .distinct()
+    )
+    return {row[0] for row in rows.all() if row[0] is not None}
+
+
+async def filter_exclude_campaign_sent_in_period(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_ids: list[UUID],
+    sent_from: datetime | None = None,
+    sent_to: datetime | None = None,
+    campaign_ids: list[UUID] | None = None,
+) -> list[UUID]:
+    excluded = await get_campaign_sent_contact_ids_in_period(
+        db,
+        account_id=account_id,
+        contact_ids=contact_ids,
+        sent_from=sent_from,
+        sent_to=sent_to,
+        campaign_ids=campaign_ids,
+    )
+    return [contact_id for contact_id in contact_ids if contact_id not in excluded]
+
+
+async def list_campaigns_in_period(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    sent_from: datetime | None = None,
+    sent_to: datetime | None = None,
+    contact_ids: list[UUID] | None = None,
+) -> list[dict]:
+    """Campaign groups that had sends in the period (for UI filters)."""
+    from app.models.campaign import Campaign
+    from app.models.campaign_recipient import CampaignRecipient
+    from sqlalchemy import func
+
+    start, end = _normalize_period_bounds(sent_from, sent_to)
+    sent_at = func.coalesce(
+        CampaignRecipient.sending_started_at,
+        Campaign.started_at,
+        CampaignRecipient.updated_at,
+        CampaignRecipient.created_at,
+    )
+    conditions = [
+        Campaign.account_id == account_id,
+        CampaignRecipient.status.in_(_campaign_sent_statuses()),
+        Campaign.archived_at.is_(None),
+    ]
+    if contact_ids:
+        conditions.append(CampaignRecipient.contact_id.in_(contact_ids))
+    if start is not None:
+        conditions.append(sent_at >= start)
+    if end is not None:
+        conditions.append(sent_at <= end)
+
+    rows = await db.execute(
+        select(
+            Campaign.id,
+            Campaign.name,
+            Campaign.started_at,
+            Campaign.completed_at,
+            Campaign.status,
+            func.count(CampaignRecipient.id),
+            func.min(sent_at),
+            func.max(sent_at),
+        )
+        .join(CampaignRecipient, CampaignRecipient.campaign_id == Campaign.id)
+        .where(*conditions)
+        .group_by(
+            Campaign.id,
+            Campaign.name,
+            Campaign.started_at,
+            Campaign.completed_at,
+            Campaign.status,
+        )
+        .order_by(func.max(sent_at).desc())
+        .limit(100)
+    )
+    items: list[dict] = []
+    for row in rows.all():
+        items.append(
+            {
+                "id": str(row[0]),
+                "name": row[1],
+                "started_at": row[2].isoformat() if row[2] else None,
+                "completed_at": row[3].isoformat() if row[3] else None,
+                "status": row[4].value if hasattr(row[4], "value") else str(row[4]),
+                "sent_count": int(row[5] or 0),
+                "first_sent_at": row[6].isoformat() if row[6] else None,
+                "last_sent_at": row[7].isoformat() if row[7] else None,
+            }
+        )
+    return items
 
 
 async def count_campaign_eligible(
