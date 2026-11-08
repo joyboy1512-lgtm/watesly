@@ -23,6 +23,10 @@ class CampaignCreateRequest(BaseModel):
     exclude_unreachable: bool = True
     exclude_risky: bool = False
     only_never_sent: bool = False
+    exclude_sent_in_period: bool = False
+    exclude_sent_from: datetime | None = None
+    exclude_sent_to: datetime | None = None
+    exclude_campaign_ids: list[UUID] = Field(default_factory=list)
 
 
 class CampaignPreflightRequest(BaseModel):
@@ -33,6 +37,10 @@ class CampaignPreflightRequest(BaseModel):
     exclude_unreachable: bool = True
     exclude_risky: bool = False
     only_never_sent: bool = False
+    exclude_sent_in_period: bool = False
+    exclude_sent_from: datetime | None = None
+    exclude_sent_to: datetime | None = None
+    exclude_campaign_ids: list[UUID] = Field(default_factory=list)
 
 
 class CampaignResponse(BaseModel):

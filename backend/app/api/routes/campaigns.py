@@ -160,6 +160,7 @@ async def post_campaign(payload: CampaignCreateRequest, context: AuthContext = D
             "ALL_RECIPIENTS_OPTED_OUT": "كل العملاء المختارين رفضوا التسويق (opt-out).",
             "ALL_RECIPIENTS_UNREACHABLE": "لا يوجد مستلمون قابلون للوصول — راجع فحص الجمهور قبل الإرسال.",
             "ALL_RECIPIENTS_PREVIOUSLY_SENT": "كل العملاء المختارين سبق إرسال رسالة لهم — لا يوجد عملاء جدد في التحديد.",
+            "ALL_RECIPIENTS_SENT_IN_PERIOD": "كل العملاء المختارين أُرسل لهم ضمن الفترة أو الحملات المحددة — لا يوجد مستلمون متبقون.",
             "INVALID_RECIPIENT": "بعض العملاء غير صالحين لهذا الفرع — اختر الفرع والقناة ثم حمّل الجمهور من جديد.",
             "RECIPIENT_CHANNEL_MISMATCH": "العملاء المختارون لا ينتمون لقناة WhatsApp المحددة — اضغط «إلغاء التحديد» ثم اختر من جديد.",
             "INVALID_WHATSAPP_ACCOUNT": "حساب WhatsApp غير صالح.",
@@ -255,6 +256,10 @@ async def post_campaign_preflight(
         exclude_unreachable=payload.exclude_unreachable,
         exclude_risky=payload.exclude_risky,
         only_never_sent=payload.only_never_sent,
+        exclude_sent_in_period=payload.exclude_sent_in_period,
+        exclude_sent_from=payload.exclude_sent_from,
+        exclude_sent_to=payload.exclude_sent_to,
+        exclude_campaign_ids=payload.exclude_campaign_ids,
     )
 
 
