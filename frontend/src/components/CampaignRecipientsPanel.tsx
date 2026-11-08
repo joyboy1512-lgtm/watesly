@@ -1,6 +1,6 @@
-import { Fragment } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, formatApiError } from "../lib/api";
+import { api, formatApiError, silentRequest } from "../lib/api";
 import {
   approveAndStartCampaign,
   CAMPAIGN_STATUS_LABELS,
@@ -119,6 +119,15 @@ function RecipientTable({ title, rows }: { title: string; rows: CampaignRecipien
   );
 }
 
+type FailedReasonGroup = {
+  reason_key: string;
+  label: string;
+  count: number;
+  sample_errors: string[];
+};
+
+const RETRYABLE_STATUSES = new Set(["completed", "completed_with_errors", "failed", "paused"]);
+
 export function CampaignRecipientsPanel({
   campaignId,
   status,
@@ -138,10 +147,25 @@ export function CampaignRecipientsPanel({
   onUnarchive?: () => void;
   actionBusy?: boolean;
 }) {
+  const client = useQueryClient();
+  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
+  const [retrying, setRetrying] = useState(false);
+
   const recipients = useQuery({
     queryKey: ["campaign-recipients", campaignId],
     queryFn: async () => (await api.get<CampaignRecipient[]>(`/campaigns/${campaignId}/recipients`)).data,
     enabled: Boolean(campaignId)
+  });
+
+  const failedReasons = useQuery({
+    queryKey: ["campaign-failed-reasons", campaignId],
+    queryFn: async () =>
+      (
+        await api.get<{ failed_total: number; reasons: FailedReasonGroup[] }>(
+          `/campaigns/${campaignId}/failed-reasons`
+        )
+      ).data,
+    enabled: Boolean(campaignId) && ((report?.failed ?? 0) > 0 || Boolean(recipients.data?.some((r) => r.status === "failed")))
   });
 
   const rows = recipients.data ?? [];
@@ -150,6 +174,72 @@ export function CampaignRecipientsPanel({
   const notSent = rows.filter((r) => PENDING_STATUSES.has(r.status));
   const canArchive = status ? ARCHIVABLE_STATUSES.has(status) && !archivedAt : false;
   const canUnarchive = Boolean(archivedAt);
+  const canRetry =
+    Boolean(status && RETRYABLE_STATUSES.has(status)) &&
+    !archivedAt &&
+    !showArchived &&
+    (failedReasons.data?.failed_total ?? failed.length) > 0;
+
+  const reasonGroups = failedReasons.data?.reasons ?? [];
+  const selectedCount = useMemo(() => {
+    if (!selectedReasons.length) return failedReasons.data?.failed_total ?? failed.length;
+    return reasonGroups
+      .filter((item) => selectedReasons.includes(item.reason_key))
+      .reduce((sum, item) => sum + item.count, 0);
+  }, [selectedReasons, reasonGroups, failedReasons.data?.failed_total, failed.length]);
+
+  useEffect(() => {
+    const groups = failedReasons.data?.reasons ?? [];
+    if (!groups.length) {
+      setSelectedReasons([]);
+      return;
+    }
+    setSelectedReasons((current) => {
+      const valid = current.filter((key) => groups.some((item) => item.reason_key === key));
+      if (valid.length) return valid;
+      // Default: select retry-friendly reasons first when available
+      const preferred = groups
+        .filter((item) =>
+          item.reason_key === "rate_limit" ||
+          item.reason_key === "other" ||
+          item.reason_key === "template_policy"
+        )
+        .map((item) => item.reason_key);
+      return preferred.length ? preferred : groups.map((item) => item.reason_key);
+    });
+  }, [failedReasons.data?.reasons]);
+
+  async function retrySelectedFailures() {
+    if (!selectedReasons.length && reasonGroups.length) {
+      toastStore.getState().show("اختر سبب فشل واحداً على الأقل.", "error");
+      return;
+    }
+    setRetrying(true);
+    try {
+      await api.post(
+        `/campaigns/${campaignId}/retry-failed`,
+        { reason_keys: selectedReasons },
+        silentRequest
+      );
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["campaign-recipients", campaignId] }),
+        client.invalidateQueries({ queryKey: ["campaign-failed-reasons", campaignId] }),
+        client.invalidateQueries({ queryKey: ["campaign-report", campaignId] }),
+        client.invalidateQueries({ queryKey: ["campaigns"] })
+      ]);
+      toastStore.getState().show(
+        `تمت إعادة جدولة ${selectedCount} رسالة فاشلة حسب الأسباب المحددة.`,
+        "success"
+      );
+    } catch (error) {
+      toastStore.getState().show(
+        formatApiError(error, "تعذر إعادة إرسال الرسائل الفاشلة."),
+        "error"
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   return (
     <div className="campaign-details-panel">
@@ -198,6 +288,70 @@ export function CampaignRecipientsPanel({
           </button>
         )}
       </div>
+      {canRetry && (
+        <div className="campaign-retry-panel">
+          <strong>إعادة إرسال الفاشلة حسب السبب</strong>
+          <p className="hint-text">
+            اختر أسباب الفشل التي تريد إعادة محاولتها فقط (مثلاً حد الإرسال)، واترك الأسباب النهائية مثل الرقم غير الصالح.
+          </p>
+          <div className="campaign-retry-reasons">
+            {reasonGroups.map((item) => {
+              const checked = selectedReasons.includes(item.reason_key);
+              return (
+                <label key={item.reason_key} className="field-label checkbox-inline">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      setSelectedReasons((current) =>
+                        checked
+                          ? current.filter((key) => key !== item.reason_key)
+                          : [...current, item.reason_key]
+                      );
+                    }}
+                  />
+                  <span>
+                    {item.label} · {item.count}
+                    {item.sample_errors[0] ? ` — ${item.sample_errors[0].slice(0, 80)}` : ""}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="inline-actions">
+            <button
+              type="button"
+              className="secondary-button compact"
+              onClick={() => setSelectedReasons(reasonGroups.map((item) => item.reason_key))}
+            >
+              تحديد الكل
+            </button>
+            <button
+              type="button"
+              className="secondary-button compact"
+              onClick={() =>
+                setSelectedReasons(
+                  reasonGroups
+                    .filter((item) =>
+                      ["rate_limit", "other", "template_policy"].includes(item.reason_key)
+                    )
+                    .map((item) => item.reason_key)
+                )
+              }
+            >
+              القابلة للمحاولة فقط
+            </button>
+            <button
+              type="button"
+              className="whatsapp-button compact"
+              disabled={retrying || actionBusy || selectedCount === 0}
+              onClick={() => void retrySelectedFailures()}
+            >
+              {retrying ? "جاري إعادة الجدولة…" : `إعادة إرسال المحددة (${selectedCount})`}
+            </button>
+          </div>
+        </div>
+      )}
       {recipients.isLoading && <p className="hint-text">جاري تحميل الأرقام…</p>}
       <RecipientTable title="تم الإرسال لهم" rows={sent} />
       <RecipientTable title="فشل الإرسال" rows={failed} />
