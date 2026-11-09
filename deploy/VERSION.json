@@ -8,16 +8,16 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "93480fc",
-    "git_commit_message": "Campaign retry by failure reason live",
+    "git_commit": "c16c79c",
+    "git_commit_message": "Campaign no-duplicate resend guard live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DPCbb6g4.js",
+      "js": "index-guey28er.js",
       "css": "index-DUvDFlY4.css"
     },
-    "server_backup": "/opt/watesly/backups/20261109-002836"
+    "server_backup": "/opt/watesly/backups/20261109-005408"
   },
   "versions": {
     "backend": "0.28.0",
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py \u2192 app_version",
     "frontend": "frontend/package.json \u2192 version"
   },
-  "commit": "93480fc",
-  "notes": "Selective retry of failed campaign messages by failure reason live"
+  "commit": "c16c79c",
+  "notes": "No duplicate resend on follow-up/retry live"
 }

@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-09",
+  "commit": "c16c79c",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-guey28er.js",
+    "css": "index-DUvDFlY4.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261109-005408",
+  "features": [
+    "Prevent duplicate campaign sends on follow-up and failed retry",
+    "Reconcile uncertain failures before resend",
+    "Follow-up targets confirmed failed / delivered-unread only"
+  ],
+  "notes": "Deployed via SSH. PR #129. Audit of olive o love offers + not_delivered follow-up on 2026-11-08."
+}
