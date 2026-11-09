@@ -64,13 +64,47 @@ async def recover_stuck_campaigns(*, limit: int = 20) -> dict:
     return {"recovered": recovered}
 
 
-async def retry_failed_campaign_recipients(
+async def list_campaign_failed_reasons(
     db,
     *,
     account_id: UUID,
     campaign_id: UUID,
     membership=None,
 ) -> dict:
+    from app.services.campaign_failure_reasons import group_failed_recipients
+    from app.services.campaigns import get_campaign
+
+    campaign = await get_campaign(
+        db, account_id=account_id, campaign_id=campaign_id, membership=membership
+    )
+    rows = (
+        await db.execute(
+            select(CampaignRecipient.id, CampaignRecipient.error_message).where(
+                CampaignRecipient.campaign_id == campaign.id,
+                CampaignRecipient.status == CampaignRecipientStatus.FAILED,
+            )
+        )
+    ).all()
+    groups = group_failed_recipients([(row[0], row[1]) for row in rows])
+    return {
+        "campaign_id": str(campaign.id),
+        "failed_total": sum(item["count"] for item in groups),
+        "reasons": groups,
+    }
+
+
+async def retry_failed_campaign_recipients(
+    db,
+    *,
+    account_id: UUID,
+    campaign_id: UUID,
+    membership=None,
+    reason_keys: list[str] | None = None,
+) -> dict:
+    from app.services.campaign_failure_reasons import (
+        CampaignFailureReason,
+        classify_campaign_failure,
+    )
     from app.services.campaigns import get_campaign
 
     campaign = await get_campaign(
@@ -84,10 +118,36 @@ async def retry_failed_campaign_recipients(
     }:
         raise ValueError("CAMPAIGN_CANNOT_RETRY")
 
+    selected_reasons: set[str] | None = None
+    if reason_keys:
+        valid = {item.value for item in CampaignFailureReason}
+        selected_reasons = {key for key in reason_keys if key in valid}
+        if not selected_reasons:
+            raise ValueError("INVALID_FAILURE_REASON")
+
+    failed_rows = (
+        await db.execute(
+            select(CampaignRecipient).where(
+                CampaignRecipient.campaign_id == campaign.id,
+                CampaignRecipient.status == CampaignRecipientStatus.FAILED,
+            )
+        )
+    ).scalars().all()
+
+    recipient_ids: list[UUID] = []
+    for recipient in failed_rows:
+        reason = classify_campaign_failure(recipient.error_message).value
+        if selected_reasons is None or reason in selected_reasons:
+            recipient_ids.append(recipient.id)
+
+    if not recipient_ids:
+        raise ValueError("NO_FAILED_RECIPIENTS")
+
     result = await db.execute(
         update(CampaignRecipient)
         .where(
             CampaignRecipient.campaign_id == campaign.id,
+            CampaignRecipient.id.in_(recipient_ids),
             CampaignRecipient.status == CampaignRecipientStatus.FAILED,
         )
         .values(
@@ -118,7 +178,12 @@ async def retry_failed_campaign_recipients(
     campaign.status = CampaignStatus.RUNNING
     await db.commit()
     await db.refresh(campaign)
-    return {"reset": reset_count, "campaign_id": str(campaign.id), "task_id": task.id}
+    return {
+        "reset": reset_count,
+        "campaign_id": str(campaign.id),
+        "task_id": task.id,
+        "reason_keys": sorted(selected_reasons) if selected_reasons else ["all"],
+    }
 
 
 async def count_sendable_recipients(db, *, campaign_id: UUID) -> int:
