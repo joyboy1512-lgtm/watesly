@@ -2399,6 +2399,25 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-radius: 10px;
   background: var(--panel);
 }
+.campaign-retry-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.campaign-retry-reasons {
+  display: grid;
+  gap: 6px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
 .knowledge-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

@@ -43,6 +43,12 @@ class CampaignPreflightRequest(BaseModel):
     exclude_campaign_ids: list[UUID] = Field(default_factory=list)
 
 
+class CampaignRetryFailedRequest(BaseModel):
+    """Empty reason_keys = retry all failed. Otherwise only selected reason groups."""
+
+    reason_keys: list[str] = Field(default_factory=list)
+
+
 class CampaignResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

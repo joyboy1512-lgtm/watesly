@@ -12,6 +12,7 @@ from app.schemas.campaign import (
     CampaignPreflightRequest,
     CampaignReportSummary,
     CampaignResponse,
+    CampaignRetryFailedRequest,
 )
 from app.models.whatsapp_template import WhatsAppTemplate
 from app.services.whatsapp_window import campaign_audience_preflight
@@ -53,11 +54,17 @@ def _error(exc: ValueError) -> HTTPException:
         "QUALITY_RED",
         "NO_FAILED_RECIPIENTS",
         "CAMPAIGN_CANNOT_RETRY",
+        "INVALID_FAILURE_REASON",
     }:
         status_code = 409
     else:
         status_code = 409
-    return HTTPException(status_code=status_code, detail=code)
+    detail_map = {
+        "NO_FAILED_RECIPIENTS": "لا توجد رسائل فاشلة مطابقة لأسباب الفشل المحددة.",
+        "CAMPAIGN_CANNOT_RETRY": "لا يمكن إعادة إرسال هذه الحملة في حالتها الحالية.",
+        "INVALID_FAILURE_REASON": "سبب الفشل المحدد غير صالح.",
+    }
+    return HTTPException(status_code=status_code, detail=detail_map.get(code, code))
 
 @router.get("", response_model=list[CampaignListItemResponse])
 async def get_campaigns(
@@ -332,20 +339,42 @@ async def cancel(campaign_id: UUID, payload: CancelCampaignRequest, context: Aut
     except ValueError as exc: raise _error(exc) from exc
 
 
+@router.get("/{campaign_id}/failed-reasons")
+async def failed_reasons(
+    campaign_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.campaign_recovery import list_campaign_failed_reasons
+
+    try:
+        return await list_campaign_failed_reasons(
+            db,
+            account_id=context.account_id,
+            campaign_id=campaign_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        raise _error(exc) from exc
+
+
 @router.post("/{campaign_id}/retry-failed", response_model=CampaignResponse)
 async def retry_failed(
     campaign_id: UUID,
+    payload: CampaignRetryFailedRequest | None = None,
     context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.campaign_recovery import retry_failed_campaign_recipients
 
+    body = payload or CampaignRetryFailedRequest()
     try:
         await retry_failed_campaign_recipients(
             db,
             account_id=context.account_id,
             campaign_id=campaign_id,
             membership=context.membership,
+            reason_keys=body.reason_keys or None,
         )
         return await get_campaign(
             db,
