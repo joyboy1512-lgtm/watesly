@@ -11,23 +11,20 @@ from app.models.campaign import Campaign, CampaignStatus
 from app.models.membership import Membership
 from app.models.campaign_recipient import CampaignRecipient, CampaignRecipientStatus
 from app.models.contact import Contact
+from app.services.campaign_send_guard import (
+    is_safe_to_resend_failure,
+    is_uncertain_delivery_failure,
+    normalize_contact_phone,
+    reconcile_uncertain_failed_recipient,
+)
 from app.services.feature_flags import get_feature_flags
 from app.services.outbox import add_outbox_event
 
+# Only statuses that mean the customer did NOT already get a confirmed send.
+# never include SENT/DELIVERED/READ for "failed"/"not_delivered" — that caused duplicates.
 FOLLOW_UP_TYPES = {
-    "not_delivered": {
-        CampaignRecipientStatus.SENT,
-        CampaignRecipientStatus.FAILED,
-        CampaignRecipientStatus.PENDING,
-        CampaignRecipientStatus.QUEUED,
-    },
-    "not_read": {
-        CampaignRecipientStatus.SENT,
-        CampaignRecipientStatus.DELIVERED,
-        CampaignRecipientStatus.FAILED,
-        CampaignRecipientStatus.PENDING,
-        CampaignRecipientStatus.QUEUED,
-    },
+    "not_delivered": {CampaignRecipientStatus.FAILED},
+    "not_read": {CampaignRecipientStatus.DELIVERED},
     "failed": {CampaignRecipientStatus.FAILED},
 }
 
@@ -58,6 +55,7 @@ async def create_follow_up_campaign(
         CampaignStatus.COMPLETED,
         CampaignStatus.COMPLETED_WITH_ERRORS,
         CampaignStatus.PAUSED,
+        CampaignStatus.FAILED,
     }:
         raise ValueError("PARENT_CAMPAIGN_NOT_FINISHED")
 
@@ -76,10 +74,45 @@ async def create_follow_up_campaign(
     if not rows:
         raise ValueError("NO_FOLLOW_UP_RECIPIENTS")
 
+    eligible: list[tuple[CampaignRecipient, Contact]] = []
+    seen_phones: set[str] = set()
+    reconciled = 0
+    skipped_uncertain = 0
+    skipped_duplicate_phone = 0
+    skipped_unsafe = 0
+
+    for recipient, contact in rows:
+        if follow_up_type in {"failed", "not_delivered"}:
+            if is_uncertain_delivery_failure(recipient.error_message):
+                restored = await reconcile_uncertain_failed_recipient(
+                    db, campaign_id=parent.id, recipient=recipient
+                )
+                if restored is not None:
+                    reconciled += 1
+                    continue
+                skipped_uncertain += 1
+                continue
+            if not is_safe_to_resend_failure(recipient.error_message):
+                skipped_unsafe += 1
+                continue
+
+        phone = normalize_contact_phone(contact.external_address, contact.country_code)
+        if phone:
+            if phone in seen_phones:
+                skipped_duplicate_phone += 1
+                continue
+            seen_phones.add(phone)
+
+        eligible.append((recipient, contact))
+
+    if not eligible:
+        await db.commit()
+        raise ValueError("NO_FOLLOW_UP_RECIPIENTS")
+
     suffix = name_suffix or {
         "not_delivered": "متابعة — لم يُسلّم",
         "not_read": "متابعة — لم يُقرأ",
-        "failed": "متابعة — فشل",
+        "failed": "متابعة — فشل مؤكد",
     }.get(follow_up_type, "متابعة")
     child_name = f"{parent.name} — {suffix}"[:160]
 
@@ -91,7 +124,7 @@ async def create_follow_up_campaign(
         created_by_user_id=user_id,
         name=child_name,
         status=CampaignStatus.DRAFT,
-        max_recipients=min(len(rows), parent.max_recipients),
+        max_recipients=min(len(eligible), parent.max_recipients),
         requires_approval=True,
         parent_campaign_id=parent.id,
         follow_up_type=follow_up_type,
@@ -99,7 +132,7 @@ async def create_follow_up_campaign(
     db.add(child)
     await db.flush()
 
-    for recipient, _contact in rows:
+    for recipient, _contact in eligible:
         db.add(
             CampaignRecipient(
                 campaign_id=child.id,
@@ -118,7 +151,11 @@ async def create_follow_up_campaign(
             "campaign_id": str(child.id),
             "parent_campaign_id": str(parent.id),
             "follow_up_type": follow_up_type,
-            "recipient_count": len(rows),
+            "recipient_count": len(eligible),
+            "reconciled_uncertain": reconciled,
+            "skipped_uncertain": skipped_uncertain,
+            "skipped_unsafe": skipped_unsafe,
+            "skipped_duplicate_phone": skipped_duplicate_phone,
         },
     )
     await db.commit()
