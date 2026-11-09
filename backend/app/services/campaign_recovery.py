@@ -100,10 +100,16 @@ async def retry_failed_campaign_recipients(
     campaign_id: UUID,
     membership=None,
     reason_keys: list[str] | None = None,
+    include_uncertain: bool = False,
 ) -> dict:
     from app.services.campaign_failure_reasons import (
         CampaignFailureReason,
         classify_campaign_failure,
+    )
+    from app.services.campaign_send_guard import (
+        is_safe_to_resend_failure,
+        is_uncertain_delivery_failure,
+        reconcile_uncertain_failed_recipient,
     )
     from app.services.campaigns import get_campaign
 
@@ -135,12 +141,48 @@ async def retry_failed_campaign_recipients(
     ).scalars().all()
 
     recipient_ids: list[UUID] = []
+    reconciled = 0
+    skipped_uncertain = 0
+    skipped_unsafe = 0
     for recipient in failed_rows:
         reason = classify_campaign_failure(recipient.error_message).value
-        if selected_reasons is None or reason in selected_reasons:
-            recipient_ids.append(recipient.id)
+        if selected_reasons is not None and reason not in selected_reasons:
+            continue
+
+        # Always try to match inbox/Meta state before resending.
+        restored = await reconcile_uncertain_failed_recipient(
+            db, campaign_id=campaign.id, recipient=recipient
+        )
+        if restored is not None:
+            reconciled += 1
+            continue
+
+        if is_uncertain_delivery_failure(recipient.error_message) and not include_uncertain:
+            skipped_uncertain += 1
+            continue
+        if not include_uncertain and not is_safe_to_resend_failure(recipient.error_message):
+            # Still allow explicit reason_keys for unreachable if user selected them
+            if selected_reasons is None:
+                skipped_unsafe += 1
+                continue
+            if reason in {
+                CampaignFailureReason.UNREACHABLE.value,
+                CampaignFailureReason.INVALID_PHONE.value,
+                CampaignFailureReason.OPT_OUT.value,
+            }:
+                # User explicitly chose these reasons — allow but still skip uncertain
+                if is_uncertain_delivery_failure(recipient.error_message):
+                    skipped_uncertain += 1
+                    continue
+
+        recipient_ids.append(recipient.id)
+
+    await db.flush()
 
     if not recipient_ids:
+        await db.commit()
+        if reconciled:
+            raise ValueError("NO_FAILED_RECIPIENTS_AFTER_RECONCILE")
         raise ValueError("NO_FAILED_RECIPIENTS")
 
     result = await db.execute(
@@ -160,6 +202,7 @@ async def retry_failed_campaign_recipients(
     )
     reset_count = len(result.scalars().all())
     if reset_count == 0:
+        await db.commit()
         raise ValueError("NO_FAILED_RECIPIENTS")
 
     campaign.status = CampaignStatus.SCHEDULED
@@ -180,6 +223,9 @@ async def retry_failed_campaign_recipients(
     await db.refresh(campaign)
     return {
         "reset": reset_count,
+        "reconciled": reconciled,
+        "skipped_uncertain": skipped_uncertain,
+        "skipped_unsafe": skipped_unsafe,
         "campaign_id": str(campaign.id),
         "task_id": task.id,
         "reason_keys": sorted(selected_reasons) if selected_reasons else ["all"],
