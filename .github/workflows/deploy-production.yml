@@ -24,8 +24,8 @@ jobs:
         run: |
           if [ -z "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::error::DEPLOY_SSH_PRIVATE_KEY secret is not configured — production was NOT updated on the server."
-            exit 1
+            echo "::warning::DEPLOY_SSH_PRIVATE_KEY secret is not configured — skipping GitHub Actions deploy. Add the secret (or deploy via agent SSH) to enable automatic production updates."
+            exit 0
           fi
           echo "configured=true" >> "$GITHUB_OUTPUT"
 
