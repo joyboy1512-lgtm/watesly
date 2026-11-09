@@ -141,21 +141,42 @@ export function formatCampaignCompleted(completedAt: string | null | undefined) 
   return formatAppTime(completedAt);
 }
 
+/** Normalize API rate: already 0–100, or legacy 0–1 fraction. */
+export function normalizeCampaignRatePercent(rate: number | undefined | null): number | null {
+  if (rate == null || Number.isNaN(rate)) return null;
+  if (rate <= 0) return 0;
+  if (rate <= 1) return Math.round(rate * 100);
+  return Math.round(rate);
+}
+
 export function formatDeliveryRate(rate: number | undefined, report?: CampaignReportLike) {
-  if (rate != null && rate > 0) return `${Math.round(rate * 100)}%`;
-  if (!report || report.total === 0) return "—";
+  if (!report || report.total === 0) {
+    const pct = normalizeCampaignRatePercent(rate);
+    return pct != null && pct > 0 ? `${pct}%` : "—";
+  }
   const sent = campaignSentCount(report);
-  if (sent === 0) return "—";
-  const delivered = report.delivered + report.read;
-  return `${Math.round((delivered / sent) * 100)}%`;
+  const deliveredCount = (report.delivered ?? 0) + (report.read ?? 0);
+  if (sent === 0 && deliveredCount === 0) return "—";
+  const pct =
+    normalizeCampaignRatePercent(rate) ??
+    (sent > 0 ? Math.round((deliveredCount / sent) * 100) : null);
+  const countLabel = deliveredCount.toLocaleString("ar");
+  return pct != null ? `${countLabel} · ${pct}%` : countLabel;
 }
 
 export function formatReadRate(rate: number | undefined, report?: CampaignReportLike) {
-  if (rate != null && rate > 0) return `${Math.round(rate * 100)}%`;
-  if (!report || report.total === 0) return "—";
-  const delivered = report.delivered + report.read;
-  if (delivered === 0) return "—";
-  return `${Math.round((report.read / delivered) * 100)}%`;
+  if (!report || report.total === 0) {
+    const pct = normalizeCampaignRatePercent(rate);
+    return pct != null && pct > 0 ? `${pct}%` : "—";
+  }
+  const readCount = report.read ?? 0;
+  const deliveredBase = (report.delivered ?? 0) + readCount;
+  if (deliveredBase === 0 && readCount === 0) return "—";
+  const pct =
+    normalizeCampaignRatePercent(rate) ??
+    (deliveredBase > 0 ? Math.round((readCount / deliveredBase) * 100) : null);
+  const countLabel = readCount.toLocaleString("ar");
+  return pct != null ? `${countLabel} · ${pct}%` : countLabel;
 }
 
 export async function approveAndStartCampaign(

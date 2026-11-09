@@ -20,6 +20,7 @@ import {
   CampaignResultsTable,
   type CampaignSummaryRow
 } from "../components/CampaignRecipientsPanel";
+import { formatDeliveryRate, formatReadRate } from "../lib/campaignHelpers";
 import { STAGE_LABELS, formatDealAmount, type CrmReport } from "../lib/crmHelpers";
 import {
   REPORT_TABS,
@@ -440,6 +441,7 @@ export default function ReportsPage() {
     return [
       { metric: "حملات", value: summary.campaigns ?? 0 },
       { metric: "مستلمين", value: summary.recipients ?? 0 },
+      { metric: "تم التسليم", value: (summary.delivered ?? 0) + (summary.read ?? 0) },
       { metric: "مقروء", value: summary.read ?? 0 }
     ];
   }, [campaigns.data]);
@@ -656,10 +658,33 @@ export default function ReportsPage() {
           <div className="stats-grid">
             <MetricCard label="عدد الحملات" value={campaigns.data?.summary?.campaigns ?? "…"} />
             <MetricCard label="المستلمين" value={campaigns.data?.summary?.recipients ?? "…"} />
-            <MetricCard label="مقروء" value={campaigns.data?.summary?.read ?? "…"} />
             <MetricCard
-              label="نسبة التسليم"
-              value={campaigns.data?.summary?.delivery_rate != null ? `${campaigns.data.summary.delivery_rate}%` : "…"}
+              label="تم التسليم"
+              value={
+                campaigns.data?.summary
+                  ? formatDeliveryRate(campaigns.data.summary.delivery_rate ?? undefined, {
+                      total: campaigns.data.summary.recipients ?? 0,
+                      sent: campaigns.data.summary.sent ?? 0,
+                      delivered: campaigns.data.summary.delivered ?? 0,
+                      read: campaigns.data.summary.read ?? 0,
+                      failed: campaigns.data.summary.failed ?? 0
+                    })
+                  : "…"
+              }
+            />
+            <MetricCard
+              label="مقروء"
+              value={
+                campaigns.data?.summary
+                  ? formatReadRate(campaigns.data.summary.read_rate ?? undefined, {
+                      total: campaigns.data.summary.recipients ?? 0,
+                      sent: campaigns.data.summary.sent ?? 0,
+                      delivered: campaigns.data.summary.delivered ?? 0,
+                      read: campaigns.data.summary.read ?? 0,
+                      failed: campaigns.data.summary.failed ?? 0
+                    })
+                  : "…"
+              }
             />
           </div>
           <ReportsBarChart

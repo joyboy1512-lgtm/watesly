@@ -31,6 +31,7 @@ import {
   formatChange
 } from "../lib/analyticsHelpers";
 import { type CtwaDashboard } from "../lib/growthFeatures";
+import { formatDeliveryRate, formatReadRate } from "../lib/campaignHelpers";
 
 const tabs: { id: AnalyticsTab; labelKey: string }[] = [
   { id: "live", labelKey: "analytics.tabLive" },
@@ -335,19 +336,61 @@ export default function AnalyticsPage() {
             <div className="stats-grid">
               <article className="metric-card"><span>حملات</span><strong>{campaigns.data?.summary.campaigns ?? "…"}</strong></article>
               <article className="metric-card"><span>مستلمين</span><strong>{campaigns.data?.summary.recipients ?? "…"}</strong></article>
-              <article className="metric-card"><span>تسليم</span><strong>{campaigns.data?.summary.delivery_rate != null ? `${campaigns.data.summary.delivery_rate}%` : "—"}</strong></article>
-              <article className="metric-card"><span>قراءة</span><strong>{campaigns.data?.summary.read_rate != null ? `${campaigns.data.summary.read_rate}%` : "—"}</strong></article>
+              <article className="metric-card">
+                <span>تسليم</span>
+                <strong>
+                  {campaigns.data?.summary
+                    ? formatDeliveryRate(campaigns.data.summary.delivery_rate ?? undefined, {
+                        total: campaigns.data.summary.recipients,
+                        sent: campaigns.data.summary.sent,
+                        delivered: campaigns.data.summary.delivered,
+                        read: campaigns.data.summary.read,
+                        failed: campaigns.data.summary.failed
+                      })
+                    : "…"}
+                </strong>
+              </article>
+              <article className="metric-card">
+                <span>قراءة</span>
+                <strong>
+                  {campaigns.data?.summary
+                    ? formatReadRate(campaigns.data.summary.read_rate ?? undefined, {
+                        total: campaigns.data.summary.recipients,
+                        sent: campaigns.data.summary.sent,
+                        delivered: campaigns.data.summary.delivered,
+                        read: campaigns.data.summary.read,
+                        failed: campaigns.data.summary.failed
+                      })
+                    : "…"}
+                </strong>
+              </article>
             </div>
             <table className="analytics-table">
-              <thead><tr><th>الحملة</th><th>الحالة</th><th>مستلمين</th><th>تسليم %</th><th>قراءة %</th></tr></thead>
+              <thead><tr><th>الحملة</th><th>الحالة</th><th>مستلمين</th><th>تسليم</th><th>قراءة</th></tr></thead>
               <tbody>
                 {(campaigns.data?.campaigns ?? []).map((item) => (
                   <tr key={item.id}>
                     <td><Link to={`/campaigns?id=${item.id}`}>{item.name}</Link></td>
                     <td>{item.status}</td>
                     <td>{item.recipients}</td>
-                    <td>{item.delivery_rate != null ? `${item.delivery_rate}%` : "—"}</td>
-                    <td>{item.read_rate != null ? `${item.read_rate}%` : "—"}</td>
+                    <td>
+                      {formatDeliveryRate(item.delivery_rate ?? undefined, {
+                        total: item.recipients,
+                        sent: item.sent,
+                        delivered: item.delivered,
+                        read: item.read,
+                        failed: item.failed
+                      })}
+                    </td>
+                    <td>
+                      {formatReadRate(item.read_rate ?? undefined, {
+                        total: item.recipients,
+                        sent: item.sent,
+                        delivered: item.delivered,
+                        read: item.read,
+                        failed: item.failed
+                      })}
+                    </td>
                   </tr>
                 ))}
               </tbody>
