@@ -1,9 +1,29 @@
 import { describe, expect, it } from "vitest";
-import {
+
+const memoryStore = new Map<string, string>();
+Object.defineProperty(globalThis, "localStorage", {
+  value: {
+    getItem: (key: string) => memoryStore.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      memoryStore.set(key, String(value));
+    },
+    removeItem: (key: string) => {
+      memoryStore.delete(key);
+    },
+    clear: () => memoryStore.clear(),
+    key: (index: number) => Array.from(memoryStore.keys())[index] ?? null,
+    get length() {
+      return memoryStore.size;
+    }
+  },
+  configurable: true
+});
+
+const {
   formatDeliveryRate,
   formatReadRate,
   normalizeCampaignRatePercent
-} from "./campaignHelpers";
+} = await import("./campaignHelpers");
 
 describe("normalizeCampaignRatePercent", () => {
   it("keeps 0–100 percentages", () => {
