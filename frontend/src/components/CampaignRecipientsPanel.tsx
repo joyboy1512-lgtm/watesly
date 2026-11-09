@@ -292,7 +292,8 @@ export function CampaignRecipientsPanel({
         <div className="campaign-retry-panel">
           <strong>إعادة إرسال الفاشلة حسب السبب</strong>
           <p className="hint-text">
-            اختر أسباب الفشل التي تريد إعادة محاولتها فقط (مثلاً حد الإرسال)، واترك الأسباب النهائية مثل الرقم غير الصالح.
+            اختر أسباب الفشل المؤكدة فقط. النظام يطابق الحالة أولاً ولن يعيد إرسال من وصلتهم الرسالة
+            أو من فشلهم غير مؤكد (انقطاع العامل).
           </p>
           <div className="campaign-retry-reasons">
             {reasonGroups.map((item) => {
@@ -509,9 +510,19 @@ export function CampaignReportRow({
                   type="button"
                   className="secondary-button compact"
                   disabled={busy}
-                  onClick={() => actions.onFollowUp?.(item.id, "not_delivered")}
+                  title="فقط الفاشل المؤكد — بعد مطابقة الحالة ومنع التكرار"
+                  onClick={() => actions.onFollowUp?.(item.id, "failed")}
                 >
-                  متابعة
+                  متابعة الفاشل
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  disabled={busy}
+                  title="فقط من تم التسليم لهم ولم يقرأوا"
+                  onClick={() => actions.onFollowUp?.(item.id, "not_read")}
+                >
+                  متابعة غير المقروء
                 </button>
               </>
             )}

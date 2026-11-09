@@ -53,6 +53,8 @@ def _error(exc: ValueError) -> HTTPException:
         "TIER_LIMIT_EXCEEDED",
         "QUALITY_RED",
         "NO_FAILED_RECIPIENTS",
+        "NO_FAILED_RECIPIENTS_AFTER_RECONCILE",
+        "NO_FOLLOW_UP_RECIPIENTS",
         "CAMPAIGN_CANNOT_RETRY",
         "INVALID_FAILURE_REASON",
     }:
@@ -61,8 +63,14 @@ def _error(exc: ValueError) -> HTTPException:
         status_code = 409
     detail_map = {
         "NO_FAILED_RECIPIENTS": "لا توجد رسائل فاشلة مطابقة لأسباب الفشل المحددة.",
+        "NO_FAILED_RECIPIENTS_AFTER_RECONCILE": (
+            "تم مطابقة الحالة مع الرسائل المرسلة سابقاً — لا حاجة لإعادة الإرسال (تجنّب التكرار)."
+        ),
         "CAMPAIGN_CANNOT_RETRY": "لا يمكن إعادة إرسال هذه الحملة في حالتها الحالية.",
         "INVALID_FAILURE_REASON": "سبب الفشل المحدد غير صالح.",
+        "NO_FOLLOW_UP_RECIPIENTS": (
+            "لا يوجد مستلمون مؤهلون للمتابعة بعد استبعاد من وصلتهم الرسالة أو الفشل غير المؤكد."
+        ),
     }
     return HTTPException(status_code=status_code, detail=detail_map.get(code, code))
 
