@@ -69,6 +69,8 @@ class ContactResponse(BaseModel):
     last_campaign_id: UUID | None = None
     last_campaign_name: str | None = None
     last_campaign_at: datetime | None = None
+    whatsapp_status: str | None = None
+    whatsapp_status_label: str | None = None
 
 
 class ContactActivityResponse(BaseModel):

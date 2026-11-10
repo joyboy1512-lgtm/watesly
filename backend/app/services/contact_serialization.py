@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.models.contact import Contact
 from app.schemas.contact import ContactResponse
+from app.services.contact_reachability import resolve_whatsapp_contact_status, whatsapp_status_label
 from app.services.privacy_mask import can_view_full_contact, mask_contact_fields
 
 
@@ -30,6 +31,9 @@ def contact_to_response(
         data["last_campaign_id"] = last_campaign.get("last_campaign_id")
         data["last_campaign_name"] = last_campaign.get("last_campaign_name")
         data["last_campaign_at"] = last_campaign.get("last_campaign_at")
+    wa_status = resolve_whatsapp_contact_status(contact)
+    data["whatsapp_status"] = wa_status.value
+    data["whatsapp_status_label"] = whatsapp_status_label(wa_status)
     if not show_full:
         data = mask_contact_fields(data, show_full=False)
     return ContactResponse(**data)

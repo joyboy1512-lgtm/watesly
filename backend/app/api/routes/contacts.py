@@ -121,6 +121,10 @@ async def get_contacts(
     tag_id: UUID | None = None,
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
+    whatsapp_status: str | None = Query(
+        default=None,
+        pattern=r"^(accepts|unreachable|invalid|dnd)$",
+    ),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -143,6 +147,7 @@ async def get_contacts(
         tag_id=tag_id,
         segment_id=segment_id,
         lifecycle_stage=lifecycle_stage,
+        whatsapp_status=whatsapp_status,
         q=q,
         accessible_channel_ids=accessible_channels if channel_id is None else None,
         accessible_organization_ids=accessible_orgs if organization_id is None else None,

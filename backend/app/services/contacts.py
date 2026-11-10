@@ -52,6 +52,7 @@ async def list_contacts(
     tag_id: UUID | None = None,
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
+    whatsapp_status: str | None = None,
     q: str | None = None,
     accessible_channel_ids: list[UUID] | None = None,
     accessible_organization_ids: list[UUID] | None = None,
@@ -109,6 +110,27 @@ async def list_contacts(
                     Contact.email.ilike(term),
                 )
             )
+        status_filter = (whatsapp_status or "").strip().lower()
+        if status_filter == "dnd":
+            query = query.where(Contact.marketing_opt_in.is_(False))
+        elif status_filter == "unreachable":
+            query = query.where(
+                Contact.marketing_opt_in.is_(True),
+                Contact.reachability_status == "unreachable",
+            )
+        elif status_filter == "invalid":
+            query = query.where(
+                Contact.marketing_opt_in.is_(True),
+                Contact.reachability_status == "invalid",
+            )
+        elif status_filter == "accepts":
+            query = query.where(
+                Contact.marketing_opt_in.is_(True),
+                or_(
+                    Contact.reachability_status.is_(None),
+                    Contact.reachability_status.in_(["reachable", "risky"]),
+                ),
+            )
 
     contacts = list((await db.execute(query)).scalars().all())
 
@@ -122,6 +144,16 @@ async def list_contacts(
         await db.commit()
         for contact in contacts:
             await db.refresh(contact)
+
+    status_filter = (whatsapp_status or "").strip().lower()
+    if status_filter in {"accepts", "invalid"}:
+        from app.services.contact_reachability import resolve_whatsapp_contact_status
+
+        contacts = [
+            contact
+            for contact in contacts
+            if resolve_whatsapp_contact_status(contact).value == status_filter
+        ]
 
     return contacts
 

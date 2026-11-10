@@ -3645,6 +3645,35 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   min-width: 160px;
 }
+.contacts-wa-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.contacts-wa-status-success {
+  background: #ecfdf3;
+  color: #067647;
+  border-color: #abefc6;
+}
+.contacts-wa-status-warning {
+  background: #fffaeb;
+  color: #b54708;
+  border-color: #fedf89;
+}
+.contacts-wa-status-danger {
+  background: #fef3f2;
+  color: #b42318;
+  border-color: #fecdca;
+}
+.contacts-wa-status-muted {
+  background: #f8fafc;
+  color: #475467;
+  border-color: #e4e7ec;
+}
 .contacts-erp-meta {
   display: flex;
   flex-wrap: wrap;

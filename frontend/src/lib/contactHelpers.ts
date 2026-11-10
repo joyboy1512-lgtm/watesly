@@ -25,7 +25,40 @@ export type Contact = {
   last_campaign_id?: string | null;
   last_campaign_name?: string | null;
   last_campaign_at?: string | null;
+  whatsapp_status?: "accepts" | "unreachable" | "invalid" | "dnd" | null;
+  whatsapp_status_label?: string | null;
 };
+
+export const WHATSAPP_STATUS_LABELS: Record<string, string> = {
+  accepts: "يقبل الاستلام",
+  unreachable: "غير قابل للوصول",
+  invalid: "غير صالح",
+  dnd: "طلب عدم الإزعاج"
+};
+
+export function formatWhatsAppStatus(contact: Pick<Contact, "whatsapp_status" | "whatsapp_status_label" | "marketing_opt_in">) {
+  if (contact.whatsapp_status_label) return contact.whatsapp_status_label;
+  if (contact.whatsapp_status && WHATSAPP_STATUS_LABELS[contact.whatsapp_status]) {
+    return WHATSAPP_STATUS_LABELS[contact.whatsapp_status];
+  }
+  if (contact.marketing_opt_in === false) return WHATSAPP_STATUS_LABELS.dnd;
+  return WHATSAPP_STATUS_LABELS.accepts;
+}
+
+export function whatsappStatusTone(status: string | null | undefined) {
+  switch (status) {
+    case "accepts":
+      return "success";
+    case "unreachable":
+      return "warning";
+    case "invalid":
+      return "danger";
+    case "dnd":
+      return "muted";
+    default:
+      return "muted";
+  }
+}
 
 export type ContactStats = {
   total: number;

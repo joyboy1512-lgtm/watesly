@@ -19,13 +19,36 @@ class ReachabilityStatus(StrEnum):
     REACHABLE = "reachable"
     RISKY = "risky"
     UNREACHABLE = "unreachable"
+    INVALID = "invalid"
 
+
+class WhatsAppContactStatus(StrEnum):
+    """Operator-facing WhatsApp readiness for a contact."""
+
+    ACCEPTS = "accepts"
+    UNREACHABLE = "unreachable"
+    INVALID = "invalid"
+    DND = "dnd"
+
+
+WHATSAPP_STATUS_LABELS_AR: dict[str, str] = {
+    WhatsAppContactStatus.ACCEPTS: "يقبل الاستلام",
+    WhatsAppContactStatus.UNREACHABLE: "غير قابل للوصول",
+    WhatsAppContactStatus.INVALID: "غير صالح",
+    WhatsAppContactStatus.DND: "طلب عدم الإزعاج",
+}
+
+
+_INVALID_PATTERNS = (
+    "invalid phone",
+    "invalid phone number",
+    "phone number format",
+)
 
 _UNREACHABLE_PATTERNS = (
     "healthy ecosystem engagement",
     "not on whatsapp",
     "no longer on whatsapp",
-    "invalid phone",
     "131026",
     "131049",
     "recipient not valid",
@@ -44,6 +67,8 @@ def classify_delivery_error(error_message: str | None) -> ReachabilityStatus:
     normalized = (error_message or "").strip().lower()
     if not normalized:
         return ReachabilityStatus.RISKY
+    if any(pattern in normalized for pattern in _INVALID_PATTERNS):
+        return ReachabilityStatus.INVALID
     if any(pattern in normalized for pattern in _UNREACHABLE_PATTERNS):
         return ReachabilityStatus.UNREACHABLE
     if any(pattern in normalized for pattern in _RISKY_PATTERNS):
@@ -54,6 +79,22 @@ def classify_delivery_error(error_message: str | None) -> ReachabilityStatus:
 def is_phone_valid_for_whatsapp(contact: Contact) -> bool:
     dial = COUNTRY_DIAL.get((contact.country_code or "KW").upper(), "965")
     return bool(normalize_whatsapp_phone(contact.external_address, country_code=dial))
+
+
+def resolve_whatsapp_contact_status(contact: Contact) -> WhatsAppContactStatus:
+    """Single customer WhatsApp status (priority: DND → invalid → unreachable → accepts)."""
+    if contact.marketing_opt_in is False:
+        return WhatsAppContactStatus.DND
+    if contact.reachability_status == ReachabilityStatus.INVALID or not is_phone_valid_for_whatsapp(contact):
+        return WhatsAppContactStatus.INVALID
+    if contact.reachability_status == ReachabilityStatus.UNREACHABLE:
+        return WhatsAppContactStatus.UNREACHABLE
+    return WhatsAppContactStatus.ACCEPTS
+
+
+def whatsapp_status_label(status: WhatsAppContactStatus | str) -> str:
+    key = status.value if isinstance(status, WhatsAppContactStatus) else str(status)
+    return WHATSAPP_STATUS_LABELS_AR.get(key, WHATSAPP_STATUS_LABELS_AR[WhatsAppContactStatus.ACCEPTS])
 
 
 def is_contact_campaign_eligible(
@@ -68,7 +109,10 @@ def is_contact_campaign_eligible(
     if not is_phone_valid_for_whatsapp(contact):
         return False
     status = contact.reachability_status
-    if exclude_unreachable and status == ReachabilityStatus.UNREACHABLE:
+    if exclude_unreachable and status in {
+        ReachabilityStatus.UNREACHABLE,
+        ReachabilityStatus.INVALID,
+    }:
         return False
     if exclude_risky and status == ReachabilityStatus.RISKY:
         return False
@@ -88,7 +132,9 @@ async def record_delivery_failure(
     if error_message:
         contact.reachability_reason = str(error_message)[:500]
     classified = classify_delivery_error(error_message)
-    if classified == ReachabilityStatus.UNREACHABLE or contact.delivery_failure_count >= 2:
+    if classified == ReachabilityStatus.INVALID:
+        contact.reachability_status = ReachabilityStatus.INVALID
+    elif classified == ReachabilityStatus.UNREACHABLE or contact.delivery_failure_count >= 2:
         contact.reachability_status = ReachabilityStatus.UNREACHABLE
     else:
         contact.reachability_status = ReachabilityStatus.RISKY
