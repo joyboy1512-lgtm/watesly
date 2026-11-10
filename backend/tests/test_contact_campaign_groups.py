@@ -41,4 +41,4 @@ def test_contacts_ui_shows_last_campaign_and_create_group() -> None:
     assert "آخر حملة" in page
     assert "إنشاء مجموعة" in page
     assert "/contacts/groups" in page
-    assert "المجموعات" in page
+    assert "التصنيفات" in page

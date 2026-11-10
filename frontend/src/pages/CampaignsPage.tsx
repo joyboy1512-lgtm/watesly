@@ -186,7 +186,9 @@ export default function CampaignsPage() {
   const [audienceMode, setAudienceMode] = useState<AudienceMode>("library");
   const [excelAudienceIds, setExcelAudienceIds] = useState<string[]>([]);
   const [contactSearch, setContactSearch] = useState("");
-  const [audienceTagId, setAudienceTagId] = useState("");
+  const [audienceTagIds, setAudienceTagIds] = useState<string[]>([]);
+  const [audienceTagMenuOpen, setAudienceTagMenuOpen] = useState(false);
+  const audienceTagMenuRef = useRef<HTMLDivElement | null>(null);
   const [audienceWhatsappStatus, setAudienceWhatsappStatus] = useState("");
   const [audienceSegmentFilterId, setAudienceSegmentFilterId] = useState("");
   const [audienceLastCampaignFrom, setAudienceLastCampaignFrom] = useState("");
@@ -228,7 +230,7 @@ export default function CampaignsPage() {
       audienceChannelId,
       audienceMode,
       excelAudienceIds,
-      audienceTagId,
+      audienceTagIds,
       audienceWhatsappStatus,
       audienceSegmentFilterId
     ],
@@ -259,7 +261,8 @@ export default function CampaignsPage() {
         }
         return rows;
       }
-      if (audienceTagId) base.tag_id = audienceTagId;
+      if (audienceTagIds.length === 1) base.tag_id = audienceTagIds[0];
+      if (audienceTagIds.length > 1) base.tag_ids = audienceTagIds.join(",");
       if (audienceWhatsappStatus) base.whatsapp_status = audienceWhatsappStatus;
       if (audienceSegmentFilterId) base.segment_id = audienceSegmentFilterId;
       return (await api.get<Contact[]>("/contacts", { params: base })).data;
@@ -377,6 +380,27 @@ export default function CampaignsPage() {
       setOrganizationId(orgs[0].id);
     }
   }, [organizations.data, organizationId]);
+
+  useEffect(() => {
+    if (!audienceTagMenuOpen) return;
+    function onDocClick(event: MouseEvent) {
+      if (audienceTagMenuRef.current && !audienceTagMenuRef.current.contains(event.target as Node)) {
+        setAudienceTagMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [audienceTagMenuOpen]);
+
+  const organizationTags = useMemo(
+    () =>
+      (tags.data ?? []).filter((tag) => !organizationId || tag.organization_id === organizationId),
+    [tags.data, organizationId]
+  );
+  const selectedAudienceTags = useMemo(
+    () => organizationTags.filter((tag) => audienceTagIds.includes(tag.id)),
+    [organizationTags, audienceTagIds]
+  );
 
   useEffect(() => {
     const idsParam = searchParams.get("contact_ids");
@@ -527,6 +551,7 @@ export default function CampaignsPage() {
     setSelectedContacts([]);
     setExcelAudienceIds([]);
     setAudienceMode("library");
+    setAudienceTagIds([]);
     setPreflight(null);
   }
 
@@ -588,7 +613,7 @@ export default function CampaignsPage() {
       setAudienceMode("excel");
       setSelectedContacts(ids);
       setExcludeUnreachable(true);
-      setAudienceTagId("");
+      setAudienceTagIds([]);
       setAudienceWhatsappStatus("");
       setAudienceSegmentFilterId("");
       setAudienceLastCampaignFrom("");
@@ -1506,15 +1531,63 @@ export default function CampaignsPage() {
             <div className="campaign-audience-filters">
               {audienceMode === "library" && (
                 <>
-                  <label className="field-label">
-                    <span>المجموعة</span>
-                    <select value={audienceTagId} onChange={(e) => setAudienceTagId(e.target.value)}>
-                      <option value="">كل المجموعات</option>
-                      {(tags.data ?? []).map((tag) => (
-                        <option key={tag.id} value={tag.id}>{tag.name}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="field-label campaign-tag-multiselect" ref={audienceTagMenuRef}>
+                    <span>التصنيف</span>
+                    <button
+                      type="button"
+                      className="campaign-tag-multiselect-trigger"
+                      onClick={() => setAudienceTagMenuOpen((open) => !open)}
+                    >
+                      {selectedAudienceTags.length === 0
+                        ? "كل التصنيفات"
+                        : selectedAudienceTags.length === 1
+                          ? selectedAudienceTags[0].name
+                          : `${selectedAudienceTags.length} تصنيفات محددةة`}
+                    </button>
+                    {audienceTagMenuOpen && (
+                      <div className="campaign-tag-multiselect-menu" role="listbox" aria-multiselectable="true">
+                        <div className="campaign-tag-multiselect-toolbar">
+                          <button
+                            type="button"
+                            className="secondary-button compact"
+                            onClick={() => setAudienceTagIds([])}
+                          >
+                            مسح التحديد
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button compact"
+                            onClick={() => setAudienceTagIds(organizationTags.map((tag) => tag.id))}
+                            disabled={organizationTags.length === 0}
+                          >
+                            تحديد الكل
+                          </button>
+                        </div>
+                        {organizationTags.length === 0 && (
+                          <p className="hint-text">لا توجد تصنيفات لهذا الفرع.</p>
+                        )}
+                        {organizationTags.map((tag) => {
+                          const checked = audienceTagIds.includes(tag.id);
+                          return (
+                            <label key={tag.id} className="campaign-tag-multiselect-option">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  setAudienceTagIds((current) =>
+                                    checked
+                                      ? current.filter((id) => id !== tag.id)
+                                      : [...current, tag.id]
+                                  );
+                                }}
+                              />
+                              <span>{tag.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                   <label className="field-label">
                     <span>الشريحة</span>
                     <select

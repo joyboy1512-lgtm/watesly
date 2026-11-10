@@ -76,7 +76,7 @@ export default function ContactCreatePage() {
 
   async function createTag() {
     if (!organizationId || !newTagName.trim()) {
-      toastStore.getState().show("اختر الفرع وأدخل اسم الوسم.", "error");
+      toastStore.getState().show("اختر الفرع وأدخل اسم التصنيف.", "error");
       return;
     }
     const response = await api.post<Tag>("/inbox-tools/tags", {
@@ -86,7 +86,7 @@ export default function ContactCreatePage() {
     setNewTagName("");
     await client.invalidateQueries({ queryKey: ["tags"] });
     setSelectedTagIds((current) => [...current, response.data.id]);
-    toastStore.getState().show("تم إنشاء الوسم.", "success");
+    toastStore.getState().show("تم إنشاء التصنيف.", "success");
   }
 
   useEffect(() => {
@@ -215,12 +215,48 @@ export default function ContactCreatePage() {
           </div>
 
           <div className="contacts-form-section">
-            <h2>التصنيف والشرائح</h2>
+            <h2>التصنيف والاهتمامات</h2>
             <p className="hint-text">
-              اختر <strong>اهتمامات العميل</strong> لتوجيه الحملات والشرائح لاحقاً.
+              يمكن اختيار <strong>أكثر من تصنيف</strong> و<strong>أكثر من اهتمام</strong> لنفس العميل.
             </p>
             <div className="field-label">
-              <span>اهتمامات العميل</span>
+              <span>التصنيف (اختياري — متعدد)</span>
+              {!organizationId && <p className="hint-text">اختر الفرع أولاً لعرض التصنيفات.</p>}
+              {organizationId && (
+                <div className="contacts-tags-cell">
+                  {orgTags.length === 0 && <p className="hint-text">لا توجد تصنيفات لهذا الفرع — أنشئ تصنيفاً جديداً.</p>}
+                  {orgTags.map((tag) => {
+                    const active = selectedTagIds.includes(tag.id);
+                    const colors = tagChipColor(tag.name);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
+                        style={active ? { background: colors.bg, color: colors.text, borderColor: colors.border } : undefined}
+                        onClick={() => toggleTag(tag.id)}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {organizationId && (
+              <div className="contacts-inline-tag-create">
+                <input
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  placeholder="تصنيف جديد…"
+                />
+                <button type="button" className="contacts-erp-btn" disabled={!newTagName.trim()} onClick={() => void createTag()}>
+                  + تصنيف
+                </button>
+              </div>
+            )}
+            <div className="field-label">
+              <span>اهتمامات العميل (متعدد)</span>
               <div className="contacts-tags-cell">
                 {(interests.data ?? []).map((interest) => {
                   const active = selectedInterestIds.includes(interest.id);
@@ -245,42 +281,6 @@ export default function ContactCreatePage() {
                 ))}
               </select>
             </label>
-            <div className="field-label">
-              <span>الوسوم (اختياري)</span>
-              {!organizationId && <p className="hint-text">اختر الفرع أولاً لعرض الوسوم.</p>}
-              {organizationId && (
-                <div className="contacts-tags-cell">
-                  {orgTags.length === 0 && <p className="hint-text">لا توجد وسوم لهذا الفرع.</p>}
-                  {orgTags.map((tag) => {
-                    const active = selectedTagIds.includes(tag.id);
-                    const colors = tagChipColor(tag.name);
-                    return (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
-                        style={active ? { background: colors.bg, color: colors.text, borderColor: colors.border } : undefined}
-                        onClick={() => toggleTag(tag.id)}
-                      >
-                        {tag.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            {organizationId && (
-              <div className="contacts-inline-tag-create">
-                <input
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  placeholder="وسم جديد…"
-                />
-                <button type="button" className="contacts-erp-btn" disabled={!newTagName.trim()} onClick={() => void createTag()}>
-                  + وسم
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="contacts-form-section">
