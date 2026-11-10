@@ -1017,33 +1017,45 @@ export default function CampaignsPage() {
           </div>
 
           <div className="campaigns-actions-grid">
-            <form className="campaigns-panel stack-form" onSubmit={importAudience}>
-              <h3>جمهور الحملة — Excel فقط</h3>
-              <p className="hint-text">
-                رفع الملف يُقفل الجمهور على أرقام الملف فقط — لن تُضاف أسماء من المكتبة خارج Excel.
-              </p>
-              <label className="field-label">
-                <span>ملف Excel أو CSV</span>
-                <input
-                  name="file"
-                  type="file"
-                  accept=".xlsx,.xlsm,.csv,text/csv"
-                  required
-                  disabled={!organizationId || !channelId}
-                />
-              </label>
-              <p className="hint-text">
-                الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> (ar/en)
-              </p>
-              <div className="admin-actions compact">
-                <button type="submit" disabled={!organizationId || !channelId}>رفع Excel وقفل الجمهور</button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void downloadContactsImportTemplate().catch(() => toastStore.getState().show("تعذر تحميل القالب.", "error"))}
-                >
-                  تحميل قالب Excel
-                </button>
+            <form className="campaigns-panel campaigns-excel-panel stack-form" onSubmit={importAudience}>
+              <div className="campaigns-excel-panel-head">
+                <div>
+                  <h3>جمهور الحملة — Excel فقط</h3>
+                  <p className="hint-text">
+                    رفع الملف يُقفل الجمهور على أرقام الملف فقط — لن تُضاف أسماء من المكتبة خارج Excel.
+                  </p>
+                </div>
+              </div>
+              <div className="campaigns-excel-upload">
+                <label className="field-label campaigns-excel-file">
+                  <span>ملف Excel أو CSV</span>
+                  <input
+                    name="file"
+                    type="file"
+                    accept=".xlsx,.xlsm,.csv,text/csv"
+                    required
+                    disabled={!organizationId || !channelId}
+                  />
+                </label>
+                <p className="hint-text campaigns-excel-columns">
+                  الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> (ar/en)
+                </p>
+                <div className="campaigns-excel-actions">
+                  <button
+                    type="submit"
+                    className="whatsapp-button compact"
+                    disabled={!organizationId || !channelId}
+                  >
+                    رفع Excel وقفل الجمهور
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    onClick={() => void downloadContactsImportTemplate().catch(() => toastStore.getState().show("تعذر تحميل القالب.", "error"))}
+                  >
+                    تحميل قالب Excel
+                  </button>
+                </div>
               </div>
               {audienceMode === "excel" && (
                 <div className="campaign-excel-lock-banner" role="status">
@@ -1247,38 +1259,41 @@ export default function CampaignsPage() {
               {!approvedTemplates.length && (
                 <p className="hint-text">لا توجد قوالب معتمدة — أضف من صفحة القوالب أو زامِن من Meta.</p>
               )}
-              <label className="field-label checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={includeOptOutOption}
-                  onChange={(event) => setIncludeOptOutOption(event.target.checked)}
-                />
-                <span>إظهار خيار «عدم الإزعاج» للعملاء واستبعاد من اختاروه تلقائياً</span>
-              </label>
-              <label className="field-label checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={excludeUnreachable}
-                  onChange={(event) => setExcludeUnreachable(event.target.checked)}
-                />
-                <span>استبعاد العملاء غير القابلين للوصول (فشل سابق أو رقم غير صالح)</span>
-              </label>
-              <label className="field-label checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={excludeRisky}
-                  onChange={(event) => setExcludeRisky(event.target.checked)}
-                />
-                <span>استبعاد العملاء بدون تفاعل سابق (محفوف بالمخاطر)</span>
-              </label>
-              <label className="field-label checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={onlyNeverSent}
-                  onChange={(event) => setOnlyNeverSent(event.target.checked)}
-                />
-                <span>عملاء جدد فقط — من لم يُرسل لهم رسالة من قبل (عزل من سبق إرسالهم)</span>
-              </label>
+              <div className="campaign-exclude-options" role="group" aria-label="خيارات الاستبعاد">
+                <strong className="campaign-exclude-options-title">خيارات الاستبعاد قبل الإرسال</strong>
+                <label className="campaign-check-row">
+                  <input
+                    type="checkbox"
+                    checked={includeOptOutOption}
+                    onChange={(event) => setIncludeOptOutOption(event.target.checked)}
+                  />
+                  <span>إظهار خيار «عدم الإزعاج» للعملاء واستبعاد من اختاروه تلقائياً</span>
+                </label>
+                <label className="campaign-check-row">
+                  <input
+                    type="checkbox"
+                    checked={excludeUnreachable}
+                    onChange={(event) => setExcludeUnreachable(event.target.checked)}
+                  />
+                  <span>استبعاد العملاء غير القابلين للوصول (فشل سابق أو رقم غير صالح)</span>
+                </label>
+                <label className="campaign-check-row">
+                  <input
+                    type="checkbox"
+                    checked={excludeRisky}
+                    onChange={(event) => setExcludeRisky(event.target.checked)}
+                  />
+                  <span>استبعاد العملاء بدون تفاعل سابق (محفوف بالمخاطر)</span>
+                </label>
+                <label className="campaign-check-row">
+                  <input
+                    type="checkbox"
+                    checked={onlyNeverSent}
+                    onChange={(event) => setOnlyNeverSent(event.target.checked)}
+                  />
+                  <span>عملاء جدد فقط — من لم يُرسل لهم رسالة من قبل (عزل من سبق إرسالهم)</span>
+                </label>
+              </div>
               <div className="campaign-period-filter">
                 <strong>فلتر حسب الحملة / التاريخ</strong>
                 <p className="hint-text">
@@ -1302,7 +1317,7 @@ export default function CampaignsPage() {
                     />
                   </label>
                 </div>
-                <label className="field-label checkbox-inline">
+                <label className="campaign-check-row">
                   <input
                     type="checkbox"
                     checked={excludeSentInPeriod}
@@ -1328,42 +1343,97 @@ export default function CampaignsPage() {
                           last_sent_at: item.completed_at || item.started_at
                         }));
                   if (!periodGroups.length) return null;
+                  const allSelected =
+                    periodGroups.length > 0 &&
+                    periodGroups.every((item) => excludeCampaignIds.includes(item.id));
                   return (
                     <div className="campaign-period-groups">
-                      <small className="hint-text">
-                        {preflight?.campaigns_in_period?.length
-                          ? "حملات في الفترة — اختر للاستبعاد:"
-                          : "حملات سابقة حسب التاريخ — اختر جروب حملة للاستبعاد:"}
-                      </small>
-                      {periodGroups.map((item) => {
-                        const checked = excludeCampaignIds.includes(item.id);
-                        const when = item.last_sent_at || item.started_at;
-                        const labelDate = when
-                          ? new Date(when).toLocaleDateString("ar-KW", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric"
-                            })
-                          : "—";
-                        return (
-                          <label key={item.id} className="field-label checkbox-inline">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                setExcludeCampaignIds((current) =>
-                                  checked
-                                    ? current.filter((id) => id !== item.id)
-                                    : [...current, item.id]
-                                );
-                              }}
-                            />
-                            <span>
-                              {item.name} · {labelDate} · {item.sent_count} مستلم
-                            </span>
-                          </label>
-                        );
-                      })}
+                      <div className="campaign-period-groups-toolbar">
+                        <small className="hint-text">
+                          {preflight?.campaigns_in_period?.length
+                            ? "حملات في الفترة — اختر للاستبعاد:"
+                            : "حملات سابقة حسب التاريخ — اختر للاستبعاد:"}
+                        </small>
+                        <div className="inline-actions">
+                          <button
+                            type="button"
+                            className="secondary-button compact"
+                            onClick={() => {
+                              if (allSelected) {
+                                setExcludeCampaignIds([]);
+                                return;
+                              }
+                              setExcludeCampaignIds(periodGroups.map((item) => item.id));
+                              setExcludeSentInPeriod(true);
+                            }}
+                          >
+                            {allSelected ? "إلغاء تحديد الكل" : "تحديد كل الحملات"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="admin-table-wrap campaign-exclude-table-wrap">
+                        <table className="admin-erp-table campaign-exclude-table">
+                          <thead>
+                            <tr>
+                              <th className="contacts-col-check">
+                                <input
+                                  type="checkbox"
+                                  checked={allSelected}
+                                  onChange={(event) => {
+                                    if (event.target.checked) {
+                                      setExcludeCampaignIds(periodGroups.map((item) => item.id));
+                                      setExcludeSentInPeriod(true);
+                                    } else {
+                                      setExcludeCampaignIds([]);
+                                    }
+                                  }}
+                                  aria-label="تحديد كل الحملات"
+                                />
+                              </th>
+                              <th>اسم الحملة</th>
+                              <th>التاريخ</th>
+                              <th>المستلمون</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {periodGroups.map((item) => {
+                              const checked = excludeCampaignIds.includes(item.id);
+                              const when = item.last_sent_at || item.started_at;
+                              const labelDate = when
+                                ? new Date(when).toLocaleDateString("ar-KW", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric"
+                                  })
+                                : "—";
+                              return (
+                                <tr key={item.id} className={checked ? "contacts-row-selected" : undefined}>
+                                  <td className="contacts-col-check">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        if (!checked) setExcludeSentInPeriod(true);
+                                        setExcludeCampaignIds((current) =>
+                                          checked
+                                            ? current.filter((id) => id !== item.id)
+                                            : [...current, item.id]
+                                        );
+                                      }}
+                                      aria-label={`استبعاد ${item.name}`}
+                                    />
+                                  </td>
+                                  <td>
+                                    <strong>{item.name}</strong>
+                                  </td>
+                                  <td>{labelDate}</td>
+                                  <td>{item.sent_count.toLocaleString("ar")}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   );
                 })()}
