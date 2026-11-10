@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "379ddd5",
-    "git_commit_message": "Campaign audience builder live",
+    "git_commit": "d910ca8",
+    "git_commit_message": "Campaign create UI polish live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-PElvYnpx.js",
-      "css": "index-DI4WDyfo.css"
+      "js": "index-BNI0itQ9.js",
+      "css": "index-DD54f925.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "379ddd5",
-  "notes": "Campaign audience builder: Excel lock, eligible preflight, filterable contacts table"
+  "commit": "d910ca8",
+  "notes": "Campaign create UI polish: Excel actions, exclusion checklist, campaign exclude table"
 }
