@@ -53,6 +53,7 @@ async def list_contacts(
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     whatsapp_status: str | None = None,
+    contact_ids: list[UUID] | None = None,
     q: str | None = None,
     accessible_channel_ids: list[UUID] | None = None,
     accessible_organization_ids: list[UUID] | None = None,
@@ -63,6 +64,10 @@ async def list_contacts(
         .order_by(Contact.created_at.desc(), Contact.updated_at.desc())
         .limit(min(max(limit, 1), _LIST_LIMIT_MAX))
     )
+    if contact_ids is not None:
+        if not contact_ids:
+            return []
+        query = query.where(Contact.id.in_(contact_ids))
     if segment_id is not None:
         segment = await db.get(Segment, segment_id)
         if segment is not None and segment.account_id == account_id:
