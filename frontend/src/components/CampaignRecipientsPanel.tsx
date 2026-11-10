@@ -505,26 +505,15 @@ export function CampaignReportRow({
               </button>
             )}
             {canFollowUp && actions?.onFollowUp && !actions.showArchived && (
-              <>
-                <button
-                  type="button"
-                  className="secondary-button compact"
-                  disabled={busy}
-                  title="فقط الفاشل المؤكد — بعد مطابقة الحالة ومنع التكرار"
-                  onClick={() => actions.onFollowUp?.(item.id, "failed")}
-                >
-                  متابعة الفاشل
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button compact"
-                  disabled={busy}
-                  title="فقط من تم التسليم لهم ولم يقرأوا"
-                  onClick={() => actions.onFollowUp?.(item.id, "not_read")}
-                >
-                  متابعة غير المقروء
-                </button>
-              </>
+              <button
+                type="button"
+                className="secondary-button compact"
+                disabled={busy}
+                title="فقط الفاشل المؤكد — بعد مطابقة الحالة ومنع التكرار"
+                onClick={() => actions.onFollowUp?.(item.id, "failed")}
+              >
+                متابعة الفاشل
+              </button>
             )}
             {canArchive && actions?.onArchive && !actions.showArchived && (
               <button
