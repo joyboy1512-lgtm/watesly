@@ -259,7 +259,11 @@ def _apply_segment_filters(query, filters: dict):
         query = query.where(Contact.channel_id == UUID(str(channel_id)))
     if country := filters.get("country_code"):
         query = query.where(Contact.country_code == country)
-    if region := filters.get("region"):
+    if regions := filters.get("regions"):
+        cleaned = [str(item).strip() for item in regions if str(item).strip()]
+        if cleaned:
+            query = query.where(Contact.region.in_(cleaned))
+    elif region := filters.get("region"):
         query = query.where(Contact.region == str(region).strip())
     if search := filters.get("search"):
         term = f"%{search}%"

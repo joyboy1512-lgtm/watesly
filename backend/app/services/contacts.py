@@ -54,6 +54,7 @@ async def list_contacts(
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     region: str | None = None,
+    regions: list[str] | None = None,
     whatsapp_status: str | None = None,
     contact_ids: list[UUID] | None = None,
     q: str | None = None,
@@ -65,6 +66,11 @@ async def list_contacts(
         effective_tag_ids.extend(tag_ids)
     if tag_id is not None and tag_id not in effective_tag_ids:
         effective_tag_ids.append(tag_id)
+    effective_regions: list[str] = []
+    if regions:
+        effective_regions.extend([item.strip() for item in regions if item and item.strip()])
+    if region and region.strip() and region.strip() not in effective_regions:
+        effective_regions.append(region.strip())
     query = (
         select(Contact)
         .where(Contact.account_id == account_id, Contact.deleted_at.is_(None))
@@ -87,8 +93,10 @@ async def list_contacts(
                 filters["tag_id"] = str(effective_tag_ids[0])
             elif len(effective_tag_ids) > 1:
                 filters["tag_ids"] = [str(item) for item in effective_tag_ids]
-            if region and region.strip():
-                filters["region"] = region.strip()
+            if len(effective_regions) == 1:
+                filters["region"] = effective_regions[0]
+            elif len(effective_regions) > 1:
+                filters["regions"] = effective_regions
             if q and q.strip():
                 filters["search"] = q.strip()
             query = _apply_segment_filters(query, filters)
@@ -124,8 +132,10 @@ async def list_contacts(
             )
         if lifecycle_stage and lifecycle_stage.strip():
             query = query.where(Contact.lifecycle_stage == lifecycle_stage.strip())
-        if region and region.strip():
-            query = query.where(Contact.region == region.strip())
+        if len(effective_regions) == 1:
+            query = query.where(Contact.region == effective_regions[0])
+        elif len(effective_regions) > 1:
+            query = query.where(Contact.region.in_(effective_regions))
         if q and q.strip():
             term = f"%{q.strip()}%"
             query = query.where(

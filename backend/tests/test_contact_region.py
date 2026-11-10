@@ -26,8 +26,9 @@ def test_contact_region_field_wired_end_to_end() -> None:
     assert "async def list_contact_regions" in contacts
     assert 'region: str | None = Query(None' in routes
     assert '"region"' in management
-    assert "audienceRegion" in campaigns
+    assert "audienceRegions" in campaigns
     assert "contactRegions" in campaigns
+    assert "regions: str | None = Query(None" in routes
     assert "المنطقة" in create_page
     assert "المنطقة" in detail
     assert "region?:" in helpers or "region:" in helpers

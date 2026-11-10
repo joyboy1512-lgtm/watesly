@@ -124,6 +124,7 @@ async def get_contacts(
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     region: str | None = Query(None, max_length=120, description="Exact contact region/area filter"),
+    regions: str | None = Query(None, description="Comma-separated regions (OR match)"),
     ids: str | None = Query(None, description="Comma-separated contact IDs (e.g. Excel audience lock)"),
     whatsapp_status: str | None = Query(
         default=None,
@@ -169,6 +170,7 @@ async def get_contacts(
         segment_id=segment_id,
         lifecycle_stage=lifecycle_stage,
         region=region,
+        regions=[item.strip() for item in regions.split(",") if item.strip()] if regions else None,
         whatsapp_status=whatsapp_status,
         contact_ids=contact_ids,
         q=q,
