@@ -14,6 +14,7 @@ export type Contact = {
   email: string | null;
   language: string | null;
   country_code: string | null;
+  region?: string | null;
   gender: ContactGender;
   marketing_opt_in?: boolean;
   lifecycle_stage?: string;
@@ -234,12 +235,14 @@ export function buildContactCreatePayload(input: {
   email: string;
   language: string;
   countryCode: string;
+  region?: string;
   lifecycleStage?: string;
   tagIds?: string[];
   interestIds?: string[];
 }) {
   const trimmedEmail = input.email.trim();
   const trimmedCountry = input.countryCode.trim();
+  const trimmedRegion = input.region?.trim() ?? "";
   return {
     organization_id: input.organizationId,
     channel_id: input.channelId,
@@ -248,6 +251,7 @@ export function buildContactCreatePayload(input: {
     email: trimmedEmail || null,
     language: input.language.trim() || null,
     country_code: trimmedCountry ? trimmedCountry.toUpperCase() : null,
+    region: trimmedRegion || null,
     lifecycle_stage: input.lifecycleStage?.trim() || null,
     tag_ids: input.tagIds ?? [],
     interest_ids: input.interestIds ?? []

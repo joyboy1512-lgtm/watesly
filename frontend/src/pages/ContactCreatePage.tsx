@@ -31,6 +31,7 @@ export default function ContactCreatePage() {
   const [email, setEmail] = useState("");
   const [language, setLanguage] = useState("ar");
   const [countryCode, setCountryCode] = useState("KW");
+  const [region, setRegion] = useState("");
   const [lifecycleStage, setLifecycleStage] = useState("lead");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([]);
@@ -128,6 +129,7 @@ export default function ContactCreatePage() {
           email,
           language,
           countryCode,
+          region,
           lifecycleStage,
           tagIds: selectedTagIds,
           interestIds: selectedInterestIds
@@ -189,6 +191,15 @@ export default function ContactCreatePage() {
             <label className="field-label">
               <span>البريد الإلكتروني (اختياري)</span>
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" type="text" dir="ltr" inputMode="email" autoComplete="email" />
+            </label>
+            <label className="field-label">
+              <span>المنطقة (اختياري)</span>
+              <input
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                placeholder="مثال: السالمية، حولي، الجهراء…"
+                maxLength={120}
+              />
             </label>
           </div>
 

@@ -237,6 +237,7 @@ export default function ContactDetailPage() {
               <div><dt>القناة</dt><dd>{channelName}</dd></div>
               <div><dt>اللغة</dt><dd>{item.language || "—"}</dd></div>
               <div><dt>رمز الدولة</dt><dd>{item.country_code || "—"}</dd></div>
+              <div><dt>المنطقة</dt><dd>{item.region || "—"}</dd></div>
               <div>
                 <dt>مرحلة العميل</dt>
                 <dd>{formatLifecycleStage(item.lifecycle_stage)}</dd>
@@ -412,6 +413,7 @@ function ContactEditModal({
   const [email, setEmail] = useState(contact.email ?? "");
   const [language, setLanguage] = useState(contact.language ?? "");
   const [countryCode, setCountryCode] = useState(contact.country_code ?? "");
+  const [region, setRegion] = useState(contact.region ?? "");
   const [marketingOptIn, setMarketingOptIn] = useState(contact.marketing_opt_in !== false);
   const [lifecycleStage, setLifecycleStage] = useState(contact.lifecycle_stage ?? "lead");
 
@@ -422,6 +424,7 @@ function ContactEditModal({
       email: email.trim() || null,
       language: language.trim() || null,
       country_code: countryCode.trim() ? countryCode.trim().toUpperCase() : null,
+      region: region.trim() || null,
       marketing_opt_in: marketingOptIn,
       lifecycle_stage: lifecycleStage
     });
@@ -450,6 +453,15 @@ function ContactEditModal({
           <label className="field-label">
             <span>رمز الدولة</span>
             <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} maxLength={2} dir="ltr" />
+          </label>
+          <label className="field-label">
+            <span>المنطقة</span>
+            <input
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              placeholder="مثال: السالمية، حولي…"
+              maxLength={120}
+            />
           </label>
           <label className="field-label">
             <span>مرحلة العميل</span>
