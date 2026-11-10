@@ -2391,13 +2391,84 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-period-groups {
   display: grid;
-  gap: 6px;
-  max-height: 180px;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  max-height: none;
+  overflow: visible;
+}
+.campaign-period-groups-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.campaign-exclude-options {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.campaign-exclude-options-title {
+  display: block;
+  padding: 10px 12px;
+  font-size: 13px;
+  background: var(--panel-soft);
+  border-bottom: 1px solid var(--line);
+}
+.campaign-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.campaign-check-row:last-child { border-bottom: 0; }
+.campaign-check-row input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px;
+  min-width: 16px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+  accent-color: var(--primary);
+}
+.campaign-check-row span {
+  flex: 1;
+  color: var(--text);
+  font-weight: 600;
+}
+.campaign-exclude-table-wrap {
+  max-height: 240px;
   overflow: auto;
-  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
+}
+.campaign-exclude-table {
+  margin: 0;
+  min-width: 520px;
+}
+.campaign-exclude-table th,
+.campaign-exclude-table td {
+  white-space: nowrap;
+}
+.campaign-exclude-table .contacts-col-check {
+  width: 42px;
+  text-align: center;
+}
+.campaign-exclude-table .contacts-col-check input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px;
+  min-width: 16px;
 }
 .campaign-retry-panel {
   display: grid;
@@ -6847,6 +6918,29 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 12px;
 }
 .campaigns-panel h3 { margin: 0; font-size: 16px; }
+.campaigns-excel-panel-head { display: grid; gap: 4px; }
+.campaigns-excel-panel-head .hint-text { margin: 0; }
+.campaigns-excel-upload {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.campaigns-excel-file { margin: 0; }
+.campaigns-excel-columns { margin: 0; }
+.campaigns-excel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.campaigns-excel-actions > button {
+  width: auto !important;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .campaigns-audience-panel {
   background: var(--panel-soft);
   border: 1px solid var(--line);
@@ -6884,6 +6978,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaigns-audience-table td {
   white-space: nowrap;
 }
+.campaigns-audience-table .contacts-col-check {
+  width: 42px;
+  text-align: center;
+}
+.campaigns-audience-table .contacts-col-check input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px;
+  min-width: 16px;
+}
 .campaign-excel-lock-banner {
   display: flex;
   flex-wrap: wrap;
@@ -6916,10 +7019,33 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaigns-contact-picker .checkbox-row:last-child { border-bottom: 0; }
 .campaigns-contact-picker small { color: var(--muted); font-size: 11px; }
 .campaigns-page .field-label select,
-.campaigns-page .field-label input {
+.campaigns-page .field-label input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
 }
+.campaigns-page .field-label input[type="checkbox"],
+.campaigns-page .field-label input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+}
+.campaigns-page .field-label.checkbox-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 600;
+}
+.campaigns-page .field-label.checkbox-inline span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
 .campaigns-page .field-label span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.campaigns-page .campaigns-excel-actions .whatsapp-button.compact,
+.campaigns-page .campaigns-excel-actions .secondary-button.compact {
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 10px;
+}
 .campaign-details-row td { background: var(--panel-soft); padding: 0 !important; }
 .campaign-details-panel { padding: 16px; display: grid; gap: 14px; }
 .campaign-details-stats { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
