@@ -12,7 +12,16 @@ import {
   type TemplateComponent
 } from "../lib/templateMedia";
 import { uploadFile, type UploadedFile } from "../lib/uploads";
-import { downloadContactsImportTemplate, CAMPAIGN_AUDIENCE_LIMIT } from "../lib/contactHelpers";
+import {
+  CAMPAIGN_AUDIENCE_LIMIT,
+  downloadContactsImportTemplate,
+  formatContactDate,
+  formatWhatsAppStatus,
+  WHATSAPP_STATUS_LABELS,
+  whatsappStatusTone,
+  type Contact as ContactRow,
+  type Tag
+} from "../lib/contactHelpers";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   AUDIENCE_GENDER_OPTIONS,
@@ -47,8 +56,9 @@ type Template = {
   components: TemplateComponent[] | null;
   whatsapp_account_id: string;
 };
-type Contact = { id: string; display_name: string | null; external_address: string; channel_id: string };
+type Contact = ContactRow;
 type Segment = { id: string; name: string };
+type AudienceMode = "library" | "excel";
 type CampaignPeriodGroup = {
   id: string;
   name: string;
@@ -77,10 +87,11 @@ type CampaignPreflight = {
   marketing_opt_in?: number;
   marketing_opt_out?: number;
   eligible_recipients?: number;
+  eligible_contact_ids?: string[];
+  invalid_phone?: number;
   reachable?: number;
   risky?: number;
   unreachable?: number;
-  invalid_phone?: number;
   cold_audience?: number;
   warm_audience?: number;
   template_has_opt_out_button?: boolean;
@@ -172,7 +183,14 @@ export default function CampaignsPage() {
   const [accountId, setAccountId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [audienceMode, setAudienceMode] = useState<AudienceMode>("library");
+  const [excelAudienceIds, setExcelAudienceIds] = useState<string[]>([]);
   const [contactSearch, setContactSearch] = useState("");
+  const [audienceTagId, setAudienceTagId] = useState("");
+  const [audienceWhatsappStatus, setAudienceWhatsappStatus] = useState("");
+  const [audienceSegmentFilterId, setAudienceSegmentFilterId] = useState("");
+  const [audienceLastCampaignFrom, setAudienceLastCampaignFrom] = useState("");
+  const [audienceLastCampaignTo, setAudienceLastCampaignTo] = useState("");
   const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
   const [highlightCampaignId, setHighlightCampaignId] = useState<string | null>(null);
   const [campaignMediaOverride, setCampaignMediaOverride] = useState<UploadedFile | null>(null);
@@ -203,14 +221,54 @@ export default function CampaignsPage() {
     return account?.channel_id || channelId || "";
   }, [accounts.data, accountId, channelId]);
   const contacts = useQuery({
-    queryKey: ["contacts", "campaign-audience", organizationId, audienceChannelId],
+    queryKey: [
+      "contacts",
+      "campaign-audience",
+      organizationId,
+      audienceChannelId,
+      audienceMode,
+      excelAudienceIds,
+      audienceTagId,
+      audienceWhatsappStatus,
+      audienceSegmentFilterId
+    ],
     queryFn: async () => {
-      const params: Record<string, string | number> = { limit: CAMPAIGN_AUDIENCE_LIMIT };
-      if (organizationId) params.organization_id = organizationId;
-      if (audienceChannelId) params.channel_id = audienceChannelId;
-      return (await api.get<Contact[]>("/contacts", { params })).data;
+      const base: Record<string, string | number> = { limit: CAMPAIGN_AUDIENCE_LIMIT };
+      if (organizationId) base.organization_id = organizationId;
+      if (audienceChannelId) base.channel_id = audienceChannelId;
+      if (audienceMode === "excel" && excelAudienceIds.length > 0) {
+        const chunkSize = 80;
+        const rows: Contact[] = [];
+        const seen = new Set<string>();
+        for (let index = 0; index < excelAudienceIds.length; index += chunkSize) {
+          const chunk = excelAudienceIds.slice(index, index + chunkSize);
+          const batch = (
+            await api.get<Contact[]>("/contacts", {
+              params: {
+                ...base,
+                ids: chunk.join(","),
+                limit: chunk.length
+              }
+            })
+          ).data;
+          for (const item of batch) {
+            if (seen.has(item.id)) continue;
+            seen.add(item.id);
+            rows.push(item);
+          }
+        }
+        return rows;
+      }
+      if (audienceTagId) base.tag_id = audienceTagId;
+      if (audienceWhatsappStatus) base.whatsapp_status = audienceWhatsappStatus;
+      if (audienceSegmentFilterId) base.segment_id = audienceSegmentFilterId;
+      return (await api.get<Contact[]>("/contacts", { params: base })).data;
     },
-    enabled: Boolean(organizationId)
+    enabled: Boolean(organizationId) && (audienceMode !== "excel" || excelAudienceIds.length > 0)
+  });
+  const tags = useQuery({
+    queryKey: ["tags"],
+    queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data
   });
   const segments = useQuery({
     queryKey: ["segments"],
@@ -353,23 +411,49 @@ export default function CampaignsPage() {
     () => new Map((contacts.data ?? []).map((item) => [item.id, item])),
     [contacts.data]
   );
-  const filteredContacts = (contacts.data ?? []).filter((item) => {
-    if (selectedAccountChannelId && item.channel_id !== selectedAccountChannelId) return false;
-    if (!contactSearch.trim()) return true;
+  const excelIdSet = useMemo(() => new Set(excelAudienceIds), [excelAudienceIds]);
+  const filteredContacts = useMemo(() => {
+    const from = audienceLastCampaignFrom ? new Date(`${audienceLastCampaignFrom}T00:00:00`) : null;
+    const to = audienceLastCampaignTo ? new Date(`${audienceLastCampaignTo}T23:59:59`) : null;
     const term = contactSearch.trim().toLowerCase();
-    return (
-      item.external_address.toLowerCase().includes(term) ||
-      (item.display_name ?? "").toLowerCase().includes(term)
-    );
-  });
+    return (contacts.data ?? []).filter((item) => {
+      if (audienceMode === "excel" && !excelIdSet.has(item.id)) return false;
+      if (selectedAccountChannelId && item.channel_id !== selectedAccountChannelId) return false;
+      if (audienceMode === "excel" && audienceWhatsappStatus) {
+        const status = item.whatsapp_status ?? (item.marketing_opt_in === false ? "dnd" : "accepts");
+        if (status !== audienceWhatsappStatus) return false;
+      }
+      if (term) {
+        const hay = `${item.display_name ?? ""} ${item.external_address}`.toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      if (from || to) {
+        if (!item.last_campaign_at) return false;
+        const at = new Date(item.last_campaign_at);
+        if (from && at < from) return false;
+        if (to && at > to) return false;
+      }
+      return true;
+    });
+  }, [
+    contacts.data,
+    audienceMode,
+    excelIdSet,
+    selectedAccountChannelId,
+    contactSearch,
+    audienceWhatsappStatus,
+    audienceLastCampaignFrom,
+    audienceLastCampaignTo
+  ]);
   const channelScopedSelectedContacts = useMemo(() => {
-    if (!selectedAccountChannelId) return selectedContacts;
     return selectedContacts.filter((id) => {
+      if (audienceMode === "excel" && !excelIdSet.has(id)) return false;
+      if (!selectedAccountChannelId) return true;
       const contact = contactById.get(id);
       if (!contact) return true;
       return contact.channel_id === selectedAccountChannelId;
     });
-  }, [selectedContacts, selectedAccountChannelId, contactById]);
+  }, [selectedContacts, selectedAccountChannelId, contactById, audienceMode, excelIdSet]);
   const hiddenSelectedCount = selectedContacts.length - channelScopedSelectedContacts.length;
   const visibleSelectedCount = filteredContacts.filter((item) =>
     channelScopedSelectedContacts.includes(item.id)
@@ -389,14 +473,18 @@ export default function CampaignsPage() {
   }, [accountId, accounts.data, approvedTemplates, templateId]);
 
   useEffect(() => {
-    if (!selectedAccountChannelId) return;
+    if (!selectedAccountChannelId && audienceMode !== "excel") return;
     setSelectedContacts((current) => {
-      const pruned = current.filter(
-        (id) => contactById.get(id)?.channel_id === selectedAccountChannelId
-      );
+      const pruned = current.filter((id) => {
+        if (audienceMode === "excel" && !excelIdSet.has(id)) return false;
+        if (!selectedAccountChannelId) return true;
+        const contact = contactById.get(id);
+        if (!contact) return true;
+        return contact.channel_id === selectedAccountChannelId;
+      });
       return pruned.length === current.length ? current : pruned;
     });
-  }, [selectedAccountChannelId, contactById]);
+  }, [selectedAccountChannelId, contactById, audienceMode, excelIdSet]);
 
   useEffect(() => {
     if (!templateId || !channelScopedSelectedContacts.length) {
@@ -437,7 +525,42 @@ export default function CampaignsPage() {
     setOrganizationId(value);
     setChannelId("");
     setSelectedContacts([]);
+    setExcelAudienceIds([]);
+    setAudienceMode("library");
     setPreflight(null);
+  }
+
+  function clearExcelAudienceLock() {
+    setAudienceMode("library");
+    setExcelAudienceIds([]);
+    toastStore.getState().show("تم فتح اختيار العملاء من المكتبة.", "success");
+  }
+
+  function applyEligibleAudienceOnly() {
+    const ids = (preflight?.eligible_contact_ids ?? []).filter((id) =>
+      channelScopedSelectedContacts.includes(id)
+    );
+    if (!ids.length) {
+      // Client-side fallback: keep only accepts / unknown from current selection
+      const fallback = channelScopedSelectedContacts.filter((id) => {
+        const contact = contactById.get(id);
+        if (!contact) return false;
+        if (contact.marketing_opt_in === false) return false;
+        if (contact.whatsapp_status === "invalid" || contact.whatsapp_status === "unreachable") return false;
+        return true;
+      });
+      if (!fallback.length) {
+        toastStore.getState().show("لا يوجد عملاء مؤهلون بعد الفحص.", "error");
+        return;
+      }
+      setSelectedContacts(fallback);
+      setExcludeUnreachable(true);
+      toastStore.getState().show(`تم الإبقاء على ${fallback.length} عميلاً مؤهلاً فقط.`, "success");
+      return;
+    }
+    setSelectedContacts(ids);
+    setExcludeUnreachable(true);
+    toastStore.getState().show(`تم الإبقاء على ${ids.length} عميلاً مؤهلاً فقط (بعد فحص الأرقام).`, "success");
   }
 
   async function importAudience(event: FormEvent<HTMLFormElement>) {
@@ -461,11 +584,20 @@ export default function CampaignsPage() {
         timeout: 300000
       });
       const ids: string[] = result.data.contact_ids ?? [];
+      setExcelAudienceIds(ids);
+      setAudienceMode("excel");
       setSelectedContacts(ids);
+      setExcludeUnreachable(true);
+      setAudienceTagId("");
+      setAudienceWhatsappStatus("");
+      setAudienceSegmentFilterId("");
+      setAudienceLastCampaignFrom("");
+      setAudienceLastCampaignTo("");
+      setContactSearch("");
       const skipped = result.data.skipped ?? 0;
       const invalid = result.data.invalid ?? 0;
       toastStore.getState().show(
-        `تم تحميل ${ids.length} عميل للحملة (${result.data.created} جديد، ${result.data.existing} موجود${invalid ? `، ${invalid} رقم غير صالح` : ""}${skipped ? `، ${skipped} فارغ` : ""}).`,
+        `تم قفل الجمهور على ملف Excel فقط: ${ids.length} عميل (${result.data.created} جديد، ${result.data.existing} موجود${invalid ? `، ${invalid} رقم غير صالح واستُبعد` : ""}${skipped ? `، ${skipped} فارغ` : ""}).`,
         "success"
       );
       await client.invalidateQueries({ queryKey: ["contacts"] });
@@ -552,6 +684,8 @@ export default function CampaignsPage() {
         { params }
       );
       const ids = result.data.map((item) => item.id);
+      setAudienceMode("library");
+      setExcelAudienceIds([]);
       setSelectedContacts(ids);
       toastStore.getState().show(`تم تحميل ${ids.length} عميل من الشريحة.`, "success");
     } catch {
@@ -599,6 +733,8 @@ export default function CampaignsPage() {
         contact_ids: string[];
         warnings: string[];
       }>("/platform/audience/resolve", payload);
+      setAudienceMode("library");
+      setExcelAudienceIds([]);
       setSelectedContacts(result.data.contact_ids ?? []);
       toastStore.getState().show(`تم تحميل ${result.data.count} عميل مطابق للفلتر.`, "success");
     } catch {
@@ -634,7 +770,12 @@ export default function CampaignsPage() {
       return;
     }
     if (!channelScopedSelectedContacts.length) {
-      toastStore.getState().show("اختر عملاء للحملة على قناة WhatsApp المحددة.", "error");
+      toastStore.getState().show(
+        audienceMode === "excel"
+          ? "لا يوجد عملاء من ملف Excel محددين للإرسال."
+          : "اختر عملاء للحملة على قناة WhatsApp المحددة.",
+        "error"
+      );
       return;
     }
     if (templateHeader && !templateHeader.mediaUrl && !campaignMediaOverride) {
@@ -646,6 +787,10 @@ export default function CampaignsPage() {
       const templateParameters = buildSendComponents(selectedTemplate?.components, campaignMediaOverride
         ? { mediaUrl: campaignMediaOverride.public_url, filename: campaignMediaOverride.filename }
         : undefined);
+      const recipientIds =
+        audienceMode === "excel"
+          ? channelScopedSelectedContacts.filter((id) => excelIdSet.has(id))
+          : channelScopedSelectedContacts;
       const response = await api.post("/campaigns", {
         organization_id: organizationId,
         whatsapp_account_id: accountId,
@@ -661,7 +806,7 @@ export default function CampaignsPage() {
         exclude_sent_from: excludeSentFrom ? `${excludeSentFrom}T00:00:00` : null,
         exclude_sent_to: excludeSentTo ? `${excludeSentTo}T00:00:00` : null,
         exclude_campaign_ids: excludeCampaignIds,
-        recipients: channelScopedSelectedContacts.map((contact_id) => ({
+        recipients: recipientIds.map((contact_id) => ({
           contact_id,
           template_parameters: templateParameters
         }))
@@ -670,6 +815,8 @@ export default function CampaignsPage() {
       await approveAndStartCampaign(campaignId, requestOptions);
       setName("");
       setSelectedContacts([]);
+      setExcelAudienceIds([]);
+      setAudienceMode("library");
       setCampaignMediaOverride(null);
       setExpandedCampaignId(campaignId);
       setHighlightCampaignId(campaignId);
@@ -871,7 +1018,10 @@ export default function CampaignsPage() {
 
           <div className="campaigns-actions-grid">
             <form className="campaigns-panel stack-form" onSubmit={importAudience}>
-              <h3>جمهور الحملة — Excel</h3>
+              <h3>جمهور الحملة — Excel فقط</h3>
+              <p className="hint-text">
+                رفع الملف يُقفل الجمهور على أرقام الملف فقط — لن تُضاف أسماء من المكتبة خارج Excel.
+              </p>
               <label className="field-label">
                 <span>ملف Excel أو CSV</span>
                 <input
@@ -886,7 +1036,7 @@ export default function CampaignsPage() {
                 الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> (ar/en)
               </p>
               <div className="admin-actions compact">
-                <button type="submit" disabled={!organizationId || !channelId}>تحميل العملاء</button>
+                <button type="submit" disabled={!organizationId || !channelId}>رفع Excel وقفل الجمهور</button>
                 <button
                   type="button"
                   className="secondary-button"
@@ -895,6 +1045,15 @@ export default function CampaignsPage() {
                   تحميل قالب Excel
                 </button>
               </div>
+              {audienceMode === "excel" && (
+                <div className="campaign-excel-lock-banner" role="status">
+                  <strong>وضع Excel مفعّل</strong>
+                  <span>{excelAudienceIds.length.toLocaleString("ar")} رقم من الملف فقط</span>
+                  <button type="button" className="secondary-button compact" onClick={clearExcelAudienceLock}>
+                    إلغاء القفل والاختيار من المكتبة
+                  </button>
+                </div>
+              )}
               {channelScopedSelectedContacts.length > 0 && (
                 <p className="hint-text">✓ {channelScopedSelectedContacts.length} عميل محدّد للحملة</p>
               )}
@@ -1046,6 +1205,7 @@ export default function CampaignsPage() {
                     <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
                     <div><strong>{preflight.reachable ?? 0}</strong><span>قابل للوصول</span></div>
                     <div><strong>{preflight.unreachable ?? 0}</strong><span>غير قابل</span></div>
+                    <div><strong>{preflight.invalid_phone ?? 0}</strong><span>رقم غير صالح</span></div>
                     <div><strong>{preflight.risky ?? 0}</strong><span>محفوف بالمخاطر</span></div>
                     <div><strong>{preflight.marketing_opt_out ?? 0}</strong><span>عدم الإزعاج</span></div>
                     <div><strong>{preflight.cold_audience ?? preflight.never_messaged}</strong><span>بدون تفاعل</span></div>
@@ -1075,6 +1235,13 @@ export default function CampaignsPage() {
                     <p className="hint-text">جودة الحساب: {preflight.quality_rating}</p>
                   )}
                   <p className="hint-text">{preflight.messaging_tier_hint}</p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={applyEligibleAudienceOnly}
+                  >
+                    تطبيق الفحص: أبقِ المؤهلين فقط (استبعاد غير صالح / بلا واتساب / عدم إزعاج)
+                  </button>
                 </div>
               )}
               {!approvedTemplates.length && (
@@ -1256,121 +1423,272 @@ export default function CampaignsPage() {
 
           <div className="campaigns-audience-panel">
             <div className="campaigns-audience-header">
-              <h3 className="section-title-sm">استهداف حسب الاهتمام والجنس</h3>
-              <p className="hint-text">
-                اختر الاهتمامات ثم حدّد الجنس من القائمة إذا لزم (مثل حملة تجميل → استبعاد الرجال).
-              </p>
-            </div>
-            <div className="campaign-audience-filters">
-              <label className="field-label">
-                <span>الجنس</span>
-                <select value={audienceGenderFilter} onChange={(e) => setAudienceGenderFilter(e.target.value as AudienceGenderFilter)}>
-                  {AUDIENCE_GENDER_OPTIONS.map((item) => (
-                    <option key={item.value || "all"} value={item.value}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="field-label">
-                <span>مرحلة العميل</span>
-                <select value={audienceLifecycle} onChange={(e) => setAudienceLifecycle(e.target.value)}>
-                  <option value="">كل المراحل</option>
-                  <option value="lead">عميل محتمل</option>
-                  <option value="prospect">مهتم</option>
-                  <option value="customer">عميل</option>
-                  <option value="churned">متوقف</option>
-                </select>
-              </label>
-            </div>
-            <div className="field-label">
-              <span>الاهتمامات</span>
-              <div className="contacts-tags-cell">
-                {(interests.data ?? []).map((interest) => {
-                  const active = audienceInterestIds.includes(interest.id);
-                  return (
-                    <button
-                      key={interest.id}
-                      type="button"
-                      className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
-                      onClick={() => toggleAudienceInterest(interest.id)}
-                    >
-                      {interest.label}
-                    </button>
-                  );
-                })}
+              <div>
+                <h3 className="section-title-sm">جدول جمهور الحملة</h3>
+                <p className="hint-text">
+                  {audienceMode === "excel"
+                    ? "الجمهور مقيّد بملف Excel — يمكنك فلترة الجدول وتحديد/إلغاء داخل الملف فقط."
+                    : "فلتر ثم حدّد العملاء من الجدول. أو ارفع Excel أعلاه لقفل الجمهور على الملف فقط."}
+                </p>
               </div>
             </div>
-            <button type="button" className="contacts-erp-btn contacts-erp-btn-primary" onClick={() => void applyAudienceFilter()}>
-              تطبيق الفلتر وتحميل الجمهور
-            </button>
 
-            <div className="campaigns-audience-header" style={{ marginTop: 18 }}>
-              <h3 className="section-title-sm">جمهور من شريحة</h3>
-              <div className="inline-actions">
-                <select value={selectedSegmentId} onChange={(e) => setSelectedSegmentId(e.target.value)}>
-                  <option value="">اختر شريحة</option>
-                  {(segments.data ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>{item.name}</option>
+            <div className="campaign-audience-filters">
+              {audienceMode === "library" && (
+                <>
+                  <label className="field-label">
+                    <span>المجموعة</span>
+                    <select value={audienceTagId} onChange={(e) => setAudienceTagId(e.target.value)}>
+                      <option value="">كل المجموعات</option>
+                      {(tags.data ?? []).map((tag) => (
+                        <option key={tag.id} value={tag.id}>{tag.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    <span>الشريحة</span>
+                    <select
+                      value={audienceSegmentFilterId}
+                      onChange={(e) => setAudienceSegmentFilterId(e.target.value)}
+                    >
+                      <option value="">كل الشرائح</option>
+                      {(segments.data ?? []).map((item) => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+              <label className="field-label">
+                <span>حالة واتساب</span>
+                <select
+                  value={audienceWhatsappStatus}
+                  onChange={(e) => setAudienceWhatsappStatus(e.target.value)}
+                >
+                  <option value="">كل الحالات</option>
+                  {Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
-                <button type="button" className="secondary-button" disabled={!selectedSegmentId} onClick={() => void loadSegmentAudience()}>
-                  تحميل الشريحة
-                </button>
-              </div>
+              </label>
+              <label className="field-label">
+                <span>آخر حملة من</span>
+                <input
+                  type="date"
+                  value={audienceLastCampaignFrom}
+                  onChange={(e) => setAudienceLastCampaignFrom(e.target.value)}
+                />
+              </label>
+              <label className="field-label">
+                <span>آخر حملة إلى</span>
+                <input
+                  type="date"
+                  value={audienceLastCampaignTo}
+                  onChange={(e) => setAudienceLastCampaignTo(e.target.value)}
+                />
+              </label>
+              {audienceMode === "library" && (
+                <>
+                  <label className="field-label">
+                    <span>الجنس</span>
+                    <select value={audienceGenderFilter} onChange={(e) => setAudienceGenderFilter(e.target.value as AudienceGenderFilter)}>
+                      {AUDIENCE_GENDER_OPTIONS.map((item) => (
+                        <option key={item.value || "all"} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    <span>مرحلة العميل</span>
+                    <select value={audienceLifecycle} onChange={(e) => setAudienceLifecycle(e.target.value)}>
+                      <option value="">كل المراحل</option>
+                      <option value="lead">عميل محتمل</option>
+                      <option value="prospect">مهتم</option>
+                      <option value="customer">عميل</option>
+                      <option value="churned">متوقف</option>
+                    </select>
+                  </label>
+                </>
+              )}
             </div>
-            <div className="campaigns-audience-header">
-              <h3 className="section-title-sm">اختيار العملاء يدوياً</h3>
+            {audienceMode === "library" && (
+              <>
+                <div className="field-label">
+                  <span>الاهتمامات (اختياري)</span>
+                  <div className="contacts-tags-cell">
+                    {(interests.data ?? []).map((interest) => {
+                      const active = audienceInterestIds.includes(interest.id);
+                      return (
+                        <button
+                          key={interest.id}
+                          type="button"
+                          className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
+                          onClick={() => toggleAudienceInterest(interest.id)}
+                        >
+                          {interest.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="inline-actions">
+                  <button type="button" className="contacts-erp-btn contacts-erp-btn-primary" onClick={() => void applyAudienceFilter()}>
+                    تطبيق الاهتمام/الجنس/المرحلة وتحميل الجمهور
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!selectedSegmentId}
+                    onClick={() => void loadSegmentAudience()}
+                  >
+                    تحميل شريحة كاملة
+                  </button>
+                  <select value={selectedSegmentId} onChange={(e) => setSelectedSegmentId(e.target.value)}>
+                    <option value="">اختر شريحة للتحميل</option>
+                    {(segments.data ?? []).map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            <div className="campaigns-audience-toolbar">
               <label className="field-label campaigns-contact-search">
-                <span>بحث</span>
+                <span>بحث في الجدول</span>
                 <input
                   value={contactSearch}
                   onChange={(e) => setContactSearch(e.target.value)}
                   placeholder="اسم أو رقم…"
                 />
               </label>
+              <div className="inline-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    const ids = filteredContacts.map((c) => c.id);
+                    setSelectedContacts((current) => {
+                      const base =
+                        audienceMode === "excel"
+                          ? current.filter((id) => excelIdSet.has(id))
+                          : selectedAccountChannelId
+                            ? current.filter((id) => contactById.get(id)?.channel_id === selectedAccountChannelId)
+                            : current;
+                      return Array.from(new Set([...base, ...ids]));
+                    });
+                  }}
+                >
+                  تحديد الكل الظاهر ({filteredContacts.length})
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    const visible = new Set(filteredContacts.map((c) => c.id));
+                    setSelectedContacts((current) => current.filter((id) => !visible.has(id)));
+                  }}
+                >
+                  إلغاء تحديد الظاهر
+                </button>
+                <button type="button" className="secondary-button" onClick={() => setSelectedContacts([])}>
+                  إلغاء الكل
+                </button>
+                {channelScopedSelectedContacts.length > 0 && (
+                  <span className="hint-text">
+                    {visibleSelectedCount} ظاهر محدد · {channelScopedSelectedContacts.length} للإرسال
+                    {audienceMode === "excel" ? " · Excel فقط" : ""}
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="inline-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setSelectedContacts(filteredContacts.map((c) => c.id))}
-              >
-                تحديد الكل ({filteredContacts.length})
-              </button>
-              <button type="button" className="secondary-button" onClick={() => setSelectedContacts([])}>
-                إلغاء التحديد
-              </button>
-              {channelScopedSelectedContacts.length > 0 && (
-                <span className="hint-text">
-                  {visibleSelectedCount} ظاهر · {channelScopedSelectedContacts.length} للإرسال
-                </span>
-              )}
-            </div>
-            {(contacts.data?.length ?? 0) >= CAMPAIGN_AUDIENCE_LIMIT && (
+
+            {(contacts.data?.length ?? 0) >= CAMPAIGN_AUDIENCE_LIMIT && audienceMode === "library" && (
               <p className="hint-text campaigns-audience-warning" role="status">
-                يُعرض حتى {CAMPAIGN_AUDIENCE_LIMIT.toLocaleString("ar")} عميل في القائمة — للجمهور الأكبر استخدم استيراد Excel أعلاه.
+                يُعرض حتى {CAMPAIGN_AUDIENCE_LIMIT.toLocaleString("ar")} عميل — للجمهور الأكبر استخدم Excel أعلاه.
               </p>
             )}
-            <div className="contact-picker campaigns-contact-picker">
-              {filteredContacts.map((item) => (
-                <label key={item.id} className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={channelScopedSelectedContacts.includes(item.id)}
-                    onChange={(e) => {
-                      setSelectedContacts((current) => {
-                        const scoped = selectedAccountChannelId
-                          ? current.filter((id) => contactById.get(id)?.channel_id === selectedAccountChannelId)
-                          : current;
-                        return e.target.checked
-                          ? [...scoped, item.id]
-                          : scoped.filter((id) => id !== item.id);
-                      });
-                    }}
-                  />
-                  <span>{item.display_name || item.external_address}</span>
-                  {item.display_name && <small dir="ltr">{item.external_address}</small>}
-                </label>
-              ))}
+
+            <div className="admin-table-wrap campaigns-audience-table-wrap">
+              <table className="admin-erp-table campaigns-audience-table">
+                <thead>
+                  <tr>
+                    <th className="contacts-col-check">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredContacts.length > 0 &&
+                          filteredContacts.every((item) => channelScopedSelectedContacts.includes(item.id))
+                        }
+                        onChange={(e) => {
+                          const ids = filteredContacts.map((c) => c.id);
+                          if (e.target.checked) {
+                            setSelectedContacts((current) => Array.from(new Set([...current, ...ids])));
+                          } else {
+                            const visible = new Set(ids);
+                            setSelectedContacts((current) => current.filter((id) => !visible.has(id)));
+                          }
+                        }}
+                        aria-label="تحديد الكل الظاهر"
+                      />
+                    </th>
+                    <th>الاسم</th>
+                    <th>الهاتف</th>
+                    <th>حالة واتساب</th>
+                    <th>آخر حملة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredContacts.length === 0 && (
+                    <tr>
+                      <td colSpan={5}>
+                        <p className="hint-text">لا يوجد عملاء مطابقون للفلاتر الحالية.</p>
+                      </td>
+                    </tr>
+                  )}
+                  {filteredContacts.map((item) => {
+                    const checked = channelScopedSelectedContacts.includes(item.id);
+                    return (
+                      <tr key={item.id} className={checked ? "contacts-row-selected" : undefined}>
+                        <td className="contacts-col-check">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setSelectedContacts((current) => {
+                                if (audienceMode === "excel" && !excelIdSet.has(item.id)) return current;
+                                const scoped = selectedAccountChannelId
+                                  ? current.filter((id) => contactById.get(id)?.channel_id === selectedAccountChannelId)
+                                  : current;
+                                return e.target.checked
+                                  ? [...scoped, item.id]
+                                  : scoped.filter((id) => id !== item.id);
+                              });
+                            }}
+                            aria-label={`تحديد ${item.display_name || item.external_address}`}
+                          />
+                        </td>
+                        <td>{item.display_name || "—"}</td>
+                        <td dir="ltr">{item.external_address}</td>
+                        <td>
+                          <span className={`contacts-wa-status contacts-wa-status-${whatsappStatusTone(item.whatsapp_status)}`}>
+                            {formatWhatsAppStatus(item)}
+                          </span>
+                        </td>
+                        <td>
+                          {item.last_campaign_at ? (
+                            <div className="admin-cell-main">
+                              <strong>{item.last_campaign_name || "حملة"}</strong>
+                              <small>{formatContactDate(item.last_campaign_at)}</small>
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

@@ -6862,6 +6862,40 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   align-items: end;
   justify-content: space-between;
 }
+.campaigns-audience-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+}
+.campaigns-audience-table-wrap {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.campaigns-audience-table {
+  margin: 0;
+  min-width: 640px;
+}
+.campaigns-audience-table th,
+.campaigns-audience-table td {
+  white-space: nowrap;
+}
+.campaign-excel-lock-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(37, 211, 102, 0.35);
+  background: rgba(37, 211, 102, 0.08);
+}
+.campaign-excel-lock-banner strong { font-size: 13px; }
+.campaign-excel-lock-banner span { color: var(--muted); font-size: 12px; }
 .campaigns-contact-search { flex: 1; min-width: 200px; margin: 0; }
 .campaigns-contact-picker {
   max-height: 280px;
