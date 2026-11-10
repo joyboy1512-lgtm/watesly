@@ -27,6 +27,7 @@ CONTACT_EXPORT_HEADERS = [
     "email",
     "language",
     "country_code",
+    "region",
     "gender",
     "salutation",
     "organization",
@@ -41,6 +42,7 @@ CONTACT_IMPORT_TEMPLATE_HEADERS = [
     "email",
     "language",
     "country_code",
+    "region",
 ]
 
 INTENT_TAG_CANDIDATES: dict[str, list[str]] = {
@@ -78,6 +80,7 @@ async def update_contact(
     email: str | None = None,
     language: str | None = None,
     country_code: str | None = None,
+    region: str | None = None,
     marketing_opt_in: bool | None = None,
     lifecycle_stage: str | None = None,
 ) -> Contact:
@@ -91,6 +94,9 @@ async def update_contact(
         contact.language = language
     if country_code is not None:
         contact.country_code = country_code
+    if region is not None:
+        cleaned = region.strip()
+        contact.region = cleaned[:120] if cleaned else None
     if marketing_opt_in is not None:
         contact.marketing_opt_in = marketing_opt_in
     if lifecycle_stage is not None:
@@ -253,6 +259,8 @@ def _apply_segment_filters(query, filters: dict):
         query = query.where(Contact.channel_id == UUID(str(channel_id)))
     if country := filters.get("country_code"):
         query = query.where(Contact.country_code == country)
+    if region := filters.get("region"):
+        query = query.where(Contact.region == str(region).strip())
     if search := filters.get("search"):
         term = f"%{search}%"
         query = query.where(
@@ -361,6 +369,7 @@ async def _build_contact_export_rows(
             contact.email or "",
             contact.language or "",
             contact.country_code or "",
+            contact.region or "",
             contact.gender or "unknown",
             gender_salutation(contact.gender),
             org_name,
@@ -890,6 +899,8 @@ async def import_contacts_from_rows(
         email = email_raw if email_raw and "@" in email_raw and "." in email_raw.split("@")[-1] else None
         language = get_row_value(row, "language") or "ar"
         country_code = country_raw.upper()[:2] if len(country_raw.strip()) >= 2 else "KW"
+        region_raw = get_row_value(row, "region") or get_row_value(row, "المنطقة") or ""
+        region = region_raw.strip()[:120] or None
         gender = infer_gender_from_name(name)
         already_id = existing_by_phone.get(phone)
 
@@ -904,6 +915,8 @@ async def import_contacts_from_rows(
                 if language:
                     contact.language = language
                 contact.country_code = country_code
+                if region is not None:
+                    contact.region = region
                 contact.updated_at = datetime.now(UTC)
             existing += 1
             if contact is not None:
@@ -918,6 +931,7 @@ async def import_contacts_from_rows(
                 email=email,
                 language=language,
                 country_code=country_code,
+                region=region,
                 gender=gender,
             )
             db.add(contact)

@@ -16,18 +16,19 @@ class ContactCreateRequest(BaseModel):
     email: EmailStr | None = None
     language: str | None = Field(default=None, max_length=10)
     country_code: str | None = Field(default=None, min_length=2, max_length=2)
+    region: str | None = Field(default=None, max_length=120)
     lifecycle_stage: str | None = Field(default=None, max_length=30)
     tag_ids: list[UUID] = Field(default_factory=list)
     interest_ids: list[UUID] = Field(default_factory=list)
 
-    @field_validator("email", "display_name", "language", "country_code", mode="before")
+    @field_validator("email", "display_name", "language", "country_code", "region", mode="before")
     @classmethod
     def empty_str_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
             return None
         return value
 
-    @field_validator("external_address", "display_name", "language", mode="before")
+    @field_validator("external_address", "display_name", "language", "region", mode="before")
     @classmethod
     def strip_optional_strings(cls, value: object) -> object:
         if isinstance(value, str):
@@ -53,6 +54,7 @@ class ContactResponse(BaseModel):
     email: EmailStr | None
     language: str | None
     country_code: str | None
+    region: str | None = None
     gender: ContactGender = "unknown"
     marketing_opt_in: bool = True
     reachability_status: str | None = None

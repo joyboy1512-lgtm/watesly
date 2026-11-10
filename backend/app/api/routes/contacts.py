@@ -56,6 +56,7 @@ class ContactUpdateBody(BaseModel):
     email: str | None = None
     language: str | None = None
     country_code: str | None = None
+    region: str | None = Field(default=None, max_length=120)
     marketing_opt_in: bool | None = None
     lifecycle_stage: str | None = Field(default=None, max_length=30)
 
@@ -122,6 +123,7 @@ async def get_contacts(
     tag_ids: str | None = Query(None, description="Comma-separated tag IDs (OR match)"),
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
+    region: str | None = Query(None, max_length=120, description="Exact contact region/area filter"),
     ids: str | None = Query(None, description="Comma-separated contact IDs (e.g. Excel audience lock)"),
     whatsapp_status: str | None = Query(
         default=None,
@@ -166,6 +168,7 @@ async def get_contacts(
         tag_ids=parsed_tag_ids,
         segment_id=segment_id,
         lifecycle_stage=lifecycle_stage,
+        region=region,
         whatsapp_status=whatsapp_status,
         contact_ids=contact_ids,
         q=q,
@@ -189,6 +192,35 @@ async def get_contacts_duplicates(
     db: AsyncSession = Depends(get_db),
 ):
     return await find_duplicate_phones(db, context.account_id)
+
+
+@router.get("/regions")
+async def get_contact_regions(
+    organization_id: UUID | None = None,
+    channel_id: UUID | None = None,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.contacts import list_contact_regions
+
+    accessible_channels = await resolve_accessible_channel_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    accessible_orgs = await resolve_accessible_organization_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if channel_id is not None and accessible_channels is not None and channel_id not in accessible_channels:
+        return []
+    if organization_id is not None and accessible_orgs is not None and organization_id not in accessible_orgs:
+        return []
+    return await list_contact_regions(
+        db,
+        context.account_id,
+        organization_id=organization_id,
+        channel_id=channel_id,
+        accessible_channel_ids=accessible_channels if channel_id is None else None,
+        accessible_organization_ids=accessible_orgs if organization_id is None else None,
+    )
 
 
 @router.post("", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)
@@ -353,6 +385,7 @@ async def patch_contact(
             email=payload.email,
             language=payload.language,
             country_code=payload.country_code,
+            region=payload.region,
             marketing_opt_in=payload.marketing_opt_in,
             lifecycle_stage=payload.lifecycle_stage,
         )

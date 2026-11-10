@@ -190,6 +190,7 @@ export default function CampaignsPage() {
   const [audienceTagMenuOpen, setAudienceTagMenuOpen] = useState(false);
   const audienceTagMenuRef = useRef<HTMLDivElement | null>(null);
   const [audienceWhatsappStatus, setAudienceWhatsappStatus] = useState("");
+  const [audienceRegion, setAudienceRegion] = useState("");
   const [audienceSegmentFilterId, setAudienceSegmentFilterId] = useState("");
   const [audienceLastCampaignFrom, setAudienceLastCampaignFrom] = useState("");
   const [audienceLastCampaignTo, setAudienceLastCampaignTo] = useState("");
@@ -232,6 +233,7 @@ export default function CampaignsPage() {
       excelAudienceIds,
       audienceTagIds,
       audienceWhatsappStatus,
+      audienceRegion,
       audienceSegmentFilterId
     ],
     queryFn: async () => {
@@ -264,10 +266,21 @@ export default function CampaignsPage() {
       if (audienceTagIds.length === 1) base.tag_id = audienceTagIds[0];
       if (audienceTagIds.length > 1) base.tag_ids = audienceTagIds.join(",");
       if (audienceWhatsappStatus) base.whatsapp_status = audienceWhatsappStatus;
+      if (audienceRegion) base.region = audienceRegion;
       if (audienceSegmentFilterId) base.segment_id = audienceSegmentFilterId;
       return (await api.get<Contact[]>("/contacts", { params: base })).data;
     },
     enabled: Boolean(organizationId) && (audienceMode !== "excel" || excelAudienceIds.length > 0)
+  });
+  const contactRegions = useQuery({
+    queryKey: ["contact-regions", organizationId, audienceChannelId],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (organizationId) params.organization_id = organizationId;
+      if (audienceChannelId) params.channel_id = audienceChannelId;
+      return (await api.get<Array<{ region: string; count: number }>>("/contacts/regions", { params })).data;
+    },
+    enabled: Boolean(organizationId)
   });
   const tags = useQuery({
     queryKey: ["tags"],
@@ -447,8 +460,9 @@ export default function CampaignsPage() {
         const status = item.whatsapp_status ?? (item.marketing_opt_in === false ? "dnd" : "accepts");
         if (status !== audienceWhatsappStatus) return false;
       }
+      if (audienceRegion && (item.region || "") !== audienceRegion) return false;
       if (term) {
-        const hay = `${item.display_name ?? ""} ${item.external_address}`.toLowerCase();
+        const hay = `${item.display_name ?? ""} ${item.external_address} ${item.region ?? ""}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       if (from || to) {
@@ -466,6 +480,7 @@ export default function CampaignsPage() {
     selectedAccountChannelId,
     contactSearch,
     audienceWhatsappStatus,
+    audienceRegion,
     audienceLastCampaignFrom,
     audienceLastCampaignTo
   ]);
@@ -552,6 +567,7 @@ export default function CampaignsPage() {
     setExcelAudienceIds([]);
     setAudienceMode("library");
     setAudienceTagIds([]);
+    setAudienceRegion("");
     setPreflight(null);
   }
 
@@ -615,6 +631,7 @@ export default function CampaignsPage() {
       setExcludeUnreachable(true);
       setAudienceTagIds([]);
       setAudienceWhatsappStatus("");
+      setAudienceRegion("");
       setAudienceSegmentFilterId("");
       setAudienceLastCampaignFrom("");
       setAudienceLastCampaignTo("");
@@ -1063,7 +1080,7 @@ export default function CampaignsPage() {
                   />
                 </label>
                 <p className="hint-text campaigns-excel-columns">
-                  الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> (ar/en)
+                  الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> · <strong dir="ltr">region</strong>
                 </p>
                 <div className="campaigns-excel-actions">
                   <button
@@ -1603,6 +1620,20 @@ export default function CampaignsPage() {
                 </>
               )}
               <label className="field-label">
+                <span>المنطقة</span>
+                <select
+                  value={audienceRegion}
+                  onChange={(e) => setAudienceRegion(e.target.value)}
+                >
+                  <option value="">كل المناطق</option>
+                  {(contactRegions.data ?? []).map((item) => (
+                    <option key={item.region} value={item.region}>
+                      {item.region} ({item.count.toLocaleString("ar")})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label">
                 <span>حالة واتساب</span>
                 <select
                   value={audienceWhatsappStatus}
@@ -1776,6 +1807,7 @@ export default function CampaignsPage() {
                     </th>
                     <th>الاسم</th>
                     <th>الهاتف</th>
+                    <th>المنطقة</th>
                     <th>حالة واتساب</th>
                     <th>آخر حملة</th>
                   </tr>
@@ -1783,7 +1815,7 @@ export default function CampaignsPage() {
                 <tbody>
                   {filteredContacts.length === 0 && (
                     <tr>
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         <p className="hint-text">لا يوجد عملاء مطابقون للفلاتر الحالية.</p>
                       </td>
                     </tr>
@@ -1812,6 +1844,7 @@ export default function CampaignsPage() {
                         </td>
                         <td>{item.display_name || "—"}</td>
                         <td dir="ltr">{item.external_address}</td>
+                        <td>{item.region || "—"}</td>
                         <td>
                           <span className={`contacts-wa-status contacts-wa-status-${whatsappStatusTone(item.whatsapp_status)}`}>
                             {formatWhatsAppStatus(item)}
