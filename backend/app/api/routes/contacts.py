@@ -119,6 +119,7 @@ async def get_contacts(
     channel_id: UUID | None = None,
     organization_id: UUID | None = None,
     tag_id: UUID | None = None,
+    tag_ids: str | None = Query(None, description="Comma-separated tag IDs (OR match)"),
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     ids: str | None = Query(None, description="Comma-separated contact IDs (e.g. Excel audience lock)"),
@@ -147,6 +148,14 @@ async def get_contacts(
             raise HTTPException(status_code=400, detail="Invalid contact IDs") from exc
         if not contact_ids:
             return []
+    parsed_tag_ids: list[UUID] | None = None
+    if tag_ids:
+        try:
+            parsed_tag_ids = [UUID(item.strip()) for item in tag_ids.split(",") if item.strip()]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid tag IDs") from exc
+        if not parsed_tag_ids:
+            parsed_tag_ids = None
     contacts = await list_contacts(
         db,
         context.account_id,
@@ -154,6 +163,7 @@ async def get_contacts(
         channel_id=channel_id,
         organization_id=organization_id,
         tag_id=tag_id,
+        tag_ids=parsed_tag_ids,
         segment_id=segment_id,
         lifecycle_stage=lifecycle_stage,
         whatsapp_status=whatsapp_status,

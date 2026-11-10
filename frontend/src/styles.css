@@ -6941,6 +6941,91 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   flex: 0 0 auto;
   white-space: nowrap;
 }
+.campaign-tag-multiselect {
+  position: relative;
+}
+.campaign-tag-multiselect-trigger {
+  width: 100%;
+  text-align: start;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.campaign-tag-multiselect-menu {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.campaign-tag-multiselect-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.campaign-tag-multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+.campaign-tag-multiselect-option:hover {
+  background: var(--panel-soft);
+}
+.campaign-tag-multiselect-option input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px;
+  min-width: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--primary);
+}
+.contacts-classification-editor {
+  display: grid;
+  gap: 12px;
+}
+.contacts-tag-dropdown-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.contacts-tag-dropdown-check:hover {
+  background: var(--panel-soft);
+}
+.contacts-tag-dropdown-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  accent-color: var(--primary);
+}
+.contacts-tag-dropdown-create {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
 .campaigns-audience-panel {
   background: var(--panel-soft);
   border: 1px solid var(--line);

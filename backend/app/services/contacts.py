@@ -50,6 +50,7 @@ async def list_contacts(
     channel_id: UUID | None = None,
     organization_id: UUID | None = None,
     tag_id: UUID | None = None,
+    tag_ids: list[UUID] | None = None,
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     whatsapp_status: str | None = None,
@@ -58,6 +59,11 @@ async def list_contacts(
     accessible_channel_ids: list[UUID] | None = None,
     accessible_organization_ids: list[UUID] | None = None,
 ) -> list[Contact]:
+    effective_tag_ids: list[UUID] = []
+    if tag_ids:
+        effective_tag_ids.extend(tag_ids)
+    if tag_id is not None and tag_id not in effective_tag_ids:
+        effective_tag_ids.append(tag_id)
     query = (
         select(Contact)
         .where(Contact.account_id == account_id, Contact.deleted_at.is_(None))
@@ -76,8 +82,10 @@ async def list_contacts(
                 filters["channel_id"] = str(channel_id)
             if organization_id is not None:
                 filters["organization_id"] = str(organization_id)
-            if tag_id is not None:
-                filters["tag_id"] = str(tag_id)
+            if len(effective_tag_ids) == 1:
+                filters["tag_id"] = str(effective_tag_ids[0])
+            elif len(effective_tag_ids) > 1:
+                filters["tag_ids"] = [str(item) for item in effective_tag_ids]
             if q and q.strip():
                 filters["search"] = q.strip()
             query = _apply_segment_filters(query, filters)
@@ -97,11 +105,18 @@ async def list_contacts(
             query = query.where(Contact.channel_id.in_(accessible_channel_ids))
         if organization_id is not None:
             query = query.where(Contact.organization_id == organization_id)
-        if tag_id is not None:
+        if len(effective_tag_ids) == 1:
             query = query.where(
                 exists().where(
                     ContactTag.contact_id == Contact.id,
-                    ContactTag.tag_id == tag_id,
+                    ContactTag.tag_id == effective_tag_ids[0],
+                )
+            )
+        elif len(effective_tag_ids) > 1:
+            query = query.where(
+                exists().where(
+                    ContactTag.contact_id == Contact.id,
+                    ContactTag.tag_id.in_(effective_tag_ids),
                 )
             )
         if lifecycle_stage and lifecycle_stage.strip():
