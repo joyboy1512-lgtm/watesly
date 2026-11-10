@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "2604103",
-    "git_commit_message": "Contact WhatsApp status live",
+    "git_commit": "379ddd5",
+    "git_commit_message": "Campaign audience builder live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BYwKQZnJ.js",
-      "css": "index-DLsypwqT.css"
+      "js": "index-PElvYnpx.js",
+      "css": "index-DI4WDyfo.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "2604103",
-  "notes": "Contact WhatsApp status: accepts/unreachable/invalid/dnd"
+  "commit": "379ddd5",
+  "notes": "Campaign audience builder: Excel lock, eligible preflight, filterable contacts table"
 }
