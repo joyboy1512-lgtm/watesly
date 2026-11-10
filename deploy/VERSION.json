@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "d910ca8",
-    "git_commit_message": "Campaign create UI polish live",
+    "git_commit": "d69aa02",
+    "git_commit_message": "Contact multi-classification live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BNI0itQ9.js",
-      "css": "index-DD54f925.css"
+      "js": "index-hjiQ02QY.js",
+      "css": "index-B7-4f5KK.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "d910ca8",
-  "notes": "Campaign create UI polish: Excel actions, exclusion checklist, campaign exclude table"
+  "commit": "d69aa02",
+  "notes": "Multi classification on contacts + campaign checkbox filter dropdown"
 }
