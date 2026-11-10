@@ -472,9 +472,9 @@ export default function ContactsPage() {
               value={tagFilter}
               onChange={(e) => onTagFilterChange(e.target.value)}
               className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب المجموعة"
+              aria-label="تصفية حسب التصنيف"
             >
-              <option value="">كل المجموعات</option>
+              <option value="">كل التصنيفات</option>
               {(tags.data ?? []).map((tag) => (
                 <option key={tag.id} value={tag.id}>{tag.name}</option>
               ))}
@@ -591,7 +591,7 @@ export default function ContactsPage() {
                   <th>البريد</th>
                   <th>الفرع</th>
                   <th>القناة</th>
-                  <th>المجموعات</th>
+                  <th>التصنيفات</th>
                   <th>آخر حملة</th>
                   <th>التسويق</th>
                   <th>تاريخ الإضافة</th>
@@ -716,6 +716,8 @@ function ContactRow({
 }) {
   const client = useQueryClient();
   const [tagOpen, setTagOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [creatingTag, setCreatingTag] = useState(false);
   const tagRef = useRef<HTMLDivElement>(null);
 
   const contactTags = useQuery({
@@ -735,16 +737,41 @@ function ContactRow({
   async function addTag(tagId: string) {
     await api.post(`/contacts/${contact.id}/tags/${tagId}`);
     await client.invalidateQueries({ queryKey: ["contact-tags", contact.id] });
-    setTagOpen(false);
+    await client.invalidateQueries({ queryKey: ["contacts"] });
   }
 
   async function removeTag(tagId: string) {
     await api.delete(`/contacts/${contact.id}/tags/${tagId}`);
     await client.invalidateQueries({ queryKey: ["contact-tags", contact.id] });
+    await client.invalidateQueries({ queryKey: ["contacts"] });
+  }
+
+  async function createAndAssignTag() {
+    const name = newTagName.trim();
+    if (!name) return;
+    setCreatingTag(true);
+    try {
+      const created = await api.post<Tag>("/inbox-tools/tags", {
+        organization_id: contact.organization_id,
+        name
+      });
+      await api.post(`/contacts/${contact.id}/tags/${created.data.id}`);
+      setNewTagName("");
+      await client.invalidateQueries({ queryKey: ["tags"] });
+      await client.invalidateQueries({ queryKey: ["contact-tags", contact.id] });
+      await client.invalidateQueries({ queryKey: ["contacts"] });
+      toastStore.getState().show("تم إنشاء التصنيف وإضافته.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إنشاء التصنيف.", "error");
+    } finally {
+      setCreatingTag(false);
+    }
   }
 
   const assigned = contactTags.data ?? [];
-  const available = tags.filter((tag) => !assigned.some((item) => item.id === tag.id));
+  const available = tags.filter(
+    (tag) => tag.organization_id === contact.organization_id && !assigned.some((item) => item.id === tag.id)
+  );
   const displayLabel = contactDisplayLabel(contact);
 
   return (
@@ -783,23 +810,40 @@ function ContactRow({
                 className="contacts-tag-chip"
                 style={{ background: colors.bg, color: colors.text, borderColor: colors.border }}
                 onClick={() => void removeTag(tag.id)}
-                title="إزالة الوسم"
+                title="إزالة التصنيف"
               >
                 {tag.name} ×
               </button>
             );
           })}
           <button type="button" className="contacts-tag-add" onClick={() => setTagOpen((v) => !v)}>
-            + مجموعة
+            + تصنيف
           </button>
           {tagOpen && (
             <div className="contacts-tag-dropdown">
-              {available.length === 0 && <p className="hint-text">لا توجد مجموعات إضافية</p>}
+              {available.length === 0 && <p className="hint-text">لا توجد تصنيفات إضافية — أنشئ تصنيفاً جديداً.</p>}
               {available.map((tag) => (
-                <button key={tag.id} type="button" onClick={() => void addTag(tag.id)}>
-                  {tag.name}
-                </button>
+                <label key={tag.id} className="contacts-tag-dropdown-check">
+                  <input type="checkbox" checked={false} onChange={() => void addTag(tag.id)} />
+                  <span>{tag.name}</span>
+                </label>
               ))}
+              <div className="contacts-inline-tag-create contacts-tag-dropdown-create">
+                <input
+                  value={newTagName}
+                  onChange={(event) => setNewTagName(event.target.value)}
+                  placeholder="تصنيف جديد…"
+                  onClick={(event) => event.stopPropagation()}
+                />
+                <button
+                  type="button"
+                  className="contacts-erp-btn"
+                  disabled={creatingTag || !newTagName.trim()}
+                  onClick={() => void createAndAssignTag()}
+                >
+                  +
+                </button>
+              </div>
             </div>
           )}
         </div>

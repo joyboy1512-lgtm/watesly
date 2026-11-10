@@ -265,33 +265,30 @@ export default function ContactDetailPage() {
           </section>
 
           <section className="contacts-detail-panel">
-            <h2>اهتمامات العميل</h2>
-            <p className="hint-text">تُستخدم لتوجيه الحملات وتصنيف العملاء.</p>
-            <ContactInterestsEditor
+            <h2>التصنيف (مجموعات)</h2>
+            <p className="hint-text">أضف تصنيفاً أو أكثر للعميل، أو أنشئ تصنيفاً جديداً.</p>
+            <ContactTagsEditor
               contactId={id!}
-              assigned={(contactInterests.data ?? []).map((item) => item.id)}
-              options={allInterests.data ?? []}
-              onSaved={() => void client.invalidateQueries({ queryKey: ["contact-interests", id] })}
+              organizationId={item.organization_id}
+              assigned={tags.data ?? []}
+              options={(allTags.data ?? []).filter((tag) => tag.organization_id === item.organization_id)}
+              onChanged={() => {
+                void client.invalidateQueries({ queryKey: ["contact-tags", id] });
+                void client.invalidateQueries({ queryKey: ["tags"] });
+                void client.invalidateQueries({ queryKey: ["contacts"] });
+              }}
             />
           </section>
 
           <section className="contacts-detail-panel">
-            <h2>الوسوم</h2>
-            <div className="contacts-tags-cell">
-              {(tags.data ?? []).length === 0 && <p className="hint-text">لا توجد وسوم</p>}
-              {(tags.data ?? []).map((tag) => {
-                const colors = tagChipColor(tag.name);
-                return (
-                  <span
-                    key={tag.id}
-                    className="contacts-tag-chip"
-                    style={{ background: colors.bg, color: colors.text, borderColor: colors.border }}
-                  >
-                    {tag.name}
-                  </span>
-                );
-              })}
-            </div>
+            <h2>اهتمامات العميل</h2>
+            <p className="hint-text">يمكن اختيار أكثر من اهتمام لتوجيه الحملات والشرائح.</p>
+            <ContactInterestsEditor
+              contactId={id!}
+              assigned={(contactInterests.data ?? []).map((row) => row.id)}
+              options={allInterests.data ?? []}
+              onSaved={() => void client.invalidateQueries({ queryKey: ["contact-interests", id] })}
+            />
           </section>
 
           <section className="contacts-detail-panel">
@@ -478,6 +475,132 @@ function ContactEditModal({
   );
 }
 
+function ContactTagsEditor({
+  contactId,
+  organizationId,
+  assigned,
+  options,
+  onChanged
+}: {
+  contactId: string;
+  organizationId: string;
+  assigned: Tag[];
+  options: Tag[];
+  onChanged: () => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const assignedIds = useMemo(() => new Set(assigned.map((tag) => tag.id)), [assigned]);
+  const available = options.filter((tag) => !assignedIds.has(tag.id));
+
+  async function addTag(tagId: string) {
+    setBusyId(tagId);
+    try {
+      await api.post(`/contacts/${contactId}/tags/${tagId}`);
+      onChanged();
+      toastStore.getState().show("تمت إضافة التصنيف.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إضافة التصنيف.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeTag(tagId: string) {
+    setBusyId(tagId);
+    try {
+      await api.delete(`/contacts/${contactId}/tags/${tagId}`);
+      onChanged();
+      toastStore.getState().show("تم إزالة التصنيف.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إزالة التصنيف.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function createAndAssign() {
+    const name = newTagName.trim();
+    if (!name) {
+      toastStore.getState().show("أدخل اسم التصنيف.", "error");
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await api.post<Tag>("/inbox-tools/tags", {
+        organization_id: organizationId,
+        name
+      });
+      await api.post(`/contacts/${contactId}/tags/${created.data.id}`);
+      setNewTagName("");
+      onChanged();
+      toastStore.getState().show("تم إنشاء التصنيف وإضافته للعميل.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إنشاء التصنيف.", "error");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="contacts-classification-editor">
+      <div className="contacts-tags-cell">
+        {assigned.length === 0 && <p className="hint-text">لا توجد تصنيفات بعد — أضف تصنيفاً أدناه.</p>}
+        {assigned.map((tag) => {
+          const colors = tagChipColor(tag.name);
+          return (
+            <button
+              key={tag.id}
+              type="button"
+              className="contacts-tag-chip contacts-tag-chip-active"
+              style={{ background: colors.bg, color: colors.text, borderColor: colors.border }}
+              disabled={busyId === tag.id}
+              onClick={() => void removeTag(tag.id)}
+              title="إزالة التصنيف"
+            >
+              {tag.name} ×
+            </button>
+          );
+        })}
+      </div>
+      {available.length > 0 && (
+        <div className="field-label">
+          <span>إضافة تصنيف موجود</span>
+          <div className="contacts-tags-cell">
+            {available.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                className="contacts-tag-chip"
+                disabled={busyId === tag.id}
+                onClick={() => void addTag(tag.id)}
+              >
+                + {tag.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="contacts-inline-tag-create">
+        <input
+          value={newTagName}
+          onChange={(event) => setNewTagName(event.target.value)}
+          placeholder="تصنيف جديد…"
+        />
+        <button
+          type="button"
+          className="contacts-erp-btn"
+          disabled={creating || !newTagName.trim()}
+          onClick={() => void createAndAssign()}
+        >
+          {creating ? "…" : "+ تصنيف"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ContactInterestsEditor({
   contactId,
   assigned,
@@ -517,6 +640,7 @@ function ContactInterestsEditor({
 
   return (
     <div className="contacts-tags-cell">
+      {options.length === 0 && <p className="hint-text">لا توجد اهتمامات معرفة بعد.</p>}
       {options.map((interest) => {
         const active = selected.includes(interest.id);
         return (
