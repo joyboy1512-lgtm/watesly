@@ -442,16 +442,16 @@ async def list_campaigns_in_period(
     return items
 
 
-async def count_campaign_eligible(
+async def list_campaign_eligible_contact_ids(
     db: AsyncSession,
     *,
     account_id: UUID,
     contact_ids: list[UUID],
     exclude_unreachable: bool = True,
     exclude_risky: bool = False,
-) -> int:
+) -> list[UUID]:
     if not contact_ids:
-        return 0
+        return []
     result = await db.execute(
         select(Contact).where(
             Contact.account_id == account_id,
@@ -461,15 +461,33 @@ async def count_campaign_eligible(
         )
     )
     contacts = list(result.scalars().all())
-    return sum(
-        1
+    return [
+        contact.id
         for contact in contacts
         if is_contact_campaign_eligible(
             contact,
             exclude_unreachable=exclude_unreachable,
             exclude_risky=exclude_risky,
         )
+    ]
+
+
+async def count_campaign_eligible(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_ids: list[UUID],
+    exclude_unreachable: bool = True,
+    exclude_risky: bool = False,
+) -> int:
+    eligible = await list_campaign_eligible_contact_ids(
+        db,
+        account_id=account_id,
+        contact_ids=contact_ids,
+        exclude_unreachable=exclude_unreachable,
+        exclude_risky=exclude_risky,
     )
+    return len(eligible)
 
 
 async def backfill_unreachable_from_campaign_failures(db: AsyncSession) -> int:

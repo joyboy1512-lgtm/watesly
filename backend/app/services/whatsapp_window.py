@@ -104,7 +104,7 @@ async def campaign_audience_preflight(
     from app.models.contact import Contact
     from app.models.whatsapp_account import WhatsAppAccount
     from app.services.contact_reachability import (
-        count_campaign_eligible,
+        list_campaign_eligible_contact_ids,
         filter_exclude_campaign_sent_in_period,
         filter_never_sent_contact_ids,
         get_campaign_sent_contact_ids_in_period,
@@ -207,13 +207,14 @@ async def campaign_audience_preflight(
         contact_ids=contact_ids,
         last_inbound=last_inbound,
     )
-    eligible_recipients = await count_campaign_eligible(
+    eligible_contact_ids = await list_campaign_eligible_contact_ids(
         db,
         account_id=account_id,
         contact_ids=contact_ids,
         exclude_unreachable=exclude_unreachable,
         exclude_risky=exclude_risky,
     )
+    eligible_recipients = len(eligible_contact_ids)
     never_messaged = 0
     window_open = 0
     window_closed = 0
@@ -324,6 +325,7 @@ async def campaign_audience_preflight(
         "marketing_opt_in": marketing_opt_in,
         "marketing_opt_out": marketing_opt_out,
         "eligible_recipients": eligible_recipients,
+        "eligible_contact_ids": [str(item) for item in eligible_contact_ids],
         "reachable": reachability["reachable"],
         "risky": reachability["risky"],
         "unreachable": reachability["unreachable"],
