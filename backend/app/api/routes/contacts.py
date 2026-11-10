@@ -38,7 +38,8 @@ from app.services.membership_access import (
     resolve_accessible_channel_ids,
     resolve_accessible_organization_ids,
 )
-from app.services.contact_serialization import contact_to_response
+from app.services.contact_campaign_groups import create_contact_group, load_last_campaigns_for_contacts
+from app.services.contact_serialization import attach_last_campaigns, contact_to_response
 from app.services.feature_flags import get_feature_flags
 
 from pydantic import BaseModel, Field
@@ -63,6 +64,13 @@ class ContactInterestsBody(BaseModel):
     interest_ids: list[UUID] = Field(default_factory=list)
 
 
+class ContactGroupCreateBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    organization_id: UUID
+    contact_ids: list[UUID] = Field(min_length=1, max_length=10000)
+    color: str | None = Field(default=None, max_length=20)
+
+
 def _contact_permissions(context: AuthContext) -> set[str]:
     from app.core.permissions import Permission, role_has_permission
 
@@ -74,19 +82,33 @@ async def _serialize_contacts(context: AuthContext, db: AsyncSession, contacts: 
     flags = await get_feature_flags(db, account_id=context.account_id)
     perms = _contact_permissions(context)
     mask = flags.get("privacy_mask_agents", True)
-    return [
-        contact_to_response(item, role=context.membership.role, permissions=perms, privacy_mask_enabled=mask)
-        for item in contacts
-    ]
+    last_campaigns = await load_last_campaigns_for_contacts(
+        db,
+        account_id=context.account_id,
+        contact_ids=[item.id for item in contacts],
+    )
+    return attach_last_campaigns(
+        contacts,
+        role=context.membership.role,
+        permissions=perms,
+        privacy_mask_enabled=mask,
+        last_campaigns=last_campaigns,
+    )
 
 
 async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) -> ContactResponse:
     flags = await get_feature_flags(db, account_id=context.account_id)
+    last_campaigns = await load_last_campaigns_for_contacts(
+        db,
+        account_id=context.account_id,
+        contact_ids=[contact.id],
+    )
     return contact_to_response(
         contact,
         role=context.membership.role,
         permissions=_contact_permissions(context),
         privacy_mask_enabled=flags.get("privacy_mask_agents", True),
+        last_campaign=last_campaigns.get(contact.id),
     )
 
 
@@ -246,6 +268,35 @@ async def import_contacts(
             "CHANNEL_ORGANIZATION_MISMATCH": "القناة لا تتبع الفرع المختار.",
         }
         raise HTTPException(status_code=400, detail=messages.get(code, code)) from exc
+
+
+@router.post("/groups")
+async def post_contact_group(
+    payload: ContactGroupCreateBody,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    accessible_orgs = await resolve_accessible_organization_ids(
+        db, account_id=context.account_id, membership=context.membership
+    )
+    if accessible_orgs is not None and payload.organization_id not in accessible_orgs:
+        raise HTTPException(status_code=403, detail="Organization is not accessible")
+    try:
+        return await create_contact_group(
+            db,
+            account_id=context.account_id,
+            organization_id=payload.organization_id,
+            name=payload.name,
+            contact_ids=payload.contact_ids,
+            color=payload.color,
+        )
+    except ValueError as exc:
+        messages = {
+            "NO_CONTACTS": (400, "اختر عميلاً واحداً على الأقل"),
+            "INVALID_NAME": (400, "اسم المجموعة غير صالح"),
+        }
+        code, detail = messages.get(str(exc), (400, "تعذر إنشاء المجموعة"))
+        raise HTTPException(status_code=code, detail=detail) from exc
 
 
 @router.get("/{contact_id}", response_model=ContactResponse)

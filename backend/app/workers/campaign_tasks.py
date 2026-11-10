@@ -225,12 +225,16 @@ async def _run_campaign(campaign_id: UUID, execution_token: UUID) -> dict:
         )
         campaign.completed_at = datetime.now(UTC)
         campaign.active_task_id = None
+        from app.services.contact_campaign_groups import tag_campaign_sent_recipients_as_group
+
+        group_info = await tag_campaign_sent_recipients_as_group(db, campaign=campaign)
         await db.commit()
         return {
             "status": campaign.status.value,
             "sent": sent,
             "failed": failed,
             "rate_limited": rate_limited,
+            "audience_group": group_info,
         }
 
 

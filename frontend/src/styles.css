@@ -3636,12 +3636,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 6px;
   align-items: center;
 }
-.contacts-bulk-tag select {
+.contacts-bulk-tag select,
+.contacts-bulk-tag input {
   padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--panel);
   font-size: 12px;
+  min-width: 160px;
 }
 .contacts-erp-meta {
   display: flex;

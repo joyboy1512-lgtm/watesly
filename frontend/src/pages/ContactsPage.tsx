@@ -46,6 +46,8 @@ export default function ContactsPage() {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const [groupBusy, setGroupBusy] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [segmentsModalOpen, setSegmentsModalOpen] = useState(false);
   const [segmentName, setSegmentName] = useState("");
@@ -263,6 +265,42 @@ export default function ContactsPage() {
     }
   }
 
+  async function createGroupFromSelected() {
+    const name = groupName.trim();
+    if (!name || !selectedCount) return;
+    const selectedRows = rows.filter((item) => selectedIds.has(item.id));
+    const organizationId = organizationFilter || selectedRows[0]?.organization_id;
+    if (!organizationId) {
+      toastStore.getState().show("اختر الفرع أولاً أو حدّد عملاء من نفس الفرع.", "error");
+      return;
+    }
+    const mixedOrg = selectedRows.some((item) => item.organization_id !== organizationId);
+    if (mixedOrg) {
+      toastStore.getState().show("أنشئ المجموعة لعملاء من نفس الفرع فقط.", "error");
+      return;
+    }
+    setGroupBusy(true);
+    try {
+      const response = await api.post<{ name: string; tagged: number }>("/contacts/groups", {
+        name,
+        organization_id: organizationId,
+        contact_ids: [...selectedIds]
+      });
+      setGroupName("");
+      await client.invalidateQueries({ queryKey: ["tags"] });
+      await client.invalidateQueries({ queryKey: ["contact-tags"] });
+      await client.invalidateQueries({ queryKey: ["contacts"] });
+      toastStore.getState().show(
+        `تم إنشاء المجموعة «${response.data.name}» وإضافة ${response.data.tagged} عميل.`,
+        "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذر إنشاء المجموعة.", "error");
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
   async function createSegment(event: FormEvent) {
     event.preventDefault();
     await api.post("/platform/segments", {
@@ -349,13 +387,29 @@ export default function ContactsPage() {
                 </button>
                 <div className="contacts-bulk-tag">
                   <select value={bulkTagId} onChange={(e) => setBulkTagId(e.target.value)}>
-                    <option value="">إضافة وسم…</option>
+                    <option value="">إضافة لمجموعة موجودة…</option>
                     {(tags.data ?? []).map((tag) => (
                       <option key={tag.id} value={tag.id}>{tag.name}</option>
                     ))}
                   </select>
                   <button type="button" className="contacts-erp-btn" disabled={!bulkTagId} onClick={() => void bulkAddTag()}>
                     تطبيق
+                  </button>
+                </div>
+                <div className="contacts-bulk-tag">
+                  <input
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="اسم مجموعة جديدة…"
+                    aria-label="اسم مجموعة جديدة"
+                  />
+                  <button
+                    type="button"
+                    className="contacts-erp-btn contacts-erp-btn-primary"
+                    disabled={!groupName.trim() || groupBusy}
+                    onClick={() => void createGroupFromSelected()}
+                  >
+                    {groupBusy ? "جاري…" : "إنشاء مجموعة"}
                   </button>
                 </div>
                 <Link
@@ -404,9 +458,9 @@ export default function ContactsPage() {
               value={tagFilter}
               onChange={(e) => onTagFilterChange(e.target.value)}
               className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب الوسم"
+              aria-label="تصفية حسب المجموعة"
             >
-              <option value="">كل الوسوم</option>
+              <option value="">كل المجموعات</option>
               {(tags.data ?? []).map((tag) => (
                 <option key={tag.id} value={tag.id}>{tag.name}</option>
               ))}
@@ -506,7 +560,8 @@ export default function ContactsPage() {
                   <th>البريد</th>
                   <th>الفرع</th>
                   <th>القناة</th>
-                  <th>الوسوم</th>
+                  <th>المجموعات</th>
+                  <th>آخر حملة</th>
                   <th>التسويق</th>
                   <th>تاريخ الإضافة</th>
                   <th></th>
@@ -699,11 +754,11 @@ function ContactRow({
             );
           })}
           <button type="button" className="contacts-tag-add" onClick={() => setTagOpen((v) => !v)}>
-            + وسم
+            + مجموعة
           </button>
           {tagOpen && (
             <div className="contacts-tag-dropdown">
-              {available.length === 0 && <p className="hint-text">لا توجد وسوم إضافية</p>}
+              {available.length === 0 && <p className="hint-text">لا توجد مجموعات إضافية</p>}
               {available.map((tag) => (
                 <button key={tag.id} type="button" onClick={() => void addTag(tag.id)}>
                   {tag.name}
@@ -712,6 +767,18 @@ function ContactRow({
             </div>
           )}
         </div>
+      </td>
+      <td className="contacts-date-cell">
+        {contact.last_campaign_at ? (
+          <div className="contacts-name-cell">
+            <strong title={contact.last_campaign_name ?? undefined}>
+              {contact.last_campaign_name || "حملة"}
+            </strong>
+            <span className="hint-text">{formatContactDate(contact.last_campaign_at)}</span>
+          </div>
+        ) : (
+          "—"
+        )}
       </td>
       <td>{contact.marketing_opt_in === false ? "✗" : "✓"}</td>
       <td className="contacts-date-cell">{formatContactDate(contact.created_at)}</td>

@@ -66,6 +66,9 @@ class ContactResponse(BaseModel):
     referral_json: dict | None = None
     created_at: datetime
     updated_at: datetime
+    last_campaign_id: UUID | None = None
+    last_campaign_name: str | None = None
+    last_campaign_at: datetime | None = None
 
 
 class ContactActivityResponse(BaseModel):

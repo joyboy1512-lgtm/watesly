@@ -22,6 +22,9 @@ export type Contact = {
   referral_json?: Record<string, unknown> | null;
   created_at: string;
   updated_at?: string;
+  last_campaign_id?: string | null;
+  last_campaign_name?: string | null;
+  last_campaign_at?: string | null;
 };
 
 export type ContactStats = {
