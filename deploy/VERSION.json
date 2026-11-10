@@ -8,16 +8,16 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "510f3cc",
-    "git_commit_message": "Remove unread follow-up campaign button",
+    "git_commit": "2604103",
+    "git_commit_message": "Contact WhatsApp status live",
     "alembic_head": "0062_instagram_accounts",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DXqGSK7b.js",
-      "css": "index-CfXf9D_1.css"
+      "js": "index-BYwKQZnJ.js",
+      "css": "index-DLsypwqT.css"
     },
-    "server_backup": "/opt/watesly/backups/20261110-180221"
+    "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "510f3cc",
-  "notes": "Removed متابعة غير المقروء from campaigns UI"
+  "commit": "2604103",
+  "notes": "Contact WhatsApp status: accepts/unreachable/invalid/dnd"
 }
