@@ -46,6 +46,7 @@ export default function ContactsPage() {
   const [tagFilter, setTagFilter] = useState(searchParams.get("tag_id") ?? "");
   const [segmentFilter, setSegmentFilter] = useState(searchParams.get("segment_id") ?? "");
   const [lifecycleFilter, setLifecycleFilter] = useState(searchParams.get("lifecycle_stage") ?? "");
+  const [regionFilter, setRegionFilter] = useState(searchParams.get("region") ?? "");
   const [whatsappStatusFilter, setWhatsappStatusFilter] = useState(searchParams.get("whatsapp_status") ?? "");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -88,7 +89,7 @@ export default function ContactsPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [debouncedSearch, channelFilter, organizationFilter, tagFilter, segmentFilter, lifecycleFilter, whatsappStatusFilter]);
+  }, [debouncedSearch, channelFilter, organizationFilter, tagFilter, segmentFilter, lifecycleFilter, regionFilter, whatsappStatusFilter]);
 
   function updateFilterParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -138,6 +139,7 @@ export default function ContactsPage() {
       tagFilter,
       segmentFilter,
       lifecycleFilter,
+      regionFilter,
       whatsappStatusFilter
     ],
     queryFn: async () => {
@@ -148,10 +150,20 @@ export default function ContactsPage() {
       if (tagFilter) params.tag_id = tagFilter;
       if (segmentFilter) params.segment_id = segmentFilter;
       if (lifecycleFilter) params.lifecycle_stage = lifecycleFilter;
+      if (regionFilter) params.region = regionFilter;
       if (whatsappStatusFilter) params.whatsapp_status = whatsappStatusFilter;
       return (await api.get<Contact[]>("/contacts", { params })).data;
     },
     refetchOnMount: "always"
+  });
+  const regions = useQuery({
+    queryKey: ["contact-regions", organizationFilter, channelFilter],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (organizationFilter) params.organization_id = organizationFilter;
+      if (channelFilter) params.channel_id = channelFilter;
+      return (await api.get<Array<{ region: string; count: number }>>("/contacts/regions", { params })).data;
+    }
   });
   const stats = useQuery({
     queryKey: ["contacts-stats"],
@@ -494,6 +506,24 @@ export default function ContactsPage() {
               ))}
             </select>
             <select
+              value={regionFilter}
+              onChange={(e) => {
+                const value = e.target.value;
+                setRegionFilter(value);
+                updateFilterParam("region", value);
+                setPage(1);
+              }}
+              className="contacts-erp-channel-filter"
+              aria-label="تصفية حسب المنطقة"
+            >
+              <option value="">كل المناطق</option>
+              {(regions.data ?? []).map((item) => (
+                <option key={item.region} value={item.region}>
+                  {item.region} ({item.count.toLocaleString("ar")})
+                </option>
+              ))}
+            </select>
+            <select
               value={whatsappStatusFilter}
               onChange={(e) => {
                 const value = e.target.value;
@@ -588,6 +618,7 @@ export default function ContactsPage() {
                   <th>المرحلة</th>
                   <th>الجنس</th>
                   <th>الهاتف</th>
+                  <th>المنطقة</th>
                   <th>البريد</th>
                   <th>الفرع</th>
                   <th>القناة</th>
@@ -796,6 +827,7 @@ function ContactRow({
       <td>{formatLifecycleStage(contact.lifecycle_stage)}</td>
       <td>{formatGenderLabel(contact.gender)}</td>
       <td dir="ltr" className="contacts-phone-cell">{contact.external_address}</td>
+      <td>{contact.region || "—"}</td>
       <td dir="ltr">{contact.email || "—"}</td>
       <td>{organizationName}</td>
       <td>{channelName}</td>

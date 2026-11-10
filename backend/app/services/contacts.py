@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.channel import Channel
@@ -53,6 +53,8 @@ async def list_contacts(
     tag_ids: list[UUID] | None = None,
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
+    region: str | None = None,
+    regions: list[str] | None = None,
     whatsapp_status: str | None = None,
     contact_ids: list[UUID] | None = None,
     q: str | None = None,
@@ -64,6 +66,11 @@ async def list_contacts(
         effective_tag_ids.extend(tag_ids)
     if tag_id is not None and tag_id not in effective_tag_ids:
         effective_tag_ids.append(tag_id)
+    effective_regions: list[str] = []
+    if regions:
+        effective_regions.extend([item.strip() for item in regions if item and item.strip()])
+    if region and region.strip() and region.strip() not in effective_regions:
+        effective_regions.append(region.strip())
     query = (
         select(Contact)
         .where(Contact.account_id == account_id, Contact.deleted_at.is_(None))
@@ -86,6 +93,10 @@ async def list_contacts(
                 filters["tag_id"] = str(effective_tag_ids[0])
             elif len(effective_tag_ids) > 1:
                 filters["tag_ids"] = [str(item) for item in effective_tag_ids]
+            if len(effective_regions) == 1:
+                filters["region"] = effective_regions[0]
+            elif len(effective_regions) > 1:
+                filters["regions"] = effective_regions
             if q and q.strip():
                 filters["search"] = q.strip()
             query = _apply_segment_filters(query, filters)
@@ -121,6 +132,10 @@ async def list_contacts(
             )
         if lifecycle_stage and lifecycle_stage.strip():
             query = query.where(Contact.lifecycle_stage == lifecycle_stage.strip())
+        if len(effective_regions) == 1:
+            query = query.where(Contact.region == effective_regions[0])
+        elif len(effective_regions) > 1:
+            query = query.where(Contact.region.in_(effective_regions))
         if q and q.strip():
             term = f"%{q.strip()}%"
             query = query.where(
@@ -128,6 +143,7 @@ async def list_contacts(
                     Contact.display_name.ilike(term),
                     Contact.external_address.ilike(term),
                     Contact.email.ilike(term),
+                    Contact.region.ilike(term),
                 )
             )
         status_filter = (whatsapp_status or "").strip().lower()
@@ -178,6 +194,42 @@ async def list_contacts(
     return contacts
 
 
+async def list_contact_regions(
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    organization_id: UUID | None = None,
+    channel_id: UUID | None = None,
+    accessible_channel_ids: list[UUID] | None = None,
+    accessible_organization_ids: list[UUID] | None = None,
+) -> list[dict]:
+    query = (
+        select(Contact.region, func.count(Contact.id))
+        .where(
+            Contact.account_id == account_id,
+            Contact.deleted_at.is_(None),
+            Contact.region.is_not(None),
+            Contact.region != "",
+        )
+        .group_by(Contact.region)
+        .order_by(Contact.region.asc())
+    )
+    if accessible_organization_ids is not None:
+        if not accessible_organization_ids:
+            return []
+        query = query.where(Contact.organization_id.in_(accessible_organization_ids))
+    if organization_id is not None:
+        query = query.where(Contact.organization_id == organization_id)
+    if channel_id is not None:
+        query = query.where(Contact.channel_id == channel_id)
+    elif accessible_channel_ids is not None:
+        if not accessible_channel_ids:
+            return []
+        query = query.where(Contact.channel_id.in_(accessible_channel_ids))
+    rows = (await db.execute(query)).all()
+    return [{"region": name, "count": int(count)} for name, count in rows if name]
+
+
 async def create_contact(
     db: AsyncSession,
     *,
@@ -219,6 +271,8 @@ async def create_contact(
             contact.language = payload.language
         if payload.country_code is not None:
             contact.country_code = payload.country_code
+        if payload.region is not None:
+            contact.region = payload.region
         if lifecycle_stage is not None:
             contact.lifecycle_stage = lifecycle_stage
         contact.updated_at = datetime.now(UTC)

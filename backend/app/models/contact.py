@@ -32,6 +32,7 @@ class Contact(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     email: Mapped[str | None] = mapped_column(String(320))
     language: Mapped[str | None] = mapped_column(String(10))
     country_code: Mapped[str | None] = mapped_column(String(2))
+    region: Mapped[str | None] = mapped_column(String(120), index=True)
     gender: Mapped[str] = mapped_column(String(10), default="unknown", server_default="unknown")
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     reachability_status: Mapped[str | None] = mapped_column(String(20), index=True)
