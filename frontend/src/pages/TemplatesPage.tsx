@@ -6,6 +6,7 @@ import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   buildStoredComponents,
   HEADER_MEDIA_ACCEPT,
+  normalizeShopUrl,
   type TemplateComponent,
   type TemplateHeaderFormat
 } from "../lib/templateMedia";
@@ -59,6 +60,9 @@ export default function TemplatesPage() {
   const [headerFile, setHeaderFile] = useState<UploadedFile | null>(null);
   const [uploadingHeader, setUploadingHeader] = useState(false);
   const [includeMarketingOptOut, setIncludeMarketingOptOut] = useState(true);
+  const [includeShopCta, setIncludeShopCta] = useState(false);
+  const [shopUrl, setShopUrl] = useState("");
+  const [shopButtonText, setShopButtonText] = useState("تسوق الآن");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -105,9 +109,11 @@ export default function TemplatesPage() {
   const previewComponents = useMemo(
     () => buildStoredComponents(bodyText, headerFile, headerType || null, {
       includeMarketingOptOut,
-      category
+      category,
+      shopUrl: includeShopCta ? shopUrl : null,
+      shopButtonText: includeShopCta ? shopButtonText : null
     }),
-    [bodyText, headerFile, headerType, includeMarketingOptOut, category]
+    [bodyText, headerFile, headerType, includeMarketingOptOut, category, includeShopCta, shopUrl, shopButtonText]
   );
 
   function accountDisplayName(accountIdValue: string) {
@@ -140,11 +146,18 @@ export default function TemplatesPage() {
       toastStore.getState().show("ارفع ملفاً للرأس (صورة / فيديو / PDF).", "error");
       return;
     }
+    const resolvedShopUrl = includeShopCta ? normalizeShopUrl(shopUrl) : null;
+    if (includeShopCta && !resolvedShopUrl) {
+      toastStore.getState().show("أدخل رابط موقع صالحاً لزر «تسوق الآن» (مثال: https://example.com).", "error");
+      return;
+    }
     setSubmitting(true);
     try {
       const components = buildStoredComponents(bodyText, headerFile, headerType || null, {
         includeMarketingOptOut,
-        category
+        category,
+        shopUrl: resolvedShopUrl,
+        shopButtonText: includeShopCta ? shopButtonText : null
       });
       const response = await api.post<Template>("/templates", {
         whatsapp_account_id: accountId,
@@ -158,6 +171,9 @@ export default function TemplatesPage() {
       setBodyText("");
       setHeaderType("");
       setHeaderFile(null);
+      setIncludeShopCta(false);
+      setShopUrl("");
+      setShopButtonText("تسوق الآن");
       await client.invalidateQueries({ queryKey: ["templates"] });
       setActiveTab("list");
       if (response.data.status === "approved") {
@@ -519,6 +535,45 @@ export default function TemplatesPage() {
                   />
                   <span>إضافة أزرار «مهتم» و«عدم الإزعاج» وتذييل إلغاء الاشتراك</span>
                 </label>
+              )}
+
+              <label className="field-label checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={includeShopCta}
+                  onChange={(event) => setIncludeShopCta(event.target.checked)}
+                />
+                <span>إضافة زر «تسوق الآن» برابط موقع (يظهر أسفل رسالة الحملة)</span>
+              </label>
+              {includeShopCta && (
+                <div className="templates-fields-row">
+                  <label className="field-label">
+                    <span>نص الزر</span>
+                    <input
+                      value={shopButtonText}
+                      onChange={(e) => setShopButtonText(e.target.value.slice(0, 25))}
+                      placeholder="تسوق الآن"
+                      maxLength={25}
+                      required
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>رابط الموقع</span>
+                    <input
+                      type="url"
+                      value={shopUrl}
+                      onChange={(e) => setShopUrl(e.target.value)}
+                      placeholder="https://example.com"
+                      dir="ltr"
+                      required
+                    />
+                  </label>
+                </div>
+              )}
+              {includeShopCta && (
+                <p className="hint-text">
+                  بعد اعتماد القالب من Meta، استخدمه في الحملة ليظهر زر الرابط أسفل الرسالة. واتساب يسمح بحد أقصى 3 أزرار.
+                </p>
               )}
 
               <label className="field-label">
