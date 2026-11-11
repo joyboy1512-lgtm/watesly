@@ -2382,12 +2382,42 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
+  background: var(--panel);
+}
+.campaign-period-filter > .campaign-check-row {
+  border: 1px solid var(--line);
+  border-radius: 10px;
   background: var(--panel-soft);
 }
 .campaign-period-dates {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
+}
+.campaign-exclude-columns {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 12px;
+  align-items: start;
+}
+.campaign-period-groups-panel {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+  min-width: 0;
+}
+.campaign-period-groups-panel > .campaign-exclude-options-title {
+  margin: 0;
+}
+.campaign-period-groups-panel .campaign-period-groups {
+  padding: 10px 12px 12px;
+}
+.campaign-period-empty {
+  margin: 0;
+  padding: 12px;
 }
 .campaign-period-groups {
   display: grid;
@@ -2397,6 +2427,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: transparent;
   max-height: none;
   overflow: visible;
+}
+@media (max-width: 900px) {
+  .campaign-exclude-columns {
+    grid-template-columns: 1fr;
+  }
 }
 .campaign-period-groups-toolbar {
   display: flex;
@@ -2447,7 +2482,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 600;
 }
 .campaign-exclude-table-wrap {
-  max-height: 240px;
+  max-height: 280px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -2455,7 +2490,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-exclude-table {
   margin: 0;
-  min-width: 520px;
+  min-width: 420px;
+}
+.campaigns-send-panel {
+  align-content: start;
+  padding: 12px 16px;
+}
+.campaigns-send-panel .whatsapp-button {
+  width: 100%;
 }
 .campaign-exclude-table th,
 .campaign-exclude-table td {
