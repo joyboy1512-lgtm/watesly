@@ -94,6 +94,11 @@ type CampaignPreflight = {
   unreachable?: number;
   cold_audience?: number;
   warm_audience?: number;
+  reachable_contact_ids?: string[];
+  risky_contact_ids?: string[];
+  unreachable_contact_ids?: string[];
+  invalid_phone_contact_ids?: string[];
+  marketing_opt_out_contact_ids?: string[];
   template_has_opt_out_button?: boolean;
   include_opt_out_option?: boolean;
   warnings: string[];
@@ -205,6 +210,7 @@ export default function CampaignsPage() {
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
   const [audienceLifecycle, setAudienceLifecycle] = useState("");
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
+  const [preflightBusy, setPreflightBusy] = useState(false);
   const [includeOptOutOption, setIncludeOptOutOption] = useState(true);
   const [excludeUnreachable, setExcludeUnreachable] = useState(true);
   const [excludeRisky, setExcludeRisky] = useState(false);
@@ -548,13 +554,20 @@ export default function CampaignsPage() {
     });
   }, [selectedAccountChannelId, contactById, audienceMode, excelIdSet]);
 
-  useEffect(() => {
+  async function runAudiencePreflight(options?: { silent?: boolean }) {
     if (!templateId || !channelScopedSelectedContacts.length) {
       setPreflight(null);
-      return;
+      if (!options?.silent) {
+        toastStore.getState().show(
+          !templateId ? "اختر القالب المعتمد أولاً ثم افحص الجمهور." : "حدّد جمهور الحملة أولاً.",
+          "error"
+        );
+      }
+      return null;
     }
-    void api
-      .post("/campaigns/preflight", {
+    setPreflightBusy(true);
+    try {
+      const res = await api.post("/campaigns/preflight", {
         template_id: templateId,
         contact_ids: channelScopedSelectedContacts,
         whatsapp_account_id: accountId || null,
@@ -566,9 +579,34 @@ export default function CampaignsPage() {
         exclude_sent_from: excludeSentFrom ? `${excludeSentFrom}T00:00:00` : null,
         exclude_sent_to: excludeSentTo ? `${excludeSentTo}T00:00:00` : null,
         exclude_campaign_ids: excludeCampaignIds
-      })
-      .then((res) => setPreflight(res.data as CampaignPreflight))
-      .catch(() => setPreflight(null));
+      });
+      const data = res.data as CampaignPreflight;
+      setPreflight(data);
+      if (!options?.silent) {
+        toastStore.getState().show(
+          `نتيجة الفحص: ${data.eligible_recipients ?? 0} مؤهل للإرسال من ${data.total}.`,
+          "success"
+        );
+      }
+      return data;
+    } catch {
+      setPreflight(null);
+      if (!options?.silent) {
+        toastStore.getState().show("تعذر فحص الجمهور. حاول مرة أخرى.", "error");
+      }
+      return null;
+    } finally {
+      setPreflightBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!templateId || !channelScopedSelectedContacts.length) {
+      setPreflight(null);
+      return;
+    }
+    void runAudiencePreflight({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- manual re-check via button; auto on audience/filter changes
   }, [
     templateId,
     channelScopedSelectedContacts,
@@ -600,12 +638,31 @@ export default function CampaignsPage() {
     toastStore.getState().show("تم فتح اختيار العملاء من المكتبة.", "success");
   }
 
+  function restoreExcelAudience() {
+    if (!excelAudienceIds.length) return;
+    setSelectedContacts([...excelAudienceIds]);
+    toastStore.getState().show(`تمت استعادة جمهور Excel كاملاً (${excelAudienceIds.length}).`, "success");
+  }
+
+  function removeContactsFromSelection(ids: string[], label: string) {
+    if (!ids.length) {
+      toastStore.getState().show(`لا يوجد ${label} ضمن التحديد الحالي.`, "error");
+      return;
+    }
+    const remove = new Set(ids);
+    setSelectedContacts((current) => {
+      const next = current.filter((id) => !remove.has(id));
+      toastStore.getState().show(`تم استبعاد ${ids.length} (${label}) — تبقّى ${next.length}.`, "success");
+      return next;
+    });
+  }
+
   function applyEligibleAudienceOnly() {
     const ids = (preflight?.eligible_contact_ids ?? []).filter((id) =>
       channelScopedSelectedContacts.includes(id)
     );
     if (!ids.length) {
-      // Client-side fallback: keep only accepts / unknown from current selection
+      // Client-side fallback: keep only accepts / reachable from current selection
       const fallback = channelScopedSelectedContacts.filter((id) => {
         const contact = contactById.get(id);
         if (!contact) return false;
@@ -652,19 +709,32 @@ export default function CampaignsPage() {
       setAudienceMode("excel");
       setSelectedContacts(ids);
       setExcludeUnreachable(true);
+      setExcludeRisky(false);
+      setOnlyNeverSent(false);
       setAudienceTagIds([]);
       setAudienceWhatsappStatus("");
       setAudienceRegions([]);
       setAudienceSegmentFilterId("");
       setAudienceLastCampaignFrom("");
       setAudienceLastCampaignTo("");
+      setAudienceGenderFilter("");
+      setAudienceInterestIds([]);
+      setAudienceLifecycle("");
+      setSelectedSegmentId("");
       setContactSearch("");
+      setPreflight(null);
       const skipped = result.data.skipped ?? 0;
       const invalid = result.data.invalid ?? 0;
       toastStore.getState().show(
-        `تم قفل الجمهور على ملف Excel فقط: ${ids.length} عميل (${result.data.created} جديد، ${result.data.existing} موجود${invalid ? `، ${invalid} رقم غير صالح واستُبعد` : ""}${skipped ? `، ${skipped} فارغ` : ""}).`,
+        `جمهور الحملة = ملف Excel فقط (${ids.length} رقم). لن يُقبل عملاء من جهات الاتصال. سيتم فحص الجمهور تلقائياً.`,
         "success"
       );
+      if (invalid || skipped) {
+        toastStore.getState().show(
+          `الاستيراد: ${result.data.created} جديد، ${result.data.existing} موجود${invalid ? `، ${invalid} رقم غير صالح` : ""}${skipped ? `، ${skipped} فارغ` : ""}.`,
+          invalid ? "error" : "success"
+        );
+      }
       await client.invalidateQueries({ queryKey: ["contacts"] });
       event.currentTarget.reset();
     } catch (error) {
@@ -1420,9 +1490,22 @@ export default function CampaignsPage() {
                 })()}
                 </div>
               </div>
+              <div className="campaign-preflight-actions">
+                <button
+                  type="button"
+                  className="whatsapp-button"
+                  disabled={preflightBusy || !templateId || !channelScopedSelectedContacts.length}
+                  onClick={() => void runAudiencePreflight()}
+                >
+                  {preflightBusy ? "جاري فحص الجمهور…" : "فحص الجمهور"}
+                </button>
+                <p className="hint-text">
+                  يمكنك الضغط مراراً بعد تعديل خيارات الاستبعاد لتعظيم عدد المؤهلين للإرسال.
+                </p>
+              </div>
               {preflight && channelScopedSelectedContacts.length > 0 && (
                 <div className="campaign-preflight-panel">
-                  <strong>فحص الجمهور قبل الإرسال</strong>
+                  <strong>نتيجة فحص الجمهور</strong>
                   <div className="campaign-preflight-stats">
                     <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
                     <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
@@ -1436,6 +1519,83 @@ export default function CampaignsPage() {
                     <div><strong>{preflight.never_sent ?? 0}</strong><span>لم يُرسل لهم</span></div>
                     <div><strong>{preflight.previously_sent ?? 0}</strong><span>سبق إرسالهم</span></div>
                     <div><strong>{preflight.sent_in_period ?? 0}</strong><span>أُرسل لهم في الفترة</span></div>
+                  </div>
+                  <div className="campaign-preflight-trim" role="group" aria-label="تحكم بجمهور الحملة بعد الفحص">
+                    <strong className="campaign-exclude-options-title">تحكم بجمهور الحملة بعد الفحص</strong>
+                    <div className="campaign-preflight-trim-actions">
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        onClick={applyEligibleAudienceOnly}
+                      >
+                        أبقِ المؤهلين فقط ({preflight.eligible_recipients ?? 0})
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        disabled={!(preflight.invalid_phone_contact_ids?.length)}
+                        onClick={() =>
+                          removeContactsFromSelection(
+                            (preflight.invalid_phone_contact_ids ?? []).filter((id) =>
+                              channelScopedSelectedContacts.includes(id)
+                            ),
+                            "رقم غير صالح"
+                          )
+                        }
+                      >
+                        استبعد رقم غير صالح ({preflight.invalid_phone ?? 0})
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        disabled={!(preflight.unreachable_contact_ids?.length)}
+                        onClick={() =>
+                          removeContactsFromSelection(
+                            (preflight.unreachable_contact_ids ?? []).filter((id) =>
+                              channelScopedSelectedContacts.includes(id)
+                            ),
+                            "غير قابل للوصول"
+                          )
+                        }
+                      >
+                        استبعد غير قابل للوصول ({preflight.unreachable ?? 0})
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        disabled={!(preflight.risky_contact_ids?.length)}
+                        onClick={() =>
+                          removeContactsFromSelection(
+                            (preflight.risky_contact_ids ?? []).filter((id) =>
+                              channelScopedSelectedContacts.includes(id)
+                            ),
+                            "محفوف بالمخاطر"
+                          )
+                        }
+                      >
+                        استبعد محفوف بالمخاطر ({preflight.risky ?? 0})
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        disabled={!(preflight.marketing_opt_out_contact_ids?.length)}
+                        onClick={() =>
+                          removeContactsFromSelection(
+                            (preflight.marketing_opt_out_contact_ids ?? []).filter((id) =>
+                              channelScopedSelectedContacts.includes(id)
+                            ),
+                            "عدم الإزعاج"
+                          )
+                        }
+                      >
+                        استبعد عدم الإزعاج ({preflight.marketing_opt_out ?? 0})
+                      </button>
+                      {audienceMode === "excel" && (
+                        <button type="button" className="secondary-button compact" onClick={restoreExcelAudience}>
+                          أعد كل أرقام Excel
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {preflight.warnings.map((warning) => (
                     <p key={warning} className="campaign-warning">⚠ {warning}</p>
@@ -1458,13 +1618,6 @@ export default function CampaignsPage() {
                     <p className="hint-text">جودة الحساب: {preflight.quality_rating}</p>
                   )}
                   <p className="hint-text">{preflight.messaging_tier_hint}</p>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={applyEligibleAudienceOnly}
-                  >
-                    تطبيق الفحص: أبقِ المؤهلين فقط (استبعاد غير صالح / بلا واتساب / عدم إزعاج)
-                  </button>
                 </div>
               )}
               {Boolean(preflight?.never_sent_contact_ids?.length) && (
@@ -1518,8 +1671,8 @@ export default function CampaignsPage() {
                   <h3 className="section-title-sm">جدول جمهور الحملة</h3>
                   <p className="hint-text">
                     {audienceMode === "excel"
-                      ? "الجمهور مقيّد بملف Excel — يمكنك فلترة الجدول وتحديد/إلغاء داخل الملف فقط."
-                      : "فلتر ثم حدّد العملاء من الجدول، أو ارفع Excel لقفل الجمهور على الملف فقط."}
+                      ? "جمهور الحملة من ملف Excel فقط — الفلترة والتحديد داخل أرقام الملف. جهات الاتصال خارج الملف مرفوضة."
+                      : "فلتر ثم حدّد من جهات الاتصال، أو ارفع Excel ليصبح الملف هو جمهور الحملة فقط."}
                   </p>
                 </div>
               </div>
@@ -1557,10 +1710,15 @@ export default function CampaignsPage() {
                 </div>
                 {audienceMode === "excel" && (
                   <div className="campaign-excel-lock-banner" role="status">
-                    <strong>وضع Excel مفعّل</strong>
-                    <span>{excelAudienceIds.length.toLocaleString("ar")} رقم من الملف فقط</span>
+                    <strong>جمهور Excel فقط</strong>
+                    <span>
+                      {excelAudienceIds.length.toLocaleString("ar")} رقم من الملف — لا يُقبل عملاء من جهات الاتصال
+                    </span>
+                    <button type="button" className="secondary-button compact" onClick={restoreExcelAudience}>
+                      استعادة كل أرقام الملف
+                    </button>
                     <button type="button" className="secondary-button compact" onClick={clearExcelAudienceLock}>
-                      إلغاء القفل والاختيار من المكتبة
+                      إلغاء القفل (المكتبة)
                     </button>
                   </div>
                 )}
