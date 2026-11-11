@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "864f398",
-    "git_commit_message": "WhatsApp status labels live",
+    "git_commit": "e6dfaf2",
+    "git_commit_message": "Excel audience control + WhatsApp status labels live",
     "alembic_head": "0063_contact_region",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-D5QUbY9Y.js",
-      "css": "index-BDKcYy-q.css"
+      "js": "index-DYPWJdYN.js",
+      "css": "index-CVnHOJtx.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "864f398",
-  "notes": "Contact WhatsApp statuses: eligible, invalid, DND, reachable, unreachable"
+  "commit": "e6dfaf2",
+  "notes": "Excel-only campaign audience, repeatable preflight, category trim controls"
 }
