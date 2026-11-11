@@ -128,7 +128,7 @@ async def get_contacts(
     ids: str | None = Query(None, description="Comma-separated contact IDs (e.g. Excel audience lock)"),
     whatsapp_status: str | None = Query(
         default=None,
-        pattern=r"^(accepts|unreachable|invalid|dnd)$",
+        pattern=r"^(accepts|reachable|unreachable|invalid|dnd)$",
     ),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),

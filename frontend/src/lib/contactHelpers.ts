@@ -26,15 +26,16 @@ export type Contact = {
   last_campaign_id?: string | null;
   last_campaign_name?: string | null;
   last_campaign_at?: string | null;
-  whatsapp_status?: "accepts" | "unreachable" | "invalid" | "dnd" | null;
+  whatsapp_status?: "accepts" | "reachable" | "unreachable" | "invalid" | "dnd" | null;
   whatsapp_status_label?: string | null;
 };
 
 export const WHATSAPP_STATUS_LABELS: Record<string, string> = {
-  accepts: "يقبل الاستلام",
-  unreachable: "غير قابل للوصول",
-  invalid: "غير صالح",
-  dnd: "طلب عدم الإزعاج"
+  accepts: "مؤهل للإرسال",
+  invalid: "رقم غير صالح",
+  dnd: "عدم الإزعاج",
+  reachable: "قابل للوصول",
+  unreachable: "غير قابل للوصول"
 };
 
 export function formatWhatsAppStatus(contact: Pick<Contact, "whatsapp_status" | "whatsapp_status_label" | "marketing_opt_in">) {
@@ -49,6 +50,7 @@ export function formatWhatsAppStatus(contact: Pick<Contact, "whatsapp_status" | 
 export function whatsappStatusTone(status: string | null | undefined) {
   switch (status) {
     case "accepts":
+    case "reachable":
       return "success";
     case "unreachable":
       return "warning";
