@@ -1199,6 +1199,11 @@ export default function CampaignsPage() {
                   {" "}→ تبويب «مزامنة من Meta» → اختر نفس الحساب → Sync.
                 </p>
               )}
+              <p className="hint-text">
+                لظهور زر «تسوق الآن» أسفل الرسالة: أنشئ قالباً مع رابط الموقع من{" "}
+                <Link to="/templates">القوالب</Link>
+                {" "}ثم اختره هنا بعد اعتماده.
+              </p>
               {accountId && templateId && selectedAccount && selectedTemplate && selectedTemplate.whatsapp_account_id !== accountId && (
                 <p className="hint-text campaign-warning">
                   هذا القالب لا ينتمي للحساب المختار — اختر قالباً من نفس القناة.

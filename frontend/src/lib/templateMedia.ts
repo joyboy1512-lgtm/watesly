@@ -63,11 +63,31 @@ export function getTemplateHeaderInfo(components: TemplateComponent[] | null | u
   return null;
 }
 
+/** Normalize a shop/CTA URL for Meta URL buttons. Returns null when empty or invalid. */
+export function normalizeShopUrl(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withProtocol);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (!parsed.hostname) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function buildStoredComponents(
   bodyText: string | null,
   uploaded: UploadedFile | null,
   headerFormat: TemplateHeaderFormat | null,
-  options?: { includeMarketingOptOut?: boolean; category?: string | null }
+  options?: {
+    includeMarketingOptOut?: boolean;
+    category?: string | null;
+    shopUrl?: string | null;
+    shopButtonText?: string | null;
+  }
 ): TemplateComponent[] {
   const components: TemplateComponent[] = [];
   if (uploaded && headerFormat) {
@@ -81,14 +101,40 @@ export function buildStoredComponents(
   if (bodyText?.trim()) {
     components.push({ type: "BODY", text: bodyText.trim() });
   }
-  if (options?.includeMarketingOptOut && (options.category ?? "marketing") === "marketing") {
-    components.push({
-      type: "BUTTONS",
-      buttons: [
-        { type: "QUICK_REPLY", text: "مهتم", id: "watesly_interested", marketing_interested: true },
-        { type: "QUICK_REPLY", text: "عدم الإزعاج", id: "watesly_marketing_opt_out", marketing_opt_out: true }
-      ]
-    });
+
+  const buttons: NonNullable<TemplateComponent["buttons"]> = [];
+  const shopUrl = normalizeShopUrl(options?.shopUrl);
+  if (shopUrl) {
+    const shopText = (options?.shopButtonText ?? "").trim().slice(0, 25) || "تسوق الآن";
+    buttons.push({ type: "URL", text: shopText, url: shopUrl });
+  }
+
+  const includeMarketing =
+    Boolean(options?.includeMarketingOptOut) && (options?.category ?? "marketing") === "marketing";
+  if (includeMarketing) {
+    // Meta allows at most 3 buttons; keep the URL CTA and fill remaining slots with marketing replies.
+    if (buttons.length < 3) {
+      buttons.push({
+        type: "QUICK_REPLY",
+        text: "مهتم",
+        id: "watesly_interested",
+        marketing_interested: true
+      });
+    }
+    if (buttons.length < 3) {
+      buttons.push({
+        type: "QUICK_REPLY",
+        text: "عدم الإزعاج",
+        id: "watesly_marketing_opt_out",
+        marketing_opt_out: true
+      });
+    }
+  }
+
+  if (buttons.length > 0) {
+    components.push({ type: "BUTTONS", buttons: buttons.slice(0, 3) });
+  }
+  if (includeMarketing) {
     components.push({ type: "FOOTER", text: "أرسل «إيقاف» لإلغاء الاشتراك" });
   }
   return components;
