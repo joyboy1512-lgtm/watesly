@@ -332,6 +332,13 @@ async def campaign_audience_preflight(
         "invalid_phone": reachability["invalid_phone"],
         "cold_audience": reachability["cold_audience"],
         "warm_audience": reachability["warm_audience"],
+        "reachable_contact_ids": [str(item) for item in reachability.get("reachable_contact_ids", [])],
+        "risky_contact_ids": [str(item) for item in reachability.get("risky_contact_ids", [])],
+        "unreachable_contact_ids": [str(item) for item in reachability.get("unreachable_contact_ids", [])],
+        "invalid_phone_contact_ids": [str(item) for item in reachability.get("invalid_phone_contact_ids", [])],
+        "marketing_opt_out_contact_ids": [
+            str(item) for item in reachability.get("marketing_opt_out_contact_ids", [])
+        ],
         "only_never_sent": only_never_sent,
         "template_has_opt_out_button": has_opt_out_button,
         "template_has_opt_out_footer": has_opt_out_footer,
