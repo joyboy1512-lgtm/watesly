@@ -24,7 +24,7 @@ def test_classify_invalid_phone_as_invalid() -> None:
 def test_resolve_whatsapp_contact_status_priority() -> None:
     dnd = Contact(external_address="96590053224", country_code="KW", marketing_opt_in=False)
     assert resolve_whatsapp_contact_status(dnd) == WhatsAppContactStatus.DND
-    assert whatsapp_status_label(WhatsAppContactStatus.DND) == "طلب عدم الإزعاج"
+    assert whatsapp_status_label(WhatsAppContactStatus.DND) == "عدم الإزعاج"
 
     invalid = Contact(
         external_address="96590053224",
@@ -33,6 +33,7 @@ def test_resolve_whatsapp_contact_status_priority() -> None:
         reachability_status=ReachabilityStatus.INVALID,
     )
     assert resolve_whatsapp_contact_status(invalid) == WhatsAppContactStatus.INVALID
+    assert whatsapp_status_label(WhatsAppContactStatus.INVALID) == "رقم غير صالح"
 
     unreachable = Contact(
         external_address="96590053224",
@@ -41,15 +42,25 @@ def test_resolve_whatsapp_contact_status_priority() -> None:
         reachability_status=ReachabilityStatus.UNREACHABLE,
     )
     assert resolve_whatsapp_contact_status(unreachable) == WhatsAppContactStatus.UNREACHABLE
+    assert whatsapp_status_label(WhatsAppContactStatus.UNREACHABLE) == "غير قابل للوصول"
 
-    accepts = Contact(
+    reachable = Contact(
         external_address="96590053224",
         country_code="KW",
         marketing_opt_in=True,
         reachability_status=ReachabilityStatus.REACHABLE,
     )
+    assert resolve_whatsapp_contact_status(reachable) == WhatsAppContactStatus.REACHABLE
+    assert whatsapp_status_label(WhatsAppContactStatus.REACHABLE) == "قابل للوصول"
+
+    accepts = Contact(
+        external_address="96590053224",
+        country_code="KW",
+        marketing_opt_in=True,
+        reachability_status=ReachabilityStatus.RISKY,
+    )
     assert resolve_whatsapp_contact_status(accepts) == WhatsAppContactStatus.ACCEPTS
-    assert whatsapp_status_label(WhatsAppContactStatus.ACCEPTS) == "يقبل الاستلام"
+    assert whatsapp_status_label(WhatsAppContactStatus.ACCEPTS) == "مؤهل للإرسال"
 
 
 def test_unreachable_contact_excluded_from_campaign() -> None:

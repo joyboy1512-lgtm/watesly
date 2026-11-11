@@ -25,17 +25,19 @@ class ReachabilityStatus(StrEnum):
 class WhatsAppContactStatus(StrEnum):
     """Operator-facing WhatsApp readiness for a contact."""
 
-    ACCEPTS = "accepts"
+    ACCEPTS = "accepts"  # مؤهل للإرسال (opt-in, not blocked)
+    REACHABLE = "reachable"  # قابل للوصول (confirmed delivery success)
     UNREACHABLE = "unreachable"
     INVALID = "invalid"
     DND = "dnd"
 
 
 WHATSAPP_STATUS_LABELS_AR: dict[str, str] = {
-    WhatsAppContactStatus.ACCEPTS: "يقبل الاستلام",
+    WhatsAppContactStatus.ACCEPTS: "مؤهل للإرسال",
+    WhatsAppContactStatus.INVALID: "رقم غير صالح",
+    WhatsAppContactStatus.DND: "عدم الإزعاج",
+    WhatsAppContactStatus.REACHABLE: "قابل للوصول",
     WhatsAppContactStatus.UNREACHABLE: "غير قابل للوصول",
-    WhatsAppContactStatus.INVALID: "غير صالح",
-    WhatsAppContactStatus.DND: "طلب عدم الإزعاج",
 }
 
 
@@ -82,13 +84,18 @@ def is_phone_valid_for_whatsapp(contact: Contact) -> bool:
 
 
 def resolve_whatsapp_contact_status(contact: Contact) -> WhatsAppContactStatus:
-    """Single customer WhatsApp status (priority: DND → invalid → unreachable → accepts)."""
+    """Single customer WhatsApp status.
+
+    Priority: DND → invalid → unreachable → reachable → accepts (eligible).
+    """
     if contact.marketing_opt_in is False:
         return WhatsAppContactStatus.DND
     if contact.reachability_status == ReachabilityStatus.INVALID or not is_phone_valid_for_whatsapp(contact):
         return WhatsAppContactStatus.INVALID
     if contact.reachability_status == ReachabilityStatus.UNREACHABLE:
         return WhatsAppContactStatus.UNREACHABLE
+    if contact.reachability_status == ReachabilityStatus.REACHABLE:
+        return WhatsAppContactStatus.REACHABLE
     return WhatsAppContactStatus.ACCEPTS
 
 

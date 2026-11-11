@@ -17,7 +17,10 @@ def test_whatsapp_status_helpers_wired() -> None:
 
     assert "class WhatsAppContactStatus" in reach
     assert "def resolve_whatsapp_contact_status" in reach
-    assert "يقبل الاستلام" in reach
+    assert "مؤهل للإرسال" in reach
+    assert "قابل للوصول" in reach
+    assert "رقم غير صالح" in reach
+    assert "عدم الإزعاج" in reach
     assert "whatsapp_status" in schema
     assert "whatsapp_status_label" in schema
     assert "whatsapp_status" in routes
