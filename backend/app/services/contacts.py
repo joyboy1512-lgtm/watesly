@@ -159,12 +159,17 @@ async def list_contacts(
                 Contact.marketing_opt_in.is_(True),
                 Contact.reachability_status == "invalid",
             )
+        elif status_filter == "reachable":
+            query = query.where(
+                Contact.marketing_opt_in.is_(True),
+                Contact.reachability_status == "reachable",
+            )
         elif status_filter == "accepts":
             query = query.where(
                 Contact.marketing_opt_in.is_(True),
                 or_(
                     Contact.reachability_status.is_(None),
-                    Contact.reachability_status.in_(["reachable", "risky"]),
+                    Contact.reachability_status == "risky",
                 ),
             )
 
@@ -182,7 +187,7 @@ async def list_contacts(
             await db.refresh(contact)
 
     status_filter = (whatsapp_status or "").strip().lower()
-    if status_filter in {"accepts", "invalid"}:
+    if status_filter in {"accepts", "reachable", "invalid"}:
         from app.services.contact_reachability import resolve_whatsapp_contact_status
 
         contacts = [

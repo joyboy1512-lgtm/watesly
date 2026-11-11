@@ -250,7 +250,7 @@ export default function ContactDetailPage() {
               )}
               <div>
                 <dt>حالة واتساب</dt>
-                <dd>{item.whatsapp_status_label || (item.marketing_opt_in === false ? "طلب عدم الإزعاج" : "يقبل الاستلام")}</dd>
+                <dd>{item.whatsapp_status_label || (item.marketing_opt_in === false ? "عدم الإزعاج" : "مؤهل للإرسال")}</dd>
               </div>
               <div>
                 <dt>موافقة التسويق</dt>
