@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "e0384d5",
-    "git_commit_message": "Shop Now template URL button live",
+    "git_commit": "edca9fa",
+    "git_commit_message": "Campaign create layout polish live",
     "alembic_head": "0063_contact_region",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-rHIkqA3y.js",
-      "css": "index-B7-4f5KK.css"
+      "js": "index--0eAvNRM.js",
+      "css": "index-ciqY3dpR.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "e0384d5",
-  "notes": "Template Shop Now URL button for campaign messages"
+  "commit": "edca9fa",
+  "notes": "Campaign create vertical layout: settings, audience+Excel, exclusions"
 }
