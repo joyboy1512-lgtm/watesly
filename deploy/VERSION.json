@@ -8,13 +8,13 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "97a337e",
-    "git_commit_message": "Campaign exclusions layout live",
+    "git_commit": "864f398",
+    "git_commit_message": "WhatsApp status labels live",
     "alembic_head": "0063_contact_region",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-iDQorEIn.js",
+      "js": "index-D5QUbY9Y.js",
       "css": "index-BDKcYy-q.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "97a337e",
-  "notes": "Exclusions above audience: date filter then side-by-side options + campaign table"
+  "commit": "864f398",
+  "notes": "Contact WhatsApp statuses: eligible, invalid, DND, reachable, unreachable"
 }
