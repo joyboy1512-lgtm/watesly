@@ -175,6 +175,11 @@ async def summarize_reachability(
             "invalid_phone": 0,
             "cold_audience": 0,
             "warm_audience": 0,
+            "reachable_contact_ids": [],
+            "risky_contact_ids": [],
+            "unreachable_contact_ids": [],
+            "invalid_phone_contact_ids": [],
+            "marketing_opt_out_contact_ids": [],
         }
 
     result = await db.execute(
@@ -188,9 +193,17 @@ async def summarize_reachability(
     last_inbound = last_inbound or {}
 
     reachable = risky = unreachable = invalid_phone = cold_audience = warm_audience = 0
+    reachable_ids: list[UUID] = []
+    risky_ids: list[UUID] = []
+    unreachable_ids: list[UUID] = []
+    invalid_ids: list[UUID] = []
+    opt_out_ids: list[UUID] = []
     for contact in contacts:
-        if not is_phone_valid_for_whatsapp(contact):
+        if contact.marketing_opt_in is False:
+            opt_out_ids.append(contact.id)
+        if not is_phone_valid_for_whatsapp(contact) or contact.reachability_status == ReachabilityStatus.INVALID:
             invalid_phone += 1
+            invalid_ids.append(contact.id)
             continue
 
         status = contact.reachability_status
@@ -202,10 +215,13 @@ async def summarize_reachability(
 
         if status == ReachabilityStatus.UNREACHABLE:
             unreachable += 1
+            unreachable_ids.append(contact.id)
         elif status == ReachabilityStatus.RISKY or inbound_at is None:
             risky += 1
+            risky_ids.append(contact.id)
         else:
             reachable += 1
+            reachable_ids.append(contact.id)
 
     return {
         "reachable": reachable,
@@ -214,6 +230,11 @@ async def summarize_reachability(
         "invalid_phone": invalid_phone,
         "cold_audience": cold_audience,
         "warm_audience": warm_audience,
+        "reachable_contact_ids": reachable_ids,
+        "risky_contact_ids": risky_ids,
+        "unreachable_contact_ids": unreachable_ids,
+        "invalid_phone_contact_ids": invalid_ids,
+        "marketing_opt_out_contact_ids": opt_out_ids,
     }
 
 

@@ -2361,6 +2361,29 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: grid;
   gap: 8px;
 }
+.campaign-preflight-actions {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.campaign-preflight-actions .whatsapp-button {
+  width: auto;
+  justify-self: start;
+}
+.campaign-preflight-trim {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.campaign-preflight-trim-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
 .campaign-preflight-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
