@@ -6892,6 +6892,61 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaigns-list-card,
 .campaigns-manage-card { display: grid; gap: 16px; }
+.campaigns-create-stack {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+.campaigns-settings-panel,
+.campaigns-exclude-panel {
+  align-content: start;
+}
+.campaigns-settings-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.campaigns-audience-card-head,
+.campaigns-exclude-card-head {
+  padding: 0;
+  margin: 0 0 4px;
+  border: 0;
+  background: transparent;
+}
+.campaigns-audience-card-head h3,
+.campaigns-exclude-card-head h3 {
+  margin: 0;
+}
+.campaigns-audience-card-head .hint-text,
+.campaigns-exclude-card-head .hint-text {
+  margin: 4px 0 0;
+}
+.campaigns-excel-toolbar {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.1fr) minmax(220px, 1fr);
+  gap: 10px 14px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.campaigns-excel-toolbar-side {
+  display: grid;
+  gap: 8px;
+  align-content: end;
+}
+.campaigns-excel-toolbar .campaign-excel-lock-banner,
+.campaigns-excel-toolbar .campaigns-excel-selected,
+.campaigns-excel-toolbar .campaigns-audience-warning {
+  grid-column: 1 / -1;
+}
+@media (max-width: 720px) {
+  .campaigns-excel-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
 .campaigns-list-header {
   display: flex;
   flex-wrap: wrap;
@@ -6906,8 +6961,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaigns-actions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: start;
 }
 .campaigns-panel {
   background: var(--panel-soft);
@@ -6916,6 +6972,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   padding: 16px;
   display: grid;
   gap: 12px;
+  align-content: start;
 }
 .campaigns-panel h3 { margin: 0; font-size: 16px; }
 .campaigns-excel-panel-head { display: grid; gap: 4px; }
