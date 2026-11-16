@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-16",
+  "commit": "0051b15",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-26gTG0cn.js",
+    "css": "index-CVnHOJtx.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261110-181210",
+  "features": [
+    "Auto-bind Excel import channel from WhatsApp account / single org channel",
+    "Stop forcing multipart Content-Type without boundary on FormData uploads",
+    "Clearer Excel upload hints and busy state"
+  ],
+  "notes": "Deployed via SSH. PR #143. Fixes inability to upload Excel on campaign create."
+}

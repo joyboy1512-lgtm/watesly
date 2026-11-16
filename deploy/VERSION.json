@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-11-11",
+  "updated_at": "2026-11-16",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,13 +8,13 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "e6dfaf2",
-    "git_commit_message": "Excel audience control + WhatsApp status labels live",
+    "git_commit": "0051b15",
+    "git_commit_message": "Excel upload fix live (channel auto-bind + multipart)",
     "alembic_head": "0063_contact_region",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DYPWJdYN.js",
+      "js": "index-26gTG0cn.js",
       "css": "index-CVnHOJtx.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "e6dfaf2",
-  "notes": "Excel-only campaign audience, repeatable preflight, category trim controls"
+  "commit": "0051b15",
+  "notes": "Campaign Excel upload: auto channel from WhatsApp account; FormData multipart boundary fix"
 }
