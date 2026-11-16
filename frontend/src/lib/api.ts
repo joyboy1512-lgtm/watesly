@@ -113,6 +113,14 @@ api.interceptors.request.use((config) => {
   const token = authStore.getState().accessToken;
   config.headers.set("X-Request-ID", crypto.randomUUID());
   if (token) config.headers.set("Authorization", `Bearer ${token}`);
+  // Let the browser set multipart boundary; a bare multipart Content-Type breaks uploads.
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    if (typeof config.headers.delete === "function") {
+      config.headers.delete("Content-Type");
+    } else {
+      delete (config.headers as Record<string, unknown>)["Content-Type"];
+    }
+  }
   return config;
 });
 

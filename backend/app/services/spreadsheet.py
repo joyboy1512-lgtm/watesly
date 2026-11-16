@@ -26,6 +26,7 @@ FIELD_ALIASES: dict[str, list[str]] = {
     "name": ["name", "display_name", "customer", "client", "اسم", "الاسم", "اسم_العميل", "العميل"],
     "email": ["email", "e_mail", "mail", "بريد", "البريد", "email_address"],
     "language": ["language", "lang", "لغة", "اللغة"],
+    "region": ["region", "city", "area", "منطقة", "المنطقة", "مدينة", "المدينة", "المحافظة"],
     "country_code": ["country_code", "country", "دولة", "رمز_الدولة"],
     "product_name": ["name", "product", "product_name", "service", "اسم", "الاسم", "منتج", "خدمة", "اسم_المنتج"],
     "product_type": ["product_type", "type", "kind", "نوع", "النوع"],
