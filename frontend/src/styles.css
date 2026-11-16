@@ -6987,6 +6987,45 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaigns-exclude-card-head .hint-text {
   margin: 4px 0 0;
 }
+.campaign-audience-sources {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 980px) {
+  .campaign-audience-sources {
+    grid-template-columns: 1fr;
+  }
+}
+.campaign-audience-source-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.campaign-audience-source-card > strong {
+  font-size: 14px;
+}
+.campaign-audience-merge-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, #0f766e) 35%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent, #0f766e) 8%, var(--panel));
+}
+.campaign-audience-merge-banner strong {
+  font-size: 13px;
+}
+.campaign-audience-merge-banner span {
+  color: var(--muted);
+  font-size: 12px;
+}
 .campaigns-excel-toolbar {
   display: grid;
   grid-template-columns: minmax(200px, 1.1fr) minmax(220px, 1fr);
