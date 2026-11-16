@@ -190,6 +190,7 @@ export default function CampaignsPage() {
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [audienceMode, setAudienceMode] = useState<AudienceMode>("library");
   const [excelAudienceIds, setExcelAudienceIds] = useState<string[]>([]);
+  const [importingAudience, setImportingAudience] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [audienceTagIds, setAudienceTagIds] = useState<string[]>([]);
   const [audienceTagMenuOpen, setAudienceTagMenuOpen] = useState(false);
@@ -473,6 +474,22 @@ export default function CampaignsPage() {
     [accounts.data, accountId]
   );
   const selectedAccountChannelId = selectedAccount?.channel_id ?? "";
+  const excelImportChannelId = channelId || selectedAccountChannelId;
+  const canImportExcel = Boolean(organizationId && excelImportChannelId);
+
+  useEffect(() => {
+    if (!organizationId || channelId) return;
+    if (orgChannels.length === 1) {
+      setChannelId(orgChannels[0].id);
+    }
+  }, [organizationId, channelId, orgChannels]);
+
+  useEffect(() => {
+    if (!accountId || !selectedAccountChannelId) return;
+    if (channelId === selectedAccountChannelId) return;
+    setChannelId(selectedAccountChannelId);
+  }, [accountId, selectedAccountChannelId, channelId]);
+
   const contactById = useMemo(
     () => new Map((contacts.data ?? []).map((item) => [item.id, item])),
     [contacts.data]
@@ -686,14 +703,23 @@ export default function CampaignsPage() {
 
   async function importAudience(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    if (!organizationId || !channelId) {
-      toastStore.getState().show("اختر الفرع والقناة أولاً.", "error");
+    const formEl = event.currentTarget;
+    const importChannelId = channelId || selectedAccountChannelId;
+    if (!organizationId || !importChannelId) {
+      toastStore.getState().show("اختر الفرع وحساب WhatsApp (أو القناة) قبل رفع الملف.", "error");
       return;
     }
+    const fileInput = formEl.querySelector('input[name="file"]') as HTMLInputElement | null;
+    if (!fileInput?.files?.length) {
+      toastStore.getState().show("اختر ملف Excel أو CSV أولاً.", "error");
+      return;
+    }
+    const form = new FormData(formEl);
     form.set("organization_id", organizationId);
-    form.set("channel_id", channelId);
+    form.set("channel_id", importChannelId);
+    setImportingAudience(true);
     try {
+      // Do not set Content-Type manually — browser must include multipart boundary.
       const result = await api.post<{
         contact_ids?: string[];
         created: number;
@@ -701,7 +727,6 @@ export default function CampaignsPage() {
         skipped?: number;
         invalid?: number;
       }>("/campaigns/import-audience", form, {
-        headers: { "Content-Type": "multipart/form-data" },
         timeout: 300000
       });
       const ids: string[] = result.data.contact_ids ?? [];
@@ -725,10 +750,14 @@ export default function CampaignsPage() {
       setPreflight(null);
       const skipped = result.data.skipped ?? 0;
       const invalid = result.data.invalid ?? 0;
-      toastStore.getState().show(
-        `جمهور الحملة = ملف Excel فقط (${ids.length} رقم). لن يُقبل عملاء من جهات الاتصال. سيتم فحص الجمهور تلقائياً.`,
-        "success"
-      );
+      if (!ids.length) {
+        toastStore.getState().show("لم يُعثر على أرقام صالحة في الملف.", "error");
+      } else {
+        toastStore.getState().show(
+          `جمهور الحملة = ملف Excel فقط (${ids.length} رقم). لن يُقبل عملاء من جهات الاتصال. سيتم فحص الجمهور تلقائياً.`,
+          "success"
+        );
+      }
       if (invalid || skipped) {
         toastStore.getState().show(
           `الاستيراد: ${result.data.created} جديد، ${result.data.existing} موجود${invalid ? `، ${invalid} رقم غير صالح` : ""}${skipped ? `، ${skipped} فارغ` : ""}.`,
@@ -736,9 +765,11 @@ export default function CampaignsPage() {
         );
       }
       await client.invalidateQueries({ queryKey: ["contacts"] });
-      event.currentTarget.reset();
+      formEl.reset();
     } catch (error) {
       toastStore.getState().show(formatApiError(error, "تعذر استيراد ملف العملاء. استخدم Excel (.xlsx) أو CSV."), "error");
+    } finally {
+      setImportingAudience(false);
     }
   }
 
@@ -1148,6 +1179,9 @@ export default function CampaignsPage() {
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
+              {!channelId && selectedAccountChannelId ? (
+                <small className="hint-text">تُستخدم قناة حساب WhatsApp تلقائياً إن تُركت فارغة.</small>
+              ) : null}
             </label>
           </div>
 
@@ -1169,7 +1203,10 @@ export default function CampaignsPage() {
                 <select
                   value={accountId}
                   onChange={(e) => {
-                    setAccountId(e.target.value);
+                    const nextAccountId = e.target.value;
+                    setAccountId(nextAccountId);
+                    const account = (accounts.data ?? []).find((item) => item.id === nextAccountId);
+                    if (account?.channel_id) setChannelId(account.channel_id);
                     setTemplateId("");
                     setCampaignMediaOverride(null);
                     setPreflight(null);
@@ -1684,20 +1721,25 @@ export default function CampaignsPage() {
                     type="file"
                     accept=".xlsx,.xlsm,.csv,text/csv"
                     required
-                    disabled={!organizationId || !channelId}
+                    disabled={!canImportExcel || importingAudience}
                   />
                 </label>
                 <div className="campaigns-excel-toolbar-side">
                   <p className="hint-text campaigns-excel-columns">
                     الأعمدة: <strong dir="ltr">phone</strong> (إلزامي) · <strong dir="ltr">name</strong> · <strong dir="ltr">language</strong> · <strong dir="ltr">region</strong>
                   </p>
+                  {!canImportExcel ? (
+                    <p className="hint-text campaigns-audience-warning" role="alert">
+                      اختر الفرع وحساب WhatsApp أولاً لتفعيل رفع Excel.
+                    </p>
+                  ) : null}
                   <div className="campaigns-excel-actions">
                     <button
                       type="submit"
                       className="whatsapp-button compact"
-                      disabled={!organizationId || !channelId}
+                      disabled={!canImportExcel || importingAudience}
                     >
-                      رفع Excel وقفل الجمهور
+                      {importingAudience ? "جارٍ الرفع..." : "رفع Excel وقفل الجمهور"}
                     </button>
                     <button
                       type="button"
