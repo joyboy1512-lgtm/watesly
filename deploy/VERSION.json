@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "0051b15",
-    "git_commit_message": "Excel upload fix live (channel auto-bind + multipart)",
+    "git_commit": "cbdda85",
+    "git_commit_message": "Campaign audience merge Excel + segment + contacts",
     "alembic_head": "0063_contact_region",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-26gTG0cn.js",
-      "css": "index-CVnHOJtx.css"
+      "js": "index-DecZLXE4.js",
+      "css": "index-CfS6YGsy.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "0051b15",
-  "notes": "Campaign Excel upload: auto channel from WhatsApp account; FormData multipart boundary fix"
+  "commit": "cbdda85",
+  "notes": "Mergeable campaign audience: Excel + segment + contacts, with exclusions"
 }

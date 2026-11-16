@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-16",
+  "commit": "cbdda85",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DecZLXE4.js",
+    "css": "index-CfS6YGsy.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261110-181210",
+  "features": [
+    "Three audience sources: Excel, saved segment, contacts",
+    "Sources merge into one campaign selection",
+    "Segment can merge or replace",
+    "Existing exclusion and post-preflight trim controls retained"
+  ],
+  "notes": "Deployed via SSH. PR #144."
+}
