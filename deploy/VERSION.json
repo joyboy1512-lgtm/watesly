@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-11-16",
+  "updated_at": "2026-11-17",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "cbdda85",
-    "git_commit_message": "Campaign audience merge Excel + segment + contacts",
+    "git_commit": "d889b3a",
+    "git_commit_message": "Meta capabilities expansion live",
     "alembic_head": "0063_contact_region",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DecZLXE4.js",
-      "css": "index-CfS6YGsy.css"
+      "js": "index-BZtd-v_U.js",
+      "css": "index-B_8oQ_7i.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "cbdda85",
-  "notes": "Mergeable campaign audience: Excel + segment + contacts, with exclusions"
+  "commit": "d889b3a",
+  "notes": "Meta expand: full template builder (no OTP change), profile fields, inbox buttons, calling lock, Flow publish"
 }
