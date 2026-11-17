@@ -77,6 +77,10 @@ export default function InboxPage() {
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copilotResult, setCopilotResult] = useState<CopilotResult | null>(null);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [replyButtonsOpen, setReplyButtonsOpen] = useState(false);
+  const [replyButtonBody, setReplyButtonBody] = useState("");
+  const [replyButtonTitles, setReplyButtonTitles] = useState("نعم\nلا");
+  const [sendingReplyButtons, setSendingReplyButtons] = useState(false);
   const [templateId, setTemplateId] = useState("");
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [csatScore, setCsatScore] = useState("");
@@ -620,6 +624,38 @@ export default function InboxPage() {
       toastStore.getState().show("تعذر إرسال القالب.", "error");
     } finally {
       setSendingTemplate(false);
+    }
+  }
+  async function handleSendReplyButtons() {
+    if (!selectedId || windowClosed || isArchived) return;
+    const body = (replyButtonBody.trim() || text.trim());
+    const titles = replyButtonTitles
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    if (!body || titles.length < 1) {
+      toastStore.getState().show("أدخل نص الرسالة وزرًا واحدًا على الأقل.", "error");
+      return;
+    }
+    setSendingReplyButtons(true);
+    try {
+      await api.post(`/conversations/${selectedId}/messages/reply-buttons`, {
+        body,
+        buttons: titles.map((title, index) => ({ id: `btn_${index + 1}`, title: title.slice(0, 20) }))
+      });
+      setReplyButtonsOpen(false);
+      setReplyButtonBody("");
+      setText("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["conversations"] })
+      ]);
+      toastStore.getState().show("تم إرسال الأزرار.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إرسال الأزرار — تأكد أن نافذة 24 ساعة مفتوحة.", "error");
+    } finally {
+      setSendingReplyButtons(false);
     }
   }
   function composerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -1300,7 +1336,56 @@ export default function InboxPage() {
             >
               🛒 منتج
             </button>
+            <button
+              type="button"
+              className="quick-reply-chip"
+              onClick={() => {
+                setReplyButtonsOpen((value) => !value);
+                if (!replyButtonBody.trim() && text.trim()) setReplyButtonBody(text);
+              }}
+              disabled={!selectedId || isArchived || windowClosed}
+              title="إرسال أزرار رد سريع (نافذة 24 ساعة)"
+            >
+              أزرار
+            </button>
           </div>
+          {replyButtonsOpen && (
+            <div className="inbox-reply-buttons-panel">
+              <label className="field-label">
+                <span>نص الرسالة</span>
+                <textarea
+                  rows={2}
+                  value={replyButtonBody}
+                  onChange={(e) => setReplyButtonBody(e.target.value)}
+                  placeholder="اختر أحد الخيارات…"
+                  maxLength={1024}
+                />
+              </label>
+              <label className="field-label">
+                <span>نصوص الأزرار (سطر لكل زر · حتى 3)</span>
+                <textarea
+                  rows={3}
+                  value={replyButtonTitles}
+                  onChange={(e) => setReplyButtonTitles(e.target.value)}
+                  maxLength={80}
+                />
+              </label>
+              <div className="inline-actions">
+                <button
+                  type="button"
+                  className="whatsapp-button"
+                  disabled={sendingReplyButtons}
+                  onClick={() => void handleSendReplyButtons()}
+                >
+                  {sendingReplyButtons ? "جاري الإرسال…" : "إرسال الأزرار"}
+                </button>
+                <button type="button" className="secondary-button" onClick={() => setReplyButtonsOpen(false)}>
+                  إغلاق
+                </button>
+              </div>
+              {/* List messages: POST /conversations/:id/messages/list (API-only for now) */}
+            </div>
+          )}
           <InboxProductPicker
             open={productPickerOpen}
             onClose={() => setProductPickerOpen(false)}

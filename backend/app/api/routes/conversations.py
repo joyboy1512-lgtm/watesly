@@ -15,6 +15,8 @@ from app.schemas.conversation import (
     ConversationSendTemplateRequest,
     ConversationSendProductRequest,
     ConversationSendProductListRequest,
+    ConversationSendReplyButtonsRequest,
+    ConversationSendListMessageRequest,
     ConversationRenderTextRequest,
     ConversationContextResponse,
     StartConversationRequest,
@@ -616,6 +618,146 @@ async def send_conversation_product_list(
     except ValueError as exc:
         if str(exc) == "COMMERCE_NOT_CONFIGURED":
             raise HTTPException(status_code=409, detail="COMMERCE_NOT_CONFIGURED") from exc
+        raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+    except MetaAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await publish_event(
+        context.account_id,
+        {"type": "message.sent", "conversation_id": str(conversation_id), "message_id": str(message.id)},
+    )
+    return {"id": str(message.id), "conversation_id": str(message.conversation_id), "status": message.status}
+
+
+@router.post("/{conversation_id}/messages/reply-buttons")
+async def send_conversation_reply_buttons(
+    conversation_id: UUID,
+    payload: ConversationSendReplyButtonsRequest,
+    context: AuthContext = Depends(require_permissions(Permission.MESSAGES_SEND, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send interactive reply buttons (open 24h window only). Inbox UI optional."""
+    try:
+        conversation = await get_conversation_for_send(
+            db,
+            account_id=context.account_id,
+            conversation_id=conversation_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        code = 403 if str(exc) == "CONVERSATION_FORBIDDEN" else 404
+        raise HTTPException(status_code=code, detail="Conversation is not available") from exc
+
+    from app.models.contact import Contact
+    from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.meta_client import MetaAPIError
+    from app.services.whatsapp import send_reply_buttons_message
+
+    wa = (
+        await db.execute(select(WhatsAppAccount).where(WhatsAppAccount.channel_id == conversation.channel_id))
+    ).scalar_one_or_none()
+    if wa is None:
+        raise HTTPException(status_code=400, detail="Conversation channel is not connected")
+
+    contact = await db.get(Contact, conversation.contact_id)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    last_inbound = await get_last_inbound_for_conversation(db, conversation_id)
+    window = compute_service_window(last_inbound)
+    if window["requires_template"]:
+        raise HTTPException(status_code=409, detail="SERVICE_WINDOW_CLOSED")
+
+    try:
+        message = await send_reply_buttons_message(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=wa.id,
+            to=contact.external_address,
+            body=payload.body,
+            buttons=[button.model_dump() for button in payload.buttons],
+            header=payload.header,
+            footer=payload.footer,
+            record_mac=True,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "REPLY_BUTTONS_REQUIRED":
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+    except MetaAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await publish_event(
+        context.account_id,
+        {"type": "message.sent", "conversation_id": str(conversation_id), "message_id": str(message.id)},
+    )
+    return {"id": str(message.id), "conversation_id": str(message.conversation_id), "status": message.status}
+
+
+@router.post("/{conversation_id}/messages/list")
+async def send_conversation_list_message(
+    conversation_id: UUID,
+    payload: ConversationSendListMessageRequest,
+    context: AuthContext = Depends(require_permissions(Permission.MESSAGES_SEND, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send interactive list message (open 24h window only). API-first; Inbox affordance optional."""
+    try:
+        conversation = await get_conversation_for_send(
+            db,
+            account_id=context.account_id,
+            conversation_id=conversation_id,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        code = 403 if str(exc) == "CONVERSATION_FORBIDDEN" else 404
+        raise HTTPException(status_code=code, detail="Conversation is not available") from exc
+
+    from app.models.contact import Contact
+    from app.models.whatsapp_account import WhatsAppAccount
+    from app.services.meta_client import MetaAPIError
+    from app.services.whatsapp import send_list_message
+
+    wa = (
+        await db.execute(select(WhatsAppAccount).where(WhatsAppAccount.channel_id == conversation.channel_id))
+    ).scalar_one_or_none()
+    if wa is None:
+        raise HTTPException(status_code=400, detail="Conversation channel is not connected")
+
+    contact = await db.get(Contact, conversation.contact_id)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    last_inbound = await get_last_inbound_for_conversation(db, conversation_id)
+    window = compute_service_window(last_inbound)
+    if window["requires_template"]:
+        raise HTTPException(status_code=409, detail="SERVICE_WINDOW_CLOSED")
+
+    sections = [
+        {
+            "title": section.title,
+            "rows": [row.model_dump(exclude_none=True) for row in section.rows],
+        }
+        for section in payload.sections
+    ]
+    try:
+        message = await send_list_message(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=wa.id,
+            to=contact.external_address,
+            body=payload.body,
+            button_text=payload.button_text,
+            sections=sections,
+            header=payload.header,
+            footer=payload.footer,
+            record_mac=True,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "LIST_SECTIONS_REQUIRED":
+            raise HTTPException(status_code=400, detail=detail) from exc
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

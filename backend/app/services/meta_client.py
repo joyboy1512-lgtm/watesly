@@ -450,6 +450,79 @@ class MetaWhatsAppClient:
             }
         )
 
+    async def send_reply_buttons(
+        self,
+        *,
+        to: str,
+        body: str,
+        buttons: list[dict],
+        header: str | None = None,
+        footer: str | None = None,
+    ) -> dict:
+        """Send interactive reply buttons (max 3). Each button: {id, title}."""
+        button_rows = []
+        for item in buttons[:3]:
+            button_id = str(item.get("id") or "").strip()[:256]
+            title = str(item.get("title") or "").strip()[:20]
+            if not button_id or not title:
+                continue
+            button_rows.append({"type": "reply", "reply": {"id": button_id, "title": title}})
+        if not button_rows:
+            raise ValueError("REPLY_BUTTONS_REQUIRED")
+        interactive: dict[str, Any] = {
+            "type": "button",
+            "body": {"text": body[:1024]},
+            "action": {"buttons": button_rows},
+        }
+        if header:
+            interactive["header"] = {"type": "text", "text": header[:60]}
+        if footer:
+            interactive["footer"] = {"text": footer[:60]}
+        return await self._send_payload(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": "interactive",
+                "interactive": interactive,
+            }
+        )
+
+    async def send_list_message(
+        self,
+        *,
+        to: str,
+        body: str,
+        button_text: str,
+        sections: list[dict],
+        header: str | None = None,
+        footer: str | None = None,
+    ) -> dict:
+        """Send interactive list message. sections: [{title, rows: [{id, title, description?}]}]."""
+        if not sections:
+            raise ValueError("LIST_SECTIONS_REQUIRED")
+        interactive: dict[str, Any] = {
+            "type": "list",
+            "body": {"text": body[:1024]},
+            "action": {
+                "button": button_text[:20],
+                "sections": sections,
+            },
+        }
+        if header:
+            interactive["header"] = {"type": "text", "text": header[:60]}
+        if footer:
+            interactive["footer"] = {"text": footer[:60]}
+        return await self._send_payload(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": "interactive",
+                "interactive": interactive,
+            }
+        )
+
     async def create_catalog_product(self, *, catalog_id: str, payload: dict) -> dict:
         base = settings.meta_graph_api_base_url.rstrip("/")
         version = settings.meta_graph_api_version.strip("/")
@@ -640,6 +713,12 @@ class MetaWhatsAppClient:
     async def update_whatsapp_business_profile(
         self,
         *,
+        about: str | None = None,
+        address: str | None = None,
+        description: str | None = None,
+        email: str | None = None,
+        websites: list[str] | None = None,
+        vertical: str | None = None,
         profile_picture_handle: str | None = None,
     ) -> dict:
         base = settings.meta_graph_api_base_url.rstrip("/")
@@ -649,8 +728,20 @@ class MetaWhatsAppClient:
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
         }
-        payload: dict[str, str] = {"messaging_product": "whatsapp"}
-        if profile_picture_handle:
+        payload: dict[str, Any] = {"messaging_product": "whatsapp"}
+        if about is not None:
+            payload["about"] = about
+        if address is not None:
+            payload["address"] = address
+        if description is not None:
+            payload["description"] = description
+        if email is not None:
+            payload["email"] = email
+        if websites is not None:
+            payload["websites"] = websites
+        if vertical is not None:
+            payload["vertical"] = vertical
+        if profile_picture_handle is not None:
             payload["profile_picture_handle"] = profile_picture_handle
         client = self._get_client()
         response = await client.post(url, headers=headers, json=payload)
@@ -1017,6 +1108,18 @@ class MetaWhatsAppClient:
         return await self._parse_graph_response(
             response,
             default_message="Unable to create WhatsApp Flow",
+        )
+
+    async def publish_flow(self, *, flow_id: str) -> dict:
+        base = settings.meta_graph_api_base_url.rstrip("/")
+        version = settings.meta_graph_api_version.strip("/")
+        url = f"{base}/{version}/{flow_id}/publish"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        client = self._get_client()
+        response = await client.post(url, headers=headers, json={})
+        return await self._parse_graph_response(
+            response,
+            default_message="Unable to publish WhatsApp Flow",
         )
 
     async def send_flow_message(

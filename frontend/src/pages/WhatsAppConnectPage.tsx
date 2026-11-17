@@ -68,6 +68,24 @@ type CommerceReadiness = {
   whatsapp_catalog_ready?: boolean;
 };
 
+type BusinessProfileDraft = {
+  about: string;
+  address: string;
+  description: string;
+  email: string;
+  websites: string;
+  vertical: string;
+};
+
+const EMPTY_PROFILE_DRAFT: BusinessProfileDraft = {
+  about: "",
+  address: "",
+  description: "",
+  email: "",
+  websites: "",
+  vertical: ""
+};
+
 export default function WhatsAppConnectPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const client = useQueryClient();
@@ -98,6 +116,9 @@ export default function WhatsAppConnectPage() {
   const [commerceReadiness, setCommerceReadiness] = useState<Record<string, CommerceReadiness | null>>({});
   const [loadingReadinessId, setLoadingReadinessId] = useState<string | null>(null);
   const [brandingDrafts, setBrandingDrafts] = useState<Record<string, { brand_image_url: string }>>({});
+  const [profileDrafts, setProfileDrafts] = useState<Record<string, BusinessProfileDraft>>({});
+  const [loadingProfileId, setLoadingProfileId] = useState<string | null>(null);
+  const [savingProfileId, setSavingProfileId] = useState<string | null>(null);
   const [uploadingBrandingId, setUploadingBrandingId] = useState<string | null>(null);
   const [savingBrandingId, setSavingBrandingId] = useState<string | null>(null);
   const [syncingBrandingId, setSyncingBrandingId] = useState<string | null>(null);
@@ -252,6 +273,7 @@ export default function WhatsAppConnectPage() {
   useEffect(() => {
     if (!panelState || panelState.tab !== "settings") return;
     void loadCommerceReadiness(panelState.accountId);
+    void loadBusinessProfile(panelState.accountId);
   }, [panelState]);
 
   useEffect(() => {
@@ -510,6 +532,71 @@ export default function WhatsAppConnectPage() {
     });
     await client.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
     return true;
+  }
+
+  async function loadBusinessProfile(accountId: string) {
+    setLoadingProfileId(accountId);
+    try {
+      const { data } = await api.get<{
+        about?: string | null;
+        address?: string | null;
+        description?: string | null;
+        email?: string | null;
+        websites?: string[];
+        vertical?: string | null;
+      }>(`/whatsapp/accounts/${accountId}/branding/profile`);
+      setProfileDrafts((current) => ({
+        ...current,
+        [accountId]: {
+          about: data.about ?? "",
+          address: data.address ?? "",
+          description: data.description ?? "",
+          email: data.email ?? "",
+          websites: (data.websites ?? []).join("\n"),
+          vertical: data.vertical ?? ""
+        }
+      }));
+    } catch {
+      setProfileDrafts((current) => ({
+        ...current,
+        [accountId]: current[accountId] ?? { ...EMPTY_PROFILE_DRAFT }
+      }));
+    } finally {
+      setLoadingProfileId(null);
+    }
+  }
+
+  function updateProfileDraft(accountId: string, patch: Partial<BusinessProfileDraft>) {
+    setProfileDrafts((current) => ({
+      ...current,
+      [accountId]: { ...(current[accountId] ?? EMPTY_PROFILE_DRAFT), ...patch }
+    }));
+  }
+
+  async function saveBusinessProfile(accountId: string) {
+    const draft = profileDrafts[accountId] ?? EMPTY_PROFILE_DRAFT;
+    const websites = draft.websites
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 2);
+    setSavingProfileId(accountId);
+    try {
+      await api.patch(`/whatsapp/accounts/${accountId}/branding`, {
+        about: draft.about.trim(),
+        address: draft.address.trim(),
+        description: draft.description.trim(),
+        email: draft.email.trim(),
+        websites,
+        vertical: draft.vertical.trim()
+      });
+      toastStore.getState().show("تم تحديث ملف الأعمال على Meta.", "success");
+      await loadBusinessProfile(accountId);
+    } catch (error: unknown) {
+      toastStore.getState().show(extractApiDetail(error, "تعذر تحديث ملف الأعمال."), "error");
+    } finally {
+      setSavingProfileId(null);
+    }
   }
 
   async function uploadBrandImage(accountId: string, file: File) {
@@ -1032,6 +1119,94 @@ export default function WhatsAppConnectPage() {
                       </button>
                     </div>
                   </div>
+                </div>
+
+                <div className="whatsapp-branding-profile-fields">
+                  <h4>بيانات ملف الأعمال</h4>
+                  <p className="hint-text">
+                    about / العنوان / الوصف / البريد / المواقع — تُحدَّث مباشرة على Meta.
+                  </p>
+                  {loadingProfileId === account.id ? (
+                    <p className="hint-text">جاري جلب البيانات من Meta…</p>
+                  ) : (
+                    <div className="whatsapp-branding-form whatsapp-branding-profile-grid">
+                      <label className="field-label">
+                        <span>نبذة (About)</span>
+                        <input
+                          value={profileDrafts[account.id]?.about ?? ""}
+                          onChange={(e) => updateProfileDraft(account.id, { about: e.target.value })}
+                          maxLength={139}
+                          placeholder="نص قصير يظهر في الملف"
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>البريد</span>
+                        <input
+                          dir="ltr"
+                          type="email"
+                          value={profileDrafts[account.id]?.email ?? ""}
+                          onChange={(e) => updateProfileDraft(account.id, { email: e.target.value })}
+                          maxLength={128}
+                          placeholder="hello@example.com"
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>العنوان</span>
+                        <input
+                          value={profileDrafts[account.id]?.address ?? ""}
+                          onChange={(e) => updateProfileDraft(account.id, { address: e.target.value })}
+                          maxLength={256}
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>التصنيف (Vertical)</span>
+                        <input
+                          dir="ltr"
+                          value={profileDrafts[account.id]?.vertical ?? ""}
+                          onChange={(e) => updateProfileDraft(account.id, { vertical: e.target.value })}
+                          maxLength={64}
+                          placeholder="OTHER / RETAIL / …"
+                        />
+                      </label>
+                      <label className="field-label whatsapp-expand-full">
+                        <span>الوصف</span>
+                        <textarea
+                          rows={3}
+                          value={profileDrafts[account.id]?.description ?? ""}
+                          onChange={(e) => updateProfileDraft(account.id, { description: e.target.value })}
+                          maxLength={512}
+                        />
+                      </label>
+                      <label className="field-label whatsapp-expand-full">
+                        <span>المواقع (سطر لكل رابط · حتى 2)</span>
+                        <textarea
+                          dir="ltr"
+                          rows={2}
+                          value={profileDrafts[account.id]?.websites ?? ""}
+                          onChange={(e) => updateProfileDraft(account.id, { websites: e.target.value })}
+                          placeholder={"https://example.com\nhttps://shop.example.com"}
+                        />
+                      </label>
+                      <div className="whatsapp-branding-actions">
+                        <button
+                          type="button"
+                          className="whatsapp-button compact"
+                          disabled={savingProfileId === account.id}
+                          onClick={() => void saveBusinessProfile(account.id)}
+                        >
+                          {savingProfileId === account.id ? "جاري الحفظ…" : "حفظ بيانات الملف على Meta"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button compact"
+                          disabled={loadingProfileId === account.id}
+                          onClick={() => void loadBusinessProfile(account.id)}
+                        >
+                          إعادة جلب من Meta
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </article>
               <article className="whatsapp-expand-panel whatsapp-expand-full whatsapp-expand-token">

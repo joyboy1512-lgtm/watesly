@@ -32,6 +32,13 @@ DEFAULT_FLAGS = {
     "shopify_integration": False,
     "woocommerce_integration": False,
     "order_templates": False,
+    # Meta Cloud Calling — locked off until explicitly enabled (no send/receive beyond analytics)
+    "whatsapp_calling": False,
+    # Meta expansion rollout switches
+    "marketing_messages_api": False,
+    "whatsapp_flows_builder": True,
+    "whatsapp_payments": False,
+    "template_analytics": True,
 }
 
 FLAG_LABELS_AR: dict[str, str] = {
@@ -54,6 +61,11 @@ FLAG_LABELS_AR: dict[str, str] = {
     "shopify_integration": "المرحلة C — Shopify",
     "woocommerce_integration": "المرحلة C — WooCommerce",
     "order_templates": "المرحلة C — قوالب رسائل الطلبات",
+    "whatsapp_calling": "تفعيل مكالمات واتساب",
+    "marketing_messages_api": "Marketing Messages API (تجريبي)",
+    "whatsapp_flows_builder": "منشئ WhatsApp Flows",
+    "whatsapp_payments": "مدفوعات واتساب (تجريبي)",
+    "template_analytics": "تحليلات القوالب من Meta",
 }
 
 

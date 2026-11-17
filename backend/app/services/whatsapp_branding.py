@@ -110,6 +110,53 @@ def _pick_product_set_id(account: WhatsAppAccount, product_sets: list[dict]) -> 
     return str(product_sets[0]["id"])
 
 
+def _normalize_websites(websites: list[str] | None) -> list[str] | None:
+    if websites is None:
+        return None
+    cleaned: list[str] = []
+    for item in websites:
+        value = (item or "").strip()
+        if value:
+            cleaned.append(value[:256])
+        if len(cleaned) >= 2:
+            break
+    return cleaned
+
+
+async def get_whatsapp_business_profile_fields(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    whatsapp_account_id: UUID,
+) -> dict:
+    account = await _load_whatsapp_account(
+        db,
+        account_id=account_id,
+        whatsapp_account_id=whatsapp_account_id,
+    )
+    client = _meta_client(account)
+    try:
+        profile = await client.get_whatsapp_business_profile()
+    except MetaAPIError as exc:
+        raise ValueError(format_meta_sync_error(str(exc))) from exc
+    finally:
+        await client.aclose()
+
+    websites_raw = profile.get("websites") or []
+    websites = [str(item) for item in websites_raw if item] if isinstance(websites_raw, list) else []
+    return {
+        "about": profile.get("about"),
+        "address": profile.get("address"),
+        "description": profile.get("description"),
+        "email": profile.get("email"),
+        "websites": websites,
+        "vertical": profile.get("vertical"),
+        "profile_picture_url": profile.get("profile_picture_url"),
+        "profile_image_url": account.profile_image_url,
+        "catalog_cover_image_url": account.catalog_cover_image_url,
+    }
+
+
 async def update_whatsapp_branding_settings(
     db: AsyncSession,
     *,
@@ -117,6 +164,12 @@ async def update_whatsapp_branding_settings(
     whatsapp_account_id: UUID,
     profile_image_url: str | None = None,
     catalog_cover_image_url: str | None = None,
+    about: str | None = None,
+    address: str | None = None,
+    description: str | None = None,
+    email: str | None = None,
+    websites: list[str] | None = None,
+    vertical: str | None = None,
 ) -> WhatsAppAccount:
     account = await _load_whatsapp_account(
         db,
@@ -134,6 +187,30 @@ async def update_whatsapp_branding_settings(
             unified = cover_value or None
         account.profile_image_url = unified
         account.catalog_cover_image_url = unified
+
+    profile_kwargs: dict = {}
+    if about is not None:
+        profile_kwargs["about"] = about.strip()
+    if address is not None:
+        profile_kwargs["address"] = address.strip()
+    if description is not None:
+        profile_kwargs["description"] = description.strip()
+    if email is not None:
+        profile_kwargs["email"] = email.strip()
+    if websites is not None:
+        profile_kwargs["websites"] = _normalize_websites(websites) or []
+    if vertical is not None:
+        profile_kwargs["vertical"] = vertical.strip()
+
+    if profile_kwargs:
+        client = _meta_client(account)
+        try:
+            await client.update_whatsapp_business_profile(**profile_kwargs)
+        except MetaAPIError as exc:
+            raise ValueError(format_meta_sync_error(str(exc))) from exc
+        finally:
+            await client.aclose()
+
     await db.commit()
     await db.refresh(account)
     return account

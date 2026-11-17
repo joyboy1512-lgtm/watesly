@@ -11,6 +11,7 @@ def test_growth_feature_flags_defaults_off_for_meta_touching():
     assert DEFAULT_FLAGS["meta_capi"] is False
     assert DEFAULT_FLAGS["follow_up_campaigns"] is False
     assert DEFAULT_FLAGS["shopify_integration"] is False
+    assert DEFAULT_FLAGS["whatsapp_calling"] is False
 
 
 def test_ctwa_dashboard_flag_on_by_default():

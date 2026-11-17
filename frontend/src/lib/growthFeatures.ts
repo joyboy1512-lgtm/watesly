@@ -18,7 +18,12 @@ export const GROWTH_FLAG_LABELS: Record<string, string> = {
   ai_support_agent: "المرحلة B — AI Support Agent",
   shopify_integration: "المرحلة C — Shopify",
   woocommerce_integration: "المرحلة C — WooCommerce",
-  order_templates: "المرحلة C — قوالب رسائل الطلبات"
+  order_templates: "المرحلة C — قوالب رسائل الطلبات",
+  whatsapp_calling: "تفعيل مكالمات واتساب",
+  marketing_messages_api: "Marketing Messages API (تجريبي)",
+  whatsapp_flows_builder: "منشئ WhatsApp Flows",
+  whatsapp_payments: "مدفوعات واتساب (تجريبي)",
+  template_analytics: "تحليلات القوالب من Meta"
 };
 
 export type CtwaDashboard = {

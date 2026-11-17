@@ -5,8 +5,10 @@ import { api } from "../lib/api";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   buildStoredComponents,
+  extractBodyVariableCount,
   HEADER_MEDIA_ACCEPT,
   normalizeShopUrl,
+  type TemplateButton,
   type TemplateComponent,
   type TemplateHeaderFormat
 } from "../lib/templateMedia";
@@ -57,12 +59,17 @@ export default function TemplatesPage() {
   const [category, setCategory] = useState("marketing");
   const [submitting, setSubmitting] = useState(false);
   const [headerType, setHeaderType] = useState<TemplateHeaderFormat | "">("");
+  const [headerText, setHeaderText] = useState("");
   const [headerFile, setHeaderFile] = useState<UploadedFile | null>(null);
   const [uploadingHeader, setUploadingHeader] = useState(false);
+  const [footerText, setFooterText] = useState("");
+  const [bodySamples, setBodySamples] = useState<string[]>([]);
+  const [customButtons, setCustomButtons] = useState<TemplateButton[]>([]);
   const [includeMarketingOptOut, setIncludeMarketingOptOut] = useState(true);
   const [includeShopCta, setIncludeShopCta] = useState(false);
   const [shopUrl, setShopUrl] = useState("");
   const [shopButtonText, setShopButtonText] = useState("تسوق الآن");
+  const [saveAsDraft, setSaveAsDraft] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -106,14 +113,33 @@ export default function TemplatesPage() {
 
   const stats = useMemo(() => computeTemplateStats(templates.data ?? []), [templates.data]);
 
+  const bodyVariableCount = useMemo(() => extractBodyVariableCount(bodyText), [bodyText]);
+
   const previewComponents = useMemo(
     () => buildStoredComponents(bodyText, headerFile, headerType || null, {
       includeMarketingOptOut,
       category,
       shopUrl: includeShopCta ? shopUrl : null,
-      shopButtonText: includeShopCta ? shopButtonText : null
+      shopButtonText: includeShopCta ? shopButtonText : null,
+      headerText: headerType === "TEXT" ? headerText : null,
+      footerText: footerText || null,
+      customButtons,
+      bodySamples
     }),
-    [bodyText, headerFile, headerType, includeMarketingOptOut, category, includeShopCta, shopUrl, shopButtonText]
+    [
+      bodyText,
+      headerFile,
+      headerType,
+      headerText,
+      footerText,
+      customButtons,
+      bodySamples,
+      includeMarketingOptOut,
+      category,
+      includeShopCta,
+      shopUrl,
+      shopButtonText
+    ]
   );
 
   function accountDisplayName(accountIdValue: string) {
@@ -140,9 +166,32 @@ export default function TemplatesPage() {
     }
   }
 
+  function resetCreateForm() {
+    setName("");
+    setBodyText("");
+    setHeaderType("");
+    setHeaderText("");
+    setHeaderFile(null);
+    setFooterText("");
+    setBodySamples([]);
+    setCustomButtons([]);
+    setIncludeShopCta(false);
+    setShopUrl("");
+    setShopButtonText("تسوق الآن");
+    setSaveAsDraft(false);
+  }
+
+  function updateCustomButton(index: number, patch: Partial<TemplateButton>) {
+    setCustomButtons((current) => current.map((item, idx) => (idx === index ? { ...item, ...patch } : item)));
+  }
+
   async function create(event: FormEvent) {
     event.preventDefault();
-    if (headerType && !headerFile) {
+    if (headerType === "TEXT" && !headerText.trim()) {
+      toastStore.getState().show("أدخل نص رأس القالب.", "error");
+      return;
+    }
+    if (headerType && headerType !== "TEXT" && !headerFile) {
       toastStore.getState().show("ارفع ملفاً للرأس (صورة / فيديو / PDF).", "error");
       return;
     }
@@ -151,13 +200,33 @@ export default function TemplatesPage() {
       toastStore.getState().show("أدخل رابط موقع صالحاً لزر «تسوق الآن» (مثال: https://example.com).", "error");
       return;
     }
+    for (const button of customButtons) {
+      const type = String(button.type || "").toUpperCase();
+      const text = String(button.text || "").trim();
+      if (!text) {
+        toastStore.getState().show("لكل زر نص ظاهر (حد أقصى 25 حرفاً).", "error");
+        return;
+      }
+      if (type === "URL" && !normalizeShopUrl(button.url)) {
+        toastStore.getState().show("زر الرابط يحتاج URL صالحاً.", "error");
+        return;
+      }
+      if (type === "PHONE_NUMBER" && !String(button.phone_number || "").trim()) {
+        toastStore.getState().show("زر الاتصال يحتاج رقم هاتف.", "error");
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const components = buildStoredComponents(bodyText, headerFile, headerType || null, {
         includeMarketingOptOut,
         category,
         shopUrl: resolvedShopUrl,
-        shopButtonText: includeShopCta ? shopButtonText : null
+        shopButtonText: includeShopCta ? shopButtonText : null,
+        headerText: headerType === "TEXT" ? headerText : null,
+        footerText: footerText || null,
+        customButtons,
+        bodySamples
       });
       const response = await api.post<Template>("/templates", {
         whatsapp_account_id: accountId,
@@ -165,18 +234,15 @@ export default function TemplatesPage() {
         language,
         category,
         body_text: bodyText || null,
-        components
+        components,
+        submit_to_meta: !saveAsDraft
       });
-      setName("");
-      setBodyText("");
-      setHeaderType("");
-      setHeaderFile(null);
-      setIncludeShopCta(false);
-      setShopUrl("");
-      setShopButtonText("تسوق الآن");
+      resetCreateForm();
       await client.invalidateQueries({ queryKey: ["templates"] });
       setActiveTab("list");
-      if (response.data.status === "approved") {
+      if (saveAsDraft || response.data.status === "draft") {
+        toastStore.getState().show("تم حفظ القالب كمسودة. يمكنك إرساله لاعتماد Meta لاحقاً.", "success");
+      } else if (response.data.status === "approved") {
         toastStore.getState().show("تم إرسال القالب إلى Meta واعتماده.", "success");
       } else if (response.data.status === "pending") {
         toastStore.getState().show("تم إرسال القالب إلى Meta — قيد المراجعة.", "success");
@@ -516,15 +582,177 @@ export default function TemplatesPage() {
               </div>
 
               <label className="field-label">
+                <span>رأس القالب (اختياري)</span>
+                <select
+                  value={headerType}
+                  onChange={(e) => {
+                    const value = e.target.value as TemplateHeaderFormat | "";
+                    setHeaderType(value);
+                    if (value !== "TEXT") setHeaderText("");
+                    if (value === "TEXT" || !value) setHeaderFile(null);
+                  }}
+                >
+                  <option value="">بدون رأس</option>
+                  <option value="TEXT">نص</option>
+                  <option value="IMAGE">صورة</option>
+                  <option value="VIDEO">فيديو</option>
+                  <option value="DOCUMENT">PDF / مستند</option>
+                </select>
+              </label>
+              {headerType === "TEXT" && (
+                <label className="field-label">
+                  <span>نص الرأس</span>
+                  <input
+                    value={headerText}
+                    onChange={(e) => setHeaderText(e.target.value.slice(0, 60))}
+                    placeholder="عرض خاص"
+                    maxLength={60}
+                  />
+                </label>
+              )}
+              {headerType && headerType !== "TEXT" && (
+                <label className="field-label">
+                  <span>ملف الرأس</span>
+                  <input
+                    type="file"
+                    accept={HEADER_MEDIA_ACCEPT}
+                    onChange={(e) => void onHeaderFileChange(e)}
+                    disabled={uploadingHeader}
+                  />
+                  {headerFile && <p className="hint-text">✓ {headerFile.filename}</p>}
+                  <p className="hint-text">الصوت غير مدعوم في رأس القالب — استخدمه في المحادثة أو الأتمتة.</p>
+                </label>
+              )}
+
+              <label className="field-label">
                 <span>نص القالب</span>
                 <textarea
                   value={bodyText}
-                  onChange={(e) => setBodyText(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setBodyText(next);
+                    const count = extractBodyVariableCount(next);
+                    setBodySamples((current) => {
+                      const nextSamples = current.slice(0, count);
+                      while (nextSamples.length < count) nextSamples.push(`مثال${nextSamples.length + 1}`);
+                      return nextSamples;
+                    });
+                  }}
                   placeholder="مرحباً {{1}}! شكراً لتواصلك معنا."
                   rows={5}
                 />
               </label>
               <p className="hint-text">استخدم {"{{1}}"}، {"{{2}}"} للمتغيرات كما في Meta.</p>
+              {bodyVariableCount > 0 && (
+                <div className="templates-samples-grid">
+                  {Array.from({ length: bodyVariableCount }, (_, index) => (
+                    <label key={`sample-${index}`} className="field-label">
+                      <span>عينة {"{{"}{index + 1}{"}}"}</span>
+                      <input
+                        value={bodySamples[index] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setBodySamples((current) => {
+                            const next = [...current];
+                            next[index] = value;
+                            return next;
+                          });
+                        }}
+                        placeholder={`مثال${index + 1}`}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <label className="field-label">
+                <span>التذييل (اختياري)</span>
+                <input
+                  value={footerText}
+                  onChange={(e) => setFooterText(e.target.value.slice(0, 60))}
+                  placeholder="أرسل إيقاف لإلغاء الاشتراك"
+                  maxLength={60}
+                />
+              </label>
+
+              <div className="templates-buttons-builder">
+                <div className="templates-buttons-builder-head">
+                  <strong>أزرار القالب (حتى 3)</strong>
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    disabled={customButtons.length >= 3}
+                    onClick={() =>
+                      setCustomButtons((current) => [
+                        ...current,
+                        { type: "QUICK_REPLY", text: "" }
+                      ])
+                    }
+                  >
+                    إضافة زر
+                  </button>
+                </div>
+                {customButtons.map((button, index) => (
+                  <div key={`btn-${index}`} className="templates-button-row">
+                    <label className="field-label">
+                      <span>النوع</span>
+                      <select
+                        value={String(button.type || "QUICK_REPLY")}
+                        onChange={(e) =>
+                          updateCustomButton(index, {
+                            type: e.target.value as TemplateButton["type"],
+                            url: e.target.value === "URL" ? button.url : undefined,
+                            phone_number: e.target.value === "PHONE_NUMBER" ? button.phone_number : undefined
+                          })
+                        }
+                      >
+                        <option value="QUICK_REPLY">رد سريع</option>
+                        <option value="URL">رابط موقع</option>
+                        <option value="PHONE_NUMBER">اتصال هاتفي</option>
+                      </select>
+                    </label>
+                    <label className="field-label">
+                      <span>النص</span>
+                      <input
+                        value={button.text ?? ""}
+                        onChange={(e) => updateCustomButton(index, { text: e.target.value.slice(0, 25) })}
+                        maxLength={25}
+                        placeholder="نص الزر"
+                      />
+                    </label>
+                    {String(button.type) === "URL" && (
+                      <label className="field-label">
+                        <span>الرابط</span>
+                        <input
+                          value={button.url ?? ""}
+                          onChange={(e) => updateCustomButton(index, { url: e.target.value })}
+                          placeholder="https://example.com"
+                          dir="ltr"
+                        />
+                      </label>
+                    )}
+                    {String(button.type) === "PHONE_NUMBER" && (
+                      <label className="field-label">
+                        <span>الهاتف</span>
+                        <input
+                          value={button.phone_number ?? ""}
+                          onChange={(e) => updateCustomButton(index, { phone_number: e.target.value })}
+                          placeholder="+965XXXXXXXX"
+                          dir="ltr"
+                        />
+                      </label>
+                    )}
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      onClick={() => setCustomButtons((current) => current.filter((_, idx) => idx !== index))}
+                    >
+                      حذف
+                    </button>
+                  </div>
+                ))}
+                <p className="hint-text">واتساب يسمح بحد أقصى 3 أزرار لكل قالب.</p>
+              </div>
 
               {category === "marketing" && (
                 <label className="field-label checkbox-inline">
@@ -533,7 +761,7 @@ export default function TemplatesPage() {
                     checked={includeMarketingOptOut}
                     onChange={(event) => setIncludeMarketingOptOut(event.target.checked)}
                   />
-                  <span>إضافة أزرار «مهتم» و«عدم الإزعاج» وتذييل إلغاء الاشتراك</span>
+                  <span>إضافة أزرار «مهتم» و«عدم الإزعاج» تلقائياً إن بقي متسع</span>
                 </label>
               )}
 
@@ -543,7 +771,7 @@ export default function TemplatesPage() {
                   checked={includeShopCta}
                   onChange={(event) => setIncludeShopCta(event.target.checked)}
                 />
-                <span>إضافة زر «تسوق الآن» برابط موقع (يظهر أسفل رسالة الحملة)</span>
+                <span>إضافة زر متجر سريع إن لم يُضف زر رابط يدوياً</span>
               </label>
               {includeShopCta && (
                 <div className="templates-fields-row">
@@ -570,44 +798,24 @@ export default function TemplatesPage() {
                   </label>
                 </div>
               )}
-              {includeShopCta && (
-                <p className="hint-text">
-                  بعد اعتماد القالب من Meta، استخدمه في الحملة ليظهر زر الرابط أسفل الرسالة. واتساب يسمح بحد أقصى 3 أزرار.
-                </p>
-              )}
 
-              <label className="field-label">
-                <span>رأس القالب (وسائط — اختياري)</span>
-                <select
-                  value={headerType}
-                  onChange={(e) => {
-                    const value = e.target.value as TemplateHeaderFormat | "";
-                    setHeaderType(value);
-                    if (!value) setHeaderFile(null);
-                  }}
-                >
-                  <option value="">بدون وسائط</option>
-                  <option value="IMAGE">صورة</option>
-                  <option value="VIDEO">فيديو</option>
-                  <option value="DOCUMENT">PDF / مستند</option>
-                </select>
+              <label className="field-label checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={saveAsDraft}
+                  onChange={(event) => setSaveAsDraft(event.target.checked)}
+                />
+                <span>حفظ كمسودة فقط (بدون إرسال إلى Meta الآن)</span>
               </label>
-              {headerType && (
-                <label className="field-label">
-                  <span>ملف الرأس</span>
-                  <input
-                    type="file"
-                    accept={HEADER_MEDIA_ACCEPT}
-                    onChange={(e) => void onHeaderFileChange(e)}
-                    disabled={uploadingHeader}
-                  />
-                  {headerFile && <p className="hint-text">✓ {headerFile.filename}</p>}
-                  <p className="hint-text">الصوت غير مدعوم في رأس القالب — استخدمه في المحادثة أو الأتمتة.</p>
-                </label>
-              )}
 
               <button type="submit" className="whatsapp-button" disabled={uploadingHeader || submitting}>
-                {submitting ? "جاري الإرسال إلى Meta…" : "إنشاء وإرسال إلى Meta"}
+                {submitting
+                  ? saveAsDraft
+                    ? "جارٍ الحفظ…"
+                    : "جاري الإرسال إلى Meta…"
+                  : saveAsDraft
+                    ? "حفظ كمسودة"
+                    : "إنشاء وإرسال إلى Meta"}
               </button>
             </form>
 

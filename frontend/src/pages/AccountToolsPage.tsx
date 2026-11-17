@@ -180,6 +180,27 @@ export default function AccountToolsPage() {
     queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
   });
 
+  const featureFlags = useQuery({
+    queryKey: ["feature-flags"],
+    queryFn: async () => (await api.get<Record<string, boolean>>("/platform/feature-flags")).data
+  });
+  const callingEnabled = Boolean(featureFlags.data?.whatsapp_calling);
+
+  const toggleCalling = useMutation({
+    mutationFn: async (enabled: boolean) =>
+      (await api.patch("/platform/feature-flags", { flags: { whatsapp_calling: enabled } })).data,
+    onSuccess: (data) => {
+      queryClient.setQueryData(["feature-flags"], data);
+      toastStore
+        .getState()
+        .show(data?.whatsapp_calling ? "تم تفعيل مكالمات واتساب." : "تم إيقاف مكالمات واتساب.", "success");
+      if (!data?.whatsapp_calling && insightsTab === "call-pricing") {
+        setInsightsTab("message-pricing");
+      }
+    },
+    onError: (error) => toastStore.getState().show(formatApiError(error), "error")
+  });
+
   const selectedId = accountId || accounts.data?.[0]?.id || "";
   const selectedAccount = accounts.data?.find((item) => item.id === selectedId) ?? null;
   const isoRange = useMemo(() => toIsoRange(startDate, endDate), [startDate, endDate]);
@@ -226,7 +247,11 @@ export default function AccountToolsPage() {
 
   const callPricing = useQuery({
     queryKey: ["whatsapp-call-pricing", selectedId, isoRange.start, isoRange.end],
-    enabled: Boolean(selectedId) && toolTab === "insights" && insightsTab === "call-pricing",
+    enabled:
+      Boolean(selectedId) &&
+      callingEnabled &&
+      toolTab === "insights" &&
+      insightsTab === "call-pricing",
     queryFn: async () =>
       (
         await api.get<CallPricingInsights>(
@@ -323,6 +348,18 @@ export default function AccountToolsPage() {
             <span className="admin-chip">{formatMessagingLimit(selectedAccount)}</span>
           </div>
         )}
+        <label className="field-label checkbox-row account-tools-calling-toggle">
+          <input
+            type="checkbox"
+            checked={callingEnabled}
+            disabled={featureFlags.isLoading || toggleCalling.isPending}
+            onChange={(e) => toggleCalling.mutate(e.target.checked)}
+          />
+          <span>تفعيل مكالمات واتساب</span>
+          {!callingEnabled && (
+            <small className="hint-text">مقفلة افتراضياً — التحليلات فقط بعد التفعيل (بدون إرسال/استقبال مكالمات)</small>
+          )}
+        </label>
       </section>
 
       <div className="whatsapp-page-tabs">
@@ -351,8 +388,9 @@ export default function AccountToolsPage() {
               type="button"
               className={insightsTab === "call-pricing" ? "whatsapp-tab active" : "whatsapp-tab"}
               onClick={() => setInsightsTab("call-pricing")}
+              title={!callingEnabled ? "فعّل مكالمات واتساب أولاً" : undefined}
             >
-              تسعير المكالمات
+              تسعير المكالمات{!callingEnabled ? " (مقفلة)" : ""}
             </button>
           </div>
 
@@ -488,43 +526,63 @@ export default function AccountToolsPage() {
 
           {insightsTab === "call-pricing" && (
             <>
-              {callPricing.isLoading && <p className="muted">جاري تحميل تسعير المكالمات…</p>}
-              {callPricing.data?.meta_error && (
-                <p className="account-tools-warning">تعذر جلب بيانات المكالمات: {callPricing.data.meta_error}</p>
-              )}
-              {callPricing.data && (
+              {!callingEnabled ? (
+                <div className="account-tools-warning" role="status">
+                  <strong>مكالمات واتساب مقفلة</strong>
+                  <p>
+                    فعّل «تفعيل مكالمات واتساب» أعلاه لعرض تحليلات المكالمات. الإرسال/الاستقبال السحابي غير مفعّل بعد —
+                    التبديل يفتح التحليلات فقط.
+                  </p>
+                  <button
+                    type="button"
+                    className="whatsapp-button"
+                    disabled={toggleCalling.isPending}
+                    onClick={() => toggleCalling.mutate(true)}
+                  >
+                    تفعيل مكالمات واتساب
+                  </button>
+                </div>
+              ) : (
                 <>
-                  <div className="at-metric-grid at-metric-grid-top">
-                    <MetricCard
-                      title="ملخص المكالمات"
-                      rows={[
-                        { label: "إجمالي المكالمات", value: callPricing.data.meta.calls_total },
-                        {
-                          label: "متوسط المدة (ث)",
-                          value: callPricing.data.meta.average_duration_seconds ?? "—"
-                        },
-                        {
-                          label: "رسوم تقريبية",
-                          value: money(callPricing.data.meta.approximate_cost, callPricing.data.meta.currency)
-                        }
-                      ]}
-                    />
-                    <MetricCard
-                      title="حسب الاتجاه"
-                      rows={(callPricing.data.meta.by_direction.length
-                        ? callPricing.data.meta.by_direction
-                        : [{ key: "لا بيانات", count: 0 }]
-                      ).map((row) => ({ label: row.key, value: row.count }))}
-                    />
-                    <MetricCard
-                      title="حسب النوع"
-                      rows={(callPricing.data.meta.by_type.length
-                        ? callPricing.data.meta.by_type
-                        : [{ key: "لا بيانات", count: 0 }]
-                      ).map((row) => ({ label: row.key, value: row.count }))}
-                    />
-                  </div>
-                  <p className="muted">{callPricing.data.note_ar}</p>
+                  {callPricing.isLoading && <p className="muted">جاري تحميل تسعير المكالمات…</p>}
+                  {callPricing.data?.meta_error && (
+                    <p className="account-tools-warning">تعذر جلب بيانات المكالمات: {callPricing.data.meta_error}</p>
+                  )}
+                  {callPricing.data && (
+                    <>
+                      <div className="at-metric-grid at-metric-grid-top">
+                        <MetricCard
+                          title="ملخص المكالمات"
+                          rows={[
+                            { label: "إجمالي المكالمات", value: callPricing.data.meta.calls_total },
+                            {
+                              label: "متوسط المدة (ث)",
+                              value: callPricing.data.meta.average_duration_seconds ?? "—"
+                            },
+                            {
+                              label: "رسوم تقريبية",
+                              value: money(callPricing.data.meta.approximate_cost, callPricing.data.meta.currency)
+                            }
+                          ]}
+                        />
+                        <MetricCard
+                          title="حسب الاتجاه"
+                          rows={(callPricing.data.meta.by_direction.length
+                            ? callPricing.data.meta.by_direction
+                            : [{ key: "لا بيانات", count: 0 }]
+                          ).map((row) => ({ label: row.key, value: row.count }))}
+                        />
+                        <MetricCard
+                          title="حسب النوع"
+                          rows={(callPricing.data.meta.by_type.length
+                            ? callPricing.data.meta.by_type
+                            : [{ key: "لا بيانات", count: 0 }]
+                          ).map((row) => ({ label: row.key, value: row.count }))}
+                        />
+                      </div>
+                      <p className="muted">{callPricing.data.note_ar}</p>
+                    </>
+                  )}
                 </>
               )}
             </>
@@ -679,6 +737,23 @@ export default function AccountToolsPage() {
                     </button>
                     <span className="at-metric-dots" aria-hidden="true" />
                     <strong className="at-metric-value">{flow.status || "—"}</strong>
+                    {String(flow.status || "").toUpperCase() !== "PUBLISHED" && (
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        onClick={() => {
+                          void api
+                            .post(`/whatsapp/accounts/${selectedId}/flows/${flow.id}/publish`)
+                            .then(() => {
+                              queryClient.invalidateQueries({ queryKey: ["whatsapp-flows", selectedId] });
+                              toastStore.getState().show("تم نشر الـ Flow على Meta.", "success");
+                            })
+                            .catch(() => toastStore.getState().show("تعذر نشر الـ Flow.", "error"));
+                        }}
+                      >
+                        نشر
+                      </button>
+                    )}
                   </li>
                 ))}
                 {!flows.isLoading && !(flows.data?.flows?.length) && (
