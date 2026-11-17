@@ -16,9 +16,9 @@ def test_preflight_returns_eligible_contact_ids() -> None:
     assert "eligible_contact_ids" in window
     assert '"eligible_contact_ids": [str(item) for item in eligible_contact_ids]' in window
     assert "applyEligibleAudienceOnly" in page
-    assert 'audienceMode === "excel"' in page
-    assert "جدول جمهور الحملة" in page
-    assert "رفع Excel وقفل الجمهور" in page
+    assert "excelAudienceIds" in page
+    assert "جمهور الحملة" in page
+    assert "دمج من Excel" in page
 
 
 def test_contacts_list_supports_ids_filter_for_excel_lock() -> None:
@@ -30,3 +30,4 @@ def test_contacts_list_supports_ids_filter_for_excel_lock() -> None:
     assert "contact_ids: list[UUID] | None = None" in contacts
     assert 'ids: chunk.join(",")' in page
     assert "campaigns-audience-table" in page
+    assert "campaign-audience-sources" in page
