@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-17",
+  "commit": "a9bfc2d",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DRDo5O4E.js",
+    "css": "index-CLRMd8cq.css"
+  },
+  "alembic_head": "0064_custom_inboxes",
+  "features": [
+    "Inbox composer toolbar (snippets, shortcuts, emoji, list, flow)",
+    "Close dialog + send-and-close + header assign",
+    "My/Team/Custom inboxes + branch switcher",
+    "Timeline, merge suggestions, custom fields panel",
+    "Campaign 4-step wizard",
+    "Supervisor ops board on dashboard",
+    "Email/SMS/Web Chat channel scaffolding"
+  ],
+  "notes": "Deployed via SSH. PR #147 merged to main and production."
+}
