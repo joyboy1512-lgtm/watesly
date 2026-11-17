@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-17",
+  "commit": "d889b3a",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BZtd-v_U.js",
+    "css": "index-B_8oQ_7i.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261110-181210",
+  "features": [
+    "Template builder: text header, footer, free buttons, samples, draft submit",
+    "WhatsApp business profile fields (about/address/email/websites)",
+    "Inbox interactive reply buttons",
+    "WhatsApp calling feature flag lock (off by default)",
+    "Flow publish action",
+    "OTP/auth templates left unchanged"
+  ],
+  "notes": "Deployed via SSH. PR #145."
+}
