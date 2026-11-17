@@ -114,33 +114,74 @@ async def _fetch_header_media(media_url: str, file_name: str, header_format: str
         return response.content, mime_type
 
 
+def _extract_text_header(components: list | None) -> dict | None:
+    for component in components or []:
+        if str(component.get("type", "")).upper() != "HEADER":
+            continue
+        fmt = str(component.get("format", "")).upper()
+        text = str(component.get("text") or "").strip()
+        if fmt == "TEXT" and text:
+            return component if isinstance(component, dict) else {"text": text, "format": "TEXT"}
+    return None
+
+
+def _body_example_values(stored_components: list | None, variable_count: int) -> list[str]:
+    defaults = [f"مثال{index}" for index in range(1, variable_count + 1)]
+    for component in stored_components or []:
+        if str(component.get("type", "")).upper() != "BODY":
+            continue
+        example = component.get("example") if isinstance(component, dict) else None
+        if not isinstance(example, dict):
+            break
+        body_text = example.get("body_text")
+        if isinstance(body_text, list) and body_text:
+            row = body_text[0] if isinstance(body_text[0], list) else body_text
+            if isinstance(row, list):
+                values = [str(item).strip() or defaults[idx] for idx, item in enumerate(row[:variable_count])]
+                while len(values) < variable_count:
+                    values.append(defaults[len(values)])
+                return values
+        break
+    return defaults
+
+
 async def build_meta_template_components(
     stored_components: list | None,
     *,
     client: MetaWhatsAppClient,
 ) -> list[dict]:
     meta_components: list[dict] = []
-    header = get_template_header_info(stored_components)
-    if header:
-        media_url = header["media_url"]
-        file_name = header.get("filename") or "header_sample.bin"
-        file_bytes, mime_type = await _fetch_header_media(
-            media_url,
-            file_name,
-            header["format"],
-        )
-        handle = await client.upload_template_sample(
-            file_name=file_name,
-            file_bytes=file_bytes,
-            mime_type=mime_type,
-        )
-        meta_components.append(
-            {
-                "type": "HEADER",
-                "format": header["format"],
-                "example": {"header_handle": [handle]},
-            }
-        )
+    text_header = _extract_text_header(stored_components)
+    if text_header:
+        header_text = str(text_header.get("text") or "").strip()[:60]
+        header_component: dict = {"type": "HEADER", "format": "TEXT", "text": header_text}
+        header_vars = _BODY_VAR_RE.findall(header_text)
+        if header_vars:
+            count = max(int(value) for value in header_vars)
+            header_component["example"] = {"header_text": [f"مثال{index}" for index in range(1, count + 1)]}
+        meta_components.append(header_component)
+    else:
+        header = get_template_header_info(stored_components)
+        if header:
+            media_url = header["media_url"]
+            file_name = header.get("filename") or "header_sample.bin"
+            file_bytes, mime_type = await _fetch_header_media(
+                media_url,
+                file_name,
+                header["format"],
+            )
+            handle = await client.upload_template_sample(
+                file_name=file_name,
+                file_bytes=file_bytes,
+                mime_type=mime_type,
+            )
+            meta_components.append(
+                {
+                    "type": "HEADER",
+                    "format": header["format"],
+                    "example": {"header_handle": [handle]},
+                }
+            )
 
     body_text = _extract_body_text(stored_components)
     if not body_text:
@@ -150,7 +191,7 @@ async def build_meta_template_components(
     variables = _BODY_VAR_RE.findall(body_text)
     if variables:
         count = max(int(value) for value in variables)
-        body_component["example"] = {"body_text": [["مثال"] * count]}
+        body_component["example"] = {"body_text": [_body_example_values(stored_components, count)]}
     meta_components.append(body_component)
 
     footer_text = _extract_footer_text(stored_components)

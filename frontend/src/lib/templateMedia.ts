@@ -1,6 +1,7 @@
 import type { UploadedFile } from "./uploads";
 
-export type TemplateHeaderFormat = "IMAGE" | "VIDEO" | "DOCUMENT";
+export type TemplateHeaderFormat = "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
+export type TemplateButtonType = "URL" | "PHONE_NUMBER" | "QUICK_REPLY";
 
 const EPHEMERAL_MEDIA_HOSTS = ["scontent.whatsapp.net", "fbcdn.net"];
 
@@ -14,17 +15,32 @@ function isEphemeralMetaMediaUrl(url: string | null | undefined) {
   }
 }
 
+export type TemplateButton = {
+  type?: TemplateButtonType | string;
+  text?: string;
+  url?: string;
+  phone_number?: string;
+  id?: string;
+  marketing_opt_out?: boolean;
+  marketing_interested?: boolean;
+};
+
 export type TemplateComponent = {
   type: string;
   format?: string;
   text?: string;
   media_url?: string;
   filename?: string;
-  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; id?: string; marketing_opt_out?: boolean; marketing_interested?: boolean }>;
-  example?: { header_url?: string[]; header_handle?: string[] };
+  buttons?: TemplateButton[];
+  example?: {
+    header_url?: string[];
+    header_handle?: string[];
+    header_text?: string[];
+    body_text?: string[][];
+  };
 };
 
-export function contentTypeToHeaderFormat(contentType: string | null | undefined): TemplateHeaderFormat | null {
+export function contentTypeToHeaderFormat(contentType: string | null | undefined): Exclude<TemplateHeaderFormat, "TEXT"> | null {
   if (!contentType) return null;
   const lowered = contentType.toLowerCase();
   if (lowered.startsWith("image/")) return "IMAGE";
@@ -57,7 +73,7 @@ export function getTemplateHeaderInfo(components: TemplateComponent[] | null | u
       mediaUrl = candidates.find((item) => item && !isEphemeralMetaMediaUrl(item)) ?? null;
     }
     if (mediaUrl && !isEphemeralMetaMediaUrl(mediaUrl)) {
-      return { format, mediaUrl, filename: component.filename ?? null };
+      return { format: format as Exclude<TemplateHeaderFormat, "TEXT">, mediaUrl, filename: component.filename ?? null };
     }
   }
   return null;
@@ -78,19 +94,34 @@ export function normalizeShopUrl(raw: string | null | undefined): string | null 
   }
 }
 
+export function extractBodyVariableCount(bodyText: string | null | undefined): number {
+  const matches = Array.from((bodyText ?? "").matchAll(/\{\{(\d+)\}\}/g));
+  if (!matches.length) return 0;
+  return Math.max(...matches.map((item) => Number(item[1])));
+}
+
+export type BuildTemplateOptions = {
+  includeMarketingOptOut?: boolean;
+  category?: string | null;
+  shopUrl?: string | null;
+  shopButtonText?: string | null;
+  headerText?: string | null;
+  footerText?: string | null;
+  customButtons?: TemplateButton[] | null;
+  bodySamples?: string[] | null;
+};
+
 export function buildStoredComponents(
   bodyText: string | null,
   uploaded: UploadedFile | null,
   headerFormat: TemplateHeaderFormat | null,
-  options?: {
-    includeMarketingOptOut?: boolean;
-    category?: string | null;
-    shopUrl?: string | null;
-    shopButtonText?: string | null;
-  }
+  options?: BuildTemplateOptions
 ): TemplateComponent[] {
   const components: TemplateComponent[] = [];
-  if (uploaded && headerFormat) {
+  const headerText = (options?.headerText ?? "").trim();
+  if (headerFormat === "TEXT" && headerText) {
+    components.push({ type: "HEADER", format: "TEXT", text: headerText.slice(0, 60) });
+  } else if (uploaded && headerFormat && headerFormat !== "TEXT") {
     components.push({
       type: "HEADER",
       format: headerFormat,
@@ -98,13 +129,49 @@ export function buildStoredComponents(
       filename: uploaded.filename
     });
   }
+
   if (bodyText?.trim()) {
-    components.push({ type: "BODY", text: bodyText.trim() });
+    const bodyComponent: TemplateComponent = { type: "BODY", text: bodyText.trim() };
+    const variableCount = extractBodyVariableCount(bodyText);
+    if (variableCount > 0) {
+      const samples = [...(options?.bodySamples ?? [])];
+      while (samples.length < variableCount) {
+        samples.push(`مثال${samples.length + 1}`);
+      }
+      bodyComponent.example = { body_text: [samples.slice(0, variableCount)] };
+    }
+    components.push(bodyComponent);
   }
 
-  const buttons: NonNullable<TemplateComponent["buttons"]> = [];
+  const buttons: TemplateButton[] = [];
+  for (const button of options?.customButtons ?? []) {
+    if (buttons.length >= 3) break;
+    const type = String(button.type || "QUICK_REPLY").toUpperCase();
+    const text = String(button.text || "").trim().slice(0, 25);
+    if (!text) continue;
+    if (type === "URL") {
+      const url = normalizeShopUrl(button.url);
+      if (!url) continue;
+      buttons.push({ type: "URL", text, url });
+      continue;
+    }
+    if (type === "PHONE_NUMBER") {
+      const phone = String(button.phone_number || "").replace(/[^\d+]/g, "").trim();
+      if (!phone) continue;
+      buttons.push({ type: "PHONE_NUMBER", text, phone_number: phone });
+      continue;
+    }
+    buttons.push({
+      type: "QUICK_REPLY",
+      text,
+      id: button.id,
+      marketing_opt_out: button.marketing_opt_out,
+      marketing_interested: button.marketing_interested
+    });
+  }
+
   const shopUrl = normalizeShopUrl(options?.shopUrl);
-  if (shopUrl) {
+  if (shopUrl && buttons.length < 3 && !buttons.some((item) => item.type === "URL")) {
     const shopText = (options?.shopButtonText ?? "").trim().slice(0, 25) || "تسوق الآن";
     buttons.push({ type: "URL", text: shopText, url: shopUrl });
   }
@@ -112,8 +179,7 @@ export function buildStoredComponents(
   const includeMarketing =
     Boolean(options?.includeMarketingOptOut) && (options?.category ?? "marketing") === "marketing";
   if (includeMarketing) {
-    // Meta allows at most 3 buttons; keep the URL CTA and fill remaining slots with marketing replies.
-    if (buttons.length < 3) {
+    if (buttons.length < 3 && !buttons.some((item) => item.marketing_interested)) {
       buttons.push({
         type: "QUICK_REPLY",
         text: "مهتم",
@@ -121,7 +187,7 @@ export function buildStoredComponents(
         marketing_interested: true
       });
     }
-    if (buttons.length < 3) {
+    if (buttons.length < 3 && !buttons.some((item) => item.marketing_opt_out)) {
       buttons.push({
         type: "QUICK_REPLY",
         text: "عدم الإزعاج",
@@ -134,7 +200,11 @@ export function buildStoredComponents(
   if (buttons.length > 0) {
     components.push({ type: "BUTTONS", buttons: buttons.slice(0, 3) });
   }
-  if (includeMarketing) {
+
+  const footerText = (options?.footerText ?? "").trim();
+  if (footerText) {
+    components.push({ type: "FOOTER", text: footerText.slice(0, 60) });
+  } else if (includeMarketing) {
     components.push({ type: "FOOTER", text: "أرسل «إيقاف» لإلغاء الاشتراك" });
   }
   return components;
@@ -174,6 +244,7 @@ export const MEDIA_ACCEPT =
 export const HEADER_MEDIA_ACCEPT = "image/jpeg,image/png,image/webp,video/mp4,application/pdf";
 
 export const HEADER_FORMAT_LABELS: Record<TemplateHeaderFormat, string> = {
+  TEXT: "نص",
   IMAGE: "صورة",
   VIDEO: "فيديو",
   DOCUMENT: "PDF / مستند"

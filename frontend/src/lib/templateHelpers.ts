@@ -53,6 +53,11 @@ export function templateCategoryBadgeClass(category: string): string {
 }
 
 export function formatTemplateHeader(components: TemplateComponent[] | null | undefined): string {
+  for (const component of components ?? []) {
+    if (component.type?.toUpperCase() !== "HEADER") continue;
+    const format = String(component.format ?? "").toUpperCase();
+    if (format === "TEXT" && component.text?.trim()) return HEADER_FORMAT_LABELS.TEXT;
+  }
   const header = getTemplateHeaderInfo(components);
   if (!header) return "—";
   return HEADER_FORMAT_LABELS[header.format] ?? header.format;

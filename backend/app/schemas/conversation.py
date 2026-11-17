@@ -68,6 +68,37 @@ class ConversationSendProductListRequest(BaseModel):
     footer: str | None = None
 
 
+class ConversationReplyButton(BaseModel):
+    id: str = Field(min_length=1, max_length=256)
+    title: str = Field(min_length=1, max_length=20)
+
+
+class ConversationSendReplyButtonsRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=1024)
+    buttons: list[ConversationReplyButton] = Field(min_length=1, max_length=3)
+    header: str | None = Field(default=None, max_length=60)
+    footer: str | None = Field(default=None, max_length=60)
+
+
+class ConversationListRow(BaseModel):
+    id: str = Field(min_length=1, max_length=200)
+    title: str = Field(min_length=1, max_length=24)
+    description: str | None = Field(default=None, max_length=72)
+
+
+class ConversationListSection(BaseModel):
+    title: str = Field(min_length=1, max_length=24)
+    rows: list[ConversationListRow] = Field(min_length=1, max_length=10)
+
+
+class ConversationSendListMessageRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=1024)
+    button_text: str = Field(min_length=1, max_length=20)
+    sections: list[ConversationListSection] = Field(min_length=1, max_length=10)
+    header: str | None = Field(default=None, max_length=60)
+    footer: str | None = Field(default=None, max_length=60)
+
+
 class ConversationRenderTextRequest(BaseModel):
     text: str
 

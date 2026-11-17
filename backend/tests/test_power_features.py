@@ -72,6 +72,7 @@ def test_default_feature_flags_include_core():
     assert DEFAULT_FLAGS["ai_agent_auto_reply"] is True
     assert DEFAULT_FLAGS["sla_monitoring"] is True
     assert DEFAULT_FLAGS["instagram_channel"] is True
+    assert DEFAULT_FLAGS["whatsapp_calling"] is False
 
 
 def test_automation_trigger_type_button_clicked():

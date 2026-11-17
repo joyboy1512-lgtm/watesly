@@ -447,6 +447,14 @@ async def create_account_flow(
     return created
 
 
+async def publish_account_flow(*, whatsapp_account: WhatsAppAccount, flow_id: str) -> dict:
+    client = _client_for(whatsapp_account)
+    try:
+        return await client.publish_flow(flow_id=flow_id)
+    finally:
+        await client.aclose()
+
+
 async def send_account_flow_message(
     *,
     whatsapp_account: WhatsAppAccount,

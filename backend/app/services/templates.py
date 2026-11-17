@@ -77,6 +77,7 @@ async def create_template(
 
     normalized_name = normalize_template_name(payload.name)
     data = payload.model_dump()
+    submit_to_meta = bool(data.pop("submit_to_meta", True))
     data["name"] = normalized_name
     template = WhatsAppTemplate(
         account_id=account_id,
@@ -87,6 +88,9 @@ async def create_template(
     db.add(template)
     await db.commit()
     await db.refresh(template)
+
+    if not submit_to_meta:
+        return template
 
     try:
         template = await submit_template_to_meta(

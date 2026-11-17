@@ -1181,6 +1181,184 @@ async def send_catalog_welcome_message(
     return message
 
 
+async def send_reply_buttons_message(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    whatsapp_account_id: UUID,
+    to: str,
+    body: str,
+    buttons: list[dict],
+    header: str | None = None,
+    footer: str | None = None,
+    record_mac: bool = False,
+) -> Message:
+    """Send interactive reply-button message within the open customer-care window."""
+    wa = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
+        raise ValueError("WHATSAPP_ACCOUNT_NOT_AVAILABLE")
+
+    contact, conversation, _ = await _get_or_create_contact_and_conversation(
+        db, whatsapp_account=wa, sender=to, display_name=None
+    )
+    message = Message(
+        account_id=account_id,
+        organization_id=wa.organization_id,
+        channel_id=wa.channel_id,
+        contact_id=contact.id,
+        conversation_id=conversation.id,
+        direction=MessageDirection.OUTBOUND,
+        type=MessageType.INTERACTIVE,
+        from_address=wa.display_phone_number,
+        to_address=to,
+        text_body=body,
+        provider_payload={
+            "interactive_type": "button",
+            "buttons": buttons,
+            "header": header,
+            "footer": footer,
+        },
+        status=MessageStatus.QUEUED,
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+
+    client = MetaWhatsAppClient(
+        access_token=decrypt_secret(wa.access_token_encrypted),
+        phone_number_id=wa.phone_number_id,
+    )
+    try:
+        response = await client.send_reply_buttons(
+            to=to,
+            body=body,
+            buttons=buttons,
+            header=header,
+            footer=footer,
+        )
+    except MetaAPIError as exc:
+        message.status = MessageStatus.FAILED
+        message.provider_payload = exc.response_data
+        await db.commit()
+        raise
+    except ValueError:
+        message.status = MessageStatus.FAILED
+        await db.commit()
+        raise
+
+    items = response.get("messages", [])
+    message.external_message_id = items[0].get("id") if items else None
+    message.provider_payload = {
+        "interactive_type": "button",
+        "buttons": buttons,
+        "meta_response": response,
+    }
+    message.status = MessageStatus.SENT
+    conversation.last_message_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(message)
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
+    return message
+
+
+async def send_list_message(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    whatsapp_account_id: UUID,
+    to: str,
+    body: str,
+    button_text: str,
+    sections: list[dict],
+    header: str | None = None,
+    footer: str | None = None,
+    record_mac: bool = False,
+) -> Message:
+    """Send interactive list message within the open customer-care window."""
+    wa = await db.get(WhatsAppAccount, whatsapp_account_id)
+    if wa is None or wa.account_id != account_id or wa.status != WhatsAppAccountStatus.ACTIVE:
+        raise ValueError("WHATSAPP_ACCOUNT_NOT_AVAILABLE")
+
+    contact, conversation, _ = await _get_or_create_contact_and_conversation(
+        db, whatsapp_account=wa, sender=to, display_name=None
+    )
+    message = Message(
+        account_id=account_id,
+        organization_id=wa.organization_id,
+        channel_id=wa.channel_id,
+        contact_id=contact.id,
+        conversation_id=conversation.id,
+        direction=MessageDirection.OUTBOUND,
+        type=MessageType.INTERACTIVE,
+        from_address=wa.display_phone_number,
+        to_address=to,
+        text_body=body,
+        provider_payload={
+            "interactive_type": "list",
+            "button_text": button_text,
+            "sections": sections,
+            "header": header,
+            "footer": footer,
+        },
+        status=MessageStatus.QUEUED,
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+
+    client = MetaWhatsAppClient(
+        access_token=decrypt_secret(wa.access_token_encrypted),
+        phone_number_id=wa.phone_number_id,
+    )
+    try:
+        response = await client.send_list_message(
+            to=to,
+            body=body,
+            button_text=button_text,
+            sections=sections,
+            header=header,
+            footer=footer,
+        )
+    except MetaAPIError as exc:
+        message.status = MessageStatus.FAILED
+        message.provider_payload = exc.response_data
+        await db.commit()
+        raise
+    except ValueError:
+        message.status = MessageStatus.FAILED
+        await db.commit()
+        raise
+
+    items = response.get("messages", [])
+    message.external_message_id = items[0].get("id") if items else None
+    message.provider_payload = {
+        "interactive_type": "list",
+        "button_text": button_text,
+        "sections": sections,
+        "meta_response": response,
+    }
+    message.status = MessageStatus.SENT
+    conversation.last_message_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(message)
+    if record_mac:
+        await _record_mac_for_contact(
+            db,
+            account_id=account_id,
+            channel_id=wa.channel_id,
+            contact_id=contact.id,
+            inbound=False,
+        )
+    return message
+
+
 async def send_product_list_message(
     db: AsyncSession,
     *,

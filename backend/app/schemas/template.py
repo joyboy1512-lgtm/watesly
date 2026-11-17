@@ -13,6 +13,7 @@ class TemplateCreateRequest(BaseModel):
     category: TemplateCategory
     body_text: str | None = Field(default=None, max_length=4096)
     components: list[dict] = Field(default_factory=list)
+    submit_to_meta: bool = True
 
 
 class TemplateUpdateRequest(BaseModel):

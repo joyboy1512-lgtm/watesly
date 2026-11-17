@@ -87,6 +87,24 @@ class WhatsAppCommerceSettingsRequest(BaseModel):
 class WhatsAppBrandingSettingsRequest(BaseModel):
     profile_image_url: str | None = Field(default=None, max_length=2048)
     catalog_cover_image_url: str | None = Field(default=None, max_length=2048)
+    about: str | None = Field(default=None, max_length=139)
+    address: str | None = Field(default=None, max_length=256)
+    description: str | None = Field(default=None, max_length=512)
+    email: str | None = Field(default=None, max_length=128)
+    websites: list[str] | None = Field(default=None, max_length=2)
+    vertical: str | None = Field(default=None, max_length=64)
+
+
+class WhatsAppBusinessProfileResponse(BaseModel):
+    about: str | None = None
+    address: str | None = None
+    description: str | None = None
+    email: str | None = None
+    websites: list[str] = Field(default_factory=list)
+    vertical: str | None = None
+    profile_picture_url: str | None = None
+    profile_image_url: str | None = None
+    catalog_cover_image_url: str | None = None
 
 
 class WhatsAppBrandingSyncResponse(BaseModel):

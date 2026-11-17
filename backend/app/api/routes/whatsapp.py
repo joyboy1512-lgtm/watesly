@@ -16,6 +16,7 @@ from app.schemas.whatsapp import (
     WhatsAppAccountResponse,
     WhatsAppBrandingSettingsRequest,
     WhatsAppBrandingSyncResponse,
+    WhatsAppBusinessProfileResponse,
     WhatsAppCommerceSettingsRequest,
     WhatsAppEmbeddedSignupConfigResponse,
     WhatsAppEmbeddedSignupRequest,
@@ -59,6 +60,7 @@ from app.services.catalog_commerce import (
     update_whatsapp_commerce_settings,
 )
 from app.services.whatsapp_branding import (
+    get_whatsapp_business_profile_fields,
     sync_all_branding_to_meta,
     sync_catalog_cover_to_meta,
     sync_profile_image_to_meta,
@@ -72,6 +74,7 @@ from app.services.whatsapp_account_tools import (
     get_message_pricing_insights,
     get_messaging_limits_snapshot,
     list_account_flows,
+    publish_account_flow,
     send_account_flow_message,
 )
 
@@ -426,6 +429,15 @@ async def get_insights_call_pricing(
 ):
     from datetime import UTC, datetime, timedelta
 
+    from app.services.feature_flags import get_feature_flags
+
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    if not flags.get("whatsapp_calling"):
+        raise HTTPException(
+            status_code=403,
+            detail="WHATSAPP_CALLING_DISABLED",
+        )
+
     item = await _load_accessible_whatsapp_account(
         db, context=context, whatsapp_account_id=whatsapp_account_id
     )
@@ -472,6 +484,22 @@ async def post_account_flow(
             categories=payload.categories,
             endpoint_uri=payload.endpoint_uri,
         )
+    except MetaAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/accounts/{whatsapp_account_id}/flows/{flow_id}/publish")
+async def post_publish_account_flow(
+    whatsapp_account_id: UUID,
+    flow_id: str,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await _load_accessible_whatsapp_account(
+        db, context=context, whatsapp_account_id=whatsapp_account_id
+    )
+    try:
+        return await publish_account_flow(whatsapp_account=item, flow_id=flow_id)
     except MetaAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -730,6 +758,28 @@ async def post_whatsapp_commerce_sync(
         raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
 
 
+@router.get(
+    "/accounts/{whatsapp_account_id}/branding/profile",
+    response_model=WhatsAppBusinessProfileResponse,
+)
+async def get_whatsapp_branding_profile(
+    whatsapp_account_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        profile = await get_whatsapp_business_profile_fields(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=whatsapp_account_id,
+        )
+    except ValueError as exc:
+        if str(exc) == "WHATSAPP_ACCOUNT_NOT_AVAILABLE":
+            raise HTTPException(status_code=404, detail="WhatsApp account is not available") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return WhatsAppBusinessProfileResponse(**profile)
+
+
 @router.patch("/accounts/{whatsapp_account_id}/branding", response_model=WhatsAppAccountResponse)
 async def patch_whatsapp_branding(
     whatsapp_account_id: UUID,
@@ -744,6 +794,12 @@ async def patch_whatsapp_branding(
             whatsapp_account_id=whatsapp_account_id,
             profile_image_url=payload.profile_image_url,
             catalog_cover_image_url=payload.catalog_cover_image_url,
+            about=payload.about,
+            address=payload.address,
+            description=payload.description,
+            email=payload.email,
+            websites=payload.websites,
+            vertical=payload.vertical,
         )
     except ValueError as exc:
         if str(exc) == "WHATSAPP_ACCOUNT_NOT_AVAILABLE":
