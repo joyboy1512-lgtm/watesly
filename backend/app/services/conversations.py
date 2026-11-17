@@ -125,6 +125,9 @@ async def list_conversations(
     starred_only: bool = False,
     snoozed_only: bool = False,
     channel_id: UUID | None = None,
+    organization_id: UUID | None = None,
+    inbox_scope: str | None = None,
+    custom_inbox_id: UUID | None = None,
 ) -> list[tuple[Conversation, Contact, Message | None, int]]:
     latest_message_id = (
         select(Message.id)
@@ -174,7 +177,48 @@ async def list_conversations(
         if accessible is not None and channel_id not in accessible:
             return []
         query = query.where(Conversation.channel_id == channel_id)
-    if _limited_to_assigned_conversations(membership):
+    if organization_id is not None:
+        query = query.where(Conversation.organization_id == organization_id)
+    scope = (inbox_scope or "").strip().lower()
+    if scope == "mine":
+        query = query.where(Conversation.assigned_membership_id == membership.id)
+    elif scope == "team":
+        from app.services.conversation_timeline import team_membership_ids
+
+        member_ids = await team_membership_ids(db, account_id=account_id, membership=membership)
+        query = query.where(Conversation.assigned_membership_id.in_(list(member_ids)))
+    if custom_inbox_id is not None:
+        from app.models.channel import Channel
+        from app.models.conversation_tag import ConversationTag
+        from app.models.custom_inbox import CustomInbox
+
+        custom = await db.get(CustomInbox, custom_inbox_id)
+        if custom is None or custom.account_id != account_id:
+            return []
+        filters = custom.filters_json or {}
+        if filters.get("assigned_membership_id"):
+            query = query.where(Conversation.assigned_membership_id == UUID(str(filters["assigned_membership_id"])))
+        if filters.get("priority"):
+            query = query.where(Conversation.priority == filters["priority"])
+        if filters.get("status"):
+            query = query.where(Conversation.status == filters["status"])
+        if filters.get("starred") is True:
+            query = query.where(Conversation.is_starred.is_(True))
+        if filters.get("channel_type"):
+            query = query.join(Channel, Channel.id == Conversation.channel_id).where(
+                Channel.type == filters["channel_type"]
+            )
+        tag_ids = filters.get("tag_ids") or []
+        if tag_ids:
+            tag_uuids = [UUID(str(tag_id)) for tag_id in tag_ids]
+            query = query.where(
+                Conversation.id.in_(
+                    select(ConversationTag.conversation_id).where(ConversationTag.tag_id.in_(tag_uuids))
+                )
+            )
+        if filters.get("needs_reply") is True:
+            query = query.where(Message.direction == MessageDirection.INBOUND)
+    if _limited_to_assigned_conversations(membership) and scope not in {"mine", "team"}:
         query = query.where(Conversation.assigned_membership_id == membership.id)
     rows = list((await db.execute(query)).all())
     result = []
