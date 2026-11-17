@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-17",
+  "commit": "868a4ad",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CapDXh7n.js",
+    "css": "index-A99UZvlO.css"
+  },
+  "server_backup": "/opt/watesly/backups/20261110-181210",
+  "features": [
+    "Campaign schedule and test-send",
+    "Conversation closing notes on archive",
+    "Snooze visibility and filter",
+    "Assignments supervisor summary strip",
+    "Automation business_hours node"
+  ],
+  "notes": "Deployed via SSH. PR #146."
+}

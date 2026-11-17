@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "d889b3a",
-    "git_commit_message": "Meta capabilities expansion live",
+    "git_commit": "868a4ad",
+    "git_commit_message": "Ops growth phase A live",
     "alembic_head": "0063_contact_region",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BZtd-v_U.js",
-      "css": "index-B_8oQ_7i.css"
+      "js": "index-CapDXh7n.js",
+      "css": "index-A99UZvlO.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "d889b3a",
-  "notes": "Meta expand: full template builder (no OTP change), profile fields, inbox buttons, calling lock, Flow publish"
+  "commit": "868a4ad",
+  "notes": "Campaign schedule + test-send, closing notes, snooze filter, supervisor strip, business-hours automation"
 }
