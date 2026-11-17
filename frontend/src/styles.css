@@ -9239,3 +9239,292 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   text-align: center !important;
   width: 100%;
 }
+
+/* Respond-style inbox / workspace chrome */
+.branch-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 6px 10px;
+  max-width: 220px;
+}
+.branch-switcher-label {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.branch-switcher select,
+.branch-switcher strong {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  max-width: 140px;
+}
+.inbox-scope-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 10px;
+  flex-wrap: wrap;
+}
+.inbox-scope-tabs button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.inbox-scope-tabs button.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: transparent;
+  font-weight: 700;
+}
+.inbox-custom-inbox-bar {
+  display: grid;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.inbox-custom-inbox-create {
+  display: flex;
+  gap: 6px;
+}
+.inbox-custom-inbox-create input,
+.inbox-custom-inbox-bar select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.composer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.composer-tool-btn {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.composer-tool-btn.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: transparent;
+}
+.inbox-shortcuts-menu,
+.inbox-emoji-picker,
+.inbox-assign-menu {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 8px;
+}
+.inbox-shortcuts-menu button,
+.inbox-assign-menu button {
+  text-align: start;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text);
+}
+.inbox-shortcuts-menu button:hover,
+.inbox-assign-menu button:hover {
+  background: var(--primary-soft);
+}
+.inbox-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+}
+.inbox-emoji-btn {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  padding: 4px;
+  border-radius: 8px;
+}
+.composer-send-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.composer-send-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.inbox-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 80;
+  padding: 16px;
+}
+.inbox-modal-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+.inbox-timeline-list,
+.inbox-merge-list,
+.inbox-custom-fields {
+  display: grid;
+  gap: 8px;
+}
+.inbox-timeline-item,
+.inbox-merge-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+.inbox-custom-field-row {
+  display: flex;
+  gap: 6px;
+}
+.inbox-custom-field-row input {
+  flex: 1;
+}
+.campaign-wizard-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 16px 12px;
+}
+.campaign-wizard-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--muted);
+}
+.campaign-wizard-step span {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--line);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.campaign-wizard-step.active {
+  color: var(--primary);
+  border-color: transparent;
+  background: var(--primary-soft);
+  font-weight: 700;
+}
+.campaign-wizard-step.active span {
+  background: var(--primary);
+  color: #fff;
+}
+.campaign-wizard-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.campaign-wizard-active-step-1 .campaigns-settings-panel,
+.campaign-wizard-active-step-1 .campaigns-exclude-panel,
+.campaign-wizard-active-step-1 .campaigns-schedule-test {
+  display: none;
+}
+.campaign-wizard-active-step-2 .campaigns-audience-panel,
+.campaign-wizard-active-step-2 .campaigns-exclude-panel,
+.campaign-wizard-active-step-2 .campaigns-schedule-test {
+  display: none;
+}
+.campaign-wizard-active-step-3 .campaigns-audience-panel,
+.campaign-wizard-active-step-3 .campaigns-settings-panel,
+.campaign-wizard-active-step-3 .campaigns-schedule-test {
+  display: none;
+}
+.campaign-wizard-active-step-4 .campaigns-audience-panel,
+.campaign-wizard-active-step-4 .campaigns-settings-panel,
+.campaign-wizard-active-step-4 .campaigns-exclude-panel {
+  display: none;
+}
+.supervisor-ops-board {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 18px;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+.supervisor-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.supervisor-ops-grid article {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+.supervisor-ops-grid strong {
+  font-size: 24px;
+}
+.supervisor-ops-alert {
+  border-color: color-mix(in srgb, #ea4335 35%, var(--line));
+}
+.supervisor-ops-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.supervisor-agent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.supervisor-agent-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 900px) {
+  .supervisor-ops-grid,
+  .supervisor-ops-columns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .supervisor-ops-grid,
+  .supervisor-ops-columns {
+    grid-template-columns: 1fr;
+  }
+}

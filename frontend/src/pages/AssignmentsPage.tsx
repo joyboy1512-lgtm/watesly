@@ -68,6 +68,7 @@ export default function AssignmentsPage() {
           waiting_conversations: number;
           snoozed_conversations: number;
           sla_breached_conversations: number;
+          unresolved_over_1h?: number;
         }>("/inbox-tools/supervisor-summary")
       ).data,
     refetchInterval: 60_000
@@ -317,6 +318,10 @@ export default function AssignmentsPage() {
         <div className="supervisor-strip-item supervisor-strip-alert">
           <span>تجاوز SLA</span>
           <strong>{supervisor.isLoading ? "…" : supervisor.data?.sla_breached_conversations ?? 0}</strong>
+        </div>
+        <div className="supervisor-strip-item supervisor-strip-alert">
+          <span>+1 ساعة</span>
+          <strong>{supervisor.isLoading ? "…" : supervisor.data?.unresolved_over_1h ?? 0}</strong>
         </div>
       </section>
 

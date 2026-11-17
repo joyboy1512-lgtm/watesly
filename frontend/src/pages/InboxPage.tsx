@@ -29,16 +29,49 @@ import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
 import type { TemplateComponent } from "../lib/templateMedia";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import InboxMessageBubble from "../components/InboxMessageBubble";
+import InboxCloseDialog from "../components/InboxCloseDialog";
+import InboxEmojiPicker from "../components/InboxEmojiPicker";
+import InboxShortcutsMenu from "../components/InboxShortcutsMenu";
+import InboxListMessagePanel from "../components/InboxListMessagePanel";
+import InboxFlowSend from "../components/InboxFlowSend";
+import InboxTimeline from "../components/InboxTimeline";
+import InboxCustomFieldsPanel from "../components/InboxCustomFieldsPanel";
+import InboxMergeSuggestions from "../components/InboxMergeSuggestions";
 import type { Conversation, Message } from "../types/api";
 import type { Tag, Note } from "../types/inbox";
 import Icon from "../components/Icon";
+import { useWorkspaceOrganizationId } from "../hooks/useWorkspace";
 
 type InboxFilter = "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
+type InboxScope = "all" | "mine" | "team" | "custom";
 type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
-type ChannelOption = { id: string; name: string; phone: string | null };
+type ChannelOption = { id: string; name: string; phone: string | null; type: string; messagingReady: boolean };
 type WhatsAppAccountRow = { id: string; channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
 type ChannelThread = { conversation_id: string; channel_id: string; channel_name: string; display_phone_number: string | null; status: string };
+type CustomInboxRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  filters: {
+    tag_ids?: string[];
+    assigned_membership_id?: string | null;
+    priority?: string | null;
+    status?: string | null;
+    starred?: boolean | null;
+    needs_reply?: boolean | null;
+    channel_type?: string | null;
+  };
+};
 const priorityLabels: Record<string, string> = { low: "منخفضة", normal: "عادية", high: "مرتفعة", urgent: "عاجلة" };
+const CHANNEL_TYPE_SHORT: Record<string, string> = {
+  whatsapp: "WA",
+  instagram: "IG",
+  email: "Email",
+  sms: "SMS",
+  web_chat: "Web",
+  telegram: "TG",
+  messenger: "MSG"
+};
 
 export default function InboxPage() {
   const { t } = useTranslation();
@@ -94,6 +127,21 @@ export default function InboxPage() {
   const [newConversationName, setNewConversationName] = useState("");
   const [startingConversation, setStartingConversation] = useState(false);
   const [switchingChannelId, setSwitchingChannelId] = useState<string | null>(null);
+  const [inboxScope, setInboxScope] = useState<InboxScope>("all");
+  const [customInboxId, setCustomInboxId] = useState("");
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [closeNote, setCloseNote] = useState("");
+  const [closeReason, setCloseReason] = useState("");
+  const [closingBusy, setClosingBusy] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
+  const [listMessageOpen, setListMessageOpen] = useState(false);
+  const [flowSendOpen, setFlowSendOpen] = useState(false);
+  const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
+  const [sendAndClose, setSendAndClose] = useState(false);
+  const [newCustomInboxName, setNewCustomInboxName] = useState("");
+  const workspaceOrganizationId = useWorkspaceOrganizationId();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageSearchRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<number | null>(null);
@@ -101,7 +149,15 @@ export default function InboxPage() {
   const showArchived = filter === "archived";
   const showSnoozed = filter === "snoozed";
   const conversationsQuery = useQuery({
-    queryKey: ["conversations", showArchived, showSnoozed, channelFilter],
+    queryKey: [
+      "conversations",
+      showArchived,
+      showSnoozed,
+      channelFilter,
+      workspaceOrganizationId,
+      inboxScope,
+      customInboxId
+    ],
     queryFn: async ({ signal }) => {
       const params: Record<string, string | boolean | number> = {
         archived: showArchived,
@@ -109,6 +165,9 @@ export default function InboxPage() {
         limit: INBOX_CONVERSATIONS_LIMIT
       };
       if (channelFilter) params.channel_id = channelFilter;
+      if (workspaceOrganizationId) params.organization_id = workspaceOrganizationId;
+      if (inboxScope === "mine" || inboxScope === "team") params.inbox_scope = inboxScope;
+      if (inboxScope === "custom" && customInboxId) params.custom_inbox_id = customInboxId;
       return (
         await api.get<Conversation[]>("/conversations", {
           params,
@@ -118,6 +177,15 @@ export default function InboxPage() {
       ).data;
     },
     refetchInterval: 30_000
+  });
+  const customInboxesQuery = useQuery({
+    queryKey: ["custom-inboxes", workspaceOrganizationId],
+    queryFn: async () =>
+      (
+        await api.get<CustomInboxRow[]>("/inbox-tools/custom-inboxes", {
+          params: workspaceOrganizationId ? { organization_id: workspaceOrganizationId } : undefined
+        })
+      ).data
   });
   const channelsQuery = useQuery({
     queryKey: ["channels"],
@@ -140,24 +208,35 @@ export default function InboxPage() {
   const channelOptions = useMemo<ChannelOption[]>(() => {
     const waByChannel = new Map((whatsappAccountsQuery.data ?? []).map((item) => [item.channel_id, item]));
     const igByChannel = new Map((instagramAccountsQuery.data ?? []).map((item) => [item.channel_id, item]));
-    return (channelsQuery.data ?? [])
-      .filter((item) => item.type === "whatsapp" || item.type === "instagram")
-      .map((item) => {
-        if (item.type === "instagram") {
-          const account = igByChannel.get(item.id);
-          return {
-            id: item.id,
-            name: account?.channel_name ?? item.name,
-            phone: account?.username ? `@${account.username}` : account?.page_name ?? null
-          };
-        }
+    return (channelsQuery.data ?? []).map((item) => {
+      if (item.type === "instagram") {
+        const account = igByChannel.get(item.id);
+        return {
+          id: item.id,
+          name: account?.channel_name ?? item.name,
+          phone: account?.username ? `@${account.username}` : account?.page_name ?? null,
+          type: item.type,
+          messagingReady: true
+        };
+      }
+      if (item.type === "whatsapp") {
         const account = waByChannel.get(item.id);
         return {
           id: item.id,
           name: account?.channel_name ?? item.name,
-          phone: account?.display_phone_number ?? null
+          phone: account?.display_phone_number ?? null,
+          type: item.type,
+          messagingReady: true
         };
-      });
+      }
+      return {
+        id: item.id,
+        name: item.name,
+        phone: null,
+        type: item.type,
+        messagingReady: item.type === "whatsapp" || item.type === "instagram"
+      };
+    });
   }, [channelsQuery.data, whatsappAccountsQuery.data, instagramAccountsQuery.data]);
   const whatsappChannelOptions = useMemo(
     () =>
@@ -165,7 +244,7 @@ export default function InboxPage() {
         .filter((item) => item.type === "whatsapp")
         .map((item) => {
           const option = channelOptions.find((row) => row.id === item.id);
-          return option ?? { id: item.id, name: item.name, phone: null };
+          return option ?? { id: item.id, name: item.name, phone: null, type: "whatsapp", messagingReady: true };
         }),
     [channelsQuery.data, channelOptions]
   );
@@ -603,12 +682,23 @@ export default function InboxPage() {
       toastStore.getState().show("انتهت نافذة 24 ساعة — استخدم قالب WhatsApp.", "error");
       return;
     }
+    const shouldClose = sendAndClose;
     setSending(true);
-    try { await api.post(`/conversations/${selectedId}/messages/text`, { text: text.trim() }); setText(""); await Promise.all([queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] }), queryClient.invalidateQueries({ queryKey: ["conversations"] })]); }
-    catch {
+    try {
+      await api.post(`/conversations/${selectedId}/messages/text`, { text: text.trim() });
+      setText("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["conversations"] })
+      ]);
+      if (shouldClose) {
+        setCloseDialogOpen(true);
+      }
+    } catch {
       toastStore.getState().show("تعذر إرسال الرسالة. قد تكون نافذة 24 ساعة منتهية.", "error");
+    } finally {
+      setSending(false);
     }
-    finally { setSending(false); }
   }
   async function handleSendTemplate(event?: FormEvent) {
     event?.preventDefault();
@@ -700,18 +790,65 @@ export default function InboxPage() {
     setFilter("all");
     toastStore.getState().show("تم استرجاع المحادثة.", "success");
   }
+  async function confirmCloseConversation() {
+    setClosingBusy(true);
+    try {
+      const payload: Record<string, unknown> = { archived: true };
+      const closing_note = closeNote.trim().slice(0, 1000);
+      const closing_reason = closeReason.trim().slice(0, 120);
+      if (closing_note) payload.closing_note = closing_note;
+      if (closing_reason) payload.closing_reason = closing_reason;
+      await updateConversation(payload);
+      setCloseDialogOpen(false);
+      setCloseNote("");
+      setCloseReason("");
+      setSelectedId(null);
+      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      toastStore.getState().show("تم إغلاق المحادثة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إغلاق المحادثة.", "error");
+    } finally {
+      setClosingBusy(false);
+    }
+  }
   async function archiveConversation() {
-    const noteInput = window.prompt("ملاحظة إغلاق اختيارية (سبب الأرشفة):");
-    if (noteInput === null) return;
-    const reasonInput = window.prompt("سبب مختصر اختياري (مثال: تم الحل):") ?? "";
-    const closing_note = noteInput.trim().slice(0, 1000);
-    const closing_reason = reasonInput.trim().slice(0, 120);
-    const payload: Record<string, unknown> = { archived: true };
-    if (closing_note) payload.closing_note = closing_note;
-    if (closing_reason) payload.closing_reason = closing_reason;
-    await updateConversation(payload);
-    setSelectedId(null);
-    await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    setCloseNote("");
+    setCloseReason("");
+    setCloseDialogOpen(true);
+  }
+  async function createCustomInbox() {
+    const name = newCustomInboxName.trim();
+    if (!name) return;
+    try {
+      await api.post("/inbox-tools/custom-inboxes", {
+        name,
+        organization_id: workspaceOrganizationId || null,
+        filters: { needs_reply: true }
+      });
+      setNewCustomInboxName("");
+      await customInboxesQuery.refetch();
+      toastStore.getState().show("تم إنشاء إنبوكس مخصص.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إنشاء الإنبوكس.", "error");
+    }
+  }
+  async function saveShortcutNote(kind: "ticket" | "order") {
+    if (!selectedId) return;
+    const label = kind === "ticket" ? "تذكرة دعم" : "طلب / أوردر";
+    const body = window.prompt(`تفاصيل ${label}:`);
+    if (body === null) return;
+    const textBody = body.trim();
+    if (!textBody) return;
+    try {
+      await api.post(`/inbox-tools/conversations/${selectedId}/notes`, {
+        body: `${label}: ${textBody}`
+      });
+      await queryClient.invalidateQueries({ queryKey: ["conversation-notes", selectedId] });
+      await queryClient.invalidateQueries({ queryKey: ["conversation-timeline", selectedId] });
+      toastStore.getState().show(`تم حفظ ${label}.`, "success");
+    } catch {
+      toastStore.getState().show("تعذر حفظ الملاحظة.", "error");
+    }
   }
   async function applyReplyTemplate(
     body: string,
@@ -966,6 +1103,52 @@ export default function InboxPage() {
           </form>
         )}
         <div className="conversation-search"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم، رقم أو نص رسالة" aria-label="بحث في المحادثات" /></div>
+        <div className="inbox-scope-tabs" role="tablist" aria-label="نوع الإنبوكس">
+          {([
+            ["all", "الكل"],
+            ["mine", "لي"],
+            ["team", "الفريق"],
+            ["custom", "مخصص"]
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={inboxScope === value ? "active" : ""}
+              onClick={() => {
+                setInboxScope(value);
+                if (value !== "custom") setCustomInboxId("");
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {inboxScope === "custom" && (
+          <div className="inbox-custom-inbox-bar">
+            <select
+              value={customInboxId}
+              onChange={(e) => setCustomInboxId(e.target.value)}
+              aria-label="إنبوكس مخصص"
+            >
+              <option value="">اختر إنبوكس مخصص</option>
+              {(customInboxesQuery.data ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <div className="inbox-custom-inbox-create">
+              <input
+                value={newCustomInboxName}
+                onChange={(e) => setNewCustomInboxName(e.target.value)}
+                placeholder="اسم إنبوكس جديد"
+              />
+              <button type="button" className="secondary-button compact" onClick={() => void createCustomInbox()}>
+                +
+              </button>
+            </div>
+          </div>
+        )}
         {channelOptions.length > 1 && (
           <div className="inbox-channel-filter">
             <select
@@ -977,7 +1160,8 @@ export default function InboxPage() {
               <option value="">كل القنوات ({conversations.length})</option>
               {channelOptions.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                  {CHANNEL_TYPE_SHORT[item.type] ?? item.type} · {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                  {!item.messagingReady ? " (قريباً)" : ""}
                 </option>
               ))}
             </select>
@@ -1046,7 +1230,7 @@ export default function InboxPage() {
             <div>
               <h2>{selectedConversation?.contact_name || selectedConversation?.contact_address || t("inbox.selectConversation")}</h2>
               <span>
-                WhatsApp
+                {CHANNEL_TYPE_SHORT[channelOptions.find((item) => item.id === selectedConversation?.channel_id)?.type ?? "whatsapp"] ?? "WhatsApp"}
                 {selectedConversation?.channel_id && channelLabelById.get(selectedConversation.channel_id)
                   ? ` · ${channelLabelById.get(selectedConversation.channel_id)}`
                   : ""}
@@ -1059,8 +1243,8 @@ export default function InboxPage() {
                   ? ` · نافذة نشطة (${formatWindowExpiry(selectedConversation.service_window_expires_at)})`
                   : selectedConversation ? " · يتطلب قالب" : ""}
               </span>
-              {selectedConversation && channelOptions.length > 1 && (
-                <div className="inbox-channel-switcher">
+              {selectedConversation && channelOptions.length > 0 && (
+                <div className="inbox-channel-switcher" aria-label="تبديل القناة">
                   {channelOptions.map((item) => {
                     const isActive = item.id === selectedConversation.channel_id;
                     const hasThread = conversations.some(
@@ -1074,14 +1258,19 @@ export default function InboxPage() {
                         key={item.id}
                         type="button"
                         className={isActive ? "inbox-channel-pill active" : "inbox-channel-pill"}
-                        disabled={switchingChannelId === item.id}
+                        disabled={switchingChannelId === item.id || (!item.messagingReady && !isActive)}
                         onClick={() => {
+                          if (!item.messagingReady) {
+                            toastStore.getState().show(`قناة ${CHANNEL_TYPE_SHORT[item.type] ?? item.type} قيد التفعيل — يمكن إنشاؤها من صفحة القنوات.`, "info");
+                            return;
+                          }
                           if (!isActive) void openConversationOnChannel(item.id);
                         }}
-                        title={item.phone ?? item.name}
+                        title={item.messagingReady ? (item.phone ?? item.name) : "قريباً — أنشئ القناة من صفحة القنوات"}
                       >
-                        {switchingChannelId === item.id ? "…" : item.name}
-                        {!isActive && !hasThread ? " +" : ""}
+                        {switchingChannelId === item.id
+                          ? "…"
+                          : `${CHANNEL_TYPE_SHORT[item.type] ?? item.type}${!isActive && !hasThread && item.messagingReady ? " +" : ""}${!item.messagingReady ? " · قريباً" : ""}`}
                       </button>
                     );
                   })}
@@ -1090,6 +1279,42 @@ export default function InboxPage() {
             </div>
           </div>
           <div className="chat-header-actions">
+            <div className="snooze-menu-wrap">
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => setHeaderAssignOpen((value) => !value)}
+                disabled={!selectedId || isArchived}
+                title="تعيين موظف"
+              >
+                👤
+              </button>
+              {headerAssignOpen && selectedId && (
+                <div className="snooze-menu inbox-assign-menu">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void updateConversation({ assigned_membership_id: null }).then(() => setHeaderAssignOpen(false));
+                    }}
+                  >
+                    غير معيّنة
+                  </button>
+                  {(employeesQuery.data ?? []).map((item: { membership_id: string; full_name: string; role: string }) => (
+                    <button
+                      key={item.membership_id}
+                      type="button"
+                      onClick={() => {
+                        void updateConversation({ assigned_membership_id: item.membership_id }).then(() =>
+                          setHeaderAssignOpen(false)
+                        );
+                      }}
+                    >
+                      {item.full_name} · {item.role}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button type="button" className="secondary-action" onClick={() => void toggleStar()} disabled={!selectedId}>{selectedConversation?.is_starred ? "★" : "☆"}</button>
             <div className="snooze-menu-wrap">
               <button type="button" className="secondary-action" onClick={() => setSnoozeOpen((value) => !value)} disabled={!selectedId || isArchived}>⏰</button>
@@ -1103,9 +1328,9 @@ export default function InboxPage() {
               )}
             </div>
             {isArchived ? (
-              <button type="button" className="secondary-action" onClick={() => void unarchiveConversation()} disabled={!selectedId}>↩</button>
+              <button type="button" className="secondary-action" onClick={() => void unarchiveConversation()} disabled={!selectedId} title="استرجاع">↩</button>
             ) : (
-              <button type="button" className="secondary-action" onClick={() => void archiveConversation()} disabled={!selectedId}>🗄</button>
+              <button type="button" className="secondary-action" onClick={() => void archiveConversation()} disabled={!selectedId} title="إغلاق">✕</button>
             )}
             <button type="button" className="secondary-action" onClick={() => void aiSuggest()} disabled={!selectedId || isArchived} title="اقتراح AI">AI</button>
             <button type="button" className="secondary-action" onClick={() => void runCopilot()} disabled={!selectedId || isArchived || copilotLoading} title="Copilot">
@@ -1301,7 +1526,7 @@ export default function InboxPage() {
               </div>
             </div>
           )}
-          {(quickReplies.length > 0) && (
+          {snippetsOpen && quickReplies.length > 0 && (
             <div className="quick-replies">
               {topQuickReplies.map((item, index) => (
                 <button
@@ -1336,6 +1561,90 @@ export default function InboxPage() {
               <code dir="ltr">{slashHint.shortcut}</code>
             </div>
           )}
+          <div className="composer-toolbar">
+            <button
+              type="button"
+              className={`composer-tool-btn${snippetsOpen ? " active" : ""}`}
+              onClick={() => setSnippetsOpen((value) => !value)}
+              disabled={!selectedId}
+              title="Snippets"
+            >
+              / ردود
+            </button>
+            <button
+              type="button"
+              className={`composer-tool-btn${shortcutsOpen ? " active" : ""}`}
+              onClick={() => setShortcutsOpen((value) => !value)}
+              disabled={!selectedId || isArchived}
+              title="Shortcuts"
+            >
+              ⚡ اختصارات
+            </button>
+            <button
+              type="button"
+              className={`composer-tool-btn${emojiOpen ? " active" : ""}`}
+              onClick={() => setEmojiOpen((value) => !value)}
+              disabled={!selectedId}
+              title="Emoji"
+            >
+              ☺
+            </button>
+            <button
+              type="button"
+              className="composer-tool-btn"
+              onClick={() => setProductPickerOpen((value) => !value)}
+              disabled={!selectedId || isArchived}
+            >
+              🛒 منتج
+            </button>
+            <button
+              type="button"
+              className={`composer-tool-btn${replyButtonsOpen ? " active" : ""}`}
+              onClick={() => {
+                setReplyButtonsOpen((value) => !value);
+                setListMessageOpen(false);
+                if (!replyButtonBody.trim() && text.trim()) setReplyButtonBody(text);
+              }}
+              disabled={!selectedId || isArchived || windowClosed}
+              title="إرسال أزرار رد سريع"
+            >
+              أزرار
+            </button>
+            <button
+              type="button"
+              className={`composer-tool-btn${listMessageOpen ? " active" : ""}`}
+              onClick={() => {
+                setListMessageOpen((value) => !value);
+                setReplyButtonsOpen(false);
+              }}
+              disabled={!selectedId || isArchived || windowClosed}
+              title="رسالة قائمة"
+            >
+              قائمة
+            </button>
+            <button
+              type="button"
+              className={`composer-tool-btn${flowSendOpen ? " active" : ""}`}
+              onClick={() => setFlowSendOpen((value) => !value)}
+              disabled={!selectedId || isArchived}
+              title="WhatsApp Flow"
+            >
+              Flow
+            </button>
+          </div>
+          <InboxShortcutsMenu
+            open={shortcutsOpen}
+            disabled={!selectedId || isArchived}
+            onClose={() => setShortcutsOpen(false)}
+            onCreateDeal={() => void createDealFromInbox()}
+            onCreateTicketNote={() => void saveShortcutNote("ticket")}
+            onCreateOrderNote={() => void saveShortcutNote("order")}
+          />
+          <InboxEmojiPicker
+            open={emojiOpen}
+            onClose={() => setEmojiOpen(false)}
+            onPick={(emoji) => setText((current) => `${current}${emoji}`)}
+          />
           <div className="composer-variable-row">
             {REPLY_VARIABLES.map((item) => (
               <button
@@ -1348,27 +1657,22 @@ export default function InboxPage() {
                 {item.label}
               </button>
             ))}
-            <button
-              type="button"
-              className="quick-reply-chip"
-              onClick={() => setProductPickerOpen((value) => !value)}
-              disabled={!selectedId || isArchived}
-            >
-              🛒 منتج
-            </button>
-            <button
-              type="button"
-              className="quick-reply-chip"
-              onClick={() => {
-                setReplyButtonsOpen((value) => !value);
-                if (!replyButtonBody.trim() && text.trim()) setReplyButtonBody(text);
-              }}
-              disabled={!selectedId || isArchived || windowClosed}
-              title="إرسال أزرار رد سريع (نافذة 24 ساعة)"
-            >
-              أزرار
-            </button>
           </div>
+          <InboxListMessagePanel
+            open={listMessageOpen}
+            conversationId={selectedId}
+            onClose={() => setListMessageOpen(false)}
+            onSent={() => {
+              void queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] });
+              void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            }}
+          />
+          <InboxFlowSend
+            open={flowSendOpen}
+            channelId={selectedConversation?.channel_id ?? null}
+            contactAddress={selectedConversation?.contact_address ?? null}
+            onClose={() => setFlowSendOpen(false)}
+          />
           {replyButtonsOpen && (
             <div className="inbox-reply-buttons-panel">
               <label className="field-label">
@@ -1431,9 +1735,19 @@ export default function InboxPage() {
               disabled={!selectedId || sending}
               maxLength={4096}
             />
-            <button className="send-button" type="submit" disabled={!selectedId || sending || !text.trim()} aria-label="إرسال">
-              <Icon name="send" />
-            </button>
+            <div className="composer-send-group">
+              <button className="send-button" type="submit" disabled={!selectedId || sending || !text.trim()} aria-label="إرسال">
+                <Icon name="send" />
+              </button>
+              <label className="composer-send-close" title="إرسال ثم إغلاق">
+                <input
+                  type="checkbox"
+                  checked={sendAndClose}
+                  onChange={(e) => setSendAndClose(e.target.checked)}
+                />
+                <span>وإغلاق</span>
+              </label>
+            </div>
           </div>
           <div className="composer-meta composer-meta-compact">
             <small>{text.length}/4096 · {"{{contact.name}}"} · <button type="button" className="link-button" onClick={() => void saveLastOutboundAsQuickReply()} disabled={!selectedId}>حفظ آخر رد</button></small>
@@ -1441,6 +1755,16 @@ export default function InboxPage() {
         </form>
         </div>
         )}
+        <InboxCloseDialog
+          open={closeDialogOpen}
+          note={closeNote}
+          reason={closeReason}
+          onNoteChange={setCloseNote}
+          onReasonChange={setCloseReason}
+          onCancel={() => setCloseDialogOpen(false)}
+          onConfirm={() => void confirmCloseConversation()}
+          busy={closingBusy}
+        />
       </section>
 
       <aside className="customer-panel"><button className="panel-close" onClick={() => setDetailsOpen(false)}>×</button><div className="customer-profile"><div className="avatar avatar-large">{(selectedConversation?.contact_name || selectedConversation?.contact_address || "?").slice(0, 2).toUpperCase()}</div><h3>{selectedConversation?.contact_name || "عميل"}</h3><span dir="ltr">{selectedConversation?.contact_address}</span>
@@ -1492,6 +1816,9 @@ export default function InboxPage() {
           </div>
         )}
         <div className="customer-section"><h4>إدارة المحادثة</h4><label className="control-label"><span>الموظف المسؤول</span><select value={selectedConversation?.assigned_membership_id ?? ""} onChange={(e) => void updateConversation({ assigned_membership_id: e.target.value || null })}><option value="">غير معيّنة</option>{(employeesQuery.data ?? []).map((item: { membership_id: string; full_name: string; role: string }) => <option key={item.membership_id} value={item.membership_id}>{item.full_name} · {item.role}</option>)}</select></label><label className="control-label"><span>الحالة</span><select value={selectedConversation?.status ?? "open"} onChange={(e) => void updateConversation({ status: e.target.value })}><option value="open">مفتوحة</option><option value="pending">قيد الانتظار</option><option value="closed">مغلقة</option><option value="spam">مزعجة</option></select></label><label className="control-label"><span>الأولوية</span><select value={selectedConversation?.priority ?? "normal"} onChange={(e) => void updateConversation({ priority: e.target.value })}><option value="low">منخفضة</option><option value="normal">عادية</option><option value="high">مرتفعة</option><option value="urgent">عاجلة</option></select></label></div>
+        <InboxCustomFieldsPanel contactId={selectedConversation?.contact_id ?? null} disabled={isArchived} />
+        <InboxMergeSuggestions contactId={selectedConversation?.contact_id ?? null} disabled={isArchived} />
+        <InboxTimeline conversationId={selectedId} />
         <div className="customer-section"><h4>الوسوم</h4><div className="tag-list">{(conversationTagsQuery.data ?? []).map((tag) => <button key={tag.id} onClick={() => void removeTag(tag.id)}>{tag.name} ×</button>)}</div><select className="tag-select" defaultValue="" onChange={(e) => { if (e.target.value) void addTag(e.target.value); e.currentTarget.value = ""; }}><option value="">إضافة وسم</option>{(allTagsQuery.data ?? []).filter((tag) => !(conversationTagsQuery.data ?? []).some((item) => item.id === tag.id)).map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}</select></div>
         <div className="customer-section"><h4>تقييم CSAT</h4><p className="hint-text">بعد إغلاق المحادثة — أو يُرسل العميل: تقييم:5</p><div className="inline-actions"><select value={csatScore} onChange={(e) => setCsatScore(e.target.value)}><option value="">—</option><option value="5">5 ممتاز</option><option value="4">4 جيد</option><option value="3">3 متوسط</option><option value="2">2 ضعيف</option><option value="1">1 سيء</option></select><button type="button" className="secondary-button" onClick={() => void submitCsat()} disabled={!csatScore || !selectedId}>حفظ</button></div></div>
         <div className="customer-section"><h4>ملاحظات داخلية</h4><div className="notes-list">{(notesQuery.data ?? []).map((note) => <article key={note.id}><p>{note.body}</p><small>{new Date(note.created_at).toLocaleString("ar")}</small></article>)}</div><textarea placeholder="أضف ملاحظة للفريق…" value={noteText} onChange={(e) => setNoteText(e.target.value)} /><button className="secondary-action" onClick={() => void saveNote()} disabled={!noteText.trim()}>حفظ الملاحظة</button></div>

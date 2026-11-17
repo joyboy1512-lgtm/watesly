@@ -98,6 +98,23 @@ export default function DashboardPage() {
     refetchInterval: canViewReports ? 60_000 : false
   });
 
+  const supervisor = useQuery({
+    queryKey: ["supervisor-summary"],
+    enabled: canViewReports,
+    queryFn: async () =>
+      (
+        await api.get<{
+          waiting_conversations: number;
+          snoozed_conversations: number;
+          sla_breached_conversations: number;
+          unresolved_over_1h?: number;
+          by_channel?: Array<{ channel_type: string; open_conversations: number }>;
+          agents?: Array<{ membership_id: string; full_name: string; open_conversations: number }>;
+        }>("/inbox-tools/supervisor-summary", silentRequest)
+      ).data,
+    refetchInterval: canViewReports ? 60_000 : false
+  });
+
   const subscription = useQuery({
     queryKey: ["subscription"],
     enabled: canViewBilling,
@@ -213,6 +230,60 @@ export default function DashboardPage() {
             </div>
           </Link>
         ))}
+      </section>
+
+      <section className="supervisor-ops-board" aria-label="غرفة قيادة المشرف">
+        <div className="panel-heading">
+          <div>
+            <h2>غرفة قيادة المشرف</h2>
+            <p>انتظار · SLA · حمل الموظفين · القنوات</p>
+          </div>
+          <Link to="/assignments" className="secondary-button">التعيينات</Link>
+        </div>
+        <div className="supervisor-ops-grid">
+          <article>
+            <span>تنتظر رداً</span>
+            <strong>{supervisor.isLoading ? "…" : supervisor.data?.waiting_conversations ?? 0}</strong>
+          </article>
+          <article>
+            <span>مؤجلة</span>
+            <strong>{supervisor.isLoading ? "…" : supervisor.data?.snoozed_conversations ?? 0}</strong>
+          </article>
+          <article className="supervisor-ops-alert">
+            <span>تجاوز SLA</span>
+            <strong>{supervisor.isLoading ? "…" : supervisor.data?.sla_breached_conversations ?? 0}</strong>
+          </article>
+          <article className="supervisor-ops-alert">
+            <span>بدون حل +1 ساعة</span>
+            <strong>{supervisor.isLoading ? "…" : supervisor.data?.unresolved_over_1h ?? 0}</strong>
+          </article>
+        </div>
+        <div className="supervisor-ops-columns">
+          <div>
+            <h3>حمل الموظفين</h3>
+            {!(supervisor.data?.agents ?? []).length && <p className="hint-text">لا توجد محادثات معيّنة حالياً.</p>}
+            <ul className="supervisor-agent-list">
+              {(supervisor.data?.agents ?? []).map((agent) => (
+                <li key={agent.membership_id}>
+                  <strong>{agent.full_name}</strong>
+                  <span>{agent.open_conversations} مفتوحة</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3>القنوات النشطة</h3>
+            {!(supervisor.data?.by_channel ?? []).length && <p className="hint-text">لا توجد محادثات مفتوحة.</p>}
+            <ul className="supervisor-agent-list">
+              {(supervisor.data?.by_channel ?? []).map((row) => (
+                <li key={row.channel_type}>
+                  <strong>{row.channel_type}</strong>
+                  <span>{row.open_conversations}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </section>
 
       <section className="stats-grid premium">

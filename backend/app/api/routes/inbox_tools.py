@@ -58,6 +58,75 @@ async def get_supervisor_summary(
     return await supervisor_summary(db, account_id=context.account_id)
 
 
+@router.get("/custom-inboxes")
+async def get_custom_inboxes(
+    organization_id: UUID | None = Query(None),
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.custom_inboxes import list_custom_inboxes
+
+    return await list_custom_inboxes(
+        db, account_id=context.account_id, organization_id=organization_id
+    )
+
+
+@router.post("/custom-inboxes", status_code=status.HTTP_201_CREATED)
+async def post_custom_inbox(
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.schemas.custom_inbox import CustomInboxCreateRequest
+    from app.services.custom_inboxes import create_custom_inbox
+
+    try:
+        body = CustomInboxCreateRequest.model_validate(payload)
+        return await create_custom_inbox(
+            db,
+            account_id=context.account_id,
+            membership_id=context.membership.id if context.membership else None,
+            payload=body,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/custom-inboxes/{inbox_id}")
+async def patch_custom_inbox(
+    inbox_id: UUID,
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.schemas.custom_inbox import CustomInboxUpdateRequest
+    from app.services.custom_inboxes import update_custom_inbox
+
+    try:
+        body = CustomInboxUpdateRequest.model_validate(payload)
+        return await update_custom_inbox(
+            db, account_id=context.account_id, inbox_id=inbox_id, payload=body
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        raise HTTPException(status_code=404 if detail == "NOT_FOUND" else 400, detail=detail) from exc
+
+
+@router.delete("/custom-inboxes/{inbox_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_custom_inbox_route(
+    inbox_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    from app.services.custom_inboxes import delete_custom_inbox
+
+    try:
+        await delete_custom_inbox(db, account_id=context.account_id, inbox_id=inbox_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Custom inbox not found") from exc
+    return Response(status_code=204)
+
+
 @router.get("/tags", response_model=list[TagResponse])
 async def get_tags(
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
