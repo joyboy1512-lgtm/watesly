@@ -176,6 +176,7 @@ export default function CampaignsPage() {
   } = useCampaignActions();
 
   const [activeTab, setActiveTab] = useState<PageTab>("list");
+  const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("active");
@@ -1211,8 +1212,27 @@ export default function CampaignsPage() {
           <div className="admin-table-header">
             <div>
               <h2>إنشاء حملة جديدة</h2>
-              <small>قالب معتمد · جمهور · فحص مسبق · إرسال فوري</small>
+              <small>معالج من 4 خطوات: جمهور → رسالة → مراجعة → إرسال</small>
             </div>
+          </div>
+
+          <div className="campaign-wizard-steps" role="tablist" aria-label="خطوات إنشاء الحملة">
+            {([
+              [1, "الجمهور"],
+              [2, "الرسالة"],
+              [3, "المراجعة"],
+              [4, "الإرسال"]
+            ] as const).map(([step, label]) => (
+              <button
+                key={step}
+                type="button"
+                className={createStep === step ? "campaign-wizard-step active" : "campaign-wizard-step"}
+                onClick={() => setCreateStep(step)}
+              >
+                <span>{step}</span>
+                {label}
+              </button>
+            ))}
           </div>
 
           <div className="campaigns-context-row">
@@ -1239,7 +1259,7 @@ export default function CampaignsPage() {
             </label>
           </div>
 
-          <div className="campaigns-create-stack">
+          <div className={`campaigns-create-stack campaign-wizard-active-step-${createStep}`}>
             <form id="campaign-create-form" className="campaigns-panel campaigns-settings-panel stack-form" onSubmit={create}>
               <h3>إعدادات الحملة</h3>
               <div className="campaigns-settings-fields">
@@ -2236,6 +2256,25 @@ export default function CampaignsPage() {
           </div>
 
             <div className="campaigns-panel campaigns-send-panel">
+              <div className="campaign-wizard-nav">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={createStep <= 1}
+                  onClick={() => setCreateStep((step) => (step > 1 ? ((step - 1) as 1 | 2 | 3 | 4) : step))}
+                >
+                  السابق
+                </button>
+                {createStep < 4 ? (
+                  <button
+                    type="button"
+                    className="whatsapp-button"
+                    onClick={() => setCreateStep((step) => (step < 4 ? ((step + 1) as 1 | 2 | 3 | 4) : step))}
+                  >
+                    التالي
+                  </button>
+                ) : null}
+              </div>
               <div className="campaigns-schedule-test">
                 <label className="field-label">
                   <span>جدولة الإرسال (اختياري)</span>
@@ -2266,6 +2305,7 @@ export default function CampaignsPage() {
                   </button>
                 </div>
               </div>
+              {createStep === 4 && (
               <button
                 type="submit"
                 form="campaign-create-form"
@@ -2276,6 +2316,7 @@ export default function CampaignsPage() {
                   ? `جدولة الحملة (${preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})`
                   : `إنشاء وبدء الحملة (${preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})`}
               </button>
+              )}
             </div>
 
           </div>

@@ -15,6 +15,8 @@ class ChannelType(StrEnum):
     INSTAGRAM = "instagram"
     MESSENGER = "messenger"
     EMAIL = "email"
+    SMS = "sms"
+    WEB_CHAT = "web_chat"
 
 
 class ChannelStatus(StrEnum):

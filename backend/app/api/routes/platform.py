@@ -1125,9 +1125,9 @@ async def channel_integrations(
             "enabled": flags.get("messenger_channel", False),
         },
         "telegram": {"status": "planned", "note": "Bot token — قريباً"},
-        "email": {"status": "planned", "note": "SMTP/IMAP — قريباً"},
-        "web_chat": {"status": "planned", "note": "Widget embed — قريباً"},
-        "sms": {"status": "planned", "note": "Twilio/other — قريباً"},
+        "email": {"status": "scaffold", "note": "يمكن إنشاء قناة Email الآن وربط SMTP لاحقاً"},
+        "web_chat": {"status": "scaffold", "note": "يمكن إنشاء قناة Web Chat الآن وربط الودجت لاحقاً"},
+        "sms": {"status": "scaffold", "note": "يمكن إنشاء قناة SMS الآن وربط المزود لاحقاً"},
         "voice": {"status": "planned", "note": "Twilio Voice — قريباً"},
     }
 

@@ -84,6 +84,9 @@ async def get_conversations(
     archived: bool = Query(False),
     snoozed: bool = Query(False),
     channel_id: UUID | None = Query(None),
+    organization_id: UUID | None = Query(None),
+    inbox_scope: str | None = Query(None, description="all | mine | team"),
+    custom_inbox_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConversationResponse]:
@@ -97,6 +100,9 @@ async def get_conversations(
         starred_only=starred,
         snoozed_only=snoozed,
         channel_id=channel_id,
+        organization_id=organization_id,
+        inbox_scope=inbox_scope,
+        custom_inbox_id=custom_inbox_id,
     )
     conversation_ids = [row[0].id for row in rows]
     last_inbound_map = await get_last_inbound_by_conversation(db, conversation_ids)
@@ -864,6 +870,22 @@ async def get_conversation_context_route(
         contact=contact,
         membership_id=context.membership.id,
     )
+
+
+@router.get("/{conversation_id}/timeline")
+async def get_conversation_timeline(
+    conversation_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.conversation_timeline import list_conversation_timeline
+
+    try:
+        return await list_conversation_timeline(
+            db, account_id=context.account_id, conversation_id=conversation_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Conversation not found") from exc
 
 
 @router.post("/{conversation_id}/render-text")

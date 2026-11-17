@@ -1,4 +1,4 @@
-export type ChannelType = "whatsapp" | "telegram" | "instagram" | "messenger" | "email";
+export type ChannelType = "whatsapp" | "telegram" | "instagram" | "messenger" | "email" | "sms" | "web_chat";
 
 export type ChannelRow = {
   channel_id: string;
@@ -57,7 +57,9 @@ export const CHANNEL_TYPE_LABELS: Record<string, string> = {
   telegram: "Telegram",
   instagram: "Instagram",
   messenger: "Messenger",
-  email: "Email"
+  email: "Email",
+  sms: "SMS",
+  web_chat: "Web Chat"
 };
 
 export const CHANNEL_PURPOSES: Record<string, string> = {
@@ -65,7 +67,9 @@ export const CHANNEL_PURPOSES: Record<string, string> = {
   telegram: "رسائل فورية · دعم العملاء",
   instagram: "رسائل Direct · تفاعل العملاء",
   messenger: "Messenger · ردود وخدمة",
-  email: "بريد · تذاكر ومتابعة"
+  email: "بريد · تذاكر ومتابعة",
+  sms: "رسائل قصيرة · تنبيهات",
+  web_chat: "دردشة الموقع · دعم فوري"
 };
 
 export const CHANNEL_TYPE_HINTS: Record<string, string> = {
@@ -73,7 +77,9 @@ export const CHANNEL_TYPE_HINTS: Record<string, string> = {
   telegram: "استقبال وإرسال رسائل Telegram للدعم.",
   instagram: "ردود رسائل Instagram Direct من صندوق الوارد.",
   messenger: "إدارة محادثات Facebook Messenger.",
-  email: "قناة بريد للمتابعة والتذاكر."
+  email: "يمكن إنشاء القناة الآن وربط SMTP/IMAP لاحقاً.",
+  sms: "يمكن إنشاء القناة الآن وربط مزود SMS لاحقاً.",
+  web_chat: "يمكن إنشاء القناة الآن وربط ودجت الموقع لاحقاً."
 };
 
 export const CHANNEL_CAPABILITIES: Record<string, string[]> = {
@@ -81,7 +87,9 @@ export const CHANNEL_CAPABILITIES: Record<string, string[]> = {
   telegram: ["صندوق الوارد", "ردود فورية"],
   instagram: ["صندوق الوارد", "Direct"],
   messenger: ["صندوق الوارد", "ردود"],
-  email: ["صندوق الوارد", "متابعة"]
+  email: ["صندوق الوارد", "متابعة", "Scaffold"],
+  sms: ["تنبيهات", "Scaffold"],
+  web_chat: ["صندوق الوارد", "Scaffold"]
 };
 
 export const CHANNEL_STATUS_LABELS: Record<string, string> = {
@@ -96,7 +104,9 @@ export const CHANNEL_TYPE_OPTIONS: ChannelType[] = [
   "telegram",
   "instagram",
   "messenger",
-  "email"
+  "email",
+  "sms",
+  "web_chat"
 ];
 
 export function formatChannelType(type: string): string {

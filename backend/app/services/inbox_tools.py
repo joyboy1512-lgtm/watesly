@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
@@ -200,8 +200,73 @@ async def supervisor_summary(db: AsyncSession, *, account_id: UUID) -> dict:
             Conversation.sla_breached_at.is_not(None),
         )
     )
+    unresolved_long = await count(
+        select(func.count(Conversation.id))
+        .select_from(Conversation)
+        .join(Message, Message.id == latest_message_id)
+        .where(
+            Conversation.account_id == account_id,
+            Conversation.deleted_at.is_(None),
+            Conversation.archived_at.is_(None),
+            Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+            Message.direction == MessageDirection.INBOUND,
+            Message.created_at <= now - timedelta(hours=1),
+            (Conversation.snoozed_until.is_(None)) | (Conversation.snoozed_until <= now),
+        )
+    )
+
+    from app.models.channel import Channel
+
+    channel_rows = (
+        await db.execute(
+            select(Channel.type, func.count(Conversation.id))
+            .select_from(Conversation)
+            .join(Channel, Channel.id == Conversation.channel_id)
+            .where(
+                Conversation.account_id == account_id,
+                Conversation.deleted_at.is_(None),
+                Conversation.archived_at.is_(None),
+                Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+            )
+            .group_by(Channel.type)
+        )
+    ).all()
+    by_channel = [{"channel_type": row[0], "open_conversations": int(row[1])} for row in channel_rows]
+
+    from app.models.membership import Membership
+    from app.models.user import User
+
+    workload_rows = (
+        await db.execute(
+            select(Membership.id, User.full_name, func.count(Conversation.id))
+            .select_from(Conversation)
+            .join(Membership, Membership.id == Conversation.assigned_membership_id)
+            .join(User, User.id == Membership.user_id)
+            .where(
+                Conversation.account_id == account_id,
+                Conversation.deleted_at.is_(None),
+                Conversation.archived_at.is_(None),
+                Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+            )
+            .group_by(Membership.id, User.full_name)
+            .order_by(func.count(Conversation.id).desc())
+            .limit(12)
+        )
+    ).all()
+    agents = [
+        {
+            "membership_id": str(row[0]),
+            "full_name": row[1],
+            "open_conversations": int(row[2]),
+        }
+        for row in workload_rows
+    ]
+
     return {
         "waiting_conversations": waiting,
         "snoozed_conversations": snoozed,
         "sla_breached_conversations": sla_breached,
+        "unresolved_over_1h": unresolved_long,
+        "by_channel": by_channel,
+        "agents": agents,
     }

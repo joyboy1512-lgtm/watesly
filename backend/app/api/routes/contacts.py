@@ -196,6 +196,11 @@ async def get_contacts_duplicates(
     return await find_duplicate_phones(db, context.account_id)
 
 
+class ContactMergeRequest(BaseModel):
+    primary_contact_id: UUID
+    secondary_contact_id: UUID
+
+
 @router.get("/regions")
 async def get_contact_regions(
     organization_id: UUID | None = None,
@@ -356,6 +361,43 @@ async def post_contact_group(
         }
         code, detail = messages.get(str(exc), (400, "تعذر إنشاء المجموعة"))
         raise HTTPException(status_code=code, detail=detail) from exc
+
+
+@router.post("/merge")
+async def post_merge_contacts(
+    payload: ContactMergeRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.contact_merge import merge_contacts
+
+    try:
+        return await merge_contacts(
+            db,
+            account_id=context.account_id,
+            primary_contact_id=payload.primary_contact_id,
+            secondary_contact_id=payload.secondary_contact_id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        code = 404 if detail == "CONTACT_NOT_FOUND" else 400
+        raise HTTPException(status_code=code, detail=detail) from exc
+
+
+@router.get("/{contact_id}/merge-suggestions")
+async def get_contact_merge_suggestions(
+    contact_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.contact_merge import suggest_contact_merges_for_contact
+
+    try:
+        return await suggest_contact_merges_for_contact(
+            db, account_id=context.account_id, contact_id=contact_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Contact not found") from exc
 
 
 @router.get("/{contact_id}", response_model=ContactResponse)

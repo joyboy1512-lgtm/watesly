@@ -10,6 +10,7 @@ import NotificationMenu from "./NotificationMenu";
 import LanguageSwitcher from "./LanguageSwitcher";
 import BrandLogo from "./BrandLogo";
 import RequirePermission from "./RequirePermission";
+import BranchSwitcher from "./BranchSwitcher";
 import { filterNavItems, hasNavPermission } from "../lib/navPermissions";
 import { formatRoleLabel, type MembershipRole } from "../lib/teamHelpers";
 
@@ -146,6 +147,7 @@ export default function AppLayout() {
             <input placeholder={t("shell.searchPlaceholder")} />
           </div>
           <div className="topbar-actions">
+            <BranchSwitcher />
             {showCatalogShortcut && (
               <Link to="/catalog" className="topbar-catalog-btn">🛒 {t("shell.catalogShortcut")}</Link>
             )}
