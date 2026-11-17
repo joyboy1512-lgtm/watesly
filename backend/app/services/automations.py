@@ -20,6 +20,7 @@ from app.schemas.automation import (
 SUPPORTED_NODE_TYPES = {
     "trigger",
     "condition",
+    "business_hours",
     "send_text",
     "send_quick_reply",
     "send_template",

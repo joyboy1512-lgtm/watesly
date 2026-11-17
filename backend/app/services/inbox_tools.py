@@ -1,11 +1,13 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.conversation import Conversation
+from app.models.conversation import Conversation, ConversationStatus
 from app.models.conversation_note import ConversationNote
 from app.models.conversation_tag import ConversationTag
+from app.models.message import Message, MessageDirection
 from app.models.organization import Organization
 from app.models.tag import Tag
 from app.schemas.inbox_tools import (
@@ -150,3 +152,56 @@ async def list_conversation_tags(
         .order_by(Tag.name.asc())
     )
     return list(result.scalars().all())
+
+
+async def supervisor_summary(db: AsyncSession, *, account_id: UUID) -> dict:
+    """Compact ops KPIs for supervisor strip — no heavy joins."""
+    now = datetime.now(UTC)
+
+    async def count(query) -> int:
+        return int((await db.scalar(query)) or 0)
+
+    latest_message_id = (
+        select(Message.id)
+        .where(Message.conversation_id == Conversation.id)
+        .order_by(Message.created_at.desc())
+        .limit(1)
+        .correlate(Conversation)
+        .scalar_subquery()
+    )
+    waiting = await count(
+        select(func.count(Conversation.id))
+        .select_from(Conversation)
+        .join(Message, Message.id == latest_message_id)
+        .where(
+            Conversation.account_id == account_id,
+            Conversation.deleted_at.is_(None),
+            Conversation.archived_at.is_(None),
+            Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+            Message.direction == MessageDirection.INBOUND,
+            (Conversation.snoozed_until.is_(None)) | (Conversation.snoozed_until <= now),
+        )
+    )
+    snoozed = await count(
+        select(func.count(Conversation.id)).where(
+            Conversation.account_id == account_id,
+            Conversation.deleted_at.is_(None),
+            Conversation.archived_at.is_(None),
+            Conversation.snoozed_until.is_not(None),
+            Conversation.snoozed_until > now,
+        )
+    )
+    sla_breached = await count(
+        select(func.count(Conversation.id)).where(
+            Conversation.account_id == account_id,
+            Conversation.deleted_at.is_(None),
+            Conversation.archived_at.is_(None),
+            Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+            Conversation.sla_breached_at.is_not(None),
+        )
+    )
+    return {
+        "waiting_conversations": waiting,
+        "snoozed_conversations": snoozed,
+        "sla_breached_conversations": sla_breached,
+    }

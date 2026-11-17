@@ -13,6 +13,16 @@ class ConversationUpdateRequest(BaseModel):
     is_starred: bool | None = None
     snoozed_until: datetime | None = None
     archived: bool | None = None
+    closing_note: str | None = Field(default=None, max_length=1000)
+    closing_reason: str | None = Field(default=None, max_length=120)
+
+    @field_validator("closing_note", "closing_reason", mode="before")
+    @classmethod
+    def empty_closing_fields_to_none(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
 
 
 class ConversationResponse(BaseModel):

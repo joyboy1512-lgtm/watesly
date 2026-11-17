@@ -82,6 +82,7 @@ async def get_conversations(
     limit: int = Query(5000, ge=1, le=5000),
     starred: bool = Query(False),
     archived: bool = Query(False),
+    snoozed: bool = Query(False),
     channel_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
@@ -94,6 +95,7 @@ async def get_conversations(
         include_archived=archived,
         archived_only=archived,
         starred_only=starred,
+        snoozed_only=snoozed,
         channel_id=channel_id,
     )
     conversation_ids = [row[0].id for row in rows]

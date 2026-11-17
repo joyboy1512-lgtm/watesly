@@ -59,6 +59,24 @@ export function snoozeUntilTomorrowMorning(): Date {
   return date;
 }
 
+export function isCurrentlySnoozed(snoozedUntil: string | null | undefined): boolean {
+  if (!snoozedUntil) return false;
+  const until = new Date(snoozedUntil);
+  return !Number.isNaN(until.getTime()) && until.getTime() > Date.now();
+}
+
+export function formatSnoozedUntil(snoozedUntil: string | null | undefined): string {
+  if (!snoozedUntil) return "";
+  const until = new Date(snoozedUntil);
+  if (Number.isNaN(until.getTime())) return "";
+  return new Intl.DateTimeFormat("ar", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "numeric",
+    month: "short"
+  }).format(until);
+}
+
 export async function startConversationOnChannel(payload: {
   channel_id: string;
   external_address: string;

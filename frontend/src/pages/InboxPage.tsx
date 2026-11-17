@@ -8,7 +8,7 @@ import { toastStore } from "../stores/toast";
 import { useHasPermission } from "../hooks/usePermissions";
 import { uploadFile } from "../lib/uploads";
 import { formatWindowExpiry } from "../lib/serviceWindow";
-import { formatWaitingMinutes, INBOX_CONVERSATIONS_LIMIT, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
+import { formatSnoozedUntil, formatWaitingMinutes, INBOX_CONVERSATIONS_LIMIT, isCurrentlySnoozed, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
 import { formatAppTime } from "../lib/language";
 import { insertReplyVariable, REPLY_VARIABLES, type ConversationContext } from "../lib/replyVariables";
 import {
@@ -33,7 +33,7 @@ import type { Conversation, Message } from "../types/api";
 import type { Tag, Note } from "../types/inbox";
 import Icon from "../components/Icon";
 
-type InboxFilter = "all" | "unread" | "waiting" | "mine" | "starred" | "archived";
+type InboxFilter = "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
 type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
 type ChannelOption = { id: string; name: string; phone: string | null };
 type WhatsAppAccountRow = { id: string; channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
@@ -99,11 +99,13 @@ export default function InboxPage() {
   const typingTimerRef = useRef<number | null>(null);
 
   const showArchived = filter === "archived";
+  const showSnoozed = filter === "snoozed";
   const conversationsQuery = useQuery({
-    queryKey: ["conversations", showArchived, channelFilter],
+    queryKey: ["conversations", showArchived, showSnoozed, channelFilter],
     queryFn: async ({ signal }) => {
       const params: Record<string, string | boolean | number> = {
         archived: showArchived,
+        snoozed: showSnoozed,
         limit: INBOX_CONVERSATIONS_LIMIT
       };
       if (channelFilter) params.channel_id = channelFilter;
@@ -186,7 +188,7 @@ export default function InboxPage() {
   const filtered = useMemo(() => channelScopedConversations.filter((item) => {
     const haystack = `${item.contact_name ?? ""} ${item.contact_address} ${item.last_message_text ?? ""}`.toLowerCase();
     const matchesSearch = haystack.includes(search.trim().toLowerCase());
-    const matchesFilter = filter === "all" || filter === "archived"
+    const matchesFilter = filter === "all" || filter === "archived" || filter === "snoozed"
       || (filter === "unread" && (item.unread_count ?? 0) > 0)
       || (filter === "waiting" && item.needs_reply)
       || (filter === "mine" && Boolean(item.assigned_membership_id))
@@ -699,9 +701,17 @@ export default function InboxPage() {
     toastStore.getState().show("تم استرجاع المحادثة.", "success");
   }
   async function archiveConversation() {
-    await updateConversation({ archived: true });
+    const noteInput = window.prompt("ملاحظة إغلاق اختيارية (سبب الأرشفة):");
+    if (noteInput === null) return;
+    const reasonInput = window.prompt("سبب مختصر اختياري (مثال: تم الحل):") ?? "";
+    const closing_note = noteInput.trim().slice(0, 1000);
+    const closing_reason = reasonInput.trim().slice(0, 120);
+    const payload: Record<string, unknown> = { archived: true };
+    if (closing_note) payload.closing_note = closing_note;
+    if (closing_reason) payload.closing_reason = closing_reason;
+    await updateConversation(payload);
     setSelectedId(null);
-    await queryClient.invalidateQueries({ queryKey: ["conversations", true] });
+    await queryClient.invalidateQueries({ queryKey: ["conversations"] });
   }
   async function applyReplyTemplate(
     body: string,
@@ -884,8 +894,10 @@ export default function InboxPage() {
     waiting: "تنتظر ردّي",
     mine: "المعيّنة لي",
     starred: "⭐ مميزة",
+    snoozed: "مؤجلة",
     archived: "مؤرشفة"
   };
+  const selectedIsSnoozed = isCurrentlySnoozed(selectedConversation?.snoozed_until);
 
   return (
     <main className={`inbox-workspace ${detailsOpen ? "details-open" : ""}`}>
@@ -972,7 +984,7 @@ export default function InboxPage() {
           </div>
         )}
         <div className="filter-pills" role="tablist">
-          {(["all", "waiting", "unread", "mine", "starred", "archived"] as InboxFilter[]).map((value) => (
+          {(["all", "waiting", "unread", "mine", "starred", "snoozed", "archived"] as InboxFilter[]).map((value) => (
             <button
               key={value}
               className={filter === value ? "active" : ""}
@@ -1009,6 +1021,11 @@ export default function InboxPage() {
                   <small className="waiting-badge">{formatWaitingMinutes(item.waiting_minutes)}</small>
                 )}
                 {item.sla_breached_at && <small className="waiting-badge" style={{ background: "#ea4335" }}>SLA</small>}
+                {isCurrentlySnoozed(item.snoozed_until) && (
+                  <small className="waiting-badge" style={{ background: "#64748b" }}>
+                    مؤجلة {formatSnoozedUntil(item.snoozed_until)}
+                  </small>
+                )}
                 {item.requires_template && <small className="window-badge closed">قالب</small>}
                 {(item.priority === "urgent" || item.priority === "high") && (
                   <small className={`priority-pill priority-${item.priority}`}>{priorityLabels[item.priority]}</small>
@@ -1035,6 +1052,9 @@ export default function InboxPage() {
                   : ""}
                 {" · "}{statusLabels[selectedConversation?.status ?? ""] ?? ""}
                 {isArchived ? " · مؤرشفة" : ""}
+                {selectedIsSnoozed
+                  ? ` · مؤجلة حتى ${formatSnoozedUntil(selectedConversation?.snoozed_until)}`
+                  : ""}
                 {selectedConversation?.service_window_open
                   ? ` · نافذة نشطة (${formatWindowExpiry(selectedConversation.service_window_expires_at)})`
                   : selectedConversation ? " · يتطلب قالب" : ""}

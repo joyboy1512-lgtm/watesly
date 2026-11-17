@@ -206,6 +206,9 @@ export default function CampaignsPage() {
   const [highlightCampaignId, setHighlightCampaignId] = useState<string | null>(null);
   const [campaignMediaOverride, setCampaignMediaOverride] = useState<UploadedFile | null>(null);
   const [uploadingCampaignMedia, setUploadingCampaignMedia] = useState(false);
+  const [scheduledAtLocal, setScheduledAtLocal] = useState("");
+  const [testPhone, setTestPhone] = useState("");
+  const [testingSend, setTestingSend] = useState(false);
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
   const [audienceGenderFilter, setAudienceGenderFilter] = useState<AudienceGenderFilter>("");
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
@@ -963,12 +966,23 @@ export default function CampaignsPage() {
         ? { mediaUrl: campaignMediaOverride.public_url, filename: campaignMediaOverride.filename }
         : undefined);
       const recipientIds = channelScopedSelectedContacts;
+      const scheduledAtIso = scheduledAtLocal
+        ? new Date(scheduledAtLocal).toISOString()
+        : null;
+      if (scheduledAtIso && Number.isNaN(Date.parse(scheduledAtIso))) {
+        toastStore.getState().show("وقت الجدولة غير صالح.", "error");
+        return;
+      }
+      if (scheduledAtIso && Date.parse(scheduledAtIso) <= Date.now()) {
+        toastStore.getState().show("اختر وقتاً في المستقبل للجدولة، أو اترك الحقل فارغاً للإرسال الفوري.", "error");
+        return;
+      }
       const response = await api.post("/campaigns", {
         organization_id: organizationId,
         whatsapp_account_id: accountId,
         template_id: templateId,
         name,
-        scheduled_at: null,
+        scheduled_at: scheduledAtIso,
         include_opt_out_option: includeOptOutOption,
         exclude_marketing_opt_out: true,
         exclude_unreachable: excludeUnreachable,
@@ -990,16 +1004,50 @@ export default function CampaignsPage() {
       setExcelAudienceIds([]);
       setSegmentAudienceIds([]);
       setCampaignMediaOverride(null);
+      setScheduledAtLocal("");
       setExpandedCampaignId(campaignId);
       setHighlightCampaignId(campaignId);
       setActiveTab("list");
-      await waitForCampaignReport(client, campaignId);
-      toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول.", "success");
+      if (scheduledAtIso) {
+        toastStore.getState().show("تم جدولة الحملة — ستُرسل تلقائياً في الوقت المحدد.", "success");
+      } else {
+        await waitForCampaignReport(client, campaignId);
+        toastStore.getState().show("تم بدء الحملة — تظهر النتيجة في الجدول.", "success");
+      }
     } catch (error) {
       toastStore.getState().show(
         formatApiError(error, "تعذر إنشاء الحملة. تحقق من القالب المعتمد، أو أن الجمهور لم يرفض التسويق."),
         "error"
       );
+    }
+  }
+
+  async function sendCampaignTest() {
+    if (!accountId || !templateId) {
+      toastStore.getState().show("اختر حساب WhatsApp والقالب المعتمد أولاً.", "error");
+      return;
+    }
+    const phone = testPhone.trim();
+    if (phone.length < 8) {
+      toastStore.getState().show("أدخل رقم اختبار صالحاً مع رمز الدولة.", "error");
+      return;
+    }
+    setTestingSend(true);
+    try {
+      const templateParameters = buildSendComponents(selectedTemplate?.components, campaignMediaOverride
+        ? { mediaUrl: campaignMediaOverride.public_url, filename: campaignMediaOverride.filename }
+        : undefined);
+      await api.post("/campaigns/test-send", {
+        whatsapp_account_id: accountId,
+        template_id: templateId,
+        to: phone,
+        components: templateParameters
+      });
+      toastStore.getState().show("تم إرسال رسالة اختبار للرقم المحدد.", "success");
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error, "تعذر إرسال رسالة الاختبار."), "error");
+    } finally {
+      setTestingSend(false);
     }
   }
 
@@ -2188,13 +2236,45 @@ export default function CampaignsPage() {
           </div>
 
             <div className="campaigns-panel campaigns-send-panel">
+              <div className="campaigns-schedule-test">
+                <label className="field-label">
+                  <span>جدولة الإرسال (اختياري)</span>
+                  <input
+                    type="datetime-local"
+                    value={scheduledAtLocal}
+                    onChange={(e) => setScheduledAtLocal(e.target.value)}
+                  />
+                  <small className="hint-text">اتركه فارغاً للإرسال الفوري بعد الإنشاء.</small>
+                </label>
+                <div className="campaigns-test-send">
+                  <label className="field-label">
+                    <span>اختبار القالب قبل البث</span>
+                    <input
+                      value={testPhone}
+                      onChange={(e) => setTestPhone(e.target.value)}
+                      placeholder="+965XXXXXXXX"
+                      dir="ltr"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!accountId || !templateId || testingSend}
+                    onClick={() => void sendCampaignTest()}
+                  >
+                    {testingSend ? "جارٍ الإرسال..." : "إرسال اختبار"}
+                  </button>
+                </div>
+              </div>
               <button
                 type="submit"
                 form="campaign-create-form"
                 className="whatsapp-button"
                 disabled={!channelScopedSelectedContacts.length || preflight?.eligible_recipients === 0}
               >
-                إنشاء وبدء الحملة ({preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})
+                {scheduledAtLocal
+                  ? `جدولة الحملة (${preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})`
+                  : `إنشاء وبدء الحملة (${preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})`}
               </button>
             </div>
 

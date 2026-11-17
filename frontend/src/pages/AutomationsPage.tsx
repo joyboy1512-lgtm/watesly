@@ -67,6 +67,7 @@ type AutomationStats = {
 
 const nodePalette = [
   ["condition", "شرط", "IF"],
+  ["business_hours", "ساعات العمل", "BH"],
   ["send_text", "إرسال رسالة", "TXT"],
   ["send_quick_reply", "رد سريع", "QR"],
   ["send_media", "إرسال وسائط", "MED"],
@@ -93,6 +94,8 @@ function defaultNodeData(type: string, label: string): Record<string, unknown> {
   switch (type) {
     case "condition":
       return { label, field: "trigger.text", operator: "contains", value: "" };
+    case "business_hours":
+      return { label, use_agent_hours: true };
     case "send_text":
       return { label, text: "" };
     case "send_quick_reply":
@@ -303,18 +306,27 @@ export default function AutomationsPage() {
     setNodes((current) => [...current, node]);
     if (sourceNode) {
       const edgeLabel =
-        sourceNode.type === "condition" ? (conditionBranch ?? "true") : "next";
+        sourceNode.type === "condition" || sourceNode.type === "business_hours"
+          ? (conditionBranch ?? "true")
+          : "next";
       setEdges((current) => [
         ...current.filter(
           (edge) =>
-            !(sourceNode.type === "condition" && edge.source === sourceNode.id && (edge.label ?? edge.source_handle) === edgeLabel)
+            !(
+              (sourceNode.type === "condition" || sourceNode.type === "business_hours") &&
+              edge.source === sourceNode.id &&
+              (edge.label ?? edge.source_handle) === edgeLabel
+            )
         ),
         {
           id: makeId("edge"),
           source: sourceNode.id,
           target: id,
           label: edgeLabel,
-          source_handle: sourceNode.type === "condition" ? edgeLabel : undefined
+          source_handle:
+            sourceNode.type === "condition" || sourceNode.type === "business_hours"
+              ? edgeLabel
+              : undefined
         }
       ]);
     }
@@ -515,11 +527,17 @@ export default function AutomationsPage() {
                 <strong>{label}</strong>
               </button>
             ))}
-            {selectedNode?.type === "condition" && (
+            {(selectedNode?.type === "condition" || selectedNode?.type === "business_hours") && (
               <div className="condition-branch-actions">
-                <p className="hint-text">فروع الشرط:</p>
-                <button type="button" className="secondary-button" onClick={() => addNode("send_text", "رد (نعم)", "true")}>+ نعم</button>
-                <button type="button" className="secondary-button" onClick={() => addNode("stop", "تخطي (لا)", "false")}>+ لا</button>
+                <p className="hint-text">
+                  {selectedNode?.type === "business_hours" ? "فروع ساعات العمل:" : "فروع الشرط:"}
+                </p>
+                <button type="button" className="secondary-button" onClick={() => addNode("send_text", selectedNode?.type === "business_hours" ? "داخل الدوام" : "رد (نعم)", "true")}>
+                  {selectedNode?.type === "business_hours" ? "+ داخل الدوام" : "+ نعم"}
+                </button>
+                <button type="button" className="secondary-button" onClick={() => addNode("stop", selectedNode?.type === "business_hours" ? "خارج الدوام" : "تخطي (لا)", "false")}>
+                  {selectedNode?.type === "business_hours" ? "+ خارج الدوام" : "+ لا"}
+                </button>
               </div>
             )}
           </aside>
@@ -554,6 +572,11 @@ export default function AutomationsPage() {
                   />
                 </label>
 
+                {selectedNode.type === "business_hours" && (
+                  <p className="hint-text">
+                    يفرّع المسار حسب ساعات عمل الوكيل (business_hours_json). يمكن تجاوزها بحقل JSON اختياري.
+                  </p>
+                )}
                 {selectedNode.type === "condition" && (
                   <>
                     <label className="field-label">
@@ -565,6 +588,7 @@ export default function AutomationsPage() {
                         <option value="trigger.text">نص الرسالة</option>
                         <option value="trigger.from">رقم المرسل</option>
                         <option value="trigger.message_type">نوع الرسالة</option>
+                        <option value="is_within_business_hours">داخل ساعات العمل</option>
                       </select>
                     </label>
                     <label className="field-label">

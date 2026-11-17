@@ -60,6 +60,18 @@ export default function AssignmentsPage() {
     queryKey: ["team-workload"],
     queryFn: async () => (await api.get<WorkloadRow[]>("/platform/team/workload")).data
   });
+  const supervisor = useQuery({
+    queryKey: ["supervisor-summary"],
+    queryFn: async () =>
+      (
+        await api.get<{
+          waiting_conversations: number;
+          snoozed_conversations: number;
+          sla_breached_conversations: number;
+        }>("/inbox-tools/supervisor-summary")
+      ).data,
+    refetchInterval: 60_000
+  });
 
   const orgMap = useMemo(
     () => new Map((organizations.data ?? []).map((item) => [item.id, item.name])),
@@ -291,6 +303,21 @@ export default function AssignmentsPage() {
         <article className="admin-stat-card admin-stat-card-brand"><span>قواعد نشطة</span><strong>{stats.rules}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>أعضاء الفرق</span><strong>{stats.members}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>محادثات مفتوحة</span><strong>{workloadRows.reduce((s, r) => s + r.open_conversations, 0)}</strong></article>
+      </section>
+
+      <section className="supervisor-strip" aria-label="ملخص المشرف">
+        <div className="supervisor-strip-item">
+          <span>تنتظر رداً</span>
+          <strong>{supervisor.isLoading ? "…" : supervisor.data?.waiting_conversations ?? 0}</strong>
+        </div>
+        <div className="supervisor-strip-item">
+          <span>مؤجلة</span>
+          <strong>{supervisor.isLoading ? "…" : supervisor.data?.snoozed_conversations ?? 0}</strong>
+        </div>
+        <div className="supervisor-strip-item supervisor-strip-alert">
+          <span>تجاوز SLA</span>
+          <strong>{supervisor.isLoading ? "…" : supervisor.data?.sla_breached_conversations ?? 0}</strong>
+        </div>
       </section>
 
       <section className="card assignments-filter-card">

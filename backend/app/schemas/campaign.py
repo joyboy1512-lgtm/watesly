@@ -49,6 +49,15 @@ class CampaignRetryFailedRequest(BaseModel):
     reason_keys: list[str] = Field(default_factory=list)
 
 
+class CampaignTestSendRequest(BaseModel):
+    """Send one template message to a single phone for campaign preview/testing."""
+
+    whatsapp_account_id: UUID
+    template_id: UUID
+    to: str = Field(min_length=5, max_length=32)
+    components: list[dict] = Field(default_factory=list)
+
+
 class CampaignResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
