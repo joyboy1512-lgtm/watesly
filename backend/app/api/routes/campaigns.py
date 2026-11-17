@@ -13,6 +13,7 @@ from app.schemas.campaign import (
     CampaignReportSummary,
     CampaignResponse,
     CampaignRetryFailedRequest,
+    CampaignTestSendRequest,
 )
 from app.models.whatsapp_template import WhatsAppTemplate
 from app.services.whatsapp_window import campaign_audience_preflight
@@ -276,6 +277,68 @@ async def post_campaign_preflight(
         exclude_sent_to=payload.exclude_sent_to,
         exclude_campaign_ids=payload.exclude_campaign_ids,
     )
+
+
+@router.post("/test-send")
+async def post_campaign_test_send(
+    payload: CampaignTestSendRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CAMPAIGNS_CREATE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a one-off template message so the team can preview before a mass campaign."""
+    from app.services.membership_access import ensure_whatsapp_account_access
+    from app.services.meta_client import MetaAPIError
+    from app.schemas.whatsapp_media import SendTemplateMessageRequest
+    from app.services.whatsapp import send_template_message
+
+    template = await db.get(WhatsAppTemplate, payload.template_id)
+    if template is None or template.account_id != context.account_id:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if str(getattr(template.status, "value", template.status)).lower() != "approved":
+        raise HTTPException(status_code=409, detail="TEMPLATE_NOT_APPROVED")
+    try:
+        await ensure_whatsapp_account_access(
+            db,
+            account_id=context.account_id,
+            membership=context.membership,
+            whatsapp_account_id=payload.whatsapp_account_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "ACCESS_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=code) from exc
+        raise HTTPException(status_code=400, detail="Invalid WhatsApp account") from exc
+
+    to = "".join(ch for ch in payload.to.strip() if ch.isdigit() or ch == "+")
+    if len(to) < 8:
+        raise HTTPException(status_code=400, detail="INVALID_PHONE")
+
+    try:
+        message = await send_template_message(
+            db,
+            account_id=context.account_id,
+            whatsapp_account_id=payload.whatsapp_account_id,
+            payload=SendTemplateMessageRequest(
+                to=to.lstrip("+"),
+                template_name=template.name,
+                language_code=template.language,
+                components=payload.components or [],
+            ),
+            display_components=template.components if isinstance(template.components, list) else [],
+            display_body_text=template.body_text,
+        )
+    except MetaAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "message_id": str(message.id),
+        "status": getattr(message.status, "value", str(message.status)),
+        "to": to,
+        "template_name": template.name,
+    }
 
 
 @router.post("/{campaign_id}/approve", response_model=CampaignResponse)

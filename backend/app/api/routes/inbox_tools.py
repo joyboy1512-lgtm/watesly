@@ -32,6 +32,7 @@ from app.services.inbox_tools import (
     list_quick_replies,
     list_tags,
     remove_tag_from_conversation,
+    supervisor_summary,
 )
 from app.services.quick_replies import (
     archive_quick_reply,
@@ -47,6 +48,14 @@ from app.services.quick_replies import (
 )
 
 router = APIRouter()
+
+
+@router.get("/supervisor-summary")
+async def get_supervisor_summary(
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await supervisor_summary(db, account_id=context.account_id)
 
 
 @router.get("/tags", response_model=list[TagResponse])

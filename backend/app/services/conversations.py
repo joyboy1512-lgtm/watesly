@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.contact import Contact
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.conversation_event import ConversationEvent
+from app.models.conversation_note import ConversationNote
 from app.models.conversation_read_state import ConversationReadState
 from app.models.membership import Membership, MembershipRole
 from app.models.message import Message, MessageDirection
@@ -122,6 +123,7 @@ async def list_conversations(
     include_archived: bool = False,
     archived_only: bool = False,
     starred_only: bool = False,
+    snoozed_only: bool = False,
     channel_id: UUID | None = None,
 ) -> list[tuple[Conversation, Contact, Message | None, int]]:
     latest_message_id = (
@@ -154,7 +156,15 @@ async def list_conversations(
         query = query.where(Conversation.archived_at.is_not(None))
     elif not include_archived:
         query = query.where(Conversation.archived_at.is_(None))
-    query = query.where((Conversation.snoozed_until.is_(None)) | (Conversation.snoozed_until <= now))
+    if snoozed_only:
+        query = query.where(
+            Conversation.snoozed_until.is_not(None),
+            Conversation.snoozed_until > now,
+        )
+    else:
+        query = query.where(
+            (Conversation.snoozed_until.is_(None)) | (Conversation.snoozed_until <= now)
+        )
     if starred_only:
         query = query.where(Conversation.is_starred.is_(True))
     accessible = await _accessible_channel_ids(db, account_id=account_id, membership=membership)
@@ -273,6 +283,13 @@ async def update_conversation(
         conversation.archived_at = datetime.now(UTC) if payload.archived else None
         changes["archived"] = payload.archived
 
+    closing_note = payload.closing_note
+    closing_reason = payload.closing_reason
+    if closing_note:
+        changes["closing_note"] = closing_note
+    if closing_reason:
+        changes["closing_reason"] = closing_reason
+
     db.add(
         ConversationEvent(
             conversation_id=conversation.id,
@@ -281,6 +298,48 @@ async def update_conversation(
             data=changes,
         )
     )
+
+    if (
+        payload.archived is True
+        and closing_note
+    ):
+        note_body = closing_note
+        if closing_reason:
+            note_body = f"[{closing_reason}] {closing_note}"
+        db.add(
+            ConversationNote(
+                conversation_id=conversation.id,
+                user_id=actor_user_id,
+                body=note_body,
+                mentions=None,
+                is_internal=True,
+            )
+        )
+        db.add(
+            ConversationEvent(
+                conversation_id=conversation.id,
+                actor_user_id=actor_user_id,
+                event_type="conversation.closed_with_note",
+                data={
+                    "closing_note": closing_note,
+                    "closing_reason": closing_reason,
+                },
+            )
+        )
+
+    if (
+        "snoozed_until" in payload.model_fields_set
+        and payload.snoozed_until is not None
+    ):
+        db.add(
+            ConversationEvent(
+                conversation_id=conversation.id,
+                actor_user_id=actor_user_id,
+                event_type="conversation.snoozed",
+                data={"until": payload.snoozed_until.isoformat()},
+            )
+        )
+
     await db.commit()
     await db.refresh(conversation)
     if automation_run_ids:

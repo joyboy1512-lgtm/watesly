@@ -26,6 +26,34 @@ SYNC_DELAY_MAX_SECONDS = 30
 
 def _evaluate_condition(config, context):
     field = str(config.get("field") or "trigger.text").strip()
+    # Documented condition: route on is_within_business_hours when present in context
+    # (set by a prior business_hours node or trigger enrichment). Prefer the
+    # dedicated `business_hours` node for live evaluation against agent hours.
+    if field in {"is_within_business_hours", "business_hours", "within_business_hours"}:
+        from app.services.business_hours import is_within_business_hours
+
+        hours = (
+            config.get("hours")
+            or config.get("business_hours_json")
+            or context.get("business_hours_json")
+            or (context.get("trigger") or {}).get("business_hours_json")
+        )
+        if hours is not None or "is_within_business_hours" in context:
+            if "is_within_business_hours" in context and hours is None:
+                actual = bool(context.get("is_within_business_hours"))
+            else:
+                actual = is_within_business_hours(hours if isinstance(hours, dict) else None)
+            op = config.get("operator", "equals")
+            expected = config.get("value")
+            if expected is None:
+                expected = True
+            if isinstance(expected, str):
+                expected = expected.strip().lower() in {"1", "true", "yes", "open"}
+            return {
+                "equals": actual == bool(expected),
+                "not_equals": actual != bool(expected),
+                "exists": True,
+            }.get(op, actual == bool(expected))
     if field and not field.startswith("trigger."):
         if field.startswith("message."):
             field = f"trigger.{field}"
@@ -47,6 +75,20 @@ def _evaluate_condition(config, context):
         "starts_with": str(actual or "").lower().startswith(str(expected).lower()),
         "exists": actual is not None,
     }.get(op, False)
+
+
+async def _evaluate_business_hours(db, run, data: dict, context: dict) -> bool:
+    from app.services.business_hours import DEFAULT_HOURS, is_within_business_hours
+    from app.services.knowledge_base import get_agent_settings
+
+    hours = data.get("hours") or data.get("business_hours_json")
+    if not isinstance(hours, dict) or not hours:
+        settings = await get_agent_settings(db, run.account_id)
+        hours = settings.business_hours_json or DEFAULT_HOURS
+    within = is_within_business_hours(hours)
+    context["is_within_business_hours"] = within
+    context["business_hours_json"] = hours
+    return within
 
 
 def _delay_seconds(data: dict) -> int:
@@ -458,6 +500,18 @@ async def _execute_run(run_id):
                 if node_type == "condition":
                     result = _evaluate_condition(data, context)
                     output = {"result": result}
+                    desired = "true" if result else "false"
+                    next_edges = [
+                        edge
+                        for edge in next_edges
+                        if (edge.get("source_handle") or edge.get("label") or "").lower() == desired
+                    ]
+                elif node_type == "business_hours":
+                    result = await _evaluate_business_hours(db, run, data, context)
+                    output = {
+                        "result": result,
+                        "is_within_business_hours": result,
+                    }
                     desired = "true" if result else "false"
                     next_edges = [
                         edge
