@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import desc, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.contact import Contact
 from app.models.conversation import Conversation, ConversationStatus
@@ -157,11 +158,13 @@ async def list_conversations(
         .limit(min(max(limit, 1), _LIST_LIMIT_MAX))
     )
     if engaged_only:
-        # Any inbound activity (text, button reply, list reply, media, etc.)
+        # Use an alias: Message is already outer-joined as the latest row, so a
+        # bare EXISTS on Message auto-correlates away its FROM and fails at compile.
+        inbound_message = aliased(Message)
         inbound_exists = exists(
-            select(Message.id).where(
-                Message.conversation_id == Conversation.id,
-                Message.direction == MessageDirection.INBOUND,
+            select(inbound_message.id).where(
+                inbound_message.conversation_id == Conversation.id,
+                inbound_message.direction == MessageDirection.INBOUND,
             )
         )
         query = query.where(inbound_exists)
