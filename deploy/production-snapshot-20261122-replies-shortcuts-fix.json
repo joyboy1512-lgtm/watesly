@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "870a241",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-Do1bAVWQ.js",
+    "css": "index-D9I2M90X.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Inbox / ردود panel always opens and loads Message Library replies",
+    "Shortcuts panel hardened with clear UI and slash shortcut normalization"
+  ],
+  "notes": "Deployed via SSH. PRs #162 + shortcuts hardening."
+}
