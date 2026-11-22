@@ -18,6 +18,7 @@ type Props = {
   onInsert: (text: string, product: MatchedCatalogProduct) => void;
   onSendImage?: (product: MatchedCatalogProduct) => void;
   onSendProductCard?: (product: MatchedCatalogProduct) => void;
+  onSendCartSummary?: (summary: string, products: MatchedCatalogProduct[]) => void;
 };
 
 function toMatchedProduct(product: CatalogProduct): MatchedCatalogProduct {
@@ -38,11 +39,30 @@ function formatSpecs(specs: Record<string, string>) {
   return entries.map(([key, value]) => `${key}: ${value}`).join(" · ");
 }
 
-export default function InboxProductPicker({ open, onClose, disabled, channelId, onInsert, onSendImage, onSendProductCard }: Props) {
+export function buildCartSummary(products: MatchedCatalogProduct[]) {
+  if (!products.length) return "";
+  const lines = products.map((item, index) => `${index + 1}) ${formatProductWhatsAppLine(item)}`);
+  return ["🛒 ملخص الطلب:", ...lines].join("\n");
+}
+
+export default function InboxProductPicker({
+  open,
+  onClose,
+  disabled,
+  channelId,
+  onInsert,
+  onSendImage,
+  onSendProductCard,
+  onSendCartSummary
+}: Props) {
   const [query, setQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!open) setQuery("");
+    if (!open) {
+      setQuery("");
+      setSelectedIds([]);
+    }
   }, [open]);
 
   const products = useQuery({
@@ -65,12 +85,23 @@ export default function InboxProductPicker({ open, onClose, disabled, channelId,
     [products.data]
   );
 
+  const cart = useMemo(
+    () => rows.filter((item) => item.id && selectedIds.includes(item.id)),
+    [rows, selectedIds]
+  );
+
   if (!open) return null;
+
+  function toggle(productId: string) {
+    setSelectedIds((current) =>
+      current.includes(productId) ? current.filter((id) => id !== productId) : [...current, productId]
+    );
+  }
 
   return (
     <div className="inbox-product-picker">
       <div className="inbox-product-picker-head">
-        <strong>إدراج منتج</strong>
+        <strong>إدراج منتج / سلة</strong>
         <button type="button" className="secondary-action" onClick={onClose} aria-label="إغلاق">×</button>
       </div>
       <div className="inbox-product-picker-search">
@@ -78,27 +109,63 @@ export default function InboxProductPicker({ open, onClose, disabled, channelId,
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="بحث في الكatalog…"
+          placeholder="بحث في الكتالوج…"
           disabled={disabled}
         />
       </div>
+      {cart.length > 0 && (
+        <div className="inbox-product-cart">
+          <span>السلة: {cart.length} منتج</span>
+          <div className="inline-actions">
+            <button
+              type="button"
+              className="whatsapp-button"
+              disabled={disabled}
+              onClick={() => {
+                const summary = buildCartSummary(cart);
+                if (onSendCartSummary) onSendCartSummary(summary, cart);
+                else onInsert(summary, cart[0]);
+                onClose();
+              }}
+            >
+              إرسال ملخص الطلب
+            </button>
+            <button type="button" className="secondary-button" onClick={() => setSelectedIds([])}>
+              تفريغ
+            </button>
+          </div>
+        </div>
+      )}
       <div className="inbox-product-picker-list">
         {products.isLoading && <p className="hint-text">جاري التحميل…</p>}
         {!products.isLoading && rows.length === 0 && <p className="hint-text">لا توجد منتجات.</p>}
-        {rows.map((product) => (
-          <CatalogProductCard
-            key={product.id}
-            product={product}
-            compact
-            useLabel="إدراج في الرد"
-            onUse={() => {
-              onInsert(formatProductWhatsAppLine(product), product);
-              onClose();
-            }}
-            onSendImage={onSendImage ? () => onSendImage(product) : undefined}
-            onSendProductCard={onSendProductCard ? () => onSendProductCard(product) : undefined}
-          />
-        ))}
+        {rows.map((product) => {
+          const checked = Boolean(product.id && selectedIds.includes(product.id));
+          return (
+            <div key={product.id || product.name} className="inbox-product-picker-row">
+              <label className="inbox-product-check">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={!product.id || disabled}
+                  onChange={() => product.id && toggle(product.id)}
+                />
+                <span>إضافة للسلة</span>
+              </label>
+              <CatalogProductCard
+                product={product}
+                compact
+                useLabel="إدراج في الرد"
+                onUse={() => {
+                  onInsert(formatProductWhatsAppLine(product), product);
+                  onClose();
+                }}
+                onSendImage={onSendImage ? () => onSendImage(product) : undefined}
+                onSendProductCard={onSendProductCard ? () => onSendProductCard(product) : undefined}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
