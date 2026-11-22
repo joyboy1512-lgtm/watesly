@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.encryption import decrypt_secret, encrypt_secret
 from app.models.ai_agent_settings import AiAgentSettings
 from app.models.knowledge_article import KnowledgeArticle
 from app.services.ai_assistant import (
@@ -19,6 +20,7 @@ from app.services.ai_assistant import (
     suggest_reply,
     summarize_conversation,
 )
+from app.services.business_hours import DEFAULT_HOURS, is_within_business_hours
 from app.services.catalog import build_catalog_reply, search_catalog_products, suggest_catalog_reply
 from app.services.llm_client import enhance_reply, llm_available
 from app.services.variables import render_template
@@ -28,6 +30,48 @@ _TOKEN_SPLIT = re.compile(r"[\s,.;:!?،؟]+")
 
 def _tokens(text: str) -> set[str]:
     return {part.lower() for part in _TOKEN_SPLIT.split(text.lower()) if len(part) >= 2}
+
+
+def _account_llm_api_key(item: AiAgentSettings) -> str | None:
+    raw = (item.llm_api_key_encrypted or "").strip()
+    if not raw:
+        return None
+    try:
+        return decrypt_secret(raw)
+    except ValueError:
+        return None
+
+
+def agent_llm_key_source(item: AiAgentSettings) -> str:
+    if _account_llm_api_key(item):
+        return "account"
+    if llm_available():
+        return "env"
+    return "none"
+
+
+def serialize_agent_settings(item: AiAgentSettings) -> dict:
+    account_key = _account_llm_api_key(item)
+    key_source = agent_llm_key_source(item)
+    hours = item.business_hours_json or {}
+    return {
+        "default_mode": item.default_mode,
+        "tone": item.tone,
+        "language": item.language,
+        "agent_enabled": bool(getattr(item, "agent_enabled", True)),
+        "llm_enabled": item.llm_enabled,
+        "auto_kb_on_inbound": item.auto_kb_on_inbound,
+        "llm_system_prompt": item.llm_system_prompt,
+        "auto_reply_outside_hours": item.auto_reply_outside_hours,
+        "business_hours_json": hours if hours else dict(DEFAULT_HOURS),
+        "outside_hours_message": item.outside_hours_message,
+        "llm_api_base_url": item.llm_api_base_url,
+        "llm_model": item.llm_model,
+        "llm_available": llm_available(api_key=account_key),
+        "llm_key_configured": bool(account_key),
+        "llm_key_source": key_source,
+        "within_business_hours": is_within_business_hours(hours or DEFAULT_HOURS),
+    }
 
 
 async def get_agent_settings(db: AsyncSession, account_id: UUID) -> AiAgentSettings:
@@ -44,7 +88,22 @@ async def get_agent_settings(db: AsyncSession, account_id: UUID) -> AiAgentSetti
 
 async def update_agent_settings(db: AsyncSession, account_id: UUID, **fields) -> AiAgentSettings:
     item = await get_agent_settings(db, account_id)
+
+    if "llm_api_key" in fields:
+        raw_key = fields.pop("llm_api_key")
+        if raw_key is None:
+            pass
+        elif str(raw_key).strip() == "":
+            item.llm_api_key_encrypted = None
+        else:
+            item.llm_api_key_encrypted = encrypt_secret(str(raw_key).strip())
+
+    if fields.pop("clear_llm_api_key", False):
+        item.llm_api_key_encrypted = None
+
     for key, value in fields.items():
+        if key == "llm_api_key_encrypted":
+            continue
         if hasattr(item, key):
             setattr(item, key, value)
     await db.commit()
@@ -219,7 +278,8 @@ async def _maybe_enhance_with_llm(
     contact_name: str,
 ) -> dict:
     settings = await get_agent_settings(db, account_id)
-    if not settings.llm_enabled or not llm_available():
+    account_key = _account_llm_api_key(settings)
+    if not settings.llm_enabled or not llm_available(api_key=account_key):
         return result
     context = result.get("suggestion") or ""
     prompt = (
@@ -234,6 +294,9 @@ async def _maybe_enhance_with_llm(
             system_prompt=settings.llm_system_prompt,
             tone=settings.tone,
             language=settings.language,
+            api_key=account_key,
+            api_base_url=settings.llm_api_base_url,
+            model=settings.llm_model,
         )
     except Exception:
         return result

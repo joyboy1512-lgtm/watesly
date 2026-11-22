@@ -12,17 +12,37 @@ export type KnowledgeArticle = {
   language: string;
 };
 
+export type BusinessHoursDay = [string, string] | null;
+
+export type BusinessHoursConfig = {
+  timezone: string;
+  days: Record<string, BusinessHoursDay>;
+};
+
 export type AgentSettings = {
   default_mode: "kb_first" | "catalog_first" | "combined" | "local";
   tone: "friendly" | "formal" | "concise";
   language: string;
+  agent_enabled: boolean;
   llm_enabled: boolean;
   auto_kb_on_inbound: boolean;
   llm_system_prompt: string | null;
   llm_available: boolean;
+  llm_key_configured?: boolean;
+  llm_key_source?: "account" | "env" | "none";
+  llm_api_base_url?: string | null;
+  llm_model?: string | null;
   auto_reply_outside_hours?: boolean;
-  business_hours_json?: Record<string, unknown>;
+  business_hours_json?: BusinessHoursConfig | Record<string, unknown>;
   outside_hours_message?: string | null;
+  within_business_hours?: boolean;
+};
+
+export type AgentSettingsPatch = Partial<
+  Omit<AgentSettings, "llm_available" | "llm_key_configured" | "llm_key_source" | "within_business_hours">
+> & {
+  llm_api_key?: string | null;
+  clear_llm_api_key?: boolean;
 };
 
 export type SmartReplyResult = {
@@ -51,20 +71,74 @@ export const CATEGORY_LABELS: Record<string, string> = {
 
 export const MODE_LABELS: Record<string, string> = {
   kb_first: "قاعدة المعرفة أولاً",
-  catalog_first: "الكتalog أولاً",
+  catalog_first: "الكتالوج أولاً",
   combined: "مدمج (KB + منتجات)",
   local: "AI محلي"
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
   knowledge_base: "قاعدة المعرفة",
-  catalog: "الكتalog",
+  catalog: "الكتالوج",
   combined: "مدمج",
   local: "AI محلي",
   "knowledge_base+llm": "KB + LLM",
-  "catalog+llm": "كتalog + LLM",
+  "catalog+llm": "كتالوج + LLM",
   "combined+llm": "مدمج + LLM"
 };
+
+export const DAY_LABELS: Record<string, string> = {
+  sun: "الأحد",
+  mon: "الإثنين",
+  tue: "الثلاثاء",
+  wed: "الأربعاء",
+  thu: "الخميس",
+  fri: "الجمعة",
+  sat: "السبت"
+};
+
+export const DAY_ORDER = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+
+export const DEFAULT_BUSINESS_HOURS: BusinessHoursConfig = {
+  timezone: "Asia/Kuwait",
+  days: {
+    mon: ["09:00", "18:00"],
+    tue: ["09:00", "18:00"],
+    wed: ["09:00", "18:00"],
+    thu: ["09:00", "18:00"],
+    fri: ["09:00", "18:00"],
+    sat: null,
+    sun: null
+  }
+};
+
+export function normalizeBusinessHours(raw?: Record<string, unknown> | BusinessHoursConfig | null): BusinessHoursConfig {
+  const source = (raw && typeof raw === "object" ? raw : {}) as Partial<BusinessHoursConfig>;
+  const daysIn = (source.days && typeof source.days === "object" ? source.days : DEFAULT_BUSINESS_HOURS.days) as Record<
+    string,
+    BusinessHoursDay
+  >;
+  const days: Record<string, BusinessHoursDay> = {};
+  for (const key of DAY_ORDER) {
+    const slot = daysIn[key];
+    if (Array.isArray(slot) && slot.length >= 2) {
+      days[key] = [String(slot[0]), String(slot[1])];
+    } else {
+      days[key] = null;
+    }
+  }
+  return {
+    timezone: String(source.timezone || DEFAULT_BUSINESS_HOURS.timezone),
+    days
+  };
+}
+
+export function llmStatusLabel(settings: AgentSettings): string {
+  if (!settings.llm_available) return "غير متاح — أضف مفتاح API";
+  if (!settings.llm_enabled) return "متاح — غير مفعّل";
+  if (settings.llm_key_source === "account") return "مفعّل (مفتاح الحساب)";
+  if (settings.llm_key_source === "env") return "مفعّل (مفتاح السيرفر)";
+  return "مفعّل";
+}
 
 export async function downloadKnowledgeExport() {
   const response = await api.get("/knowledge/export", { responseType: "blob" });
