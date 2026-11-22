@@ -16,7 +16,25 @@ type Props = {
   onSent: () => void;
 };
 
-const emptySection = (): ListSectionDraft => ({ title: "الخيارات", rowsText: "خيار 1\nخيار 2\nخيار 3" });
+const OPTION_SLOTS_MIN = 3;
+const OPTION_SLOTS_MAX = 10;
+const OPTION_TITLE_MAX = 24;
+
+const emptySection = (): ListSectionDraft => ({
+  title: "الخيارات",
+  rowsText: "خيار 1\nخيار 2\nخيار 3"
+});
+
+function parseOptionRows(rowsText: string): string[] {
+  const rows = rowsText.split(/\n/).map((item) => item.slice(0, OPTION_TITLE_MAX));
+  const count = Math.min(OPTION_SLOTS_MAX, Math.max(OPTION_SLOTS_MIN, rows.length || OPTION_SLOTS_MIN));
+  return Array.from({ length: count }, (_, index) => rows[index] ?? "");
+}
+
+function joinOptionRows(rows: string[]): string {
+  const count = Math.min(OPTION_SLOTS_MAX, Math.max(OPTION_SLOTS_MIN, rows.length || OPTION_SLOTS_MIN));
+  return Array.from({ length: count }, (_, index) => (rows[index] ?? "").slice(0, OPTION_TITLE_MAX)).join("\n");
+}
 
 export default function InboxListMessagePanel({ open, conversationId, onClose, onSent }: Props) {
   const [body, setBody] = useState("اختر من القائمة");
@@ -38,6 +56,33 @@ export default function InboxListMessagePanel({ open, conversationId, onClose, o
     setSections(template.sections.length ? template.sections : [emptySection()]);
   }
 
+  function updateSectionOptions(sectionIndex: number, nextRows: string[]) {
+    setSections((current) =>
+      current.map((item, i) => (i === sectionIndex ? { ...item, rowsText: joinOptionRows(nextRows) } : item))
+    );
+  }
+
+  function updateOptionRow(sectionIndex: number, optionIndex: number, value: string) {
+    const currentRows = parseOptionRows(sections[sectionIndex]?.rowsText ?? "");
+    const next = [...currentRows];
+    next[optionIndex] = value.slice(0, OPTION_TITLE_MAX);
+    updateSectionOptions(sectionIndex, next);
+  }
+
+  function addOptionRow(sectionIndex: number) {
+    const currentRows = parseOptionRows(sections[sectionIndex]?.rowsText ?? "");
+    if (currentRows.length >= OPTION_SLOTS_MAX) return;
+    updateSectionOptions(sectionIndex, [...currentRows, ""]);
+  }
+
+  function removeOptionRow(sectionIndex: number, optionIndex: number) {
+    const currentRows = parseOptionRows(sections[sectionIndex]?.rowsText ?? "");
+    if (currentRows.length <= 1) return;
+    const next = currentRows.filter((_, i) => i !== optionIndex);
+    while (next.length < OPTION_SLOTS_MIN) next.push("");
+    updateSectionOptions(sectionIndex, next);
+  }
+
   async function send() {
     if (!conversationId) return;
     const payloadSections = sections
@@ -46,8 +91,8 @@ export default function InboxListMessagePanel({ open, conversationId, onClose, o
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean)
-          .slice(0, 10)
-          .map((title, index) => ({ id: `row_${section.title}_${index + 1}`, title: title.slice(0, 24) }));
+          .slice(0, OPTION_SLOTS_MAX)
+          .map((title, index) => ({ id: `row_${section.title}_${index + 1}`, title: title.slice(0, OPTION_TITLE_MAX) }));
         return {
           title: section.title.slice(0, 24) || "خيارات",
           rows
@@ -108,41 +153,72 @@ export default function InboxListMessagePanel({ open, conversationId, onClose, o
         <span>نص زر القائمة</span>
         <input value={buttonText} onChange={(e) => setButtonText(e.target.value)} maxLength={20} />
       </label>
-      {sections.map((section, index) => (
-        <div key={index} className="inbox-list-section">
-          <label className="field-label">
-            <span>عنوان القسم {index + 1}</span>
-            <input
-              value={section.title}
-              onChange={(e) =>
-                setSections((current) => current.map((item, i) => (i === index ? { ...item, title: e.target.value } : item)))
-              }
-              maxLength={24}
-            />
-          </label>
-          <label className="field-label">
-            <span>صفوف القسم (سطر لكل خيار)</span>
-            <textarea
-              rows={3}
-              value={section.rowsText}
-              onChange={(e) =>
-                setSections((current) =>
-                  current.map((item, i) => (i === index ? { ...item, rowsText: e.target.value } : item))
-                )
-              }
-            />
-          </label>
-          {sections.length > 1 && (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setSections((current) => current.filter((_, i) => i !== index))}
-            >
-              حذف القسم
-            </button>
-          )}
-        </div>
-      ))}
+      {sections.map((section, index) => {
+        const optionRows = parseOptionRows(section.rowsText);
+        return (
+          <div key={index} className="inbox-list-section">
+            <label className="field-label">
+              <span>عنوان القسم {index + 1}</span>
+              <input
+                value={section.title}
+                onChange={(e) =>
+                  setSections((current) => current.map((item, i) => (i === index ? { ...item, title: e.target.value } : item)))
+                }
+                maxLength={24}
+              />
+            </label>
+            <div className="field-label inbox-button-titles">
+              <span>خيارات القسم (حتى {OPTION_SLOTS_MAX})</span>
+              <div className="inbox-button-title-rows" role="group" aria-label={`خيارات القسم ${index + 1}`}>
+                {optionRows.map((title, optionIndex) => (
+                  <div key={optionIndex} className="inbox-list-option-row">
+                    <label className="inbox-button-title-row">
+                      <span className="inbox-button-title-index" aria-hidden="true">
+                        {optionIndex + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => updateOptionRow(index, optionIndex, e.target.value)}
+                        placeholder={`خيار ${optionIndex + 1}`}
+                        maxLength={OPTION_TITLE_MAX}
+                        aria-label={`خيار ${optionIndex + 1} في القسم ${index + 1}`}
+                      />
+                    </label>
+                    {optionRows.length > 1 && (
+                      <button
+                        type="button"
+                        className="secondary-action inbox-list-option-remove"
+                        onClick={() => removeOptionRow(index, optionIndex)}
+                        aria-label={`حذف الخيار ${optionIndex + 1}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={optionRows.length >= OPTION_SLOTS_MAX}
+                onClick={() => addOptionRow(index)}
+              >
+                + خيار إضافي
+              </button>
+            </div>
+            {sections.length > 1 && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setSections((current) => current.filter((_, i) => i !== index))}
+              >
+                حذف القسم
+              </button>
+            )}
+          </div>
+        );
+      })}
       <button
         type="button"
         className="secondary-button"
