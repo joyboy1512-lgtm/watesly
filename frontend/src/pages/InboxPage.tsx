@@ -147,6 +147,8 @@ export default function InboxPage() {
   const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
   const [sendAndClose, setSendAndClose] = useState(false);
   const [newCustomInboxName, setNewCustomInboxName] = useState("");
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const workspaceOrganizationId = useWorkspaceOrganizationId();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageSearchRef = useRef<HTMLInputElement>(null);
@@ -833,6 +835,38 @@ export default function InboxPage() {
     setCloseReason("");
     setCloseDialogOpen(true);
   }
+
+  function toggleChecked(id: string) {
+    setCheckedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  function toggleSelectAllVisible() {
+    const visibleIds = filtered.map((item) => item.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => checkedIds.includes(id));
+    setCheckedIds(allSelected ? checkedIds.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...checkedIds, ...visibleIds])));
+  }
+
+  function clearChecked() {
+    setCheckedIds([]);
+  }
+
+  async function archiveConversationIds(ids: string[]) {
+    const unique = Array.from(new Set(ids.filter(Boolean)));
+    if (!unique.length) return;
+    if (!window.confirm(`حذف/أرشفة ${unique.length.toLocaleString("ar")} محادثة؟ يمكن استرجاعها من «مؤرشفة».`)) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(unique.map((id) => api.patch(`/conversations/${id}`, { archived: true })));
+      setCheckedIds((current) => current.filter((id) => !unique.includes(id)));
+      if (selectedId && unique.includes(selectedId)) setSelectedId(null);
+      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      toastStore.getState().show("تم أرشفة المحادثات المحددة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر أرشفة بعض المحادثات.", "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
   async function createCustomInbox() {
     const name = newCustomInboxName.trim();
     if (!name) return;
@@ -1066,186 +1100,227 @@ export default function InboxPage() {
   return (
     <main className={`inbox-workspace ${detailsOpen ? "details-open" : ""}`}>
       <aside className={`conversation-column ${selectedId ? "has-selection" : ""}`}>
-        <div className="conversation-column-header">
-          <div><span className="eyebrow">{t("eyebrow.unifiedInbox")}</span><h2>{t("pages.inbox")}</h2></div>
-          <div className="inbox-column-actions">
-            <button
-              type="button"
-              className="secondary-button compact inbox-new-conversation-button"
-              onClick={() => {
-                setNewConversationOpen((value) => !value);
-                if (!newConversationChannelId && whatsappChannelOptions[0]) {
-                  setNewConversationChannelId(
-                    channelFilter && whatsappChannelOptions.some((item) => item.id === channelFilter)
-                      ? channelFilter
-                      : whatsappChannelOptions[0].id
-                  );
-                }
-              }}
-            >
-              + محادثة
-            </button>
-            <span className="count-badge">{channelScopedConversations.length}</span>
-          </div>
-        </div>
-        {newConversationOpen && (
-          <form className="inbox-new-conversation-panel" onSubmit={handleStartNewConversation}>
-            <label className="field-label">
-              <span>القناة</span>
-              <select
-                value={newConversationChannelId}
-                onChange={(e) => setNewConversationChannelId(e.target.value)}
-                required
+        <div className="conversation-column-top">
+          <div className="conversation-column-header">
+            <div><span className="eyebrow">{t("eyebrow.unifiedInbox")}</span><h2>{t("pages.inbox")}</h2></div>
+            <div className="inbox-column-actions">
+              <button
+                type="button"
+                className="secondary-button compact inbox-new-conversation-button"
+                onClick={() => {
+                  setNewConversationOpen((value) => !value);
+                  if (!newConversationChannelId && whatsappChannelOptions[0]) {
+                    setNewConversationChannelId(
+                      channelFilter && whatsappChannelOptions.some((item) => item.id === channelFilter)
+                        ? channelFilter
+                        : whatsappChannelOptions[0].id
+                    );
+                  }
+                }}
               >
-                <option value="">اختر قناة WhatsApp</option>
-                {whatsappChannelOptions.map((item) => (
+                + محادثة
+              </button>
+              <span className="count-badge">{channelScopedConversations.length}</span>
+            </div>
+          </div>
+          {newConversationOpen && (
+            <form className="inbox-new-conversation-panel" onSubmit={handleStartNewConversation}>
+              <label className="field-label">
+                <span>القناة</span>
+                <select
+                  value={newConversationChannelId}
+                  onChange={(e) => setNewConversationChannelId(e.target.value)}
+                  required
+                >
+                  <option value="">اختر قناة WhatsApp</option>
+                  {whatsappChannelOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label">
+                <span>رقم WhatsApp</span>
+                <input
+                  dir="ltr"
+                  value={newConversationPhone}
+                  onChange={(e) => setNewConversationPhone(e.target.value)}
+                  placeholder="+965..."
+                  required
+                />
+              </label>
+              <label className="field-label">
+                <span>اسم العميل (اختياري)</span>
+                <input value={newConversationName} onChange={(e) => setNewConversationName(e.target.value)} />
+              </label>
+              <div className="admin-actions">
+                <button type="submit" className="whatsapp-button compact" disabled={startingConversation}>
+                  {startingConversation ? "جاري الفتح…" : "بدء المحادثة"}
+                </button>
+                <button type="button" className="secondary-button compact" onClick={() => setNewConversationOpen(false)}>
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          )}
+          <div className="conversation-search"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم، رقم أو نص رسالة" aria-label="بحث في المحادثات" /></div>
+          <div className="inbox-scope-tabs" role="tablist" aria-label="نوع الإنبوكس">
+            {([
+              ["all", "الكل"],
+              ["mine", "لي"],
+              ["team", "الفريق"],
+              ["custom", "مخصص"]
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={inboxScope === value ? "active" : ""}
+                onClick={() => {
+                  setInboxScope(value);
+                  if (value !== "custom") setCustomInboxId("");
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {inboxScope === "custom" && (
+            <div className="inbox-custom-inbox-bar">
+              <select
+                value={customInboxId}
+                onChange={(e) => setCustomInboxId(e.target.value)}
+                aria-label="إنبوكس مخصص"
+              >
+                <option value="">اختر إنبوكس مخصص</option>
+                {(customInboxesQuery.data ?? []).map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                    {item.name}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field-label">
-              <span>رقم WhatsApp</span>
-              <input
-                dir="ltr"
-                value={newConversationPhone}
-                onChange={(e) => setNewConversationPhone(e.target.value)}
-                placeholder="+965..."
-                required
-              />
-            </label>
-            <label className="field-label">
-              <span>اسم العميل (اختياري)</span>
-              <input value={newConversationName} onChange={(e) => setNewConversationName(e.target.value)} />
-            </label>
-            <div className="admin-actions">
-              <button type="submit" className="whatsapp-button compact" disabled={startingConversation}>
-                {startingConversation ? "جاري الفتح…" : "بدء المحادثة"}
-              </button>
-              <button type="button" className="secondary-button compact" onClick={() => setNewConversationOpen(false)}>
-                إلغاء
-              </button>
+              <div className="inbox-custom-inbox-create">
+                <input
+                  value={newCustomInboxName}
+                  onChange={(e) => setNewCustomInboxName(e.target.value)}
+                  placeholder="اسم إنبوكس جديد"
+                />
+                <button type="button" className="secondary-button compact" onClick={() => void createCustomInbox()}>
+                  +
+                </button>
+              </div>
             </div>
-          </form>
-        )}
-        <div className="conversation-search"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم، رقم أو نص رسالة" aria-label="بحث في المحادثات" /></div>
-        <div className="inbox-scope-tabs" role="tablist" aria-label="نوع الإنبوكس">
-          {([
-            ["all", "الكل"],
-            ["mine", "لي"],
-            ["team", "الفريق"],
-            ["custom", "مخصص"]
-          ] as const).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={inboxScope === value ? "active" : ""}
-              onClick={() => {
-                setInboxScope(value);
-                if (value !== "custom") setCustomInboxId("");
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {inboxScope === "custom" && (
-          <div className="inbox-custom-inbox-bar">
-            <select
-              value={customInboxId}
-              onChange={(e) => setCustomInboxId(e.target.value)}
-              aria-label="إنبوكس مخصص"
-            >
-              <option value="">اختر إنبوكس مخصص</option>
-              {(customInboxesQuery.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            <div className="inbox-custom-inbox-create">
-              <input
-                value={newCustomInboxName}
-                onChange={(e) => setNewCustomInboxName(e.target.value)}
-                placeholder="اسم إنبوكس جديد"
-              />
-              <button type="button" className="secondary-button compact" onClick={() => void createCustomInbox()}>
-                +
-              </button>
+          )}
+          {channelOptions.length > 1 && (
+            <div className="inbox-channel-filter">
+              <select
+                id="inbox-channel-filter"
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value)}
+                aria-label="فلتر القناة"
+              >
+                <option value="">كل القنوات ({conversations.length})</option>
+                {channelOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {CHANNEL_TYPE_SHORT[item.type] ?? item.type} · {item.phone ? `${item.name} · ${item.phone}` : item.name}
+                    {!item.messagingReady ? " (قريباً)" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
+          )}
+          <div className="filter-pills" role="tablist">
+            {(["all", "waiting", "unread", "mine", "starred", "snoozed", "archived"] as InboxFilter[]).map((value) => (
+              <button
+                key={value}
+                className={filter === value ? "active" : ""}
+                onClick={() => setFilter(value)}
+              >
+                {filterLabels[value]}
+                {value === "waiting" && waitingCount > 0 && ` (${waitingCount})`}
+              </button>
+            ))}
           </div>
-        )}
-        {channelOptions.length > 1 && (
-          <div className="inbox-channel-filter">
-            <select
-              id="inbox-channel-filter"
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value)}
-              aria-label="فلتر القناة"
-            >
-              <option value="">كل القنوات ({conversations.length})</option>
-              {channelOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {CHANNEL_TYPE_SHORT[item.type] ?? item.type} · {item.phone ? `${item.name} · ${item.phone}` : item.name}
-                  {!item.messagingReady ? " (قريباً)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div className="filter-pills" role="tablist">
-          {(["all", "waiting", "unread", "mine", "starred", "snoozed", "archived"] as InboxFilter[]).map((value) => (
-            <button
-              key={value}
-              className={filter === value ? "active" : ""}
-              onClick={() => setFilter(value)}
-            >
-              {filterLabels[value]}
-              {value === "waiting" && waitingCount > 0 && ` (${waitingCount})`}
-            </button>
-          ))}
         </div>
         {conversations.length >= INBOX_CONVERSATIONS_LIMIT && (
           <p className="hint-text inbox-list-limit-hint">
             يُعرض حتى {INBOX_CONVERSATIONS_LIMIT.toLocaleString("ar")} محادثة — استخدم البحث أو فلتر القناة للوصول لباقي العملاء.
           </p>
         )}
+        {checkedIds.length > 0 && (
+          <div className="inbox-bulk-bar" role="region" aria-label="إجراءات التحديد">
+            <strong>محدد: {checkedIds.length.toLocaleString("ar")}</strong>
+            <div className="inbox-bulk-actions">
+              <button type="button" className="secondary-button compact" onClick={toggleSelectAllVisible}>
+                {filtered.every((item) => checkedIds.includes(item.id)) && filtered.length > 0
+                  ? "إلغاء تحديد الظاهر"
+                  : "تحديد الظاهر"}
+              </button>
+              <button type="button" className="secondary-button compact" onClick={clearChecked}>
+                إلغاء التحديد
+              </button>
+              <button
+                type="button"
+                className="whatsapp-button compact"
+                disabled={bulkBusy || filter === "archived"}
+                onClick={() => void archiveConversationIds(checkedIds)}
+              >
+                {bulkBusy ? "جاري الحذف…" : "حذف المحدد"}
+              </button>
+            </div>
+          </div>
+        )}
         <div className="conversation-scroll">
           {conversationsQuery.isLoading && Array.from({ length: 6 }).map((_, index) => <div className="conversation-skeleton" key={index}><span /><div><b /><i /></div></div>)}
           {conversationsQuery.isError && <div className="inbox-state error"><strong>تعذر تحميل المحادثات</strong><button onClick={() => conversationsQuery.refetch()}>إعادة المحاولة</button></div>}
           {!conversationsQuery.isLoading && filtered.length === 0 && <div className="inbox-state"><strong>لا توجد نتائج</strong><span>جرّب تغيير البحث أو الفلتر.</span></div>}
-          {filtered.map((item) => (
-            <button className={`conversation-row ${selectedId === item.id ? "active" : ""}${item.needs_reply ? " needs-reply" : ""}`} key={item.id} onClick={() => openConversation(item)}>
-            <div className="avatar avatar-soft">{(item.contact_name || item.contact_address).slice(0, 2).toUpperCase()}</div>
-            <div className="conversation-copy">
-              <div className="conversation-title-line">
-                <strong>{item.contact_name || item.contact_address}</strong>
-                <time>{item.last_message_at ? formatAppTime(item.last_message_at) : ""}</time>
+          {filtered.map((item) => {
+            const isChecked = checkedIds.includes(item.id);
+            return (
+              <div
+                className={`conversation-row ${selectedId === item.id ? "active" : ""}${item.needs_reply ? " needs-reply" : ""}${isChecked ? " checked" : ""}`}
+                key={item.id}
+              >
+                <label className="conversation-row-check" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleChecked(item.id)}
+                    aria-label={`تحديد محادثة ${item.contact_name || item.contact_address}`}
+                  />
+                </label>
+                <button type="button" className="conversation-row-main" onClick={() => openConversation(item)}>
+                  <div className="avatar avatar-soft">{(item.contact_name || item.contact_address).slice(0, 2).toUpperCase()}</div>
+                  <div className="conversation-copy">
+                    <div className="conversation-title-line">
+                      <strong>{item.contact_name || item.contact_address}</strong>
+                      <time>{item.last_message_at ? formatAppTime(item.last_message_at) : ""}</time>
+                    </div>
+                    {channelOptions.length > 1 && !channelFilter && (
+                      <small className="inbox-channel-badge">{channelLabelById.get(item.channel_id) ?? "WhatsApp"}</small>
+                    )}
+                    <div className="conversation-preview">
+                      <span>{item.last_message_text || "رسالة غير نصية"}</span>
+                      {item.needs_reply && item.waiting_minutes != null && (
+                        <small className="waiting-badge">{formatWaitingMinutes(item.waiting_minutes)}</small>
+                      )}
+                      {item.sla_breached_at && <small className="waiting-badge" style={{ background: "#ea4335" }}>SLA</small>}
+                      {isCurrentlySnoozed(item.snoozed_until) && (
+                        <small className="waiting-badge" style={{ background: "#64748b" }}>
+                          مؤجلة {formatSnoozedUntil(item.snoozed_until)}
+                        </small>
+                      )}
+                      {item.requires_template && <small className="window-badge closed">قالب</small>}
+                      {(item.priority === "urgent" || item.priority === "high") && (
+                        <small className={`priority-pill priority-${item.priority}`}>{priorityLabels[item.priority]}</small>
+                      )}
+                      {(item.unread_count ?? 0) > 0 && <b>{item.unread_count}</b>}
+                    </div>
+                  </div>
+                </button>
               </div>
-              {channelOptions.length > 1 && !channelFilter && (
-                <small className="inbox-channel-badge">{channelLabelById.get(item.channel_id) ?? "WhatsApp"}</small>
-              )}
-              <div className="conversation-preview">
-                <span>{item.last_message_text || "رسالة غير نصية"}</span>
-                {item.needs_reply && item.waiting_minutes != null && (
-                  <small className="waiting-badge">{formatWaitingMinutes(item.waiting_minutes)}</small>
-                )}
-                {item.sla_breached_at && <small className="waiting-badge" style={{ background: "#ea4335" }}>SLA</small>}
-                {isCurrentlySnoozed(item.snoozed_until) && (
-                  <small className="waiting-badge" style={{ background: "#64748b" }}>
-                    مؤجلة {formatSnoozedUntil(item.snoozed_until)}
-                  </small>
-                )}
-                {item.requires_template && <small className="window-badge closed">قالب</small>}
-                {(item.priority === "urgent" || item.priority === "high") && (
-                  <small className={`priority-pill priority-${item.priority}`}>{priorityLabels[item.priority]}</small>
-                )}
-                {(item.unread_count ?? 0) > 0 && <b>{item.unread_count}</b>}
-              </div>
-            </div>
-          </button>
-          ))}
+            );
+          })}
         </div>
       </aside>
 
@@ -1865,6 +1940,25 @@ export default function InboxPage() {
             <Link to="/crm" className="secondary-button">CRM</Link>
             <button type="button" className="secondary-button" onClick={() => void createDealFromInbox()} disabled={!selectedId || isArchived}>
               صفقة CRM
+            </button>
+          </div>
+        )}
+        {selectedConversation && (
+          <div className="customer-select-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => toggleChecked(selectedConversation.id)}
+            >
+              {checkedIds.includes(selectedConversation.id) ? "إلغاء التحديد" : "تحديد المحادثة"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={isArchived || bulkBusy}
+              onClick={() => void archiveConversationIds([selectedConversation.id])}
+            >
+              حذف المحادثة
             </button>
           </div>
         )}
