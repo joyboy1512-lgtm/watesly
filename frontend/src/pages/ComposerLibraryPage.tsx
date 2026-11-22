@@ -86,6 +86,8 @@ export default function ComposerLibraryPage() {
   const [listModalOpen, setListModalOpen] = useState(false);
   const [editingList, setEditingList] = useState<ListTemplate | null>(null);
   const [listForm, setListForm] = useState<ListForm>(emptyListForm());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const organizations = useQuery({
     queryKey: ["organizations"],
@@ -170,12 +172,42 @@ export default function ComposerLibraryPage() {
     );
   }, [lists.data, statusTab, search, orgMap]);
 
-  const activeCount =
-    mainTab === "replies" ? visibleReplies.length : mainTab === "buttons" ? visibleButtons.length : visibleLists.length;
+  const visibleRows =
+    mainTab === "replies" ? visibleReplies : mainTab === "buttons" ? visibleButtons : visibleLists;
+  const activeCount = visibleRows.length;
+  const visibleIds = useMemo(() => visibleRows.map((item) => item.id), [visibleRows]);
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
   const isLoading =
     (mainTab === "replies" && replies.isLoading) ||
     (mainTab === "buttons" && buttons.isLoading) ||
     (mainTab === "lists" && lists.isLoading);
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function toggleRowSelection(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
+  }
 
   function openCreate() {
     const defaultOrg = organizationFilter || organizations.data?.[0]?.id || "";
@@ -379,6 +411,114 @@ export default function ComposerLibraryPage() {
     }
   }
 
+  async function bulkArchiveSelected() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    if (!window.confirm(`أرشفة ${ids.length} عنصر؟`)) return;
+    setBulkBusy(true);
+    let ok = 0;
+    try {
+      for (const id of ids) {
+        try {
+          if (mainTab === "replies") await api.delete(`/inbox-tools/quick-replies/${id}`);
+          else if (mainTab === "buttons") await api.delete(`/inbox-tools/composer-button-templates/${id}`);
+          else await api.delete(`/inbox-tools/composer-list-templates/${id}`);
+          ok += 1;
+        } catch {
+          /* continue */
+        }
+      }
+      clearSelection();
+      await client.invalidateQueries({
+        queryKey:
+          mainTab === "replies"
+            ? ["quick-replies"]
+            : mainTab === "buttons"
+              ? ["composer-button-templates"]
+              : ["composer-list-templates"]
+      });
+      toastStore
+        .getState()
+        .show(ok === ids.length ? `تمت أرشفة ${ok} عنصر.` : `أُرشف ${ok} من ${ids.length}.`, ok ? "success" : "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkDeleteSelected() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    if (!window.confirm(`حذف ${ids.length} عنصر نهائياً؟ لا يمكن التراجع.`)) return;
+    setBulkBusy(true);
+    let ok = 0;
+    try {
+      for (const id of ids) {
+        try {
+          if (mainTab === "replies") {
+            await api.delete(`/inbox-tools/quick-replies/${id}`, { params: { permanent: true } });
+          } else if (mainTab === "buttons") {
+            await api.delete(`/inbox-tools/composer-button-templates/${id}`, { params: { permanent: true } });
+          } else {
+            await api.delete(`/inbox-tools/composer-list-templates/${id}`, { params: { permanent: true } });
+          }
+          ok += 1;
+        } catch {
+          /* continue */
+        }
+      }
+      clearSelection();
+      await client.invalidateQueries({
+        queryKey:
+          mainTab === "replies"
+            ? ["quick-replies"]
+            : mainTab === "buttons"
+              ? ["composer-button-templates"]
+              : ["composer-list-templates"]
+      });
+      toastStore
+        .getState()
+        .show(ok === ids.length ? `تم حذف ${ok} عنصر نهائياً.` : `حُذف ${ok} من ${ids.length}.`, ok ? "success" : "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkRestoreSelected() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setBulkBusy(true);
+    let ok = 0;
+    try {
+      for (const id of ids) {
+        try {
+          if (mainTab === "replies") await api.patch(`/inbox-tools/quick-replies/${id}`, { is_active: true });
+          else if (mainTab === "buttons") {
+            await api.patch(`/inbox-tools/composer-button-templates/${id}`, { is_active: true });
+          } else {
+            await api.patch(`/inbox-tools/composer-list-templates/${id}`, { is_active: true });
+          }
+          ok += 1;
+        } catch {
+          /* continue */
+        }
+      }
+      clearSelection();
+      await client.invalidateQueries({
+        queryKey:
+          mainTab === "replies"
+            ? ["quick-replies"]
+            : mainTab === "buttons"
+              ? ["composer-button-templates"]
+              : ["composer-list-templates"]
+      });
+      toastStore
+        .getState()
+        .show(ok === ids.length ? `تمت استعادة ${ok} عنصر.` : `استُعيد ${ok} من ${ids.length}.`, ok ? "success" : "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const createLabel =
     mainTab === "replies" ? "رد جديد" : mainTab === "buttons" ? "أزرار جديدة" : "قائمة جديدة";
   const emptyTitle =
@@ -431,6 +571,7 @@ export default function ComposerLibraryPage() {
               setMainTab(key);
               setStatusTab("active");
               setSearch("");
+              clearSelection();
             }}
           >
             <span className="composer-library-type-icon" aria-hidden>
@@ -440,7 +581,9 @@ export default function ComposerLibraryPage() {
               <strong>{label}</strong>
               <small>{hint}</small>
             </span>
-            {mainTab === key && !isLoading && <b className="composer-library-type-count">{activeCount}</b>}
+            {mainTab === key && !isLoading && activeCount > 0 && (
+              <b className="composer-library-type-count">{activeCount}</b>
+            )}
           </button>
         ))}
       </div>
@@ -457,7 +600,13 @@ export default function ComposerLibraryPage() {
         </label>
         <label className="field-label composer-library-branch">
           <span>الفرع</span>
-          <select value={organizationFilter} onChange={(e) => setOrganizationFilter(e.target.value)}>
+          <select
+            value={organizationFilter}
+            onChange={(e) => {
+              setOrganizationFilter(e.target.value);
+              clearSelection();
+            }}
+          >
             <option value="">كل الفروع المتاحة</option>
             {(organizations.data ?? []).map((org) => (
               <option key={org.id} value={org.id}>
@@ -470,18 +619,71 @@ export default function ComposerLibraryPage() {
           <button
             type="button"
             className={statusTab === "active" ? "active" : ""}
-            onClick={() => setStatusTab("active")}
+            onClick={() => {
+              setStatusTab("active");
+              clearSelection();
+            }}
           >
             نشطة
           </button>
           <button
             type="button"
             className={statusTab === "archived" ? "active" : ""}
-            onClick={() => setStatusTab("archived")}
+            onClick={() => {
+              setStatusTab("archived");
+              clearSelection();
+            }}
           >
             مؤرشفة
           </button>
         </div>
+        {selectedCount > 0 && (
+          <div className="composer-library-bulk" role="region" aria-label="إجراءات التحديد">
+            <span className="composer-library-bulk-count">{selectedCount}</span>
+            {statusTab === "active" ? (
+              <>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  disabled={bulkBusy}
+                  onClick={() => void bulkArchiveSelected()}
+                >
+                  أرشفة
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact danger-button"
+                  disabled={bulkBusy}
+                  onClick={() => void bulkDeleteSelected()}
+                >
+                  حذف
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  disabled={bulkBusy}
+                  onClick={() => void bulkRestoreSelected()}
+                >
+                  استعادة
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button compact danger-button"
+                  disabled={bulkBusy}
+                  onClick={() => void bulkDeleteSelected()}
+                >
+                  حذف
+                </button>
+              </>
+            )}
+            <button type="button" className="secondary-button compact" disabled={bulkBusy} onClick={clearSelection}>
+              إلغاء
+            </button>
+          </div>
+        )}
       </div>
 
       <section className="composer-library-board" aria-live="polite">
@@ -508,23 +710,44 @@ export default function ComposerLibraryPage() {
               <table className="data-table composer-library-table">
                 <thead>
                   <tr>
+                    <th className="composer-library-col-check">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        ref={(input) => {
+                          if (input) input.indeterminate = someVisibleSelected && !allVisibleSelected;
+                        }}
+                        onChange={toggleAllVisible}
+                        aria-label="تحديد الكل"
+                      />
+                    </th>
                     <th>العنوان</th>
-                    <th>الاختصار</th>
+                    <th className="composer-library-col-ltr">الاختصار</th>
                     <th>الفرع</th>
                     <th>النص</th>
-                    <th>إجراءات</th>
+                    <th className="composer-library-col-actions">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleReplies.map((item) => (
-                    <tr key={item.id}>
+                    <tr key={item.id} className={selectedIds.has(item.id) ? "is-selected" : undefined}>
+                      <td className="composer-library-col-check">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => toggleRowSelection(item.id)}
+                          aria-label={`تحديد ${item.title}`}
+                        />
+                      </td>
                       <td>
                         <strong>{item.title}</strong>
                       </td>
-                      <td dir="ltr">/{item.shortcut}</td>
+                      <td className="composer-library-col-ltr" dir="ltr">
+                        /{item.shortcut}
+                      </td>
                       <td>{orgMap.get(item.organization_id) ?? "—"}</td>
                       <td className="composer-library-preview">{item.body}</td>
-                      <td className="composer-library-actions">
+                      <td className="composer-library-actions composer-library-col-actions">
                         {statusTab === "active" ? (
                           <>
                             <button
@@ -582,23 +805,42 @@ export default function ComposerLibraryPage() {
               <table className="data-table composer-library-table">
                 <thead>
                   <tr>
+                    <th className="composer-library-col-check">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        ref={(input) => {
+                          if (input) input.indeterminate = someVisibleSelected && !allVisibleSelected;
+                        }}
+                        onChange={toggleAllVisible}
+                        aria-label="تحديد الكل"
+                      />
+                    </th>
                     <th>الاسم</th>
                     <th>الفرع</th>
                     <th>النص</th>
                     <th>الأزرار</th>
-                    <th>إجراءات</th>
+                    <th className="composer-library-col-actions">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleButtons.map((item) => (
-                    <tr key={item.id}>
+                    <tr key={item.id} className={selectedIds.has(item.id) ? "is-selected" : undefined}>
+                      <td className="composer-library-col-check">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => toggleRowSelection(item.id)}
+                          aria-label={`تحديد ${item.name}`}
+                        />
+                      </td>
                       <td>
                         <strong>{item.name}</strong>
                       </td>
                       <td>{orgMap.get(item.organization_id) ?? "—"}</td>
                       <td className="composer-library-preview">{item.body}</td>
                       <td>{item.titles.split("\n").filter(Boolean).join(" · ")}</td>
-                      <td className="composer-library-actions">
+                      <td className="composer-library-actions composer-library-col-actions">
                         {statusTab === "active" ? (
                           <>
                             <button
@@ -662,11 +904,22 @@ export default function ComposerLibraryPage() {
               <table className="data-table composer-library-table">
                 <thead>
                   <tr>
+                    <th className="composer-library-col-check">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        ref={(input) => {
+                          if (input) input.indeterminate = someVisibleSelected && !allVisibleSelected;
+                        }}
+                        onChange={toggleAllVisible}
+                        aria-label="تحديد الكل"
+                      />
+                    </th>
                     <th>الاسم</th>
                     <th>الفرع</th>
                     <th>النص</th>
                     <th>الزر / الخيارات</th>
-                    <th>إجراءات</th>
+                    <th className="composer-library-col-actions">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -676,7 +929,15 @@ export default function ComposerLibraryPage() {
                       0
                     );
                     return (
-                      <tr key={item.id}>
+                      <tr key={item.id} className={selectedIds.has(item.id) ? "is-selected" : undefined}>
+                        <td className="composer-library-col-check">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(item.id)}
+                            onChange={() => toggleRowSelection(item.id)}
+                            aria-label={`تحديد ${item.name}`}
+                          />
+                        </td>
                         <td>
                           <strong>{item.name}</strong>
                         </td>
@@ -685,7 +946,7 @@ export default function ComposerLibraryPage() {
                         <td>
                           {item.button_text} · {optionCount} خيار
                         </td>
-                        <td className="composer-library-actions">
+                        <td className="composer-library-actions composer-library-col-actions">
                           {statusTab === "active" ? (
                             <>
                               <button
