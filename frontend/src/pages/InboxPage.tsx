@@ -8,7 +8,7 @@ import { toastStore } from "../stores/toast";
 import { useHasPermission } from "../hooks/usePermissions";
 import { uploadFile } from "../lib/uploads";
 import { formatWindowExpiry } from "../lib/serviceWindow";
-import { formatSnoozedUntil, formatWaitingMinutes, INBOX_CONVERSATIONS_LIMIT, isCurrentlySnoozed, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
+import { formatSnoozedUntil, formatWaitingMinutes, INBOX_CONVERSATIONS_LIMIT, INBOX_CONVERSATIONS_PAGE_SIZE, isCurrentlySnoozed, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
 import { formatAppTime } from "../lib/language";
 import { insertReplyVariable, REPLY_VARIABLES, type ConversationContext } from "../lib/replyVariables";
 import {
@@ -46,7 +46,7 @@ import type { Tag, Note } from "../types/inbox";
 import Icon from "../components/Icon";
 import { useWorkspaceOrganizationId } from "../hooks/useWorkspace";
 
-type InboxFilter = "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
+type InboxFilter = "engaged" | "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
 type InboxScope = "all" | "mine" | "team" | "custom";
 type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
 type ChannelOption = { id: string; name: string; phone: string | null; type: string; messagingReady: boolean };
@@ -104,7 +104,8 @@ export default function InboxPage() {
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
   const [noteText, setNoteText] = useState("");
-  const [filter, setFilter] = useState<InboxFilter>("all");
+  const [filter, setFilter] = useState<InboxFilter>("engaged");
+  const [listLimit, setListLimit] = useState(INBOX_CONVERSATIONS_PAGE_SIZE);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [aiSuggestionSource, setAiSuggestionSource] = useState<string | null>(null);
@@ -156,11 +157,15 @@ export default function InboxPage() {
 
   const showArchived = filter === "archived";
   const showSnoozed = filter === "snoozed";
+  /** Default: only conversations with customer inbound activity; «الكل» turns this off. */
+  const engagedOnly = filter !== "all";
   const conversationsQuery = useQuery({
     queryKey: [
       "conversations",
       showArchived,
       showSnoozed,
+      engagedOnly,
+      listLimit,
       channelFilter,
       workspaceOrganizationId,
       inboxScope,
@@ -170,7 +175,8 @@ export default function InboxPage() {
       const params: Record<string, string | boolean | number> = {
         archived: showArchived,
         snoozed: showSnoozed,
-        limit: INBOX_CONVERSATIONS_LIMIT
+        engaged_only: engagedOnly,
+        limit: listLimit
       };
       if (channelFilter) params.channel_id = channelFilter;
       if (workspaceOrganizationId) params.organization_id = workspaceOrganizationId;
@@ -184,7 +190,7 @@ export default function InboxPage() {
         })
       ).data;
     },
-    refetchInterval: 30_000
+    refetchInterval: 45_000
   });
   const customInboxesQuery = useQuery({
     queryKey: ["custom-inboxes", workspaceOrganizationId],
@@ -275,13 +281,17 @@ export default function InboxPage() {
   const filtered = useMemo(() => channelScopedConversations.filter((item) => {
     const haystack = `${item.contact_name ?? ""} ${item.contact_address} ${item.last_message_text ?? ""}`.toLowerCase();
     const matchesSearch = haystack.includes(search.trim().toLowerCase());
-    const matchesFilter = filter === "all" || filter === "archived" || filter === "snoozed"
+    const matchesFilter = filter === "engaged" || filter === "all" || filter === "archived" || filter === "snoozed"
       || (filter === "unread" && (item.unread_count ?? 0) > 0)
       || (filter === "waiting" && item.needs_reply)
       || (filter === "mine" && Boolean(item.assigned_membership_id))
       || (filter === "starred" && item.is_starred);
     return matchesSearch && matchesFilter;
   }), [channelScopedConversations, filter, search]);
+
+  useEffect(() => {
+    setListLimit(INBOX_CONVERSATIONS_PAGE_SIZE);
+  }, [showArchived, showSnoozed, engagedOnly, channelFilter, workspaceOrganizationId, inboxScope, customInboxId]);
 
   useEffect(() => {
     if (!requestedConversationId) return;
@@ -291,8 +301,11 @@ export default function InboxPage() {
       if (match.channel_id && match.channel_id !== channelFilter) {
         setChannelFilter(match.channel_id);
       }
+      return;
     }
-  }, [requestedConversationId, conversations, channelFilter]);
+    // Deep link may point at a silent (outbound-only) thread — reveal via «الكل».
+    if (engagedOnly) setFilter("all");
+  }, [requestedConversationId, conversations, channelFilter, engagedOnly]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -388,9 +401,8 @@ export default function InboxPage() {
     }
     setStartingConversation(true);
     try {
-      if (filter === "archived") {
-        setFilter("all");
-      }
+      // New/outbound threads may have no inbound yet — show under «الكل».
+      setFilter("all");
       const result = await startConversationOnChannel({
         channel_id: newConversationChannelId,
         external_address: normalizedPhone,
@@ -445,7 +457,7 @@ export default function InboxPage() {
     queryFn: async ({ signal }) => (
       await api.get<Message[]>(`/conversations/${selectedId}/messages`, { signal, ...silentRequest })
     ).data,
-    refetchInterval: selectedId ? 2_000 : false,
+    refetchInterval: selectedId ? 8_000 : false,
   });
   const contextQuery = useQuery({
     queryKey: ["conversation-context", selectedId],
@@ -453,7 +465,7 @@ export default function InboxPage() {
     queryFn: async ({ signal }) => (
       await api.get<ConversationContext>(`/conversations/${selectedId}/context`, { signal, ...silentRequest })
     ).data,
-    refetchInterval: 10_000
+    refetchInterval: 20_000
   });
 
   const visibleMessages = useMemo(() => {
@@ -806,7 +818,7 @@ export default function InboxPage() {
   }
   async function unarchiveConversation() {
     await updateConversation({ archived: false });
-    setFilter("all");
+    setFilter("engaged");
     toastStore.getState().show("تم استرجاع المحادثة.", "success");
   }
   async function confirmCloseConversation() {
@@ -1087,6 +1099,7 @@ export default function InboxPage() {
   }, [inboxContext]);
 
   const filterLabels: Record<InboxFilter, string> = {
+    engaged: "نشط",
     all: "الكل",
     unread: "غير مقروء",
     waiting: "تنتظر ردّي",
@@ -1095,6 +1108,10 @@ export default function InboxPage() {
     snoozed: "مؤجلة",
     archived: "مؤرشفة"
   };
+  const canLoadMore =
+    !conversationsQuery.isLoading &&
+    conversations.length >= listLimit &&
+    listLimit < INBOX_CONVERSATIONS_LIMIT;
   const selectedIsSnoozed = isCurrentlySnoozed(selectedConversation?.snoozed_until);
 
   return (
@@ -1230,11 +1247,18 @@ export default function InboxPage() {
             </div>
           )}
           <div className="filter-pills" role="tablist">
-            {(["all", "waiting", "unread", "mine", "starred", "snoozed", "archived"] as InboxFilter[]).map((value) => (
+            {(["engaged", "all", "waiting", "unread", "mine", "starred", "snoozed", "archived"] as InboxFilter[]).map((value) => (
               <button
                 key={value}
                 className={filter === value ? "active" : ""}
                 onClick={() => setFilter(value)}
+                title={
+                  value === "engaged"
+                    ? "محادثات تفاعل معها العميل (رسالة أو زر)"
+                    : value === "all"
+                      ? "كل المحادثات بما فيها من لم يرد بعد الحملات"
+                      : undefined
+                }
               >
                 {filterLabels[value]}
                 {value === "waiting" && waitingCount > 0 && ` (${waitingCount})`}
@@ -1242,6 +1266,11 @@ export default function InboxPage() {
             ))}
           </div>
         </div>
+        {engagedOnly && filter === "engaged" && (
+          <p className="hint-text inbox-list-limit-hint">
+            يظهر من تفاعل معكم فقط — اختر «الكل» لإظهار من أُرسلت لهم حملات بلا رد.
+          </p>
+        )}
         {conversations.length >= INBOX_CONVERSATIONS_LIMIT && (
           <p className="hint-text inbox-list-limit-hint">
             يُعرض حتى {INBOX_CONVERSATIONS_LIMIT.toLocaleString("ar")} محادثة — استخدم البحث أو فلتر القناة للوصول لباقي العملاء.
@@ -1321,6 +1350,24 @@ export default function InboxPage() {
               </div>
             );
           })}
+          {canLoadMore && (
+            <div className="inbox-load-more">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={conversationsQuery.isFetching}
+                onClick={() =>
+                  setListLimit((current) =>
+                    Math.min(current + INBOX_CONVERSATIONS_PAGE_SIZE, INBOX_CONVERSATIONS_LIMIT)
+                  )
+                }
+              >
+                {conversationsQuery.isFetching
+                  ? "جاري التحميل…"
+                  : `تحميل المزيد (${listLimit.toLocaleString("ar")} / ${INBOX_CONVERSATIONS_LIMIT.toLocaleString("ar")})`}
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
