@@ -6,14 +6,17 @@ import {
   DAY_LABELS,
   DAY_ORDER,
   downloadKnowledgeExport,
+  evaluateKnowledgeQuality,
   llmStatusLabel,
   MODE_LABELS,
   normalizeBusinessHours,
+  sendArticleFeedback,
   SOURCE_LABELS,
   type AgentSettings,
   type AgentSettingsPatch,
   type BusinessHoursConfig,
   type KnowledgeArticle,
+  type QualityEvalResult,
   type SmartReplyResult
 } from "../lib/knowledgeHelpers";
 import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
@@ -83,6 +86,11 @@ export default function KnowledgePage() {
   const [llmApiKeyDraft, setLlmApiKeyDraft] = useState("");
   const [hoursDraft, setHoursDraft] = useState<BusinessHoursConfig | null>(null);
   const [hoursDirty, setHoursDirty] = useState(false);
+  const [qualityCasesText, setQualityCasesText] = useState(
+    "ما مدة التوصيل؟\nكم السعر؟\nكيف أرجع الطلب؟\nهل الفرع مفتوح؟"
+  );
+  const [qualityResult, setQualityResult] = useState<QualityEvalResult | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
@@ -259,6 +267,38 @@ export default function KnowledgePage() {
     });
   }
 
+  async function feedbackArticle(articleId: string, helpful: boolean) {
+    try {
+      await sendArticleFeedback(articleId, helpful);
+      toastStore.getState().show(helpful ? "تم تسجيل أنه مفيد." : "تم تسجيل أنه غير مناسب.", "success");
+      await client.invalidateQueries({ queryKey: ["knowledge"] });
+    } catch {
+      toastStore.getState().show("تعذر حفظ التقييم.", "error");
+    }
+  }
+
+  async function runQualityLab() {
+    const cases = qualityCasesText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((query) => ({ query }));
+    if (cases.length === 0) {
+      toastStore.getState().show("أضف سؤالًا واحدًا على الأقل.", "error");
+      return;
+    }
+    setQualityLoading(true);
+    try {
+      const result = await evaluateKnowledgeQuality(cases);
+      setQualityResult(result.data);
+      toastStore.getState().show(`نسبة الإصابة: ${Math.round(result.data.hit_rate * 100)}%`, "success");
+    } catch {
+      toastStore.getState().show("تعذر تشغيل مختبر الجودة.", "error");
+    } finally {
+      setQualityLoading(false);
+    }
+  }
+
   async function testAi() {
     if (!testQuery.trim()) return;
     setTestLoading(true);
@@ -266,7 +306,8 @@ export default function KnowledgePage() {
       const result = await api.post<SmartReplyResult>("/knowledge/suggest-reply", {
         query: testQuery.trim(),
         contact_name: testContactName.trim(),
-        mode: testMode
+        mode: testMode,
+        use_llm: false
       });
       setTestResult(result.data);
     } catch {
@@ -467,7 +508,9 @@ export default function KnowledgePage() {
                         </span>
                       </td>
                       <td className="knowledge-cell-center" data-label="استخدام">
-                        {item.usage_count > 0 ? item.usage_count : "—"}
+                        {item.usage_count > 0 || (item.helpful_count ?? 0) > 0 || (item.dismiss_count ?? 0) > 0
+                          ? `${item.usage_count || 0} · ✓${item.helpful_count ?? 0} · ✗${item.dismiss_count ?? 0}`
+                          : "—"}
                       </td>
                       <td className="knowledge-cell-actions" data-label="إجراءات">
                         <div className="admin-actions knowledge-row-actions">
@@ -545,16 +588,36 @@ export default function KnowledgePage() {
               <strong>
                 مصدر: {SOURCE_LABELS[testResult.source ?? ""] ?? testResult.source ?? "—"}
                 {testResult.confidence != null && ` · ثقة ${Math.round(testResult.confidence * 100)}%`}
+                {testResult.engine ? ` · ${testResult.engine}` : ""}
               </strong>
               <WhatsAppTextPreview text={testResult.suggestion} compact />
+              {(testResult.expanded_terms ?? []).length > 0 && (
+                <p className="hint-text">توسيع المرادفات: {(testResult.expanded_terms ?? []).join(" · ")}</p>
+              )}
             </div>
             {(testResult.matched_articles ?? []).length > 0 && (
               <div className="knowledge-matched-list">
-                <h3 className="section-title-sm">مقالات مطابقة</h3>
+                <h3 className="section-title-sm">مقالات مطابقة (مرتّبة بالدرجة)</h3>
                 {(testResult.matched_articles ?? []).map((article) => (
                   <article key={article.id} className="inbox-kb-card">
-                    <strong>{article.title}</strong>
+                    <strong>
+                      {article.title}
+                      {article.score != null && (
+                        <span className="hint-text"> · درجة {Math.round(article.score * 100)}%</span>
+                      )}
+                    </strong>
                     {article.body && <p>{article.body.slice(0, 120)}…</p>}
+                    {(article.reasons ?? []).length > 0 && (
+                      <p className="hint-text">{(article.reasons ?? []).join(" · ")}</p>
+                    )}
+                    <div className="catalog-card-actions">
+                      <button type="button" className="secondary-button compact" onClick={() => void feedbackArticle(article.id, true)}>
+                        مفيد
+                      </button>
+                      <button type="button" className="secondary-button compact" onClick={() => void feedbackArticle(article.id, false)}>
+                        غير مناسب
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -567,6 +630,44 @@ export default function KnowledgePage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+      </section>
+
+      <section className="card knowledge-preview-card">
+        <h2 className="section-title">مختبر جودة الذكاء الداخلي</h2>
+        <p className="hint-text">ضع أسئلة حقيقية (سطر لكل سؤال) لقياس نسبة إصابة المحرك الداخلي بدون LLM.</p>
+        <label className="field-label">
+          <span>أسئلة الاختبار</span>
+          <textarea
+            rows={5}
+            value={qualityCasesText}
+            onChange={(e) => setQualityCasesText(e.target.value)}
+            placeholder={"ما مدة التوصيل؟\nكم السعر؟"}
+          />
+        </label>
+        <button type="button" className="whatsapp-button" onClick={() => void runQualityLab()} disabled={qualityLoading}>
+          {qualityLoading ? "جاري القياس…" : "تشغيل المختبر"}
+        </button>
+        {qualityResult && (
+          <div className="knowledge-preview-layout">
+            <p className="hint-text">
+              الإصابة: {qualityResult.hits}/{qualityResult.total} —{" "}
+              <strong>{Math.round(qualityResult.hit_rate * 100)}%</strong>
+            </p>
+            <div className="knowledge-matched-list">
+              {qualityResult.results.map((row) => (
+                <article key={`${row.index}-${row.query}`} className="inbox-kb-card">
+                  <strong>
+                    {row.matched ? "✓" : "✗"} {row.query}
+                  </strong>
+                  <p className="hint-text">
+                    الأعلى: {row.top_title ?? "—"}
+                    {row.top_score != null ? ` · درجة ${Math.round(row.top_score * 100)}%` : ""}
+                  </p>
+                </article>
+              ))}
+            </div>
           </div>
         )}
       </section>

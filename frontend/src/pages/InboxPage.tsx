@@ -23,6 +23,7 @@ import { buildCartSummary } from "../components/InboxProductPicker";
 import {
   llmStatusLabel,
   MODE_LABELS,
+  sendArticleFeedback,
   SOURCE_LABELS,
   type AgentSettings,
   type CopilotResult,
@@ -1623,7 +1624,29 @@ export default function InboxPage() {
               </div>
             )}
             <div className="ai-suggestion-actions">
-              <button type="button" className="whatsapp-button" onClick={() => setText(aiSuggestion)}>استخدام الرد</button>
+              <button
+                type="button"
+                className="whatsapp-button"
+                onClick={() => {
+                  setText(aiSuggestion);
+                  const top = matchedArticles[0];
+                  if (top?.id) void sendArticleFeedback(top.id, true).catch(() => undefined);
+                }}
+              >
+                استخدام الرد
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  const top = matchedArticles[0];
+                  if (top?.id) void sendArticleFeedback(top.id, false).catch(() => undefined);
+                  setAiSuggestion(null);
+                  setMatchedArticles([]);
+                }}
+              >
+                غير مناسب
+              </button>
               <button type="button" className="secondary-action" onClick={() => setAiSuggestion(null)}>إخفاء</button>
             </div>
           </div>
