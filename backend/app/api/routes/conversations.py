@@ -54,9 +54,11 @@ async def _maybe_mask_conversation_response(
     db: AsyncSession,
     context: AuthContext,
     response: ConversationResponse,
+    *,
+    flags: dict | None = None,
 ) -> ConversationResponse:
-    flags = await get_feature_flags(db, account_id=context.account_id)
-    if not flags.get("privacy_mask_agents", True):
+    resolved_flags = flags if flags is not None else await get_feature_flags(db, account_id=context.account_id)
+    if not resolved_flags.get("privacy_mask_agents", True):
         return response
     role = context.membership.role.value if hasattr(context.membership.role, "value") else str(context.membership.role)
     if can_view_full_contact(role=role, permissions=_contact_permissions(context)):
@@ -71,18 +73,32 @@ async def _mask_conversation_list(
     context: AuthContext,
     items: list[ConversationResponse],
 ) -> list[ConversationResponse]:
+    if not items:
+        return items
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    if not flags.get("privacy_mask_agents", True):
+        return items
+    role = context.membership.role.value if hasattr(context.membership.role, "value") else str(context.membership.role)
+    if can_view_full_contact(role=role, permissions=_contact_permissions(context)):
+        return items
     results = []
     for item in items:
-        results.append(await _maybe_mask_conversation_response(db, context, item))
+        masked = item.model_copy()
+        masked.contact_address = mask_phone(masked.contact_address) or masked.contact_address
+        results.append(masked)
     return results
 
 
 @router.get("", response_model=list[ConversationResponse])
 async def get_conversations(
-    limit: int = Query(5000, ge=1, le=5000),
+    limit: int = Query(100, ge=1, le=5000),
     starred: bool = Query(False),
     archived: bool = Query(False),
     snoozed: bool = Query(False),
+    engaged_only: bool = Query(
+        False,
+        description="When true, hide conversations with no inbound customer activity",
+    ),
     channel_id: UUID | None = Query(None),
     organization_id: UUID | None = Query(None),
     inbox_scope: str | None = Query(None, description="all | mine | team"),
@@ -99,6 +115,7 @@ async def get_conversations(
         archived_only=archived,
         starred_only=starred,
         snoozed_only=snoozed,
+        engaged_only=engaged_only,
         channel_id=channel_id,
         organization_id=organization_id,
         inbox_scope=inbox_scope,
