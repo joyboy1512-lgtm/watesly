@@ -5496,13 +5496,94 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   justify-content: space-between;
   gap: 10px;
 }
-.catalog-invoice-head strong { display: block; font-size: 16px; }
+.catalog-invoice-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.catalog-invoice-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  flex: 0 0 auto;
+}
+.catalog-invoice-brand strong { display: block; font-size: 16px; }
+.catalog-invoice-branch-name {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary-darker);
+}
+.catalog-invoice-head small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
 .catalog-invoice-meta {
   display: grid;
   gap: 4px;
   text-align: end;
   color: var(--muted);
   font-size: 12px;
+}
+.org-page-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.org-page-header-brand h1 {
+  margin: 0;
+}
+.org-page-header-brand p {
+  margin: 0.25rem 0 0;
+}
+.org-branch-logo,
+.org-branch-logo-fallback {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--primary-soft) 55%, #fff);
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  color: var(--primary-darker);
+  font-weight: 800;
+  font-size: 0.9rem;
+  overflow: hidden;
+}
+.org-branch-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.org-edit-title {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.org-edit-title h3 {
+  margin: 0;
+}
+.org-logo-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--primary) 28%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary-soft) 28%, #fff);
+}
+.org-logo-editor-actions {
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
 }
 .catalog-invoice-table {
   width: 100%;

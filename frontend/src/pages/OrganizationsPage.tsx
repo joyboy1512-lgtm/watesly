@@ -12,12 +12,14 @@ import {
 } from "../lib/orgHelpers";
 import { formatPlanLimit } from "../lib/planLimits";
 import { isAccountManager } from "../lib/teamHelpers";
+import { uploadFile } from "../lib/uploads";
 import { toastStore } from "../stores/toast";
 
 type Organization = {
   id: string;
   name: string;
   slug: string;
+  logo_url?: string | null;
   country_code: string;
   currency_code: string;
   timezone: string;
@@ -46,6 +48,33 @@ function limitInputValue(limit: number): string {
   return limit > 0 ? String(limit) : "";
 }
 
+function BranchLogo({
+  name,
+  logoUrl,
+  size = 36
+}: {
+  name: string;
+  logoUrl?: string | null;
+  size?: number;
+}) {
+  const initial = name.trim().slice(0, 1) || "ف";
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={`شعار ${name}`}
+        className="org-branch-logo"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <span className="org-branch-logo-fallback" style={{ width: size, height: size }} aria-hidden>
+      {initial}
+    </span>
+  );
+}
+
 export default function OrganizationsPage() {
   const client = useQueryClient();
   const profile = useCurrentUser();
@@ -59,7 +88,9 @@ export default function OrganizationsPage() {
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [editMaxUsers, setEditMaxUsers] = useState("");
   const [editMaxChannels, setEditMaxChannels] = useState("");
+  const [editLogoUrl, setEditLogoUrl] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
 
   const query = useQuery({
@@ -79,6 +110,11 @@ export default function OrganizationsPage() {
     });
   }, [query.data, search]);
 
+  const primaryBranch = useMemo(() => {
+    const rows = query.data ?? [];
+    return rows.find((item) => item.status === "active") ?? rows[0] ?? null;
+  }, [query.data]);
+
   const stats = useMemo(() => {
     const rows = query.data ?? [];
     return {
@@ -93,6 +129,25 @@ export default function OrganizationsPage() {
     setEditingOrg(org);
     setEditMaxUsers(limitInputValue(org.max_users ?? 0));
     setEditMaxChannels(limitInputValue(org.max_channels ?? 0));
+    setEditLogoUrl(org.logo_url ?? "");
+  }
+
+  async function uploadLogo(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toastStore.getState().show("اختر صورة (PNG أو JPG أو WebP).", "error");
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const uploaded = await uploadFile(file);
+      setEditLogoUrl(uploaded.public_url);
+      toastStore.getState().show("تم رفع الشعار. احفظ التعديلات لتثبيته.", "success");
+    } catch {
+      toastStore.getState().show("تعذر رفع الشعار.", "error");
+    } finally {
+      setUploadingLogo(false);
+    }
   }
 
   async function saveEdit(event: FormEvent) {
@@ -102,10 +157,11 @@ export default function OrganizationsPage() {
     try {
       await api.patch(`/organizations/${editingOrg.id}`, {
         max_users: parseOptionalLimit(editMaxUsers),
-        max_channels: parseOptionalLimit(editMaxChannels)
+        max_channels: parseOptionalLimit(editMaxChannels),
+        logo_url: editLogoUrl.trim() || null
       });
       await client.invalidateQueries({ queryKey: ["organizations"] });
-      toastStore.getState().show("تم تحديث حدود الفرع.", "success");
+      toastStore.getState().show("تم تحديث الفرع.", "success");
       setEditingOrg(null);
     } catch (error) {
       toastStore.getState().show(organizationUpdateErrorMessage(error), "error");
@@ -181,13 +237,20 @@ export default function OrganizationsPage() {
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1>الفروع</h1>
-        <p>
-          {canManageAccountBranches
-            ? "أنشئ فرعاً جديداً، عدّل حدود المستخدمين والقنوات، أو أوقف الوصول للفرع فوراً."
-            : "عرض الفروع المرتبطة بصلاحياتك. إدارة الموظفين والقنوات تتم من صفحات الفريق والقنوات."}
-        </p>
+      <header className="page-header org-page-header">
+        <div className="org-page-header-brand">
+          {primaryBranch && (
+            <BranchLogo name={primaryBranch.name} logoUrl={primaryBranch.logo_url} size={48} />
+          )}
+          <div>
+            <h1>{primaryBranch ? primaryBranch.name : "الفروع"}</h1>
+            <p>
+              {canManageAccountBranches
+                ? "أضف شعار الفرع ليظهر مع الاسم هنا وفي فاتورة طلبات الكتالوج."
+                : "عرض الفروع المرتبطة بصلاحياتك. إدارة الموظفين والقنوات تتم من صفحات الفريق والقنوات."}
+            </p>
+          </div>
+        </div>
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">
@@ -249,7 +312,7 @@ export default function OrganizationsPage() {
             </label>
           </div>
           <p className="hint-text" style={{ margin: 0 }}>
-            سيُرسَل لمدير الفرع دعوة بصلاحية «مدير فرع» لإدارة هذا الفرع فقط.
+            سيُرسَل لمدير الفرع دعوة بصلاحية «مدير فرع» لإدارة هذا الفرع فقط. يمكنك رفع الشعار بعد الإنشاء من «تعديل».
           </p>
           <button type="submit">إضافة فرع</button>
         </form>
@@ -294,9 +357,12 @@ export default function OrganizationsPage() {
               {filtered.map((item) => (
                 <tr key={item.id}>
                   <td>
-                    <div className="admin-cell-main">
-                      <strong>{item.name}</strong>
-                      <small>{item.id.slice(0, 8)}…</small>
+                    <div className="admin-cell-main org-branch-cell">
+                      <BranchLogo name={item.name} logoUrl={item.logo_url} size={32} />
+                      <div>
+                        <strong>{item.name}</strong>
+                        <small>{item.id.slice(0, 8)}…</small>
+                      </div>
                     </div>
                   </td>
                   <td dir="ltr">{item.slug}</td>
@@ -312,7 +378,7 @@ export default function OrganizationsPage() {
                   <td>
                     <div className="admin-actions compact">
                       <button type="button" className="secondary-button" onClick={() => openEdit(item)}>
-                        تعديل الحدود
+                        تعديل
                       </button>
                       <button
                         type="button"
@@ -339,14 +405,45 @@ export default function OrganizationsPage() {
       {editingOrg && (
         <div className="catalog-edit-overlay" role="dialog" aria-modal="true">
           <button type="button" className="catalog-edit-backdrop" aria-label="إغلاق" onClick={() => setEditingOrg(null)} />
-          <form className="catalog-edit-panel stack-form" onSubmit={saveEdit}>
+          <form className="catalog-edit-panel stack-form" onSubmit={(e) => void saveEdit(e)}>
             <div className="catalog-edit-head">
-              <h3>تعديل حدود: {editingOrg.name}</h3>
+              <div className="org-edit-title">
+                <BranchLogo name={editingOrg.name} logoUrl={editLogoUrl || editingOrg.logo_url} size={40} />
+                <h3>تعديل: {editingOrg.name}</h3>
+              </div>
               <button type="button" className="panel-close" onClick={() => setEditingOrg(null)}>×</button>
             </div>
             <p className="hint-text">
               الاستخدام الحالي: {editingOrg.active_member_count ?? 0} مستخدم · {editingOrg.active_channel_count ?? 0} قناة
             </p>
+            <div className="org-logo-editor">
+              <BranchLogo name={editingOrg.name} logoUrl={editLogoUrl} size={64} />
+              <div className="org-logo-editor-actions">
+                <label className="secondary-button compact">
+                  {uploadingLogo ? "جاري الرفع…" : "رفع شعار الفرع"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    hidden
+                    disabled={uploadingLogo || savingEdit}
+                    onChange={(e) => void uploadLogo(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {editLogoUrl && (
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    disabled={savingEdit}
+                    onClick={() => setEditLogoUrl("")}
+                  >
+                    إزالة الشعار
+                  </button>
+                )}
+                <p className="hint-text" style={{ margin: 0 }}>
+                  يظهر الشعار أعلى صفحة الفروع ومع اسم الفرع في فاتورة طلب الكتالوج.
+                </p>
+              </div>
+            </div>
             <div className="inline-form">
               <label className="field-label">
                 <span>حد المستخدمين</span>
@@ -373,7 +470,7 @@ export default function OrganizationsPage() {
               لا يمكن وضع حد أقل من العدد الحالي للمستخدمين أو القنوات.
             </p>
             <div className="catalog-card-actions">
-              <button type="submit" className="whatsapp-button" disabled={savingEdit}>
+              <button type="submit" className="whatsapp-button" disabled={savingEdit || uploadingLogo}>
                 {savingEdit ? "جاري الحفظ…" : "حفظ التعديلات"}
               </button>
               <button type="button" className="secondary-button" onClick={() => setEditingOrg(null)}>إلغاء</button>

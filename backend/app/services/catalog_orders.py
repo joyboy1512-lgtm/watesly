@@ -310,6 +310,7 @@ async def get_invoice_context(
         "company_name": organization.name if organization else (account.name if account else "Watesly"),
         "account_name": account.name if account else "",
         "organization_name": organization.name if organization else "",
+        "logo_url": (organization.logo_url if organization and organization.logo_url else None),
         "customer_name": contact.display_name if contact and contact.display_name else "عميل",
         "customer_phone": contact.external_address if contact else "",
         "order_number": order.order_number,

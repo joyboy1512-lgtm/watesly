@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -13,6 +13,12 @@ import {
 import { openContactConversation } from "../lib/contactHelpers";
 import { toastStore } from "../stores/toast";
 
+type OrganizationBrief = {
+  id: string;
+  name: string;
+  logo_url?: string | null;
+};
+
 export default function CatalogOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const client = useQueryClient();
@@ -23,6 +29,16 @@ export default function CatalogOrderDetailPage() {
     enabled: Boolean(id),
     queryFn: async () => (await api.get<CatalogOrder>(`/catalog/orders/${id}`)).data
   });
+
+  const organizations = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => (await api.get<OrganizationBrief[]>("/organizations")).data
+  });
+
+  const branch = useMemo(() => {
+    if (!order.data) return null;
+    return (organizations.data ?? []).find((item) => item.id === order.data?.organization_id) ?? null;
+  }, [order.data, organizations.data]);
 
   async function markStatus(status: CatalogOrderStatus) {
     if (!id) return;
@@ -158,9 +174,15 @@ export default function CatalogOrderDetailPage() {
               <h2>معاينة الفاتورة</h2>
               <div className="catalog-invoice-card">
                 <header className="catalog-invoice-head">
-                  <div>
-                    <strong>فاتورة طلب كتالوج</strong>
-                    <small dir="ltr">{item.order_number}</small>
+                  <div className="catalog-invoice-brand">
+                    {branch?.logo_url ? (
+                      <img src={branch.logo_url} alt={`شعار ${branch.name}`} className="catalog-invoice-logo" />
+                    ) : null}
+                    <div>
+                      <strong>فاتورة طلب كتالوج</strong>
+                      <span className="catalog-invoice-branch-name">{branch?.name || "الفرع"}</span>
+                      <small dir="ltr">{item.order_number}</small>
+                    </div>
                   </div>
                   <div className="catalog-invoice-meta">
                     <span>{formatOrderDate(item.created_at)}</span>
