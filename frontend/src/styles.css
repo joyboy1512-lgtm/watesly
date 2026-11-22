@@ -1124,21 +1124,39 @@ select, input, textarea {
 .conversation-column-header h2 { margin: 2px 0 0; }
 
 .chat-header {
-  height: 72px;
+  min-height: 88px;
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  gap: 12px;
+  padding: 14px 16px;
   border-bottom: none;
   background: linear-gradient(180deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
   color: #fff;
   box-shadow: 0 2px 10px rgba(7, 94, 84, 0.16);
+  overflow: visible;
 }
 
 .chat-header h2 {
-  margin: 2px 0 0;
+  margin: 0;
   color: #fff;
   font-size: 1.05rem;
+  line-height: 1.45;
+  padding-block: 2px;
+  overflow: visible;
+}
+
+.chat-header .chat-user {
+  min-width: 0;
+  align-items: center;
+  overflow: visible;
+}
+
+.chat-header .chat-user > div:last-child {
+  display: grid;
+  gap: 4px;
+  overflow: visible;
 }
 
 .conversation-search {
