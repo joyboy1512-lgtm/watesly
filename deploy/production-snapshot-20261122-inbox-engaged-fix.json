@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-22",
+  "commit": "fa4a703",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DgZtyuvm.js",
+    "css": "index-ddV262cZ.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Fix empty نشط / تنتظر ردي lists caused by Message EXISTS auto-correlation"
+  ],
+  "notes": "Deployed via SSH. PR #166."
+}
