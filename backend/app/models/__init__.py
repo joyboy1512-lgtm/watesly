@@ -50,6 +50,7 @@ from app.models.contact_interest import ContactInterest
 from app.models.interest_category import InterestCategory
 from app.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from app.models.custom_inbox import CustomInbox
+from app.models.composer_library import ComposerButtonTemplate, ComposerListTemplate
 from app.models.segment import Segment
 from app.models.department import Department
 from app.models.agent_presence import AgentPresence
@@ -80,7 +81,8 @@ __all__ = [
     "AccountDataKey", "AuditLog", "SupportAccessGrant",
     "ResourceRecord", "ScheduledJob", "IntegrationSecret", "ModuleHealth",
     "OutboxEvent", "IdempotencyRecord", "ProcessedEvent",
-    "ContactTag", "ContactInterest", "InterestCategory", "CustomFieldDefinition", "CustomFieldValue", "CustomInbox", "Segment",
+    "ContactTag", "ContactInterest", "InterestCategory", "CustomFieldDefinition", "CustomFieldValue", "CustomInbox",
+    "ComposerButtonTemplate", "ComposerListTemplate", "Segment",
     "Department", "AgentPresence", "ConversationReadState",
     "ApiKey", "Deal", "DealActivity", "WebhookSubscription", "WebhookDelivery", "MarketplaceIntegration",
     "CatalogProduct", "CatalogOrder",
