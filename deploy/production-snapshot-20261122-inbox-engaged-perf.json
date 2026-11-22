@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-22",
+  "commit": "9e9b9a6",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DgZtyuvm.js",
+    "css": "index-ddV262cZ.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Default inbox filter نشط: only conversations with customer inbound activity",
+    "الكل shows silent/outbound-only campaign recipients",
+    "Paged conversation list (100) with load more up to 5000",
+    "Privacy-mask N+1 fixed; softer polling intervals"
+  ],
+  "notes": "Deployed via SSH. PR #165."
+}
