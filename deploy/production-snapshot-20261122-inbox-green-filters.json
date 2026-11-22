@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "a7d5167",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BHcru80q.js",
+    "css": "index-CXKMZhAs.css"
+  },
+  "alembic_head": "0064_custom_inboxes",
+  "features": [
+    "Green inbox filter and scope chips",
+    "Green contact initial avatars with white letters"
+  ],
+  "notes": "Deployed via SSH. PR #155."
+}
