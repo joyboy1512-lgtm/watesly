@@ -395,7 +395,10 @@ button { cursor: pointer; }
   color: #334155;
 }
 
-.avatar-soft { background: #e8f8f0; color: #12955b; }
+.avatar-soft {
+  background: linear-gradient(145deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+}
 .avatar-online { position: relative; }
 .avatar-online::after {
   content: "";
@@ -1165,18 +1168,32 @@ select, input, textarea {
 
 .filter-pills button,
 .chip-button {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 70%, white);
+  color: var(--primary-darker);
   border-radius: 999px;
   padding: 7px 10px;
   white-space: nowrap;
+  font-weight: 700;
 }
 
 .filter-pills button.active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
   border-color: transparent;
+}
+
+:root[data-theme="dark"] .filter-pills button,
+:root[data-theme="dark"] .inbox-scope-tabs button {
+  background: color-mix(in srgb, var(--primary-dark) 35%, var(--panel));
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--line));
+  color: #d9fdd3;
+}
+
+:root[data-theme="dark"] .filter-pills button.active,
+:root[data-theme="dark"] .inbox-scope-tabs button.active {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
 }
 
 .inbox-channel-filter {
@@ -9663,18 +9680,25 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   flex-wrap: wrap;
 }
 .inbox-scope-tabs button {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 70%, white);
+  color: var(--primary-darker);
   border-radius: 10px;
   padding: 6px 10px;
   font-size: 12px;
+  font-weight: 700;
 }
 .inbox-scope-tabs button.active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
   border-color: transparent;
-  font-weight: 700;
+  font-weight: 800;
+}
+.conversation-row .avatar,
+.chat-header .avatar,
+.customer-profile .avatar {
+  background: linear-gradient(145deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
 }
 .inbox-custom-inbox-bar {
   display: grid;
