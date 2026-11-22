@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "17499bb",
-    "git_commit_message": "Message Library UI refresh live",
+    "git_commit": "b9da59f",
+    "git_commit_message": "Message Library table + hard delete live",
     "alembic_head": "0065_composer_library",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-B-Ar6pGs.js",
-      "css": "index-DX1m8Pvv.css"
+      "js": "index-BMmt8Zb9.js",
+      "css": "index-DMhpXSTu.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "17499bb",
-  "notes": "Message Library page UI refresh (PR #167)"
+  "commit": "b9da59f",
+  "notes": "Message Library green-header table with edit/archive/delete; inbox use-only (PR #168)"
 }
