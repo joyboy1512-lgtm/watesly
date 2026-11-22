@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-22",
+  "commit": "b5c9bdc",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DBKgyvy6.js",
+    "css": "index-DCfk6lGe.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Brand-colored numbered AI control sections",
+    "Matched add / import / generate FAQ cards",
+    "Clearer visual separation with teal rails"
+  ],
+  "notes": "Deployed via SSH. PR #176. Frontend-only."
+}
