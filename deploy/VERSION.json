@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-11-17",
+  "updated_at": "2026-11-22",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "a9bfc2d",
-    "git_commit_message": "Respond-style UI phases live",
+    "git_commit": "ebe0b7e",
+    "git_commit_message": "Dashboard green cards live",
     "alembic_head": "0064_custom_inboxes",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DRDo5O4E.js",
-      "css": "index-CLRMd8cq.css"
+      "js": "index-D8CKaZAO.js",
+      "css": "index-DqmXBeOj.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "a9bfc2d",
-  "notes": "Respond-style UI: inbox chrome, custom inboxes, timeline/merge, campaign wizard, supervisor board, omnichannel scaffold"
+  "commit": "ebe0b7e",
+  "notes": "Dashboard green high-efficiency card redesign published"
 }
