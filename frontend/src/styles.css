@@ -9727,6 +9727,18 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .inbox-assign-menu button:hover {
   background: var(--primary-soft);
 }
+.inbox-emoji-search {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--panel);
+  color: var(--text);
+}
+.inbox-emoji-section {
+  display: grid;
+  gap: 6px;
+}
 .inbox-emoji-grid {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -9738,6 +9750,63 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 18px;
   padding: 4px;
   border-radius: 8px;
+}
+.inbox-shortcuts-form {
+  gap: 10px;
+}
+.inbox-reply-category-chips,
+.inbox-template-chips,
+.quick-replies-panel-inline {
+  display: grid;
+  gap: 8px;
+}
+.quick-reply-preview {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inbox-product-cart {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+.inbox-product-picker-row {
+  display: grid;
+  gap: 6px;
+}
+.inbox-product-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.inbox-template-save-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.inbox-template-delete {
+  margin-inline-start: 6px;
+  opacity: 0.7;
+}
+.inbox-list-section {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 .composer-send-group {
   display: flex;
