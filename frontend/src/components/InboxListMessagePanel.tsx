@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { toastStore } from "../stores/toast";
 import type { ListSectionDraft } from "../lib/inboxComposerStorage";
@@ -55,14 +56,11 @@ export default function InboxListMessagePanel({
   onClose,
   onSent
 }: Props) {
-  const queryClient = useQueryClient();
   const [mode, setMode] = useState<"library" | "manual">("library");
   const [body, setBody] = useState("اختر من القائمة");
   const [buttonText, setButtonText] = useState("القائمة");
   const [sections, setSections] = useState<ListSectionDraft[]>([emptySection()]);
   const [sending, setSending] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const libraryQuery = useQuery({
     queryKey: ["composer-list-templates", organizationId],
@@ -76,10 +74,7 @@ export default function InboxListMessagePanel({
   });
 
   useEffect(() => {
-    if (!open) {
-      setMode("library");
-      setTemplateName("");
-    }
+    if (!open) setMode("library");
   }, [open]);
 
   if (!open) return null;
@@ -116,55 +111,6 @@ export default function InboxListMessagePanel({
     const next = currentRows.filter((_, i) => i !== optionIndex);
     while (next.length < OPTION_SLOTS_MIN) next.push("");
     updateSectionOptions(sectionIndex, next);
-  }
-
-  async function saveToLibrary() {
-    if (!organizationId) {
-      toastStore.getState().show("اختر فرعاً أولاً لحفظ القالب في المكتبة.", "error");
-      return;
-    }
-    const name = templateName.trim();
-    const payloadSections = sections
-      .map((section) => ({
-        title: section.title.trim() || "خيارات",
-        rows_text: section.rowsText
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .join("\n")
-      }))
-      .filter((section) => section.rows_text);
-    if (!name || !body.trim() || !payloadSections.length) {
-      toastStore.getState().show("أدخل اسم القالب ونص الرسالة وخياراً واحداً على الأقل.", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.post("/inbox-tools/composer-list-templates", {
-        organization_id: organizationId,
-        name,
-        body: body.trim(),
-        button_text: buttonText.trim().slice(0, 20) || "القائمة",
-        sections: payloadSections
-      });
-      setTemplateName("");
-      await queryClient.invalidateQueries({ queryKey: ["composer-list-templates", organizationId] });
-      toastStore.getState().show("تم حفظ القالب في مكتبة الفرع.", "success");
-    } catch {
-      toastStore.getState().show("تعذر حفظ القالب — ربما الاسم مستخدم مسبقاً.", "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeLibraryItem(id: string) {
-    try {
-      await api.delete(`/inbox-tools/composer-list-templates/${id}`);
-      await queryClient.invalidateQueries({ queryKey: ["composer-list-templates", organizationId] });
-      toastStore.getState().show("تم حذف القالب من المكتبة.", "success");
-    } catch {
-      toastStore.getState().show("تعذر حذف القالب.", "error");
-    }
   }
 
   async function send() {
@@ -238,7 +184,10 @@ export default function InboxListMessagePanel({
           ) : libraryQuery.isLoading ? (
             <p className="hint-text">جاري تحميل المكتبة…</p>
           ) : library.length === 0 ? (
-            <p className="hint-text">لا توجد قوالب بعد. انتقل للتعبئة اليدوية واحفظ قالباً للمكتبة.</p>
+            <p className="hint-text">
+              لا توجد قوالب بعد. أنشئها من{" "}
+              <Link to="/composer-library">مكتبة الرسائل</Link> ثم عد للاستخدام هنا.
+            </p>
           ) : (
             <div className="inbox-composer-library-list">
               {library.map((item) => (
@@ -251,17 +200,9 @@ export default function InboxListMessagePanel({
                   <strong>{item.name}</strong>
                   <span>{item.body}</span>
                   <small>
-                    {item.button_text} · {item.sections.reduce((n, s) => n + s.rows_text.split("\n").filter(Boolean).length, 0)} خيار
+                    {item.button_text} ·{" "}
+                    {item.sections.reduce((n, s) => n + s.rows_text.split("\n").filter(Boolean).length, 0)} خيار
                   </small>
-                  <span
-                    className="inbox-template-delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void removeLibraryItem(item.id);
-                    }}
-                  >
-                    ×
-                  </span>
                 </button>
               ))}
             </div>
@@ -361,21 +302,10 @@ export default function InboxListMessagePanel({
           >
             + قسم إضافي
           </button>
-          <div className="inbox-template-save-row">
-            <input
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="اسم القالب لحفظه في المكتبة"
-            />
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={!templateName.trim() || saving || !organizationId}
-              onClick={() => void saveToLibrary()}
-            >
-              {saving ? "جاري الحفظ…" : "حفظ القالب"}
-            </button>
-          </div>
+          <p className="hint-text">
+            لإدارة القوالب (تعديل / أرشفة / حذف) من{" "}
+            <Link to="/composer-library">مكتبة الرسائل</Link> فقط.
+          </p>
           <div className="inline-actions">
             <button type="button" className="whatsapp-button" disabled={sending} onClick={() => void send()}>
               {sending ? "جاري الإرسال…" : "إرسال القائمة"}

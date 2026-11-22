@@ -261,6 +261,29 @@ async def archive_quick_reply(
     return item
 
 
+async def hard_delete_quick_reply(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    reply_id: UUID,
+    membership=None,
+) -> None:
+    from app.services.membership_access import ensure_membership_organization_access
+
+    item = await _get_reply(db, account_id, reply_id)
+    if item is None:
+        raise ValueError("NOT_FOUND")
+    if membership is not None:
+        await ensure_membership_organization_access(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_id=item.organization_id,
+        )
+    await db.delete(item)
+    await db.commit()
+
+
 async def increment_quick_reply_usage(
     db: AsyncSession, *, account_id: UUID, reply_id: UUID
 ) -> QuickReply:

@@ -10251,93 +10251,76 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .composer-library-board {
   min-height: 280px;
 }
-.composer-library-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 0.9rem;
-}
-.composer-library-card {
-  display: grid;
-  gap: 0.75rem;
-  padding: 0.95rem;
-  border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--line));
+.composer-library-table-wrap {
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--line));
   border-radius: 16px;
   background: #fff;
   box-shadow: 0 1px 2px rgba(7, 94, 84, 0.04);
-  animation: composer-library-fade-up 0.4s ease both;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-.composer-library-card:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
-  box-shadow: 0 10px 24px rgba(7, 94, 84, 0.08);
+.composer-library-table-loading {
+  padding: 1.5rem;
 }
-.composer-library-card-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
-  align-items: start;
+.composer-library-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
 }
-.composer-library-card-head > div {
-  display: grid;
-  gap: 0.35rem;
-  min-width: 0;
-}
-.composer-library-card-head strong {
-  font-size: 0.98rem;
-  line-height: 1.35;
-}
-.composer-library-card-head small {
-  color: var(--muted);
-  font-size: 0.75rem;
+.composer-library-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.82rem;
+  text-align: start;
+  padding: 0.85rem 1rem;
+  border: 0;
   white-space: nowrap;
 }
-.composer-library-chip {
-  display: inline-flex;
-  width: fit-content;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--primary-soft) 65%, #fff);
-  color: var(--primary-darker);
-  font-size: 0.72rem;
-  font-weight: 700;
+.composer-library-table tbody td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 10%, var(--line));
+  vertical-align: top;
+  font-size: 0.9rem;
 }
-.composer-library-bubble {
-  padding: 0.75rem 0.85rem;
-  border-radius: 12px 12px 4px 12px;
-  background: #d9fdd3;
-  color: #111b21;
-  font-size: 0.88rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  max-height: 7.5rem;
+.composer-library-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.composer-library-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--primary-soft) 28%, #fff);
+}
+.composer-library-preview {
+  max-width: 320px;
+  color: var(--muted);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
-:root[data-theme="dark"] .composer-library-bubble {
-  background: color-mix(in srgb, var(--primary-dark) 55%, #111);
-  color: #e9edef;
-}
-.composer-library-button-row,
-.composer-library-list-meta {
+.composer-library-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  justify-content: flex-start;
+  white-space: nowrap;
 }
-.composer-library-button-row span,
-.composer-library-list-meta span {
-  padding: 0.3rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
-  background: color-mix(in srgb, var(--primary-soft) 30%, #fff);
-  color: var(--primary-darker);
-  font-size: 0.75rem;
-  font-weight: 700;
+.composer-library-actions .danger-button {
+  color: #b42318;
+  border-color: color-mix(in srgb, #b42318 28%, var(--line));
 }
-.composer-library-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.15rem;
+.composer-library-actions .danger-button:hover {
+  background: color-mix(in srgb, #b42318 8%, #fff);
+}
+:root[data-theme="dark"] .composer-library-table-wrap {
+  background: color-mix(in srgb, var(--surface) 92%, #000);
+}
+:root[data-theme="dark"] .composer-library-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--primary-soft) 35%, transparent);
+}
+:root[data-theme="dark"] .composer-library-actions .danger-button:hover {
+  background: color-mix(in srgb, #b42318 18%, transparent);
 }
 .composer-library-empty {
   display: grid;

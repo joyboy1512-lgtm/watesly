@@ -38,6 +38,7 @@ from app.services.quick_replies import (
     archive_quick_reply,
     create_from_conversation,
     export_quick_replies_csv,
+    hard_delete_quick_reply,
     import_quick_replies_csv,
     increment_quick_reply_usage,
     list_quick_reply_categories,
@@ -383,13 +384,22 @@ async def patch_quick_reply(
         raise HTTPException(status_code=409, detail="Shortcut already exists") from exc
 
 
-@router.delete("/quick-replies/{reply_id}", response_model=QuickReplyResponse)
+@router.delete("/quick-replies/{reply_id}", response_model=QuickReplyResponse | None)
 async def delete_quick_reply(
     reply_id: UUID,
+    permanent: bool = Query(False, description="Hard-delete when true; otherwise archive"),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        if permanent:
+            await hard_delete_quick_reply(
+                db,
+                account_id=context.account_id,
+                reply_id=reply_id,
+                membership=context.membership,
+            )
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
         return await archive_quick_reply(
             db,
             account_id=context.account_id,
@@ -503,18 +513,27 @@ async def patch_composer_button_template(
 @router.delete("/composer-button-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_composer_button_template(
     template_id: UUID,
+    permanent: bool = Query(False, description="Hard-delete when true; otherwise archive"),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    from app.services.composer_library import archive_button_template
+    from app.services.composer_library import archive_button_template, hard_delete_button_template
 
     try:
-        await archive_button_template(
-            db,
-            account_id=context.account_id,
-            template_id=template_id,
-            membership=context.membership,
-        )
+        if permanent:
+            await hard_delete_button_template(
+                db,
+                account_id=context.account_id,
+                template_id=template_id,
+                membership=context.membership,
+            )
+        else:
+            await archive_button_template(
+                db,
+                account_id=context.account_id,
+                template_id=template_id,
+                membership=context.membership,
+            )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Template not found") from exc
@@ -606,18 +625,27 @@ async def patch_composer_list_template(
 @router.delete("/composer-list-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_composer_list_template(
     template_id: UUID,
+    permanent: bool = Query(False, description="Hard-delete when true; otherwise archive"),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    from app.services.composer_library import archive_list_template
+    from app.services.composer_library import archive_list_template, hard_delete_list_template
 
     try:
-        await archive_list_template(
-            db,
-            account_id=context.account_id,
-            template_id=template_id,
-            membership=context.membership,
-        )
+        if permanent:
+            await hard_delete_list_template(
+                db,
+                account_id=context.account_id,
+                template_id=template_id,
+                membership=context.membership,
+            )
+        else:
+            await archive_list_template(
+                db,
+                account_id=context.account_id,
+                template_id=template_id,
+                membership=context.membership,
+            )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Template not found") from exc
