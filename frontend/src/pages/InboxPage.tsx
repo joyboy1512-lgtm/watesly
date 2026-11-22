@@ -12,11 +12,14 @@ import { formatSnoozedUntil, formatWaitingMinutes, INBOX_CONVERSATIONS_LIMIT, is
 import { formatAppTime } from "../lib/language";
 import { insertReplyVariable, REPLY_VARIABLES, type ConversationContext } from "../lib/replyVariables";
 import {
+  QUICK_REPLY_CATEGORIES,
+  categoryLabel,
   matchShortcutAutocomplete,
   type QuickReply
 } from "../lib/quickReplyHelpers";
-import { createDealFromConversation } from "../lib/crmHelpers";
+import { createDealFromConversation, type DealStage } from "../lib/crmHelpers";
 import type { MatchedCatalogProduct } from "../lib/catalogHelpers";
+import { buildCartSummary } from "../components/InboxProductPicker";
 import {
   SOURCE_LABELS,
   type AgentSettings,
@@ -34,6 +37,7 @@ import InboxEmojiPicker from "../components/InboxEmojiPicker";
 import InboxShortcutsMenu from "../components/InboxShortcutsMenu";
 import InboxListMessagePanel from "../components/InboxListMessagePanel";
 import InboxFlowSend from "../components/InboxFlowSend";
+import InboxReplyButtonsPanel from "../components/InboxReplyButtonsPanel";
 import InboxTimeline from "../components/InboxTimeline";
 import InboxCustomFieldsPanel from "../components/InboxCustomFieldsPanel";
 import InboxMergeSuggestions from "../components/InboxMergeSuggestions";
@@ -136,6 +140,8 @@ export default function InboxPage() {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
+  const [replyCategoryFilter, setReplyCategoryFilter] = useState<string>("all");
+  const [cartProducts, setCartProducts] = useState<MatchedCatalogProduct[]>([]);
   const [listMessageOpen, setListMessageOpen] = useState(false);
   const [flowSendOpen, setFlowSendOpen] = useState(false);
   const [headerAssignOpen, setHeaderAssignOpen] = useState(false);
@@ -515,10 +521,19 @@ export default function InboxPage() {
   const windowClosed = Boolean(selectedConversation?.requires_template);
   const isArchived = Boolean(selectedConversation?.archived_at);
   const quickReplies = quickRepliesQuery.data ?? [];
+  const filteredQuickReplies = useMemo(() => {
+    if (replyCategoryFilter === "all") return quickReplies;
+    return quickReplies.filter((item) => (item.category || "general") === replyCategoryFilter);
+  }, [quickReplies, replyCategoryFilter]);
   const topQuickReplies = useMemo(
-    () => [...quickReplies].sort((a, b) => b.usage_count - a.usage_count || a.sort_order - b.sort_order).slice(0, 2),
-    [quickReplies]
+    () => [...filteredQuickReplies].sort((a, b) => b.usage_count - a.usage_count || a.sort_order - b.sort_order).slice(0, 2),
+    [filteredQuickReplies]
   );
+  const cartSummary = useMemo(() => buildCartSummary(cartProducts), [cartProducts]);
+  const replyCategoryOptions = useMemo(() => {
+    const present = new Set(quickReplies.map((item) => item.category || "general"));
+    return Object.entries(QUICK_REPLY_CATEGORIES).filter(([key]) => present.has(key));
+  }, [quickReplies]);
 
   useEffect(() => {
     setSuggestedReplies([]);
@@ -832,12 +847,10 @@ export default function InboxPage() {
       toastStore.getState().show("تعذر إنشاء الإنبوكس.", "error");
     }
   }
-  async function saveShortcutNote(kind: "ticket" | "order") {
+  async function saveShortcutNote(kind: "ticket" | "order", details: string) {
     if (!selectedId) return;
     const label = kind === "ticket" ? "تذكرة دعم" : "طلب / أوردر";
-    const body = window.prompt(`تفاصيل ${label}:`);
-    if (body === null) return;
-    const textBody = body.trim();
+    const textBody = details.trim();
     if (!textBody) return;
     try {
       await api.post(`/inbox-tools/conversations/${selectedId}/notes`, {
@@ -935,10 +948,18 @@ export default function InboxPage() {
     }
   }
 
-  async function createDealFromInbox() {
+  async function createDealFromInbox(input?: { title?: string; amount?: string; stage?: DealStage }) {
     if (!selectedId) return;
     try {
-      const deal = await createDealFromConversation(selectedId);
+      const deal = await createDealFromConversation(selectedId, input?.title || undefined);
+      if (input?.amount) {
+        await api.patch(`/platform/crm/deals/${deal.id}`, {
+          amount: Number(input.amount) || 0
+        });
+      }
+      if (input?.stage) {
+        await api.patch(`/platform/crm/deals/${deal.id}/stage`, { stage: input.stage });
+      }
       toastStore.getState().show(`تم إنشاء الصفقة: ${deal.title}`, "success");
       window.location.href = `/crm/${deal.id}`;
     } catch {
@@ -1520,39 +1541,63 @@ export default function InboxPage() {
                     onClick={() => void applyReplyTemplate(item.body, { quickReplyId: item.id })}
                     disabled={!selectedId}
                   >
-                    {item.title}
+                    <strong>{item.title}</strong>
+                    <small>{categoryLabel(item.category)}</small>
+                    <span className="quick-reply-preview">{item.body.slice(0, 72)}{item.body.length > 72 ? "…" : ""}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
           {snippetsOpen && quickReplies.length > 0 && (
-            <div className="quick-replies">
-              {topQuickReplies.map((item, index) => (
+            <div className="quick-replies-panel-inline">
+              <div className="inbox-reply-category-chips">
                 <button
-                  key={`top-${item.id}`}
                   type="button"
-                  className="quick-reply-chip top-used"
-                  title={`${item.body} (Ctrl+${index + 1})`}
-                  onClick={() => void applyReplyTemplate(item.body, { quickReplyId: item.id })}
-                  disabled={!selectedId}
+                  className={`quick-reply-chip${replyCategoryFilter === "all" ? " suggested" : ""}`}
+                  onClick={() => setReplyCategoryFilter("all")}
                 >
-                  {item.title}
-                  <small dir="ltr">Ctrl+{index + 1}</small>
+                  الكل
                 </button>
-              ))}
-              {quickReplies.filter((item) => !topQuickReplies.some((top) => top.id === item.id)).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="quick-reply-chip"
-                  title={item.body}
-                  onClick={() => void applyReplyTemplate(item.body, { quickReplyId: item.id })}
-                  disabled={!selectedId}
-                >
-                  {item.title}
-                </button>
-              ))}
+                {replyCategoryOptions.map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`quick-reply-chip${replyCategoryFilter === key ? " suggested" : ""}`}
+                    onClick={() => setReplyCategoryFilter(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="quick-replies">
+                {topQuickReplies.map((item, index) => (
+                  <button
+                    key={`top-${item.id}`}
+                    type="button"
+                    className="quick-reply-chip top-used"
+                    title={`${item.body} (Ctrl+${index + 1})`}
+                    onClick={() => void applyReplyTemplate(item.body, { quickReplyId: item.id })}
+                    disabled={!selectedId}
+                  >
+                    {item.title}
+                    <small dir="ltr">Ctrl+{index + 1}</small>
+                  </button>
+                ))}
+                {filteredQuickReplies.filter((item) => !topQuickReplies.some((top) => top.id === item.id)).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="quick-reply-chip"
+                    title={item.body}
+                    onClick={() => void applyReplyTemplate(item.body, { quickReplyId: item.id })}
+                    disabled={!selectedId}
+                  >
+                    {item.title}
+                    <small>{categoryLabel(item.category)}</small>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {slashHint && (
@@ -1635,10 +1680,11 @@ export default function InboxPage() {
           <InboxShortcutsMenu
             open={shortcutsOpen}
             disabled={!selectedId || isArchived}
+            cartSummary={cartSummary}
             onClose={() => setShortcutsOpen(false)}
-            onCreateDeal={() => void createDealFromInbox()}
-            onCreateTicketNote={() => void saveShortcutNote("ticket")}
-            onCreateOrderNote={() => void saveShortcutNote("order")}
+            onCreateDeal={(input) => void createDealFromInbox(input)}
+            onCreateTicketNote={(details) => void saveShortcutNote("ticket", details)}
+            onCreateOrderNote={(details) => void saveShortcutNote("order", details)}
           />
           <InboxEmojiPicker
             open={emojiOpen}
@@ -1671,45 +1717,19 @@ export default function InboxPage() {
             open={flowSendOpen}
             channelId={selectedConversation?.channel_id ?? null}
             contactAddress={selectedConversation?.contact_address ?? null}
+            conversationId={selectedId}
             onClose={() => setFlowSendOpen(false)}
           />
-          {replyButtonsOpen && (
-            <div className="inbox-reply-buttons-panel">
-              <label className="field-label">
-                <span>نص الرسالة</span>
-                <textarea
-                  rows={2}
-                  value={replyButtonBody}
-                  onChange={(e) => setReplyButtonBody(e.target.value)}
-                  placeholder="اختر أحد الخيارات…"
-                  maxLength={1024}
-                />
-              </label>
-              <label className="field-label">
-                <span>نصوص الأزرار (سطر لكل زر · حتى 3)</span>
-                <textarea
-                  rows={3}
-                  value={replyButtonTitles}
-                  onChange={(e) => setReplyButtonTitles(e.target.value)}
-                  maxLength={80}
-                />
-              </label>
-              <div className="inline-actions">
-                <button
-                  type="button"
-                  className="whatsapp-button"
-                  disabled={sendingReplyButtons}
-                  onClick={() => void handleSendReplyButtons()}
-                >
-                  {sendingReplyButtons ? "جاري الإرسال…" : "إرسال الأزرار"}
-                </button>
-                <button type="button" className="secondary-button" onClick={() => setReplyButtonsOpen(false)}>
-                  إغلاق
-                </button>
-              </div>
-              {/* List messages: POST /conversations/:id/messages/list (API-only for now) */}
-            </div>
-          )}
+          <InboxReplyButtonsPanel
+            open={replyButtonsOpen}
+            body={replyButtonBody}
+            titles={replyButtonTitles}
+            sending={sendingReplyButtons}
+            onBodyChange={setReplyButtonBody}
+            onTitlesChange={setReplyButtonTitles}
+            onSend={() => void handleSendReplyButtons()}
+            onClose={() => setReplyButtonsOpen(false)}
+          />
           <InboxProductPicker
             open={productPickerOpen}
             onClose={() => setProductPickerOpen(false)}
@@ -1718,6 +1738,12 @@ export default function InboxPage() {
             onInsert={(line) => insertCatalogProduct(line)}
             onSendImage={(product) => void sendProductImage(product)}
             onSendProductCard={(product) => void sendProductCard(product)}
+            onSendCartSummary={(summary, products) => {
+              setCartProducts(products);
+              insertCatalogProduct(summary);
+              setText(summary);
+              toastStore.getState().show("تم تجهيز ملخص الطلب في مربع الكتابة.", "success");
+            }}
           />
           </div>
           <div className="chat-composer-bar">
