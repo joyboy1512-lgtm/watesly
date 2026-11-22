@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "9452832",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-M93MaEd1.js",
+    "css": "index-BOIg3cWh.css"
+  },
+  "alembic_head": "0064_custom_inboxes",
+  "features": [
+    "Inbox product picker shows full catalog (up to 500), no default channel filter",
+    "Optional channel-only toggle and live product count"
+  ],
+  "notes": "Deployed via SSH. PR #158."
+}
