@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "636e5fa",
-    "git_commit_message": "Message Library compact rows + bulk select live",
+    "git_commit": "36f3d5d",
+    "git_commit_message": "Message Library center-align + compact rows live",
     "alembic_head": "0065_composer_library",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BFWXxohz.js",
-      "css": "index-bSVzo8ze.css"
+      "js": "index-Cbda4Kof.js",
+      "css": "index-BH4Qn_C4.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "636e5fa",
-  "notes": "Message Library aligned headers, compact row height, bulk archive/delete (PR #169)"
+  "commit": "36f3d5d",
+  "notes": "Message Library center-aligned columns + true compact rows (PR #170)"
 }

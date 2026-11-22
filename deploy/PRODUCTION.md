@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — Message Library center-align
+
+| Item | Value |
+|------|-------|
+| Commit | `36f3d5d` |
+| Alembic | `0065_composer_library` |
+| Live assets | `index-Cbda4Kof.js`, `index-BH4Qn_C4.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-composer-library-center.json` |
+
 ### Production snapshot (2026-11-22) — Message Library compact rows
 
 | Item | Value |
