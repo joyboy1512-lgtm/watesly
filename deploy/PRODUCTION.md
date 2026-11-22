@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — Branch logo on orgs + invoices
+
+| Item | Value |
+|------|-------|
+| Commit | `e8e85f1` |
+| Alembic | `0066_organization_logo` |
+| Live assets | `index-DrxMk3Zn.js`, `index-DQMzW1yI.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-branch-logo.json` |
+
 ### Production snapshot (2026-11-22) — Message Library center-align
 
 | Item | Value |

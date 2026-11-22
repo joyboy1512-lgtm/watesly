@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "36f3d5d",
-    "git_commit_message": "Message Library center-align + compact rows live",
-    "alembic_head": "0065_composer_library",
+    "git_commit": "e8e85f1",
+    "git_commit_message": "Branch logo on organizations and catalog invoices live",
+    "alembic_head": "0066_organization_logo",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-Cbda4Kof.js",
-      "css": "index-BH4Qn_C4.css"
+      "js": "index-DrxMk3Zn.js",
+      "css": "index-DQMzW1yI.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "36f3d5d",
-  "notes": "Message Library center-aligned columns + true compact rows (PR #170)"
+  "commit": "e8e85f1",
+  "notes": "Branch logo upload on Organizations page + invoice PDF/preview branding (PR #171)"
 }
