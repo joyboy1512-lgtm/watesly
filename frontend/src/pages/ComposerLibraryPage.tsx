@@ -294,6 +294,17 @@ export default function ComposerLibraryPage() {
     }
   }
 
+  async function deleteReply(item: QuickReply) {
+    if (!window.confirm(`حذف "${item.title}" نهائياً؟ لا يمكن التراجع.`)) return;
+    try {
+      await api.delete(`/inbox-tools/quick-replies/${item.id}`, { params: { permanent: true } });
+      await client.invalidateQueries({ queryKey: ["quick-replies"] });
+      toastStore.getState().show("تم الحذف نهائياً.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الحذف.", "error");
+    }
+  }
+
   async function restoreReply(item: QuickReply) {
     try {
       await api.patch(`/inbox-tools/quick-replies/${item.id}`, { is_active: true });
@@ -315,6 +326,17 @@ export default function ComposerLibraryPage() {
     }
   }
 
+  async function deleteButton(item: ButtonTemplate) {
+    if (!window.confirm(`حذف "${item.name}" نهائياً؟ لا يمكن التراجع.`)) return;
+    try {
+      await api.delete(`/inbox-tools/composer-button-templates/${item.id}`, { params: { permanent: true } });
+      await client.invalidateQueries({ queryKey: ["composer-button-templates"] });
+      toastStore.getState().show("تم الحذف نهائياً.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الحذف.", "error");
+    }
+  }
+
   async function restoreButton(item: ButtonTemplate) {
     try {
       await api.patch(`/inbox-tools/composer-button-templates/${item.id}`, { is_active: true });
@@ -333,6 +355,17 @@ export default function ComposerLibraryPage() {
       toastStore.getState().show("تمت الأرشفة.", "success");
     } catch {
       toastStore.getState().show("تعذر الأرشفة.", "error");
+    }
+  }
+
+  async function deleteList(item: ListTemplate) {
+    if (!window.confirm(`حذف "${item.name}" نهائياً؟ لا يمكن التراجع.`)) return;
+    try {
+      await api.delete(`/inbox-tools/composer-list-templates/${item.id}`, { params: { permanent: true } });
+      await client.invalidateQueries({ queryKey: ["composer-list-templates"] });
+      toastStore.getState().show("تم الحذف نهائياً.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الحذف.", "error");
     }
   }
 
@@ -371,7 +404,7 @@ export default function ComposerLibraryPage() {
         <div className="composer-library-hero-copy">
           <span className="composer-library-eyebrow">مكتبة الفرع</span>
           <h1>مكتبة الرسائل</h1>
-          <p>ردود وأزرار وقوائم مشتركة على مستوى الفرع — تعديل، أرشفة، واستعادة من مكان واحد.</p>
+          <p>ردود وأزرار وقوائم مشتركة على مستوى الفرع — التعديل والأرشفة والحذف من هنا فقط.</p>
         </div>
         {statusTab === "active" && (
           <button type="button" className="whatsapp-button composer-library-hero-cta" onClick={openCreate}>
@@ -453,10 +486,8 @@ export default function ComposerLibraryPage() {
 
       <section className="composer-library-board" aria-live="polite">
         {isLoading ? (
-          <div className="composer-library-skeleton-grid" aria-hidden>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div className="composer-library-skeleton-card" key={index} />
-            ))}
+          <div className="composer-library-table-wrap composer-library-table-loading">
+            <p className="hint-text">جاري التحميل…</p>
           </div>
         ) : activeCount === 0 ? (
           <div className="composer-library-empty">
@@ -472,170 +503,252 @@ export default function ComposerLibraryPage() {
             )}
           </div>
         ) : (
-          <div className="composer-library-grid">
-            {mainTab === "replies" &&
-              visibleReplies.map((item) => (
-                <article key={item.id} className="composer-library-card">
-                  <header className="composer-library-card-head">
-                    <div>
-                      <strong>{item.title}</strong>
-                      <span className="composer-library-chip">/{item.shortcut}</span>
-                    </div>
-                    <small>{orgMap.get(item.organization_id) ?? "—"}</small>
-                  </header>
-                  <div className="composer-library-bubble">{item.body}</div>
-                  <footer className="composer-library-card-actions">
-                    {statusTab === "active" ? (
-                      <>
-                        <button
-                          type="button"
-                          className="secondary-button compact"
-                          onClick={() => {
-                            setEditingReply(item);
-                            setReplyForm(formFromQuickReply(item));
-                            setReplyModalOpen(true);
-                          }}
-                        >
-                          تعديل
-                        </button>
-                        <button type="button" className="secondary-button compact" onClick={() => void archiveReply(item)}>
-                          أرشفة
-                        </button>
-                      </>
-                    ) : (
-                      <button type="button" className="secondary-button compact" onClick={() => void restoreReply(item)}>
-                        استعادة
-                      </button>
-                    )}
-                  </footer>
-                </article>
-              ))}
+          <div className="composer-library-table-wrap">
+            {mainTab === "replies" && (
+              <table className="data-table composer-library-table">
+                <thead>
+                  <tr>
+                    <th>العنوان</th>
+                    <th>الاختصار</th>
+                    <th>الفرع</th>
+                    <th>النص</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleReplies.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <strong>{item.title}</strong>
+                      </td>
+                      <td dir="ltr">/{item.shortcut}</td>
+                      <td>{orgMap.get(item.organization_id) ?? "—"}</td>
+                      <td className="composer-library-preview">{item.body}</td>
+                      <td className="composer-library-actions">
+                        {statusTab === "active" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="secondary-button compact"
+                              onClick={() => {
+                                setEditingReply(item);
+                                setReplyForm(formFromQuickReply(item));
+                                setReplyModalOpen(true);
+                              }}
+                            >
+                              تعديل
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button compact"
+                              onClick={() => void archiveReply(item)}
+                            >
+                              أرشفة
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button compact danger-button"
+                              onClick={() => void deleteReply(item)}
+                            >
+                              حذف
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="secondary-button compact"
+                              onClick={() => void restoreReply(item)}
+                            >
+                              استعادة
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button compact danger-button"
+                              onClick={() => void deleteReply(item)}
+                            >
+                              حذف
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
 
-            {mainTab === "buttons" &&
-              visibleButtons.map((item) => {
-                const titles = item.titles.split("\n").filter(Boolean);
-                return (
-                  <article key={item.id} className="composer-library-card">
-                    <header className="composer-library-card-head">
-                      <div>
+            {mainTab === "buttons" && (
+              <table className="data-table composer-library-table">
+                <thead>
+                  <tr>
+                    <th>الاسم</th>
+                    <th>الفرع</th>
+                    <th>النص</th>
+                    <th>الأزرار</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleButtons.map((item) => (
+                    <tr key={item.id}>
+                      <td>
                         <strong>{item.name}</strong>
-                        <span className="composer-library-chip">أزرار</span>
-                      </div>
-                      <small>{orgMap.get(item.organization_id) ?? "—"}</small>
-                    </header>
-                    <div className="composer-library-bubble">{item.body}</div>
-                    <div className="composer-library-button-row">
-                      {titles.map((title) => (
-                        <span key={title}>{title}</span>
-                      ))}
-                    </div>
-                    <footer className="composer-library-card-actions">
-                      {statusTab === "active" ? (
-                        <>
-                          <button
-                            type="button"
-                            className="secondary-button compact"
-                            onClick={() => {
-                              const rows = item.titles.split("\n");
-                              setEditingButton(item);
-                              setButtonForm({
-                                organizationId: item.organization_id,
-                                name: item.name,
-                                body: item.body,
-                                titles: [rows[0] ?? "", rows[1] ?? "", rows[2] ?? ""]
-                              });
-                              setButtonModalOpen(true);
-                            }}
-                          >
-                            تعديل
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button compact"
-                            onClick={() => void archiveButton(item)}
-                          >
-                            أرشفة
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="secondary-button compact"
-                          onClick={() => void restoreButton(item)}
-                        >
-                          استعادة
-                        </button>
-                      )}
-                    </footer>
-                  </article>
-                );
-              })}
+                      </td>
+                      <td>{orgMap.get(item.organization_id) ?? "—"}</td>
+                      <td className="composer-library-preview">{item.body}</td>
+                      <td>{item.titles.split("\n").filter(Boolean).join(" · ")}</td>
+                      <td className="composer-library-actions">
+                        {statusTab === "active" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="secondary-button compact"
+                              onClick={() => {
+                                const rows = item.titles.split("\n");
+                                setEditingButton(item);
+                                setButtonForm({
+                                  organizationId: item.organization_id,
+                                  name: item.name,
+                                  body: item.body,
+                                  titles: [rows[0] ?? "", rows[1] ?? "", rows[2] ?? ""]
+                                });
+                                setButtonModalOpen(true);
+                              }}
+                            >
+                              تعديل
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button compact"
+                              onClick={() => void archiveButton(item)}
+                            >
+                              أرشفة
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button compact danger-button"
+                              onClick={() => void deleteButton(item)}
+                            >
+                              حذف
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="secondary-button compact"
+                              onClick={() => void restoreButton(item)}
+                            >
+                              استعادة
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button compact danger-button"
+                              onClick={() => void deleteButton(item)}
+                            >
+                              حذف
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
 
-            {mainTab === "lists" &&
-              visibleLists.map((item) => {
-                const optionCount = item.sections.reduce(
-                  (n, section) => n + section.rows_text.split("\n").filter(Boolean).length,
-                  0
-                );
-                return (
-                  <article key={item.id} className="composer-library-card">
-                    <header className="composer-library-card-head">
-                      <div>
-                        <strong>{item.name}</strong>
-                        <span className="composer-library-chip">قائمة</span>
-                      </div>
-                      <small>{orgMap.get(item.organization_id) ?? "—"}</small>
-                    </header>
-                    <div className="composer-library-bubble">{item.body}</div>
-                    <div className="composer-library-list-meta">
-                      <span>{item.button_text}</span>
-                      <span>{optionCount} خيار</span>
-                    </div>
-                    <footer className="composer-library-card-actions">
-                      {statusTab === "active" ? (
-                        <>
-                          <button
-                            type="button"
-                            className="secondary-button compact"
-                            onClick={() => {
-                              const first = item.sections[0];
-                              const options = (first?.rows_text ?? "").split("\n");
-                              while (options.length < 3) options.push("");
-                              setEditingList(item);
-                              setListForm({
-                                organizationId: item.organization_id,
-                                name: item.name,
-                                body: item.body,
-                                buttonText: item.button_text,
-                                sectionTitle: first?.title || "الخيارات",
-                                options
-                              });
-                              setListModalOpen(true);
-                            }}
-                          >
-                            تعديل
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button compact"
-                            onClick={() => void archiveList(item)}
-                          >
-                            أرشفة
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="secondary-button compact"
-                          onClick={() => void restoreList(item)}
-                        >
-                          استعادة
-                        </button>
-                      )}
-                    </footer>
-                  </article>
-                );
-              })}
+            {mainTab === "lists" && (
+              <table className="data-table composer-library-table">
+                <thead>
+                  <tr>
+                    <th>الاسم</th>
+                    <th>الفرع</th>
+                    <th>النص</th>
+                    <th>الزر / الخيارات</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleLists.map((item) => {
+                    const optionCount = item.sections.reduce(
+                      (n, section) => n + section.rows_text.split("\n").filter(Boolean).length,
+                      0
+                    );
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <strong>{item.name}</strong>
+                        </td>
+                        <td>{orgMap.get(item.organization_id) ?? "—"}</td>
+                        <td className="composer-library-preview">{item.body}</td>
+                        <td>
+                          {item.button_text} · {optionCount} خيار
+                        </td>
+                        <td className="composer-library-actions">
+                          {statusTab === "active" ? (
+                            <>
+                              <button
+                                type="button"
+                                className="secondary-button compact"
+                                onClick={() => {
+                                  const first = item.sections[0];
+                                  const options = (first?.rows_text ?? "").split("\n");
+                                  while (options.length < 3) options.push("");
+                                  setEditingList(item);
+                                  setListForm({
+                                    organizationId: item.organization_id,
+                                    name: item.name,
+                                    body: item.body,
+                                    buttonText: item.button_text,
+                                    sectionTitle: first?.title || "الخيارات",
+                                    options
+                                  });
+                                  setListModalOpen(true);
+                                }}
+                              >
+                                تعديل
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-button compact"
+                                onClick={() => void archiveList(item)}
+                              >
+                                أرشفة
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-button compact danger-button"
+                                onClick={() => void deleteList(item)}
+                              >
+                                حذف
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="secondary-button compact"
+                                onClick={() => void restoreList(item)}
+                              >
+                                استعادة
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-button compact danger-button"
+                                onClick={() => void deleteList(item)}
+                              >
+                                حذف
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
       </section>

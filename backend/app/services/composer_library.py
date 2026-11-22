@@ -129,6 +129,23 @@ async def archive_button_template(
     return item
 
 
+async def hard_delete_button_template(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    template_id: UUID,
+    membership=None,
+) -> None:
+    item = await db.get(ComposerButtonTemplate, template_id)
+    if item is None or item.account_id != account_id:
+        raise ValueError("NOT_FOUND")
+    await _ensure_org(
+        db, account_id=account_id, organization_id=item.organization_id, membership=membership
+    )
+    await db.delete(item)
+    await db.commit()
+
+
 async def list_list_templates(
     db: AsyncSession,
     *,
@@ -250,3 +267,20 @@ async def archive_list_template(
     await db.commit()
     await db.refresh(item)
     return item
+
+
+async def hard_delete_list_template(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    template_id: UUID,
+    membership=None,
+) -> None:
+    item = await db.get(ComposerListTemplate, template_id)
+    if item is None or item.account_id != account_id:
+        raise ValueError("NOT_FOUND")
+    await _ensure_org(
+        db, account_id=account_id, organization_id=item.organization_id, membership=membership
+    )
+    await db.delete(item)
+    await db.commit()
