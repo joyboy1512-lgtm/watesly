@@ -1369,6 +1369,18 @@ select, input, textarea {
   flex-wrap: wrap;
   gap: 6px;
 }
+.inbox-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 4px 12px;
+}
+.inbox-load-more .secondary-button {
+  width: 100%;
+}
+.inbox-list-limit-hint {
+  margin: 0 14px 8px;
+  font-size: 12px;
+}
 
 .conversation-copy { min-width: 0; flex: 1; }
 .conversation-title-line {

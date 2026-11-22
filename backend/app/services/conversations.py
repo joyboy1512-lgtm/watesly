@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.contact import Contact
@@ -124,6 +124,7 @@ async def list_conversations(
     archived_only: bool = False,
     starred_only: bool = False,
     snoozed_only: bool = False,
+    engaged_only: bool = False,
     channel_id: UUID | None = None,
     organization_id: UUID | None = None,
     inbox_scope: str | None = None,
@@ -155,6 +156,15 @@ async def list_conversations(
         .order_by(desc(Conversation.last_message_at))
         .limit(min(max(limit, 1), _LIST_LIMIT_MAX))
     )
+    if engaged_only:
+        # Any inbound activity (text, button reply, list reply, media, etc.)
+        inbound_exists = exists(
+            select(Message.id).where(
+                Message.conversation_id == Conversation.id,
+                Message.direction == MessageDirection.INBOUND,
+            )
+        )
+        query = query.where(inbound_exists)
     if archived_only:
         query = query.where(Conversation.archived_at.is_not(None))
     elif not include_archived:

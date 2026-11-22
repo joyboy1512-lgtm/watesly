@@ -1,7 +1,9 @@
 import { api } from "./api";
 
-/** Must match backend GET /conversations limit validation (le=5000). */
+/** Max conversations the inbox may request (matches backend le=5000). */
 export const INBOX_CONVERSATIONS_LIMIT = 5000;
+/** First page / each "load more" chunk — keeps initial inbox load light. */
+export const INBOX_CONVERSATIONS_PAGE_SIZE = 100;
 
 const DEFAULT_COUNTRY_CODE = "965";
 
