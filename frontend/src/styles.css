@@ -10274,9 +10274,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   line-height: 1;
 }
 .composer-library-bulk .secondary-button.compact {
-  padding: 0.28rem 0.55rem;
-  font-size: 0.75rem;
+  padding: 0.18rem 0.45rem !important;
+  margin: 0 !important;
+  width: auto !important;
+  font-size: 0.72rem;
   min-height: 0;
+  line-height: 1.2;
 }
 .composer-library-board {
   min-height: 280px;
@@ -10299,10 +10302,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .composer-library-table thead th,
 .composer-library-table tbody td {
-  text-align: start;
-  padding: 0.38rem 0.7rem;
-  font-size: 0.82rem;
-  line-height: 1.3;
+  text-align: center;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.8rem;
+  line-height: 1.25;
   vertical-align: middle;
   border: 0;
 }
@@ -10314,11 +10317,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: #fff;
   font-weight: 700;
   white-space: nowrap;
-  padding-block: 0.42rem;
+  padding-block: 0.32rem;
 }
 .composer-library-table tbody td {
   border-bottom: 1px solid color-mix(in srgb, var(--primary) 10%, var(--line));
   color: var(--text);
+}
+.composer-library-table tbody td strong {
+  font-weight: 700;
 }
 .composer-library-table tbody tr:last-child td {
   border-bottom: 0;
@@ -10330,9 +10336,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: color-mix(in srgb, var(--primary-soft) 48%, #fff);
 }
 .composer-library-col-check {
-  width: 1.85rem;
+  width: 1.7rem;
   text-align: center !important;
-  padding-inline: 0.35rem !important;
+  padding-inline: 0.3rem !important;
 }
 .composer-library-col-check input {
   width: 13px;
@@ -10347,11 +10353,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .composer-library-col-ltr {
   direction: ltr;
-  text-align: start;
+  text-align: center;
   unicode-bidi: plaintext;
 }
 .composer-library-col-actions {
   white-space: nowrap;
+  text-align: center;
 }
 .composer-library-preview {
   max-width: 320px;
@@ -10361,17 +10368,21 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   text-overflow: ellipsis;
 }
 .composer-library-actions {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  justify-content: flex-start;
+  gap: 0.2rem;
+  justify-content: center;
+  align-items: center;
   white-space: nowrap;
 }
 .composer-library-actions .secondary-button.compact {
-  padding: 0.2rem 0.45rem;
-  font-size: 0.72rem;
+  /* Override global `.compact { padding: 10px 15px !important }` that inflates row height */
+  padding: 0.12rem 0.4rem !important;
+  margin: 0 !important;
+  width: auto !important;
+  font-size: 0.7rem;
   min-height: 0;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 .composer-library-actions .danger-button,
 .composer-library-bulk .danger-button {
