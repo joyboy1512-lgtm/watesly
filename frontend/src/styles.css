@@ -10093,44 +10093,336 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .composer-library-page {
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
 }
-.composer-library-main-tabs {
-  margin-block: 0.25rem 0.5rem;
-}
-.composer-library-toolbar {
+.composer-library-hero {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem 1rem;
   align-items: end;
   justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.35rem;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--primary-soft) 70%, transparent), transparent 55%),
+    linear-gradient(135deg, color-mix(in srgb, var(--primary-soft) 55%, #fff) 0%, #fff 70%);
+  animation: composer-library-fade-up 0.45s ease both;
 }
-.composer-library-toolbar .field-label {
-  min-width: min(240px, 100%);
+.composer-library-eyebrow {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--primary-darker);
 }
-.composer-library-table-wrap {
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-}
-.composer-library-table-wrap .data-table {
-  width: 100%;
+.composer-library-hero h1 {
   margin: 0;
+  font-size: clamp(1.45rem, 2.2vw, 1.9rem);
+  color: var(--primary-darker);
 }
-.composer-library-preview {
-  max-width: 280px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.composer-library-hero p {
+  margin: 0.4rem 0 0;
+  max-width: 42rem;
   color: var(--muted);
+  line-height: 1.55;
 }
-.composer-library-actions {
+.composer-library-hero-cta {
+  flex: 0 0 auto;
+}
+.composer-library-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.composer-library-type-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: start;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--line));
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.composer-library-type-tab:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--line));
+  transform: translateY(-1px);
+}
+.composer-library-type-tab.active {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+  box-shadow: inset 3px 0 0 var(--primary), 0 6px 18px rgba(7, 94, 84, 0.08);
+  background: color-mix(in srgb, var(--primary-soft) 35%, #fff);
+}
+.composer-library-type-icon {
+  display: grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--primary-soft) 70%, #fff);
+  color: var(--primary-darker);
+  flex: 0 0 auto;
+}
+.composer-library-type-text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.composer-library-type-text strong {
+  font-size: 0.95rem;
+}
+.composer-library-type-text small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+.composer-library-type-count {
+  margin-inline-start: auto;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.75rem;
+}
+.composer-library-controls {
   display: flex;
   flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--line));
+  border-radius: 14px;
+  background: #fff;
+}
+.composer-library-search {
+  flex: 1 1 220px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  padding: 0 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary-soft) 25%, #fff);
+  color: var(--muted);
+}
+.composer-library-search input {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  color: var(--text);
+  font: inherit;
+}
+.composer-library-branch {
+  min-width: min(220px, 100%);
+  margin: 0;
+}
+.composer-library-status-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary-soft) 40%, #fff);
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--line));
+}
+.composer-library-status-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--primary-darker);
+  border-radius: 9px;
+  padding: 0.45rem 0.85rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.composer-library-status-tabs button.active {
+  background: var(--primary);
+  color: #fff;
+}
+.composer-library-board {
+  min-height: 280px;
+}
+.composer-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+.composer-library-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--line));
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(7, 94, 84, 0.04);
+  animation: composer-library-fade-up 0.4s ease both;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.composer-library-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+  box-shadow: 0 10px 24px rgba(7, 94, 84, 0.08);
+}
+.composer-library-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: start;
+}
+.composer-library-card-head > div {
+  display: grid;
   gap: 0.35rem;
-  justify-content: flex-end;
+  min-width: 0;
+}
+.composer-library-card-head strong {
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+.composer-library-card-head small {
+  color: var(--muted);
+  font-size: 0.75rem;
   white-space: nowrap;
+}
+.composer-library-chip {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-soft) 65%, #fff);
+  color: var(--primary-darker);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.composer-library-bubble {
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px 12px 4px 12px;
+  background: #d9fdd3;
+  color: #111b21;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 7.5rem;
+  overflow: hidden;
+}
+:root[data-theme="dark"] .composer-library-bubble {
+  background: color-mix(in srgb, var(--primary-dark) 55%, #111);
+  color: #e9edef;
+}
+.composer-library-button-row,
+.composer-library-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.composer-library-button-row span,
+.composer-library-list-meta span {
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 30%, #fff);
+  color: var(--primary-darker);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.composer-library-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+.composer-library-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  text-align: center;
+  padding: 2.6rem 1.2rem;
+  border: 1px dashed color-mix(in srgb, var(--primary) 28%, var(--line));
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--primary-soft) 40%, #fff), #fff 70%);
+  animation: composer-library-fade-up 0.45s ease both;
+}
+.composer-library-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  margin-bottom: 0.25rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary-soft) 70%, #fff);
+  color: var(--primary-darker);
+}
+.composer-library-empty strong {
+  font-size: 1.05rem;
+}
+.composer-library-empty p {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.composer-library-empty .whatsapp-button {
+  margin-top: 0.45rem;
+}
+.composer-library-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+.composer-library-skeleton-card {
+  min-height: 180px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--primary-soft) 25%, #fff) 0%,
+    #fff 45%,
+    color-mix(in srgb, var(--primary-soft) 25%, #fff) 100%
+  );
+  background-size: 200% 100%;
+  animation: composer-library-shimmer 1.2s linear infinite;
+}
+@keyframes composer-library-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes composer-library-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (max-width: 900px) {
+  .composer-library-type-tabs {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .composer-library-hero {
+    padding: 1rem;
+  }
+  .composer-library-controls {
+    align-items: stretch;
+  }
+  .composer-library-status-tabs {
+    width: 100%;
+  }
+  .composer-library-status-tabs button {
+    flex: 1;
+  }
 }
 .composer-send-group {
   display: flex;
