@@ -57,7 +57,7 @@ type DashboardSummary = {
 const quickActions = [
   { to: "/inbox", label: "صندوق الوارد", hint: "رد على المحادثات", icon: "inbox" as const },
   { to: "/campaigns?action=create", label: "حملة WhatsApp", hint: "إرسال جماعي بقالب", icon: "campaign" as const },
-  { to: "/catalog/new", label: "منتج أو خدمة", hint: "إضافة للكتalog", icon: "template" as const },
+  { to: "/catalog/new", label: "منتج أو خدمة", hint: "إضافة للكتالوج", icon: "template" as const },
   { to: "/analytics", label: "التحليلات", hint: "أداء الفريق وCSAT", icon: "dashboard" as const }
 ];
 
@@ -70,6 +70,16 @@ const campaignStatusLabels: Record<string, string> = {
   paused: "متوقفة",
   cancelled: "ملغاة",
   failed: "فشلت"
+};
+
+const CHANNEL_TYPE_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  instagram: "Instagram",
+  email: "Email",
+  sms: "SMS",
+  web_chat: "Web Chat",
+  telegram: "Telegram",
+  messenger: "Messenger"
 };
 
 function formatWaiting(minutes: number | null) {
@@ -139,47 +149,52 @@ export default function DashboardPage() {
       value: String(data?.open_conversations ?? 0),
       change: `${data?.pending_conversations ?? 0} قيد الانتظار`,
       icon: "inbox" as const,
-      to: "/inbox"
+      to: "/inbox",
+      tone: "solid" as const
     },
     {
       label: "الرسائل اليوم",
       value: String((data?.sent_messages_today ?? 0) + (data?.received_messages_today ?? 0)),
       change: `${data?.received_messages_today ?? 0} واردة · ${data?.sent_messages_today ?? 0} صادرة`,
       icon: "dashboard" as const,
-      to: "/inbox"
+      to: "/inbox",
+      tone: "soft" as const
     },
     {
       label: "CSAT",
-      value: data?.csat_average != null ? `${data.csat_average} ★` : "—",
+      value: data?.csat_average != null ? `${data.csat_average}` : "—",
       change: data?.csat_total_ratings ? `${data.csat_total_ratings} تقييم · ${data.csat_promoters_pct ?? 0}% ≥4` : "لا توجد تقييمات بعد",
       icon: "dashboard" as const,
-      to: "/analytics"
+      to: "/analytics",
+      tone: "soft" as const
     },
     {
       label: "متوسط أول رد",
       value: data?.first_response_avg_minutes != null ? `${data.first_response_avg_minutes} د` : "—",
       change: "آخر 7 أيام",
       icon: "team" as const,
-      to: "/analytics"
+      to: "/analytics",
+      tone: "outline" as const
     }
   ] as const;
 
   const campaign = data?.latest_campaign;
+  const firstName = profile.data?.full_name?.split(" ")[0] ?? "فريق Watesly";
 
   return (
     <main className="page page-dashboard">
-      <section className="hero-card">
-        <div>
-          <span className="eyebrow">{t("eyebrow.wateslyWorkspace")}</span>
-          <h1>مرحبًا، {profile.data?.full_name?.split(" ")[0] ?? "فريق Watesly"} 👋</h1>
-          <p>إليك ملخص أداء فريقك وقنوات التواصل اليوم.</p>
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-hero-eyebrow">{t("eyebrow.wateslyWorkspace")}</span>
+          <h1>مرحباً، {firstName}</h1>
+          <p>ملخص أداء الفريق والقنوات اليوم — ركّز على ما يحتاج رداً الآن.</p>
         </div>
-        <div className="hero-actions">
-          <Link to="/campaigns?action=create" className="hero-action-link primary-action">
-            إنشاء حملة جديدة
+        <div className="dashboard-hero-actions">
+          <Link to="/inbox" className="dashboard-hero-btn dashboard-hero-btn-primary">
+            فتح صندوق الوارد
           </Link>
-          <Link to="/catalog/new" className="hero-action-link primary-action whatsapp-button">
-            + إضافة منتجات وخدمات
+          <Link to="/campaigns?action=create" className="dashboard-hero-btn dashboard-hero-btn-ghost">
+            إنشاء حملة
           </Link>
         </div>
       </section>
@@ -220,10 +235,10 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="dashboard-quick-actions">
+      <section className="dashboard-quick-actions" aria-label="اختصارات سريعة">
         {quickActions.map((item) => (
           <Link key={item.to} to={item.to} className="dashboard-quick-card">
-            <span className="metric-icon"><Icon name={item.icon} /></span>
+            <span className="dashboard-quick-icon"><Icon name={item.icon} /></span>
             <div>
               <strong>{item.label}</strong>
               <small>{item.hint}</small>
@@ -232,37 +247,54 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      <section className="supervisor-ops-board" aria-label="غرفة قيادة المشرف">
-        <div className="panel-heading">
+      <section className="dashboard-kpi-grid" aria-label="مؤشرات الأداء">
+        {stats.map((item) => (
+          <Link
+            to={item.to}
+            className={`dashboard-kpi-card dashboard-kpi-${item.tone}`}
+            key={item.label}
+          >
+            <div className="dashboard-kpi-top">
+              <span className="dashboard-kpi-icon"><Icon name={item.icon} /></span>
+              <span className="dashboard-kpi-label">{item.label}</span>
+            </div>
+            <strong className="dashboard-kpi-value">{summary.isLoading ? "…" : item.value}</strong>
+            <small className="dashboard-kpi-meta">{item.change}</small>
+          </Link>
+        ))}
+      </section>
+
+      <section className="dashboard-panel dashboard-panel-green" aria-label="غرفة قيادة المشرف">
+        <div className="dashboard-panel-head">
           <div>
             <h2>غرفة قيادة المشرف</h2>
             <p>انتظار · SLA · حمل الموظفين · القنوات</p>
           </div>
-          <Link to="/assignments" className="secondary-button">التعيينات</Link>
+          <Link to="/assignments" className="dashboard-panel-link">التعيينات</Link>
         </div>
-        <div className="supervisor-ops-grid">
-          <article>
+        <div className="dashboard-supervisor-grid">
+          <article className="dashboard-supervisor-tile">
             <span>تنتظر رداً</span>
             <strong>{supervisor.isLoading ? "…" : supervisor.data?.waiting_conversations ?? 0}</strong>
           </article>
-          <article>
+          <article className="dashboard-supervisor-tile">
             <span>مؤجلة</span>
             <strong>{supervisor.isLoading ? "…" : supervisor.data?.snoozed_conversations ?? 0}</strong>
           </article>
-          <article className="supervisor-ops-alert">
+          <article className="dashboard-supervisor-tile dashboard-supervisor-alert">
             <span>تجاوز SLA</span>
             <strong>{supervisor.isLoading ? "…" : supervisor.data?.sla_breached_conversations ?? 0}</strong>
           </article>
-          <article className="supervisor-ops-alert">
+          <article className="dashboard-supervisor-tile dashboard-supervisor-alert">
             <span>بدون حل +1 ساعة</span>
             <strong>{supervisor.isLoading ? "…" : supervisor.data?.unresolved_over_1h ?? 0}</strong>
           </article>
         </div>
-        <div className="supervisor-ops-columns">
+        <div className="dashboard-supervisor-columns">
           <div>
             <h3>حمل الموظفين</h3>
             {!(supervisor.data?.agents ?? []).length && <p className="hint-text">لا توجد محادثات معيّنة حالياً.</p>}
-            <ul className="supervisor-agent-list">
+            <ul className="dashboard-rank-list">
               {(supervisor.data?.agents ?? []).map((agent) => (
                 <li key={agent.membership_id}>
                   <strong>{agent.full_name}</strong>
@@ -274,10 +306,10 @@ export default function DashboardPage() {
           <div>
             <h3>القنوات النشطة</h3>
             {!(supervisor.data?.by_channel ?? []).length && <p className="hint-text">لا توجد محادثات مفتوحة.</p>}
-            <ul className="supervisor-agent-list">
+            <ul className="dashboard-rank-list">
               {(supervisor.data?.by_channel ?? []).map((row) => (
                 <li key={row.channel_type}>
-                  <strong>{row.channel_type}</strong>
+                  <strong>{CHANNEL_TYPE_LABELS[row.channel_type] ?? row.channel_type}</strong>
                   <span>{row.open_conversations}</span>
                 </li>
               ))}
@@ -286,27 +318,14 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="stats-grid premium">
-        {stats.map((item) => (
-          <Link to={item.to} className="metric-card metric-card-link" key={item.label}>
-            <div className="metric-icon"><Icon name={item.icon} /></div>
-            <div>
-              <span>{item.label}</span>
-              <strong>{summary.isLoading ? "…" : item.value}</strong>
-              <small>{item.change}</small>
-            </div>
-          </Link>
-        ))}
-      </section>
-
-      <section className="dashboard-grid dashboard-grid-wide">
-        <article className="panel-card">
-          <div className="panel-heading">
+      <section className="dashboard-split">
+        <article className="dashboard-panel dashboard-panel-green">
+          <div className="dashboard-panel-head">
             <div>
               <h2>تنتظر ردّك</h2>
               <p>آخر محادثات برسالة واردة من العميل</p>
             </div>
-            <Link to="/inbox" className="secondary-button">صندوق الوارد</Link>
+            <Link to="/inbox" className="dashboard-panel-link">صندوق الوارد</Link>
           </div>
           <div className="dashboard-waiting-list">
             {summary.isLoading && <p className="hint-text">جاري التحميل…</p>}
@@ -335,14 +354,14 @@ export default function DashboardPage() {
           </div>
         </article>
 
-        <article className="panel-card">
-          <div className="panel-heading">
+        <article className="dashboard-panel dashboard-panel-green">
+          <div className="dashboard-panel-head">
             <div>
               <h2>آخر حملة</h2>
               <p>حالة الإرسال والتسليم</p>
             </div>
             {campaign && (
-              <Link to="/campaigns" className="secondary-button">كل الحملات</Link>
+              <Link to="/campaigns" className="dashboard-panel-link">كل الحملات</Link>
             )}
           </div>
           {!campaign && !summary.isLoading && (
@@ -359,7 +378,7 @@ export default function DashboardPage() {
                   {campaignStatusLabels[campaign.status] ?? campaign.status}
                 </span>
               </div>
-              <div className="campaign-preflight-stats">
+              <div className="dashboard-campaign-stats">
                 <div><strong>{campaign.total}</strong><span>إجمالي</span></div>
                 <div><strong>{campaign.sent}</strong><span>مُرسل</span></div>
                 <div><strong>{campaign.delivered}</strong><span>مُسلّم</span></div>
@@ -374,32 +393,44 @@ export default function DashboardPage() {
         </article>
       </section>
 
-      <section className="dashboard-grid">
-        <article className="panel-card">
-          <div className="panel-heading">
+      <section className="dashboard-split dashboard-split-narrow">
+        <article className="dashboard-panel dashboard-panel-green">
+          <div className="dashboard-panel-head">
             <div>
               <h2>ملخص المحادثات</h2>
               <p>الحالة الحالية</p>
             </div>
           </div>
-          <div className="summary-list">
-            <Link to="/inbox" className="summary-list-link"><span>مفتوحة</span><strong>{data?.open_conversations ?? 0}</strong></Link>
-            <Link to="/inbox" className="summary-list-link"><span>قيد الانتظار</span><strong>{data?.pending_conversations ?? 0}</strong></Link>
-            <div><span>مغلقة</span><strong>{data?.closed_conversations ?? 0}</strong></div>
-            <Link to="/contacts" className="summary-list-link"><span>جهات الاتصال</span><strong>{data?.total_contacts ?? 0}</strong></Link>
+          <div className="dashboard-summary-list">
+            <Link to="/inbox" className="dashboard-summary-item">
+              <span>مفتوحة</span>
+              <strong>{data?.open_conversations ?? 0}</strong>
+            </Link>
+            <Link to="/inbox" className="dashboard-summary-item">
+              <span>قيد الانتظار</span>
+              <strong>{data?.pending_conversations ?? 0}</strong>
+            </Link>
+            <div className="dashboard-summary-item">
+              <span>مغلقة</span>
+              <strong>{data?.closed_conversations ?? 0}</strong>
+            </div>
+            <Link to="/contacts" className="dashboard-summary-item">
+              <span>جهات الاتصال</span>
+              <strong>{data?.total_contacts ?? 0}</strong>
+            </Link>
           </div>
         </article>
 
-        <article className="panel-card">
-          <div className="panel-heading">
+        <article className="dashboard-panel dashboard-panel-green">
+          <div className="dashboard-panel-head">
             <div>
               <h2>الاشتراك</h2>
               <p>استخدام الخطة الحالية</p>
             </div>
-            <Link to="/billing" className="secondary-button">الفوترة</Link>
+            <Link to="/billing" className="dashboard-panel-link">الفوترة</Link>
           </div>
-          <div className="plan-card">
-            <span className="plan-badge">{subscription.data?.plan_name ?? "Trial"}</span>
+          <div className="dashboard-plan-card">
+            <span className="dashboard-plan-badge">{subscription.data?.plan_name ?? "Trial"}</span>
             <h3>{subscription.data?.status ?? "trial"}</h3>
             <div className="progress-row">
               <span>الموظفون</span>
