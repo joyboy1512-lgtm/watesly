@@ -1,0 +1,824 @@
+import { FormEvent, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
+import Icon from "../components/Icon";
+import { toastStore } from "../stores/toast";
+import {
+  buildQuickReplyPayload,
+  emptyQuickReplyForm,
+  formFromQuickReply,
+  type Organization,
+  type QuickReply,
+  type QuickReplyForm
+} from "../lib/quickReplyHelpers";
+
+type MainTab = "replies" | "buttons" | "lists";
+type StatusTab = "active" | "archived";
+
+type ButtonTemplate = {
+  id: string;
+  organization_id: string;
+  name: string;
+  body: string;
+  titles: string;
+  is_active: boolean;
+};
+
+type ListSection = { title: string; rows_text: string };
+
+type ListTemplate = {
+  id: string;
+  organization_id: string;
+  name: string;
+  body: string;
+  button_text: string;
+  sections: ListSection[];
+  is_active: boolean;
+};
+
+type ButtonForm = {
+  organizationId: string;
+  name: string;
+  body: string;
+  titles: [string, string, string];
+};
+
+type ListForm = {
+  organizationId: string;
+  name: string;
+  body: string;
+  buttonText: string;
+  sectionTitle: string;
+  options: string[];
+};
+
+const emptyButtonForm = (): ButtonForm => ({
+  organizationId: "",
+  name: "",
+  body: "",
+  titles: ["", "", ""]
+});
+
+const emptyListForm = (): ListForm => ({
+  organizationId: "",
+  name: "",
+  body: "",
+  buttonText: "القائمة",
+  sectionTitle: "الخيارات",
+  options: ["", "", ""]
+});
+
+export default function ComposerLibraryPage() {
+  const client = useQueryClient();
+  const [mainTab, setMainTab] = useState<MainTab>("replies");
+  const [statusTab, setStatusTab] = useState<StatusTab>("active");
+  const [organizationFilter, setOrganizationFilter] = useState("");
+
+  const [replyModalOpen, setReplyModalOpen] = useState(false);
+  const [editingReply, setEditingReply] = useState<QuickReply | null>(null);
+  const [replyForm, setReplyForm] = useState<QuickReplyForm>(emptyQuickReplyForm());
+
+  const [buttonModalOpen, setButtonModalOpen] = useState(false);
+  const [editingButton, setEditingButton] = useState<ButtonTemplate | null>(null);
+  const [buttonForm, setButtonForm] = useState<ButtonForm>(emptyButtonForm());
+
+  const [listModalOpen, setListModalOpen] = useState(false);
+  const [editingList, setEditingList] = useState<ListTemplate | null>(null);
+  const [listForm, setListForm] = useState<ListForm>(emptyListForm());
+
+  const organizations = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => (await api.get<Organization[]>("/organizations")).data
+  });
+
+  const orgMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const org of organizations.data ?? []) map.set(org.id, org.name);
+    return map;
+  }, [organizations.data]);
+
+  const replies = useQuery({
+    queryKey: ["quick-replies", "composer-library", statusTab, organizationFilter],
+    enabled: mainTab === "replies",
+    queryFn: async () => {
+      const params: Record<string, string | boolean> = {};
+      if (statusTab === "archived") params.include_inactive = true;
+      if (organizationFilter) params.organization_id = organizationFilter;
+      return (await api.get<QuickReply[]>("/inbox-tools/quick-replies", { params })).data;
+    }
+  });
+
+  const buttons = useQuery({
+    queryKey: ["composer-button-templates", "page", statusTab, organizationFilter],
+    enabled: mainTab === "buttons",
+    queryFn: async () => {
+      const params: Record<string, string | boolean> = {};
+      if (statusTab === "archived") params.include_inactive = true;
+      if (organizationFilter) params.organization_id = organizationFilter;
+      return (await api.get<ButtonTemplate[]>("/inbox-tools/composer-button-templates", { params })).data;
+    }
+  });
+
+  const lists = useQuery({
+    queryKey: ["composer-list-templates", "page", statusTab, organizationFilter],
+    enabled: mainTab === "lists",
+    queryFn: async () => {
+      const params: Record<string, string | boolean> = {};
+      if (statusTab === "archived") params.include_inactive = true;
+      if (organizationFilter) params.organization_id = organizationFilter;
+      return (await api.get<ListTemplate[]>("/inbox-tools/composer-list-templates", { params })).data;
+    }
+  });
+
+  const visibleReplies = useMemo(() => {
+    const rows = replies.data ?? [];
+    return statusTab === "archived" ? rows.filter((item) => !item.is_active) : rows.filter((item) => item.is_active);
+  }, [replies.data, statusTab]);
+
+  const visibleButtons = useMemo(() => {
+    const rows = buttons.data ?? [];
+    return statusTab === "archived" ? rows.filter((item) => !item.is_active) : rows.filter((item) => item.is_active);
+  }, [buttons.data, statusTab]);
+
+  const visibleLists = useMemo(() => {
+    const rows = lists.data ?? [];
+    return statusTab === "archived" ? rows.filter((item) => !item.is_active) : rows.filter((item) => item.is_active);
+  }, [lists.data, statusTab]);
+
+  function openCreate() {
+    const defaultOrg = organizationFilter || organizations.data?.[0]?.id || "";
+    if (mainTab === "replies") {
+      setEditingReply(null);
+      setReplyForm({ ...emptyQuickReplyForm(), organizationId: defaultOrg });
+      setReplyModalOpen(true);
+    } else if (mainTab === "buttons") {
+      setEditingButton(null);
+      setButtonForm({ ...emptyButtonForm(), organizationId: defaultOrg });
+      setButtonModalOpen(true);
+    } else {
+      setEditingList(null);
+      setListForm({ ...emptyListForm(), organizationId: defaultOrg });
+      setListModalOpen(true);
+    }
+  }
+
+  async function saveReply(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const payload = buildQuickReplyPayload(replyForm);
+      if (editingReply) {
+        await api.patch(`/inbox-tools/quick-replies/${editingReply.id}`, payload);
+        toastStore.getState().show("تم تحديث الرد.", "success");
+      } else {
+        await api.post("/inbox-tools/quick-replies", payload);
+        toastStore.getState().show("تم حفظ الرد.", "success");
+      }
+      setReplyModalOpen(false);
+      await client.invalidateQueries({ queryKey: ["quick-replies"] });
+    } catch {
+      toastStore.getState().show("تعذر حفظ الرد.", "error");
+    }
+  }
+
+  async function saveButton(event: FormEvent) {
+    event.preventDefault();
+    const titles = buttonForm.titles.map((item) => item.trim()).filter(Boolean).join("\n");
+    if (!buttonForm.organizationId || !buttonForm.name.trim() || !buttonForm.body.trim() || !titles) {
+      toastStore.getState().show("أكمل اسم القالب والنص وزرّاً واحداً على الأقل.", "error");
+      return;
+    }
+    try {
+      const payload = {
+        organization_id: buttonForm.organizationId,
+        name: buttonForm.name.trim(),
+        body: buttonForm.body.trim(),
+        titles
+      };
+      if (editingButton) {
+        await api.patch(`/inbox-tools/composer-button-templates/${editingButton.id}`, {
+          name: payload.name,
+          body: payload.body,
+          titles: payload.titles
+        });
+        toastStore.getState().show("تم تحديث قالب الأزرار.", "success");
+      } else {
+        await api.post("/inbox-tools/composer-button-templates", payload);
+        toastStore.getState().show("تم حفظ قالب الأزرار.", "success");
+      }
+      setButtonModalOpen(false);
+      await client.invalidateQueries({ queryKey: ["composer-button-templates"] });
+    } catch {
+      toastStore.getState().show("تعذر الحفظ — ربما الاسم مستخدم في نفس الفرع.", "error");
+    }
+  }
+
+  async function saveList(event: FormEvent) {
+    event.preventDefault();
+    const options = listForm.options.map((item) => item.trim()).filter(Boolean);
+    if (!listForm.organizationId || !listForm.name.trim() || !listForm.body.trim() || !options.length) {
+      toastStore.getState().show("أكمل اسم القالب والنص وخياراً واحداً على الأقل.", "error");
+      return;
+    }
+    try {
+      const payload = {
+        organization_id: listForm.organizationId,
+        name: listForm.name.trim(),
+        body: listForm.body.trim(),
+        button_text: listForm.buttonText.trim().slice(0, 20) || "القائمة",
+        sections: [
+          {
+            title: listForm.sectionTitle.trim() || "خيارات",
+            rows_text: options.join("\n")
+          }
+        ]
+      };
+      if (editingList) {
+        await api.patch(`/inbox-tools/composer-list-templates/${editingList.id}`, {
+          name: payload.name,
+          body: payload.body,
+          button_text: payload.button_text,
+          sections: payload.sections
+        });
+        toastStore.getState().show("تم تحديث قالب القائمة.", "success");
+      } else {
+        await api.post("/inbox-tools/composer-list-templates", payload);
+        toastStore.getState().show("تم حفظ قالب القائمة.", "success");
+      }
+      setListModalOpen(false);
+      await client.invalidateQueries({ queryKey: ["composer-list-templates"] });
+    } catch {
+      toastStore.getState().show("تعذر الحفظ — ربما الاسم مستخدم في نفس الفرع.", "error");
+    }
+  }
+
+  async function archiveReply(item: QuickReply) {
+    if (!window.confirm(`أرشفة "${item.title}"؟`)) return;
+    try {
+      await api.delete(`/inbox-tools/quick-replies/${item.id}`);
+      await client.invalidateQueries({ queryKey: ["quick-replies"] });
+      toastStore.getState().show("تمت الأرشفة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الأرشفة.", "error");
+    }
+  }
+
+  async function restoreReply(item: QuickReply) {
+    try {
+      await api.patch(`/inbox-tools/quick-replies/${item.id}`, { is_active: true });
+      await client.invalidateQueries({ queryKey: ["quick-replies"] });
+      toastStore.getState().show("تمت الاستعادة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الاستعادة.", "error");
+    }
+  }
+
+  async function archiveButton(item: ButtonTemplate) {
+    if (!window.confirm(`أرشفة "${item.name}"؟`)) return;
+    try {
+      await api.delete(`/inbox-tools/composer-button-templates/${item.id}`);
+      await client.invalidateQueries({ queryKey: ["composer-button-templates"] });
+      toastStore.getState().show("تمت الأرشفة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الأرشفة.", "error");
+    }
+  }
+
+  async function restoreButton(item: ButtonTemplate) {
+    try {
+      await api.patch(`/inbox-tools/composer-button-templates/${item.id}`, { is_active: true });
+      await client.invalidateQueries({ queryKey: ["composer-button-templates"] });
+      toastStore.getState().show("تمت الاستعادة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الاستعادة.", "error");
+    }
+  }
+
+  async function archiveList(item: ListTemplate) {
+    if (!window.confirm(`أرشفة "${item.name}"؟`)) return;
+    try {
+      await api.delete(`/inbox-tools/composer-list-templates/${item.id}`);
+      await client.invalidateQueries({ queryKey: ["composer-list-templates"] });
+      toastStore.getState().show("تمت الأرشفة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الأرشفة.", "error");
+    }
+  }
+
+  async function restoreList(item: ListTemplate) {
+    try {
+      await api.patch(`/inbox-tools/composer-list-templates/${item.id}`, { is_active: true });
+      await client.invalidateQueries({ queryKey: ["composer-list-templates"] });
+      toastStore.getState().show("تمت الاستعادة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر الاستعادة.", "error");
+    }
+  }
+
+  const createLabel =
+    mainTab === "replies" ? "رد جديد" : mainTab === "buttons" ? "أزرار جديدة" : "قائمة جديدة";
+
+  return (
+    <main className="page composer-library-page">
+      <header className="page-header">
+        <div className="page-header-row">
+          <div>
+            <h1>مكتبة الرسائل</h1>
+            <p>إدارة مشتركة على مستوى الفرع للردود والأزرار والقوائم — تعديل، أرشفة، واستعادة.</p>
+          </div>
+          {statusTab === "active" && (
+            <button type="button" className="whatsapp-button" onClick={openCreate}>
+              <Icon name="plus" /> {createLabel}
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="inbox-composer-mode-tabs composer-library-main-tabs" role="tablist" aria-label="نوع المكتبة">
+        {(
+          [
+            ["replies", "ردود"],
+            ["buttons", "أزرار"],
+            ["lists", "قوائم"]
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={mainTab === key}
+            className={mainTab === key ? "active" : ""}
+            onClick={() => {
+              setMainTab(key);
+              setStatusTab("active");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="composer-library-toolbar">
+        <label className="field-label">
+          <span>الفرع</span>
+          <select value={organizationFilter} onChange={(e) => setOrganizationFilter(e.target.value)}>
+            <option value="">كل الفروع المتاحة</option>
+            {(organizations.data ?? []).map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="inbox-composer-mode-tabs" role="tablist" aria-label="حالة العناصر">
+          <button
+            type="button"
+            className={statusTab === "active" ? "active" : ""}
+            onClick={() => setStatusTab("active")}
+          >
+            نشطة
+          </button>
+          <button
+            type="button"
+            className={statusTab === "archived" ? "active" : ""}
+            onClick={() => setStatusTab("archived")}
+          >
+            مؤرشفة
+          </button>
+        </div>
+      </div>
+
+      {mainTab === "replies" && (
+        <section className="composer-library-table-wrap">
+          {replies.isLoading ? (
+            <p className="hint-text">جاري التحميل…</p>
+          ) : visibleReplies.length === 0 ? (
+            <p className="hint-text">لا توجد ردود في هذا العرض.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>العنوان</th>
+                  <th>الاختصار</th>
+                  <th>الفرع</th>
+                  <th>المعاينة</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleReplies.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.title}</td>
+                    <td>/{item.shortcut}</td>
+                    <td>{orgMap.get(item.organization_id) ?? "—"}</td>
+                    <td className="composer-library-preview">{item.body}</td>
+                    <td className="composer-library-actions">
+                      {statusTab === "active" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => {
+                              setEditingReply(item);
+                              setReplyForm(formFromQuickReply(item));
+                              setReplyModalOpen(true);
+                            }}
+                          >
+                            تعديل
+                          </button>
+                          <button type="button" className="secondary-button" onClick={() => void archiveReply(item)}>
+                            أرشفة
+                          </button>
+                        </>
+                      ) : (
+                        <button type="button" className="secondary-button" onClick={() => void restoreReply(item)}>
+                          استعادة
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {mainTab === "buttons" && (
+        <section className="composer-library-table-wrap">
+          {buttons.isLoading ? (
+            <p className="hint-text">جاري التحميل…</p>
+          ) : visibleButtons.length === 0 ? (
+            <p className="hint-text">لا توجد قوالب أزرار في هذا العرض.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>الاسم</th>
+                  <th>الفرع</th>
+                  <th>النص</th>
+                  <th>الأزرار</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleButtons.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.name}</td>
+                    <td>{orgMap.get(item.organization_id) ?? "—"}</td>
+                    <td className="composer-library-preview">{item.body}</td>
+                    <td>{item.titles.split("\n").filter(Boolean).join(" · ")}</td>
+                    <td className="composer-library-actions">
+                      {statusTab === "active" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => {
+                              const rows = item.titles.split("\n");
+                              setEditingButton(item);
+                              setButtonForm({
+                                organizationId: item.organization_id,
+                                name: item.name,
+                                body: item.body,
+                                titles: [rows[0] ?? "", rows[1] ?? "", rows[2] ?? ""]
+                              });
+                              setButtonModalOpen(true);
+                            }}
+                          >
+                            تعديل
+                          </button>
+                          <button type="button" className="secondary-button" onClick={() => void archiveButton(item)}>
+                            أرشفة
+                          </button>
+                        </>
+                      ) : (
+                        <button type="button" className="secondary-button" onClick={() => void restoreButton(item)}>
+                          استعادة
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {mainTab === "lists" && (
+        <section className="composer-library-table-wrap">
+          {lists.isLoading ? (
+            <p className="hint-text">جاري التحميل…</p>
+          ) : visibleLists.length === 0 ? (
+            <p className="hint-text">لا توجد قوالب قوائم في هذا العرض.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>الاسم</th>
+                  <th>الفرع</th>
+                  <th>النص</th>
+                  <th>الزر / الخيارات</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleLists.map((item) => {
+                  const optionCount = item.sections.reduce(
+                    (n, section) => n + section.rows_text.split("\n").filter(Boolean).length,
+                    0
+                  );
+                  return (
+                    <tr key={item.id}>
+                      <td>{item.name}</td>
+                      <td>{orgMap.get(item.organization_id) ?? "—"}</td>
+                      <td className="composer-library-preview">{item.body}</td>
+                      <td>
+                        {item.button_text} · {optionCount} خيار
+                      </td>
+                      <td className="composer-library-actions">
+                        {statusTab === "active" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => {
+                                const first = item.sections[0];
+                                const options = (first?.rows_text ?? "").split("\n");
+                                while (options.length < 3) options.push("");
+                                setEditingList(item);
+                                setListForm({
+                                  organizationId: item.organization_id,
+                                  name: item.name,
+                                  body: item.body,
+                                  buttonText: item.button_text,
+                                  sectionTitle: first?.title || "الخيارات",
+                                  options
+                                });
+                                setListModalOpen(true);
+                              }}
+                            >
+                              تعديل
+                            </button>
+                            <button type="button" className="secondary-button" onClick={() => void archiveList(item)}>
+                              أرشفة
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" className="secondary-button" onClick={() => void restoreList(item)}>
+                            استعادة
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {replyModalOpen && (
+        <div className="modal-overlay" role="presentation" onClick={() => setReplyModalOpen(false)}>
+          <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={(e) => void saveReply(e)}>
+            <h2>{editingReply ? "تعديل رد" : "رد جديد"}</h2>
+            <label className="field-label">
+              <span>الفرع</span>
+              <select
+                required
+                value={replyForm.organizationId}
+                onChange={(e) => setReplyForm((current) => ({ ...current, organizationId: e.target.value }))}
+                disabled={Boolean(editingReply)}
+              >
+                <option value="">اختر الفرع</option>
+                {(organizations.data ?? []).map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              <span>العنوان</span>
+              <input
+                required
+                value={replyForm.title}
+                onChange={(e) => setReplyForm((current) => ({ ...current, title: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              <span>الاختصار</span>
+              <input
+                required
+                value={replyForm.shortcut}
+                onChange={(e) => setReplyForm((current) => ({ ...current, shortcut: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              <span>نص الرد</span>
+              <textarea
+                required
+                rows={4}
+                value={replyForm.body}
+                onChange={(e) => setReplyForm((current) => ({ ...current, body: e.target.value }))}
+              />
+            </label>
+            <div className="inline-actions">
+              <button type="submit" className="whatsapp-button">
+                حفظ
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setReplyModalOpen(false)}>
+                إلغاء
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {buttonModalOpen && (
+        <div className="modal-overlay" role="presentation" onClick={() => setButtonModalOpen(false)}>
+          <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={(e) => void saveButton(e)}>
+            <h2>{editingButton ? "تعديل أزرار" : "أزرار جديدة"}</h2>
+            <label className="field-label">
+              <span>الفرع</span>
+              <select
+                required
+                value={buttonForm.organizationId}
+                onChange={(e) => setButtonForm((current) => ({ ...current, organizationId: e.target.value }))}
+                disabled={Boolean(editingButton)}
+              >
+                <option value="">اختر الفرع</option>
+                {(organizations.data ?? []).map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              <span>اسم القالب</span>
+              <input
+                required
+                value={buttonForm.name}
+                onChange={(e) => setButtonForm((current) => ({ ...current, name: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              <span>نص الرسالة</span>
+              <textarea
+                required
+                rows={3}
+                value={buttonForm.body}
+                onChange={(e) => setButtonForm((current) => ({ ...current, body: e.target.value }))}
+              />
+            </label>
+            <div className="field-label inbox-button-titles">
+              <span>نصوص الأزرار</span>
+              <div className="inbox-button-title-rows">
+                {buttonForm.titles.map((title, index) => (
+                  <label key={index} className="inbox-button-title-row">
+                    <span className="inbox-button-title-index">{index + 1}</span>
+                    <input
+                      value={title}
+                      maxLength={20}
+                      placeholder={`زر ${index + 1}`}
+                      onChange={(e) =>
+                        setButtonForm((current) => {
+                          const titles = [...current.titles] as ButtonForm["titles"];
+                          titles[index] = e.target.value;
+                          return { ...current, titles };
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="inline-actions">
+              <button type="submit" className="whatsapp-button">
+                حفظ
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setButtonModalOpen(false)}>
+                إلغاء
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {listModalOpen && (
+        <div className="modal-overlay" role="presentation" onClick={() => setListModalOpen(false)}>
+          <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={(e) => void saveList(e)}>
+            <h2>{editingList ? "تعديل قائمة" : "قائمة جديدة"}</h2>
+            <label className="field-label">
+              <span>الفرع</span>
+              <select
+                required
+                value={listForm.organizationId}
+                onChange={(e) => setListForm((current) => ({ ...current, organizationId: e.target.value }))}
+                disabled={Boolean(editingList)}
+              >
+                <option value="">اختر الفرع</option>
+                {(organizations.data ?? []).map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              <span>اسم القالب</span>
+              <input
+                required
+                value={listForm.name}
+                onChange={(e) => setListForm((current) => ({ ...current, name: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              <span>نص الرسالة</span>
+              <textarea
+                required
+                rows={3}
+                value={listForm.body}
+                onChange={(e) => setListForm((current) => ({ ...current, body: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              <span>نص زر القائمة</span>
+              <input
+                required
+                maxLength={20}
+                value={listForm.buttonText}
+                onChange={(e) => setListForm((current) => ({ ...current, buttonText: e.target.value }))}
+              />
+            </label>
+            <label className="field-label">
+              <span>عنوان القسم</span>
+              <input
+                value={listForm.sectionTitle}
+                maxLength={24}
+                onChange={(e) => setListForm((current) => ({ ...current, sectionTitle: e.target.value }))}
+              />
+            </label>
+            <div className="field-label inbox-button-titles">
+              <span>الخيارات</span>
+              <div className="inbox-button-title-rows">
+                {listForm.options.map((option, index) => (
+                  <div key={index} className="inbox-list-option-row">
+                    <label className="inbox-button-title-row">
+                      <span className="inbox-button-title-index">{index + 1}</span>
+                      <input
+                        value={option}
+                        maxLength={24}
+                        placeholder={`خيار ${index + 1}`}
+                        onChange={(e) =>
+                          setListForm((current) => {
+                            const options = [...current.options];
+                            options[index] = e.target.value;
+                            return { ...current, options };
+                          })
+                        }
+                      />
+                    </label>
+                    {listForm.options.length > 1 && (
+                      <button
+                        type="button"
+                        className="secondary-action inbox-list-option-remove"
+                        onClick={() =>
+                          setListForm((current) => ({
+                            ...current,
+                            options: current.options.filter((_, i) => i !== index)
+                          }))
+                        }
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {listForm.options.length < 10 && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setListForm((current) => ({ ...current, options: [...current.options, ""] }))}
+                >
+                  + خيار
+                </button>
+              )}
+            </div>
+            <div className="inline-actions">
+              <button type="submit" className="whatsapp-button">
+                حفظ
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setListModalOpen(false)}>
+                إلغاء
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </main>
+  );
+}

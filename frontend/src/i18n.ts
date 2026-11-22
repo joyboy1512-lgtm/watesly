@@ -13,6 +13,7 @@ const resources = {
         knowledge: "قاعدة المعرفة",
         contacts: "جهات الاتصال",
         quickReplies: "ردود سريعة",
+        composerLibrary: "مكتبة الرسائل",
         crm: "CRM",
         analytics: "تحليل البيانات",
         reports: "التقارير",
@@ -282,6 +283,7 @@ const resources = {
         catalog: "المنتجات والخدمات",
         knowledge: "قاعدة المعرفة",
         quickReplies: "الردود السريعة",
+        composerLibrary: "مكتبة الرسائل",
         automations: "الأتمتة",
         whatsappConnect: "ربط WhatsApp"
       },
@@ -351,6 +353,7 @@ const resources = {
         knowledge: "Knowledge Base",
         contacts: "Contacts",
         quickReplies: "Quick Replies",
+        composerLibrary: "Message Library",
         crm: "CRM",
         analytics: "Analytics",
         reports: "Reports",
@@ -619,6 +622,7 @@ const resources = {
         catalog: "Products & Services",
         knowledge: "Knowledge Base",
         quickReplies: "Quick Replies",
+        composerLibrary: "Message Library",
         automations: "Automations",
         whatsappConnect: "Connect WhatsApp"
       },

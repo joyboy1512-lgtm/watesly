@@ -34,13 +34,13 @@ async def list_button_templates(
     account_id: UUID,
     organization_id: UUID | None = None,
     membership=None,
+    active_only: bool = True,
 ) -> list[ComposerButtonTemplate]:
     from app.services.membership_access import organization_scope_clauses
 
-    query = select(ComposerButtonTemplate).where(
-        ComposerButtonTemplate.account_id == account_id,
-        ComposerButtonTemplate.is_active.is_(True),
-    )
+    query = select(ComposerButtonTemplate).where(ComposerButtonTemplate.account_id == account_id)
+    if active_only:
+        query = query.where(ComposerButtonTemplate.is_active.is_(True))
     if membership is not None:
         for clause in await organization_scope_clauses(
             db,
@@ -135,13 +135,13 @@ async def list_list_templates(
     account_id: UUID,
     organization_id: UUID | None = None,
     membership=None,
+    active_only: bool = True,
 ) -> list[ComposerListTemplate]:
     from app.services.membership_access import organization_scope_clauses
 
-    query = select(ComposerListTemplate).where(
-        ComposerListTemplate.account_id == account_id,
-        ComposerListTemplate.is_active.is_(True),
-    )
+    query = select(ComposerListTemplate).where(ComposerListTemplate.account_id == account_id)
+    if active_only:
+        query = query.where(ComposerListTemplate.is_active.is_(True))
     if membership is not None:
         for clause in await organization_scope_clauses(
             db,
