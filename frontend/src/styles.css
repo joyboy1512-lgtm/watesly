@@ -1524,7 +1524,8 @@ select, input, textarea {
 
 .chat-composer-extras:has(.inbox-product-picker),
 .chat-composer-extras:has(.inbox-reply-buttons-panel),
-.chat-composer-extras:has(.inbox-shortcuts-form) {
+.chat-composer-extras:has(.inbox-shortcuts-form),
+.chat-composer-extras:has(.quick-replies-panel-inline) {
   max-height: min(58vh, 560px);
 }
 
