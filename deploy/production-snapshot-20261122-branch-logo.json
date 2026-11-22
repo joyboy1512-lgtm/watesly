@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "e8e85f1",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DrxMk3Zn.js",
+    "css": "index-DQMzW1yI.css"
+  },
+  "alembic_head": "0066_organization_logo",
+  "features": [
+    "Organization logo_url field + upload on Organizations page",
+    "Catalog order invoice PDF and preview show branch logo + name"
+  ],
+  "notes": "Deployed via SSH. PR #171. Migration 0066_organization_logo."
+}
