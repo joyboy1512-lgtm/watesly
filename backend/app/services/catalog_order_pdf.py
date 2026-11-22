@@ -72,6 +72,80 @@ def _cell_latin(pdf: Any, w: float, h: float, text: str, *, size: int, **kwargs:
     pdf.cell(w, h, _sanitize_latin(text), **kwargs)
 
 
+def _fetch_logo_bytes(url: str) -> bytes | None:
+    value = str(url or "").strip()
+    if not value:
+        return None
+    try:
+        from app.services.storage import storage
+
+        key = storage.key_from_public_url(value)
+        if key:
+            data = storage.download_bytes(key)
+            if data:
+                return data
+    except Exception:
+        pass
+    try:
+        import httpx
+
+        response = httpx.get(value, timeout=20, follow_redirects=True)
+        if response.is_success and response.content:
+            return response.content
+    except Exception:
+        return None
+    return None
+
+
+def _draw_branch_header(
+    pdf: Any,
+    *,
+    company: str,
+    logo_url: str | None,
+    arabic_loaded: bool,
+) -> None:
+    """Title + optional logo beside branch name at the top of the invoice."""
+    _cell_arabic(pdf, 0, 10, "فاتورة طلب كتالوج", size=16, arabic_loaded=arabic_loaded, ln=1, align="R")
+
+    logo_bytes = _fetch_logo_bytes(logo_url or "")
+    if logo_bytes:
+        import tempfile
+        from pathlib import Path as FsPath
+
+        suffix = ".png" if logo_bytes[:8] == b"\x89PNG\r\n\x1a\n" else ".jpg"
+        tmp_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(logo_bytes)
+                tmp_path = tmp.name
+            # Place logo on the right (RTL), branch name beside it.
+            logo_w = 18
+            logo_h = 18
+            x = pdf.w - pdf.r_margin - logo_w
+            y = pdf.get_y()
+            pdf.image(tmp_path, x=x, y=y, w=logo_w, h=logo_h)
+            name_width = pdf.w - pdf.l_margin - pdf.r_margin - logo_w - 4
+            pdf.set_xy(pdf.l_margin, y + 4)
+            if _has_arabic(company):
+                _cell_arabic(
+                    pdf, name_width, 7, company, size=12, arabic_loaded=arabic_loaded, align="R", ln=1
+                )
+            else:
+                _cell_latin(pdf, name_width, 7, company, size=12, align="R", ln=1)
+            pdf.set_y(max(pdf.get_y(), y + logo_h + 2))
+            return
+        except Exception:
+            pass
+        finally:
+            if tmp_path:
+                FsPath(tmp_path).unlink(missing_ok=True)
+
+    if _has_arabic(company):
+        _cell_arabic(pdf, 0, 7, company, size=12, arabic_loaded=arabic_loaded, ln=1, align="R")
+    else:
+        _cell_latin(pdf, 0, 7, company, size=12, ln=1, align="R")
+
+
 def _row_label_value(
     pdf: Any,
     label: str,
@@ -101,6 +175,7 @@ def generate_catalog_order_invoice_pdf(context: dict[str, Any]) -> bytes:
     arabic_loaded = _load_fonts(pdf)
 
     company = str(context.get("company_name") or "Watesly")
+    logo_url = context.get("logo_url")
     order_number = str(context.get("order_number") or "")
     created_at: datetime | None = context.get("created_at")
     created_label = created_at.strftime("%Y-%m-%d %H:%M") if isinstance(created_at, datetime) else ""
@@ -110,11 +185,12 @@ def generate_catalog_order_invoice_pdf(context: dict[str, Any]) -> bytes:
     currency = str(context.get("currency") or "KWD")
     subtotal = Decimal(str(context.get("subtotal") or 0))
 
-    _cell_arabic(pdf, 0, 10, "فاتورة طلب كتالوج", size=16, arabic_loaded=arabic_loaded, ln=1, align="R")
-    if _has_arabic(company):
-        _cell_arabic(pdf, 0, 7, company, size=11, arabic_loaded=arabic_loaded, ln=1, align="R")
-    else:
-        _cell_latin(pdf, 0, 7, company, size=11, ln=1, align="R")
+    _draw_branch_header(
+        pdf,
+        company=company,
+        logo_url=str(logo_url) if logo_url else None,
+        arabic_loaded=arabic_loaded,
+    )
     pdf.ln(2)
 
     _row_label_value(pdf, "رقم الطلب", order_number, size=11, arabic_loaded=arabic_loaded)

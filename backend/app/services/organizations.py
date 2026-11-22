@@ -49,6 +49,7 @@ async def build_organization_response(db: AsyncSession, organization: Organizati
         id=organization.id,
         name=organization.name,
         slug=organization.slug,
+        logo_url=organization.logo_url,
         country_code=organization.country_code,
         currency_code=organization.currency_code,
         timezone=organization.timezone,
@@ -138,6 +139,9 @@ async def update_organization(
 
     if payload.status is not None:
         organization.status = OrganizationStatus(payload.status)
+
+    if "logo_url" in payload.model_fields_set:
+        organization.logo_url = payload.logo_url
 
     await db.commit()
     await db.refresh(organization)

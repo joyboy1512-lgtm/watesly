@@ -31,6 +31,7 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     slug: Mapped[str] = mapped_column(String(80), nullable=False)
+    logo_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     country_code: Mapped[str] = mapped_column(String(2), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Kuwait")

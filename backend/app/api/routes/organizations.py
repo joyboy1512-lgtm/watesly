@@ -164,7 +164,12 @@ async def patch_organization(
     context: AuthContext = Depends(require_permissions(Permission.ORGANIZATIONS_MANAGE, write=True)),
     db: AsyncSession = Depends(get_db),
 ) -> OrganizationResponse:
-    if payload.max_users is None and payload.max_channels is None and payload.status is None:
+    if (
+        payload.max_users is None
+        and payload.max_channels is None
+        and payload.status is None
+        and "logo_url" not in payload.model_fields_set
+    ):
         raise HTTPException(
             status_code=400,
             detail={"code": "NO_CHANGES", "message": "لم يُرسل أي تعديل."},

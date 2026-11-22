@@ -33,6 +33,7 @@ class OrganizationResponse(BaseModel):
     id: UUID
     name: str
     slug: str
+    logo_url: str | None = None
     country_code: str
     currency_code: str
     timezone: str
@@ -53,6 +54,7 @@ class OrganizationUpdateRequest(BaseModel):
     max_users: int | None = Field(default=None, ge=0, description="0 = unlimited users for this branch")
     max_channels: int | None = Field(default=None, ge=0, description="0 = unlimited channels for this branch")
     status: str | None = Field(default=None, pattern=r"^(active|suspended)$")
+    logo_url: str | None = Field(default=None, max_length=2048)
 
     @field_validator("status")
     @classmethod
@@ -60,3 +62,11 @@ class OrganizationUpdateRequest(BaseModel):
         if value is None:
             return None
         return value.strip().lower()
+
+    @field_validator("logo_url")
+    @classmethod
+    def normalize_logo_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
