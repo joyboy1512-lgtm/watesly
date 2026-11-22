@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "e8e85f1",
-    "git_commit_message": "Branch logo on organizations and catalog invoices live",
-    "alembic_head": "0066_organization_logo",
+    "git_commit": "dc90c8e",
+    "git_commit_message": "AI agent control panel live",
+    "alembic_head": "0067_ai_agent_control_panel",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DrxMk3Zn.js",
-      "css": "index-DQMzW1yI.css"
+      "js": "index-C6a0zhtH.js",
+      "css": "index-Ds0DWfmF.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "e8e85f1",
-  "notes": "Branch logo upload on Organizations page + invoice PDF/preview branding (PR #171)"
+  "commit": "dc90c8e",
+  "notes": "AI agent control panel: API key, business hours, master switch, inbox mode chip (PR #172)"
 }

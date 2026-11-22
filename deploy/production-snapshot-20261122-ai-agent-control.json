@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-22",
+  "commit": "dc90c8e",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-C6a0zhtH.js",
+    "css": "index-Ds0DWfmF.css"
+  },
+  "alembic_head": "0067_ai_agent_control_panel",
+  "features": [
+    "Master agent enable/disable from Knowledge page",
+    "Per-account encrypted LLM API key + base URL/model",
+    "Business hours editor in UI",
+    "Inbox chip for active reply mode / agent off"
+  ],
+  "notes": "Deployed via SSH. PR #172. Migration 0067_ai_agent_control_panel."
+}
