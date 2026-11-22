@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "4872ad3",
-    "git_commit_message": "Bold chat text live",
+    "git_commit": "7e70817",
+    "git_commit_message": "Inbox composer tools upgrade live",
     "alembic_head": "0064_custom_inboxes",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-1KDQO4jZ.js",
-      "css": "index-C-bXMfWs.css"
+      "js": "index-D2XNUDCW.js",
+      "css": "index-Bp4535pg.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "4872ad3",
-  "notes": "Chat dialog message and composer text bold (700)"
+  "commit": "7e70817",
+  "notes": "All inbox composer tool cards upgraded (PR #153)"
 }
