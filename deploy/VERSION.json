@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "53a6018",
-    "git_commit_message": "Taller chat header live",
+    "git_commit": "96412af",
+    "git_commit_message": "Inbox product picker fix live",
     "alembic_head": "0064_custom_inboxes",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-CieAQfbr.js",
-      "css": "index-_CaN94he.css"
+      "js": "index-evwzvZzL.js",
+      "css": "index-C01TdNSV.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "53a6018",
-  "notes": "Taller green chat header so Arabic names are not clipped (PR #156)"
+  "commit": "96412af",
+  "notes": "Inbox product picker catalog selectable (PR #157)"
 }

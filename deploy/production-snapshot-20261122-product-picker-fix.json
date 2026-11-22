@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-22",
+  "commit": "96412af",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-evwzvZzL.js",
+    "css": "index-C01TdNSV.css"
+  },
+  "alembic_head": "0064_custom_inboxes",
+  "features": [
+    "Expanded product picker panel so catalog products are selectable"
+  ],
+  "notes": "Deployed via SSH. PR #157."
+}
