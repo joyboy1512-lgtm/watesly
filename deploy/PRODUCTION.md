@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — Internal AI engine upgrade
+
+| Item | Value |
+|------|-------|
+| Commit | `6e754c9` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-CJ_s0gMW.js`, `index-Ds0DWfmF.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-internal-ai.json` |
+
 ### Production snapshot (2026-11-22) — AI agent control panel
 
 | Item | Value |

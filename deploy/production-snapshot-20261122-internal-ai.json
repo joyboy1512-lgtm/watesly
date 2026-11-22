@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-22",
+  "commit": "6e754c9",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CJ_s0gMW.js",
+    "css": "index-Ds0DWfmF.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Arabic normalize + synonym ranking engine",
+    "Helpful/dismiss feedback learning",
+    "Multi-article complementary replies",
+    "Knowledge quality lab + inbox feedback buttons"
+  ],
+  "notes": "Deployed via SSH. PR #173. Migration 0068_internal_ai_feedback."
+}
