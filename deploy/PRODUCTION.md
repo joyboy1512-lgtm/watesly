@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — Bilingual catalog + clarifying dialogue
+
+| Item | Value |
+|------|-------|
+| Commit | `191196a` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-XzxrybLR.js`, `index-Ds0DWfmF.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-bilingual-clarify.json` |
+
 ### Production snapshot (2026-11-22) — Internal AI engine upgrade
 
 | Item | Value |
