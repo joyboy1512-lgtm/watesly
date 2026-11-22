@@ -46,20 +46,20 @@ export function buildCartSummary(products: MatchedCatalogProduct[]) {
   return ["🛒 ملخص الطلب:", ...lines].join("\n");
 }
 
-async function fetchCatalogProducts(query: string, channelId?: string | null) {
+async function fetchCatalogProducts(
+  query: string,
+  channelId?: string | null,
+  channelOnly = false
+) {
   const params: Record<string, string | number> = {};
-  if (channelId) params.channel_id = channelId;
+  // Only narrow by channel when explicitly requested; otherwise show full catalog.
+  if (channelOnly && channelId) params.channel_id = channelId;
   if (query.trim()) {
     params.q = query.trim();
-    params.limit = 24;
-    const searched = (await api.get<CatalogProduct[]>("/catalog/search", { params })).data;
-    if (searched.length || !channelId) return searched;
-    const { channel_id: _ignored, ...rest } = params;
-    return (await api.get<CatalogProduct[]>("/catalog/search", { params: rest })).data;
+    params.limit = 500;
+    return (await api.get<CatalogProduct[]>("/catalog/search", { params })).data;
   }
-  const listed = (await api.get<CatalogProduct[]>("/catalog", { params })).data.slice(0, 24);
-  if (listed.length || !channelId) return listed;
-  return (await api.get<CatalogProduct[]>("/catalog")).data.slice(0, 24);
+  return (await api.get<CatalogProduct[]>("/catalog", { params })).data;
 }
 
 export default function InboxProductPicker({
@@ -74,18 +74,20 @@ export default function InboxProductPicker({
 }: Props) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [channelOnly, setChannelOnly] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setQuery("");
       setSelectedIds([]);
+      setChannelOnly(false);
     }
   }, [open]);
 
   const products = useQuery({
-    queryKey: ["catalog-picker", query, channelId],
+    queryKey: ["catalog-picker", query, channelId, channelOnly],
     enabled: open,
-    queryFn: () => fetchCatalogProducts(query, channelId)
+    queryFn: () => fetchCatalogProducts(query, channelId, channelOnly)
   });
 
   const rows = useMemo(
@@ -128,6 +130,24 @@ export default function InboxProductPicker({
           disabled={disabled}
           autoFocus
         />
+      </div>
+      <div className="inbox-product-picker-meta">
+        <span>
+          {products.isLoading
+            ? "جاري التحميل…"
+            : `عرض ${rows.length.toLocaleString("ar")} منتج`}
+        </span>
+        {channelId && (
+          <label className="inbox-product-check">
+            <input
+              type="checkbox"
+              checked={channelOnly}
+              onChange={(e) => setChannelOnly(e.target.checked)}
+              disabled={disabled}
+            />
+            <span>هذه القناة فقط</span>
+          </label>
+        )}
       </div>
       {cart.length > 0 && (
         <div className="inbox-product-cart">
