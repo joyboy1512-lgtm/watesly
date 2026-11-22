@@ -8,8 +8,8 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "9e9b9a6",
-    "git_commit_message": "Inbox نشط filter + paged load live",
+    "git_commit": "fa4a703",
+    "git_commit_message": "Fix inbox نشط empty list",
     "alembic_head": "0065_composer_library",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "9e9b9a6",
-  "notes": "Inbox engaged-only default + paged lists (PR #165)"
+  "commit": "fa4a703",
+  "notes": "Fix engaged_only Message EXISTS correlation (PR #166)"
 }
