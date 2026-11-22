@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "ebe0b7e",
-    "git_commit_message": "Dashboard green cards live",
+    "git_commit": "81b1213",
+    "git_commit_message": "Inbox contacts list wider live",
     "alembic_head": "0064_custom_inboxes",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-D8CKaZAO.js",
-      "css": "index-DqmXBeOj.css"
+      "js": "index-CqmqzmL_.js",
+      "css": "index-BnVLwIb3.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "ebe0b7e",
-  "notes": "Dashboard green high-efficiency card redesign published"
+  "commit": "81b1213",
+  "notes": "Inbox contacts list widened to 348px; chat pane slightly narrower"
 }
