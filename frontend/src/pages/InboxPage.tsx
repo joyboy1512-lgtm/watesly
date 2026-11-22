@@ -489,12 +489,12 @@ export default function InboxPage() {
   const repliesOrganizationId =
     selectedConversation?.organization_id ?? workspaceOrganizationId ?? undefined;
   const quickRepliesQuery = useQuery({
-    queryKey: ["quick-replies", repliesOrganizationId, selectedConversation?.channel_id],
+    queryKey: ["quick-replies", "inbox-picker", repliesOrganizationId],
     enabled: Boolean(selectedConversation),
     queryFn: async () => {
       const params: Record<string, string> = {};
+      // Branch-scoped library only — do not filter by channel so all shared replies appear.
       if (repliesOrganizationId) params.organization_id = repliesOrganizationId;
-      if (selectedConversation?.channel_id) params.channel_id = selectedConversation.channel_id;
       return (await api.get<QuickReply[]>("/inbox-tools/quick-replies", { params })).data;
     }
   });
@@ -867,7 +867,7 @@ export default function InboxPage() {
   }
   async function applyReplyTemplate(
     body: string,
-    options?: { articleId?: string; quickReplyId?: string }
+    options?: { articleId?: string; quickReplyId?: string; closePicker?: boolean }
   ) {
     if (!selectedId) return;
     try {
@@ -882,6 +882,10 @@ export default function InboxPage() {
     if (options?.quickReplyId) {
       void api.post(`/inbox-tools/quick-replies/${options.quickReplyId}/usage`, undefined, silentRequest).catch(() => undefined);
       void queryClient.invalidateQueries({ queryKey: ["quick-replies"] });
+    }
+    if (options?.closePicker !== false) {
+      setSnippetsOpen(false);
+      setSlashHint(null);
     }
   }
   async function saveLastOutboundAsQuickReply() {
@@ -1554,80 +1558,70 @@ export default function InboxPage() {
           {snippetsOpen && (
             <div className="quick-replies-panel-inline inbox-reply-buttons-panel">
               <div className="inbox-product-picker-head">
-                <strong>ردود من مكتبة الرسائل</strong>
-                <div className="inline-actions">
-                  <Link to="/composer-library">فتح المكتبة</Link>
-                  <button
-                    type="button"
-                    className="secondary-action"
-                    onClick={() => setSnippetsOpen(false)}
-                    aria-label="إغلاق"
-                  >
-                    ×
-                  </button>
-                </div>
+                <strong>اختر رداً لإدراجه في المحادثة</strong>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={() => setSnippetsOpen(false)}
+                  aria-label="إغلاق"
+                >
+                  ×
+                </button>
               </div>
               {quickRepliesQuery.isLoading ? (
                 <p className="hint-text">جاري تحميل الردود…</p>
               ) : quickRepliesQuery.isError ? (
                 <p className="hint-text">تعذر تحميل الردود. تأكد من صلاحياتك ثم أعد المحاولة.</p>
               ) : quickReplies.length === 0 ? (
-                <div className="inbox-composer-library">
-                  <p className="hint-text">لا توجد ردود نشطة لهذا الفرع بعد.</p>
-                  <Link className="secondary-button" to="/composer-library">
-                    إضافة ردود من مكتبة الرسائل
-                  </Link>
-                </div>
+                <p className="hint-text">
+                  لا توجد ردود نشطة لهذا الفرع. أضفها من صفحة «مكتبة الرسائل» ثم ارجع هنا لاختيارها.
+                </p>
               ) : (
                 <>
-                  <div className="inbox-reply-category-chips">
-                    <button
-                      type="button"
-                      className={`quick-reply-chip${replyCategoryFilter === "all" ? " suggested" : ""}`}
-                      onClick={() => setReplyCategoryFilter("all")}
-                    >
-                      الكل
-                    </button>
-                    {replyCategoryOptions.map(([key, label]) => (
+                  {replyCategoryOptions.length > 0 && (
+                    <div className="inbox-reply-category-chips">
                       <button
-                        key={key}
                         type="button"
-                        className={`quick-reply-chip${replyCategoryFilter === key ? " suggested" : ""}`}
-                        onClick={() => setReplyCategoryFilter(key)}
+                        className={`quick-reply-chip${replyCategoryFilter === "all" ? " suggested" : ""}`}
+                        onClick={() => setReplyCategoryFilter("all")}
                       >
-                        {label}
+                        الكل
                       </button>
-                    ))}
-                  </div>
-                  <div className="quick-replies">
-                    {topQuickReplies.map((item, index) => (
-                      <button
-                        key={`top-${item.id}`}
-                        type="button"
-                        className="quick-reply-chip top-used"
-                        title={`${item.body} (Ctrl+${index + 1})`}
-                        onClick={() => void applyReplyTemplate(item.body, { quickReplyId: item.id })}
-                        disabled={!selectedId}
-                      >
-                        {item.title}
-                        <small dir="ltr">Ctrl+{index + 1}</small>
-                      </button>
-                    ))}
-                    {filteredQuickReplies
-                      .filter((item) => !topQuickReplies.some((top) => top.id === item.id))
-                      .map((item) => (
+                      {replyCategoryOptions.map(([key, label]) => (
                         <button
-                          key={item.id}
+                          key={key}
                           type="button"
-                          className="quick-reply-chip"
-                          title={item.body}
-                          onClick={() => void applyReplyTemplate(item.body, { quickReplyId: item.id })}
-                          disabled={!selectedId}
+                          className={`quick-reply-chip${replyCategoryFilter === key ? " suggested" : ""}`}
+                          onClick={() => setReplyCategoryFilter(key)}
                         >
-                          {item.title}
-                          <small>{categoryLabel(item.category)}</small>
+                          {label}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  <div className="inbox-composer-library-list" role="listbox" aria-label="الردود الجاهزة">
+                    {filteredQuickReplies.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="option"
+                        className="inbox-composer-library-card"
+                        title={item.body}
+                        disabled={!selectedId}
+                        onClick={() =>
+                          void applyReplyTemplate(item.body, {
+                            quickReplyId: item.id,
+                            closePicker: true
+                          })
+                        }
+                      >
+                        <strong>{item.title}</strong>
+                        <span>{item.body}</span>
+                        <small>
+                          {item.shortcut} · {categoryLabel(item.category)}
+                        </small>
+                      </button>
+                    ))}
                   </div>
                 </>
               )}
