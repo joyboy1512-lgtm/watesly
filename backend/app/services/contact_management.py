@@ -295,12 +295,20 @@ def _apply_segment_filters(query, filters: dict):
         values = [str(item) for item in exclude_genders if str(item) in {"male", "female", "unknown"}]
         if values:
             query = query.where(Contact.gender.notin_(values))
+    interest_filter_ids: list[UUID] = []
     if interest_ids := filters.get("interest_ids"):
-        ids = [UUID(str(item)) for item in interest_ids]
-        if ids:
-            query = query.join(ContactInterest, ContactInterest.contact_id == Contact.id).where(
-                ContactInterest.interest_id.in_(ids)
+        interest_filter_ids.extend(UUID(str(item)) for item in interest_ids)
+    if interest_id := filters.get("interest_id"):
+        value = UUID(str(interest_id))
+        if value not in interest_filter_ids:
+            interest_filter_ids.append(value)
+    if interest_filter_ids:
+        query = query.where(
+            exists().where(
+                ContactInterest.contact_id == Contact.id,
+                ContactInterest.interest_id.in_(interest_filter_ids),
             )
+        )
     return query
 
 

@@ -16,7 +16,7 @@ import {
   type Organization,
   type Tag
 } from "../lib/contactHelpers";
-import { type InterestCategory } from "../lib/interestHelpers";
+import { slugifyInterestLabel, type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 export default function ContactCreatePage() {
@@ -36,6 +36,7 @@ export default function ContactCreatePage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState("");
+  const [newInterestLabel, setNewInterestLabel] = useState("");
 
   const organizations = useQuery({
     queryKey: ["organizations"],
@@ -88,6 +89,22 @@ export default function ContactCreatePage() {
     await client.invalidateQueries({ queryKey: ["tags"] });
     setSelectedTagIds((current) => [...current, response.data.id]);
     toastStore.getState().show("تم إنشاء التصنيف.", "success");
+  }
+
+  async function createInterest() {
+    const label = newInterestLabel.trim();
+    if (!label) {
+      toastStore.getState().show("أدخل اسم الاهتمام.", "error");
+      return;
+    }
+    const response = await api.post<InterestCategory>("/platform/interests", {
+      label,
+      slug: slugifyInterestLabel(label)
+    });
+    setNewInterestLabel("");
+    await client.invalidateQueries({ queryKey: ["interests"] });
+    setSelectedInterestIds((current) => [...current, response.data.id]);
+    toastStore.getState().show("تم إنشاء الاهتمام.", "success");
   }
 
   useEffect(() => {
@@ -282,6 +299,21 @@ export default function ContactCreatePage() {
                     </button>
                   );
                 })}
+              </div>
+              <div className="contacts-inline-tag-create">
+                <input
+                  value={newInterestLabel}
+                  onChange={(e) => setNewInterestLabel(e.target.value)}
+                  placeholder="اهتمام جديد…"
+                />
+                <button
+                  type="button"
+                  className="contacts-erp-btn"
+                  disabled={!newInterestLabel.trim()}
+                  onClick={() => void createInterest()}
+                >
+                  + اهتمام
+                </button>
               </div>
             </div>
             <label className="field-label">

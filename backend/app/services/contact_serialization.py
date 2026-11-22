@@ -21,6 +21,8 @@ def contact_to_response(
     permissions: set[str],
     privacy_mask_enabled: bool = True,
     last_campaign: dict | None = None,
+    interest_ids: list[UUID] | None = None,
+    interest_labels: list[str] | None = None,
 ) -> ContactResponse:
     show_full = not privacy_mask_enabled or can_view_full_contact(
         role=_role_value(role),
@@ -31,6 +33,8 @@ def contact_to_response(
         data["last_campaign_id"] = last_campaign.get("last_campaign_id")
         data["last_campaign_name"] = last_campaign.get("last_campaign_name")
         data["last_campaign_at"] = last_campaign.get("last_campaign_at")
+    data["interest_ids"] = list(interest_ids or [])
+    data["interest_labels"] = list(interest_labels or [])
     wa_status = resolve_whatsapp_contact_status(contact)
     data["whatsapp_status"] = wa_status.value
     data["whatsapp_status_label"] = whatsapp_status_label(wa_status)
@@ -46,14 +50,21 @@ def attach_last_campaigns(
     permissions: set[str],
     privacy_mask_enabled: bool,
     last_campaigns: dict[UUID, dict],
+    interests_by_contact: dict[UUID, list] | None = None,
 ) -> list[ContactResponse]:
-    return [
-        contact_to_response(
-            item,
-            role=role,
-            permissions=permissions,
-            privacy_mask_enabled=privacy_mask_enabled,
-            last_campaign=last_campaigns.get(item.id),
+    interests_by_contact = interests_by_contact or {}
+    rows: list[ContactResponse] = []
+    for item in contacts:
+        interest_rows = interests_by_contact.get(item.id) or []
+        rows.append(
+            contact_to_response(
+                item,
+                role=role,
+                permissions=permissions,
+                privacy_mask_enabled=privacy_mask_enabled,
+                last_campaign=last_campaigns.get(item.id),
+                interest_ids=[category.id for category in interest_rows],
+                interest_labels=[category.label for category in interest_rows],
+            )
         )
-        for item in contacts
-    ]
+    return rows

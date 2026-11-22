@@ -27,6 +27,7 @@ import {
 } from "../lib/contactHelpers";
 import Icon from "../components/Icon";
 import ContactsSegmentsModal from "../components/ContactsSegmentsModal";
+import { slugifyInterestLabel, type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 type Segment = { id: string; name: string; filter_json: Record<string, unknown> };
@@ -44,6 +45,7 @@ export default function ContactsPage() {
   const [channelFilter, setChannelFilter] = useState(searchParams.get("channel_id") ?? "");
   const [organizationFilter, setOrganizationFilter] = useState(searchParams.get("organization_id") ?? "");
   const [tagFilter, setTagFilter] = useState(searchParams.get("tag_id") ?? "");
+  const [interestFilter, setInterestFilter] = useState(searchParams.get("interest_id") ?? "");
   const [segmentFilter, setSegmentFilter] = useState(searchParams.get("segment_id") ?? "");
   const [lifecycleFilter, setLifecycleFilter] = useState(searchParams.get("lifecycle_stage") ?? "");
   const [regionFilter, setRegionFilter] = useState(searchParams.get("region") ?? "");
@@ -51,6 +53,7 @@ export default function ContactsPage() {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState("");
+  const [bulkInterestId, setBulkInterestId] = useState("");
   const [groupName, setGroupName] = useState("");
   const [groupBusy, setGroupBusy] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -77,6 +80,8 @@ export default function ContactsPage() {
     if (organization) setOrganizationFilter(organization);
     const tag = searchParams.get("tag_id");
     if (tag) setTagFilter(tag);
+    const interest = searchParams.get("interest_id");
+    if (interest) setInterestFilter(interest);
     const segment = searchParams.get("segment_id");
     if (segment) setSegmentFilter(segment);
   }, [searchParams]);
@@ -89,7 +94,7 @@ export default function ContactsPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [debouncedSearch, channelFilter, organizationFilter, tagFilter, segmentFilter, lifecycleFilter, regionFilter, whatsappStatusFilter]);
+  }, [debouncedSearch, channelFilter, organizationFilter, tagFilter, interestFilter, segmentFilter, lifecycleFilter, regionFilter, whatsappStatusFilter]);
 
   function updateFilterParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -113,6 +118,11 @@ export default function ContactsPage() {
     updateFilterParam("tag_id", value);
   }
 
+  function onInterestFilterChange(value: string) {
+    setInterestFilter(value);
+    updateFilterParam("interest_id", value);
+  }
+
   function onSegmentFilterChange(value: string) {
     setSegmentFilter(value);
     updateFilterParam("segment_id", value);
@@ -130,6 +140,10 @@ export default function ContactsPage() {
     queryKey: ["tags"],
     queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data
   });
+  const interests = useQuery({
+    queryKey: ["interests"],
+    queryFn: async () => (await api.get<InterestCategory[]>("/platform/interests")).data
+  });
   const contacts = useQuery({
     queryKey: [
       "contacts",
@@ -137,6 +151,7 @@ export default function ContactsPage() {
       channelFilter,
       organizationFilter,
       tagFilter,
+      interestFilter,
       segmentFilter,
       lifecycleFilter,
       regionFilter,
@@ -148,6 +163,7 @@ export default function ContactsPage() {
       if (channelFilter) params.channel_id = channelFilter;
       if (organizationFilter) params.organization_id = organizationFilter;
       if (tagFilter) params.tag_id = tagFilter;
+      if (interestFilter) params.interest_id = interestFilter;
       if (segmentFilter) params.segment_id = segmentFilter;
       if (lifecycleFilter) params.lifecycle_stage = lifecycleFilter;
       if (regionFilter) params.region = regionFilter;
@@ -291,6 +307,25 @@ export default function ContactsPage() {
     }
   }
 
+  async function bulkAddInterest() {
+    if (!bulkInterestId || !selectedCount) return;
+    try {
+      await Promise.all(
+        [...selectedIds].map(async (id) => {
+          const current = await api.get<InterestCategory[]>(`/contacts/${id}/interests`);
+          const nextIds = Array.from(new Set([...current.data.map((item) => item.id), bulkInterestId]));
+          await api.put(`/contacts/${id}/interests`, { interest_ids: nextIds });
+        })
+      );
+      await client.invalidateQueries({ queryKey: ["contact-interests"] });
+      await client.invalidateQueries({ queryKey: ["contacts"] });
+      setBulkInterestId("");
+      toastStore.getState().show("تمت إضافة الاهتمام للمحدّدين.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إضافة الاهتمام.", "error");
+    }
+  }
+
   async function createGroupFromSelected() {
     const name = groupName.trim();
     if (!name || !selectedCount) return;
@@ -336,6 +371,7 @@ export default function ContactsPage() {
         organization_id: organizationFilter,
         channel_id: channelFilter,
         tag_id: tagFilter,
+        interest_id: interestFilter,
         lifecycle_stage: lifecycleFilter
       })
     });
@@ -413,12 +449,23 @@ export default function ContactsPage() {
                 </button>
                 <div className="contacts-bulk-tag">
                   <select value={bulkTagId} onChange={(e) => setBulkTagId(e.target.value)}>
-                    <option value="">إضافة لمجموعة موجودة…</option>
+                    <option value="">إضافة تصنيف…</option>
                     {(tags.data ?? []).map((tag) => (
                       <option key={tag.id} value={tag.id}>{tag.name}</option>
                     ))}
                   </select>
                   <button type="button" className="contacts-erp-btn" disabled={!bulkTagId} onClick={() => void bulkAddTag()}>
+                    تطبيق
+                  </button>
+                </div>
+                <div className="contacts-bulk-tag">
+                  <select value={bulkInterestId} onChange={(e) => setBulkInterestId(e.target.value)}>
+                    <option value="">إضافة اهتمام…</option>
+                    {(interests.data ?? []).map((interest) => (
+                      <option key={interest.id} value={interest.id}>{interest.label}</option>
+                    ))}
+                  </select>
+                  <button type="button" className="contacts-erp-btn" disabled={!bulkInterestId} onClick={() => void bulkAddInterest()}>
                     تطبيق
                   </button>
                 </div>
@@ -489,6 +536,17 @@ export default function ContactsPage() {
               <option value="">كل التصنيفات</option>
               {(tags.data ?? []).map((tag) => (
                 <option key={tag.id} value={tag.id}>{tag.name}</option>
+              ))}
+            </select>
+            <select
+              value={interestFilter}
+              onChange={(e) => onInterestFilterChange(e.target.value)}
+              className="contacts-erp-channel-filter"
+              aria-label="تصفية حسب الاهتمام"
+            >
+              <option value="">كل الاهتمامات</option>
+              {(interests.data ?? []).map((interest) => (
+                <option key={interest.id} value={interest.id}>{interest.label}</option>
               ))}
             </select>
             <select
@@ -623,6 +681,7 @@ export default function ContactsPage() {
                   <th>الفرع</th>
                   <th>القناة</th>
                   <th>التصنيفات</th>
+                  <th>الاهتمامات</th>
                   <th>آخر حملة</th>
                   <th>التسويق</th>
                   <th>تاريخ الإضافة</th>
@@ -635,6 +694,7 @@ export default function ContactsPage() {
                     key={item.id}
                     contact={item}
                     tags={tags.data ?? []}
+                    interests={interests.data ?? []}
                     organizationName={orgMap.get(item.organization_id) ?? "—"}
                     channelName={channelMap.get(item.channel_id) ?? "—"}
                     selected={selectedIds.has(item.id)}
@@ -669,6 +729,7 @@ export default function ContactsPage() {
           organization_id: organizationFilter || undefined,
           channel_id: channelFilter || undefined,
           tag_id: tagFilter || undefined,
+          interest_id: interestFilter || undefined,
           lifecycle_stage: lifecycleFilter || undefined
         }}
         onApplySegment={(segmentId) => onSegmentFilterChange(segmentId)}
@@ -729,6 +790,7 @@ export default function ContactsPage() {
 function ContactRow({
   contact,
   tags,
+  interests,
   organizationName,
   channelName,
   selected,
@@ -738,6 +800,7 @@ function ContactRow({
 }: {
   contact: Contact;
   tags: Tag[];
+  interests: InterestCategory[];
   organizationName: string;
   channelName: string;
   selected: boolean;
@@ -747,13 +810,22 @@ function ContactRow({
 }) {
   const client = useQueryClient();
   const [tagOpen, setTagOpen] = useState(false);
+  const [interestOpen, setInterestOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
+  const [newInterestLabel, setNewInterestLabel] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
+  const [creatingInterest, setCreatingInterest] = useState(false);
   const tagRef = useRef<HTMLDivElement>(null);
+  const interestRef = useRef<HTMLDivElement>(null);
 
   const contactTags = useQuery({
     queryKey: ["contact-tags", contact.id],
     queryFn: async () => (await api.get<Tag[]>(`/contacts/${contact.id}/tags`)).data
+  });
+
+  const contactInterests = useQuery({
+    queryKey: ["contact-interests", contact.id],
+    queryFn: async () => (await api.get<InterestCategory[]>(`/contacts/${contact.id}/interests`)).data
   });
 
   useEffect(() => {
@@ -764,6 +836,15 @@ function ContactRow({
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [tagOpen]);
+
+  useEffect(() => {
+    if (!interestOpen) return;
+    function onDocClick(event: MouseEvent) {
+      if (interestRef.current && !interestRef.current.contains(event.target as Node)) setInterestOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [interestOpen]);
 
   async function addTag(tagId: string) {
     await api.post(`/contacts/${contact.id}/tags/${tagId}`);
@@ -799,9 +880,59 @@ function ContactRow({
     }
   }
 
+  async function saveInterestIds(nextIds: string[]) {
+    await api.put(`/contacts/${contact.id}/interests`, { interest_ids: nextIds });
+    await client.invalidateQueries({ queryKey: ["contact-interests", contact.id] });
+    await client.invalidateQueries({ queryKey: ["contacts"] });
+  }
+
+  async function addInterest(interestId: string) {
+    const current = (contactInterests.data ?? []).map((item) => item.id);
+    if (current.includes(interestId)) return;
+    await saveInterestIds([...current, interestId]);
+  }
+
+  async function removeInterest(interestId: string) {
+    const current = (contactInterests.data ?? []).map((item) => item.id);
+    await saveInterestIds(current.filter((id) => id !== interestId));
+  }
+
+  async function createAndAssignInterest() {
+    const label = newInterestLabel.trim();
+    if (!label) return;
+    setCreatingInterest(true);
+    try {
+      const created = await api.post<InterestCategory>("/platform/interests", {
+        label,
+        slug: slugifyInterestLabel(label)
+      });
+      await addInterest(created.data.id);
+      setNewInterestLabel("");
+      await client.invalidateQueries({ queryKey: ["interests"] });
+      toastStore.getState().show("تم إنشاء الاهتمام وإضافته.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إنشاء الاهتمام.", "error");
+    } finally {
+      setCreatingInterest(false);
+    }
+  }
+
   const assigned = contactTags.data ?? [];
   const available = tags.filter(
     (tag) => tag.organization_id === contact.organization_id && !assigned.some((item) => item.id === tag.id)
+  );
+  const assignedInterests =
+    contactInterests.data ??
+    (contact.interest_ids ?? []).map((id, index) => ({
+      id,
+      slug: id,
+      label: contact.interest_labels?.[index] ?? id,
+      exclude_genders: [] as string[],
+      include_genders: null,
+      sort_order: index
+    }));
+  const availableInterests = interests.filter(
+    (interest) => !assignedInterests.some((item) => item.id === interest.id)
   );
   const displayLabel = contactDisplayLabel(contact);
 
@@ -872,6 +1003,51 @@ function ContactRow({
                   className="contacts-erp-btn"
                   disabled={creatingTag || !newTagName.trim()}
                   onClick={() => void createAndAssignTag()}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </td>
+      <td onClick={(e) => e.stopPropagation()}>
+        <div className="contacts-tags-cell" ref={interestRef}>
+          {assignedInterests.map((interest) => (
+            <button
+              key={interest.id}
+              type="button"
+              className="contacts-tag-chip contacts-interest-chip contacts-tag-chip-active"
+              onClick={() => void removeInterest(interest.id)}
+              title="إزالة الاهتمام"
+            >
+              {interest.label} ×
+            </button>
+          ))}
+          <button type="button" className="contacts-tag-add" onClick={() => setInterestOpen((v) => !v)}>
+            + اهتمام
+          </button>
+          {interestOpen && (
+            <div className="contacts-tag-dropdown">
+              {availableInterests.length === 0 && <p className="hint-text">لا توجد اهتمامات إضافية — أنشئ اهتماماً جديداً.</p>}
+              {availableInterests.map((interest) => (
+                <label key={interest.id} className="contacts-tag-dropdown-check">
+                  <input type="checkbox" checked={false} onChange={() => void addInterest(interest.id)} />
+                  <span>{interest.label}</span>
+                </label>
+              ))}
+              <div className="contacts-inline-tag-create contacts-tag-dropdown-create">
+                <input
+                  value={newInterestLabel}
+                  onChange={(event) => setNewInterestLabel(event.target.value)}
+                  placeholder="اهتمام جديد…"
+                  onClick={(event) => event.stopPropagation()}
+                />
+                <button
+                  type="button"
+                  className="contacts-erp-btn"
+                  disabled={creatingInterest || !newInterestLabel.trim()}
+                  onClick={() => void createAndAssignInterest()}
                 >
                   +
                 </button>

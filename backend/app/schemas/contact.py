@@ -73,6 +73,8 @@ class ContactResponse(BaseModel):
     last_campaign_at: datetime | None = None
     whatsapp_status: str | None = None
     whatsapp_status_label: str | None = None
+    interest_ids: list[UUID] = Field(default_factory=list)
+    interest_labels: list[str] = Field(default_factory=list)
 
 
 class ContactActivityResponse(BaseModel):

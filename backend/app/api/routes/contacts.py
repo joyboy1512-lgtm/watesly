@@ -80,13 +80,21 @@ def _contact_permissions(context: AuthContext) -> set[str]:
 
 
 async def _serialize_contacts(context: AuthContext, db: AsyncSession, contacts: list) -> list[ContactResponse]:
+    from app.services.interests import load_interests_for_contacts
+
     flags = await get_feature_flags(db, account_id=context.account_id)
     perms = _contact_permissions(context)
     mask = flags.get("privacy_mask_agents", True)
+    contact_ids = [item.id for item in contacts]
     last_campaigns = await load_last_campaigns_for_contacts(
         db,
         account_id=context.account_id,
-        contact_ids=[item.id for item in contacts],
+        contact_ids=contact_ids,
+    )
+    interests_by_contact = await load_interests_for_contacts(
+        db,
+        account_id=context.account_id,
+        contact_ids=contact_ids,
     )
     return attach_last_campaigns(
         contacts,
@@ -94,22 +102,33 @@ async def _serialize_contacts(context: AuthContext, db: AsyncSession, contacts: 
         permissions=perms,
         privacy_mask_enabled=mask,
         last_campaigns=last_campaigns,
+        interests_by_contact=interests_by_contact,
     )
 
 
 async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) -> ContactResponse:
+    from app.services.interests import load_interests_for_contacts
+
     flags = await get_feature_flags(db, account_id=context.account_id)
     last_campaigns = await load_last_campaigns_for_contacts(
         db,
         account_id=context.account_id,
         contact_ids=[contact.id],
     )
+    interests_by_contact = await load_interests_for_contacts(
+        db,
+        account_id=context.account_id,
+        contact_ids=[contact.id],
+    )
+    interest_rows = interests_by_contact.get(contact.id) or []
     return contact_to_response(
         contact,
         role=context.membership.role,
         permissions=_contact_permissions(context),
         privacy_mask_enabled=flags.get("privacy_mask_agents", True),
         last_campaign=last_campaigns.get(contact.id),
+        interest_ids=[item.id for item in interest_rows],
+        interest_labels=[item.label for item in interest_rows],
     )
 
 
@@ -121,6 +140,8 @@ async def get_contacts(
     organization_id: UUID | None = None,
     tag_id: UUID | None = None,
     tag_ids: str | None = Query(None, description="Comma-separated tag IDs (OR match)"),
+    interest_id: UUID | None = None,
+    interest_ids: str | None = Query(None, description="Comma-separated interest IDs (OR match)"),
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     region: str | None = Query(None, max_length=120, description="Exact contact region/area filter"),
@@ -159,6 +180,14 @@ async def get_contacts(
             raise HTTPException(status_code=400, detail="Invalid tag IDs") from exc
         if not parsed_tag_ids:
             parsed_tag_ids = None
+    parsed_interest_ids: list[UUID] | None = None
+    if interest_ids:
+        try:
+            parsed_interest_ids = [UUID(item.strip()) for item in interest_ids.split(",") if item.strip()]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid interest IDs") from exc
+        if not parsed_interest_ids:
+            parsed_interest_ids = None
     contacts = await list_contacts(
         db,
         context.account_id,
@@ -167,6 +196,8 @@ async def get_contacts(
         organization_id=organization_id,
         tag_id=tag_id,
         tag_ids=parsed_tag_ids,
+        interest_id=interest_id,
+        interest_ids=parsed_interest_ids,
         segment_id=segment_id,
         lifecycle_stage=lifecycle_stage,
         region=region,

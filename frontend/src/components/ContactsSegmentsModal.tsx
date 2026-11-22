@@ -52,12 +52,14 @@ export default function ContactsSegmentsModal({
     const org = organizations.find((item) => item.id === activeFilters.organization_id);
     const channel = channels.find((item) => item.id === activeFilters.channel_id);
     const tag = tags.find((item) => item.id === activeFilters.tag_id);
+    const interest = (interests.data ?? []).find((item) => item.id === activeFilters.interest_id);
     return describeSegmentFilters(activeFilters, {
       organizationName: org?.name,
       channelName: channel?.name,
-      tagName: tag?.name
+      tagName: tag?.name,
+      interestName: interest?.label
     });
-  }, [activeFilters, organizations, channels, tags]);
+  }, [activeFilters, organizations, channels, tags, interests.data]);
 
   if (!open) return null;
 
