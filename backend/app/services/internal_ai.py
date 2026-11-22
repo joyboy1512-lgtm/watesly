@@ -7,6 +7,8 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from app.services.bilingual_lexicon import PRODUCT_LEXICON_GROUPS
+
 # Diacritics / tatweel stripping
 _AR_DIACRITICS = re.compile(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]")
 _TOKEN_SPLIT = re.compile(r"[\s,.;:!?،؟\-_/\\|()+\[\]{}\"'`~]+")
@@ -21,7 +23,7 @@ _LATIN_NORMALIZE = str.maketrans(
 )
 
 # Canonical synonym groups (each group shares one root token)
-SYNONYM_GROUPS: tuple[tuple[str, ...], ...] = (
+_BASE_SYNONYM_GROUPS: tuple[tuple[str, ...], ...] = (
     (
         "توصيل",
         "شحن",
@@ -52,6 +54,9 @@ SYNONYM_GROUPS: tuple[tuple[str, ...], ...] = (
     ("شكرا", "شكراً", "مشكور", "thanks", "thank"),
     ("مرحبا", "السلام", "هلا", "اهلا", "أهلا", "hello", "hi"),
 )
+
+# Site-wide product bilingual lexicon applies to every catalog item automatically.
+SYNONYM_GROUPS: tuple[tuple[str, ...], ...] = _BASE_SYNONYM_GROUPS + PRODUCT_LEXICON_GROUPS
 
 CATEGORY_INTENT_HINTS: dict[str, tuple[str, ...]] = {
     "shipping": ("توصيل", "شحن", "delivery", "shipping"),

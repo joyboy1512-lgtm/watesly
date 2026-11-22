@@ -92,6 +92,7 @@ export default function InboxPage() {
   const aiSourceLabels: Record<string, string> = useMemo(() => ({
     knowledge_base: t("inbox.sourceKnowledge"),
     catalog: t("inbox.sourceCatalog"),
+    catalog_clarify: "توضيح أنواع المنتج",
     combined: t("inbox.sourceCombined"),
     local: t("inbox.sourceLocal"),
     "knowledge_base+llm": "KB + LLM",
