@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "abc70f3",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CY-MTJgS.js",
+    "css": "index-D9I2M90X.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Inbox / ردود shows selectable Message Library replies",
+    "Clicking a reply inserts it into the chat composer"
+  ],
+  "notes": "Deployed via SSH. PR #163."
+}
