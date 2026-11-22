@@ -1716,6 +1716,7 @@ export default function InboxPage() {
           <InboxListMessagePanel
             open={listMessageOpen}
             conversationId={selectedId}
+            organizationId={selectedConversation?.organization_id ?? workspaceOrganizationId ?? null}
             onClose={() => setListMessageOpen(false)}
             onSent={() => {
               void queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] });
@@ -1731,6 +1732,7 @@ export default function InboxPage() {
           />
           <InboxReplyButtonsPanel
             open={replyButtonsOpen}
+            organizationId={selectedConversation?.organization_id ?? workspaceOrganizationId ?? null}
             body={replyButtonBody}
             titles={replyButtonTitles}
             sending={sendingReplyButtons}
