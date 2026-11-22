@@ -21,6 +21,8 @@ import { createDealFromConversation, type DealStage } from "../lib/crmHelpers";
 import type { MatchedCatalogProduct } from "../lib/catalogHelpers";
 import { buildCartSummary } from "../components/InboxProductPicker";
 import {
+  llmStatusLabel,
+  MODE_LABELS,
   SOURCE_LABELS,
   type AgentSettings,
   type CopilotResult,
@@ -1503,6 +1505,17 @@ export default function InboxPage() {
             <button type="button" className="secondary-action" onClick={() => void runCopilot()} disabled={!selectedId || isArchived || copilotLoading} title="Copilot">
               {copilotLoading ? "…" : "Copilot"}
             </button>
+            {agentSettingsQuery.data && (
+              <Link
+                to="/knowledge"
+                className={`inbox-ai-status-chip ${agentSettingsQuery.data.agent_enabled === false ? "is-off" : "is-on"}`}
+                title={`الوكيل: ${agentSettingsQuery.data.agent_enabled === false ? "متوقف" : "يعمل"} · ${MODE_LABELS[agentSettingsQuery.data.default_mode] ?? agentSettingsQuery.data.default_mode} · LLM: ${llmStatusLabel(agentSettingsQuery.data)}`}
+              >
+                {agentSettingsQuery.data.agent_enabled === false
+                  ? "وكيل متوقف"
+                  : MODE_LABELS[agentSettingsQuery.data.default_mode] ?? agentSettingsQuery.data.default_mode}
+              </Link>
+            )}
             <span className={`priority-badge priority-${selectedConversation?.priority ?? "normal"}`}>{priorityLabels[selectedConversation?.priority ?? "normal"]}</span>
             <button className="icon-button details-toggle" onClick={() => setDetailsOpen((value) => !value)} aria-label="تفاصيل العميل">•••</button>
           </div>
@@ -1577,7 +1590,12 @@ export default function InboxPage() {
         )}
         {aiSuggestion && selectedId && !windowClosed && !isArchived && (
           <div className="ai-suggestion-banner">
-            <strong>🤖 اقتراح {aiSourceLabels[aiSuggestionSource ?? ""] ?? SOURCE_LABELS[aiSuggestionSource ?? ""] ?? "ذكي"}</strong>
+            <strong>
+              اقتراح {aiSourceLabels[aiSuggestionSource ?? ""] ?? SOURCE_LABELS[aiSuggestionSource ?? ""] ?? "ذكي"}
+              {agentSettingsQuery.data?.default_mode
+                ? ` · وضع ${MODE_LABELS[agentSettingsQuery.data.default_mode] ?? agentSettingsQuery.data.default_mode}`
+                : ""}
+            </strong>
             <WhatsAppTextPreview text={aiSuggestion} compact />
             {matchedArticles.length > 0 && (
               <div className="inbox-kb-list">

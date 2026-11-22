@@ -542,40 +542,46 @@ async def process_inbound_side_effects(
 
             power_flags = await get_feature_flags(db, account_id=whatsapp_account.account_id)
             agent_settings = await get_agent_settings(db, whatsapp_account.account_id)
-            ai_result = await suggest_smart_reply(
-                db,
-                account_id=whatsapp_account.account_id,
-                query=text_body,
-                contact_name=contact.display_name or "",
-                mode=agent_settings.default_mode,
-                use_llm=agent_settings.llm_enabled,
-            )
-            ai_event_type = "ai.kb_suggestion"
-            if ai_result.get("source") == "catalog":
-                ai_event_type = "ai.catalog_suggestion"
-            elif ai_result.get("source") == "combined":
-                ai_event_type = "ai.combined_suggestion"
-            elif agent_settings.auto_kb_on_inbound and ai_result.get("matched_articles"):
-                ai_event_type = "ai.kb_suggestion"
-            await publish_event(
-                whatsapp_account.account_id,
-                {
-                    "type": ai_event_type,
-                    "conversation_id": str(conversation.id),
-                    "suggestion": ai_result.get("suggestion"),
-                    "matched_products": ai_result.get("matched_products", []),
-                    "matched_articles": ai_result.get("matched_articles", []),
-                    "confidence": ai_result.get("confidence"),
-                    "source": ai_result.get("source"),
-                },
-            )
+            agent_live = bool(getattr(agent_settings, "agent_enabled", True))
 
             from app.models.monthly_active_contact import MacTriggerSource
             from app.services.business_hours import is_within_business_hours
             from app.services.whatsapp import send_text_message
 
+            if agent_live and agent_settings.auto_kb_on_inbound:
+                ai_result = await suggest_smart_reply(
+                    db,
+                    account_id=whatsapp_account.account_id,
+                    query=text_body,
+                    contact_name=contact.display_name or "",
+                    mode=agent_settings.default_mode,
+                    use_llm=agent_settings.llm_enabled,
+                )
+                ai_event_type = "ai.kb_suggestion"
+                source = str(ai_result.get("source") or "")
+                if source.startswith("catalog"):
+                    ai_event_type = "ai.catalog_suggestion"
+                elif source.startswith("combined"):
+                    ai_event_type = "ai.combined_suggestion"
+                await publish_event(
+                    whatsapp_account.account_id,
+                    {
+                        "type": ai_event_type,
+                        "conversation_id": str(conversation.id),
+                        "suggestion": ai_result.get("suggestion"),
+                        "matched_products": ai_result.get("matched_products", []),
+                        "matched_articles": ai_result.get("matched_articles", []),
+                        "confidence": ai_result.get("confidence"),
+                        "source": ai_result.get("source"),
+                        "mode": agent_settings.default_mode,
+                    },
+                )
+            else:
+                ai_result = {}
+
             if (
-                power_flags.get("ai_agent_auto_reply", True)
+                agent_live
+                and power_flags.get("ai_agent_auto_reply", True)
                 and agent_settings.auto_reply_outside_hours
                 and not is_within_business_hours(agent_settings.business_hours_json)
                 and not conversation.first_response_at
