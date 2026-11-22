@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-22",
+  "commit": "81b1213",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CqmqzmL_.js",
+    "css": "index-BnVLwIb3.css"
+  },
+  "alembic_head": "0064_custom_inboxes",
+  "features": [
+    "Inbox conversation list column 300px → 348px"
+  ],
+  "notes": "Deployed via SSH. PR #149."
+}
