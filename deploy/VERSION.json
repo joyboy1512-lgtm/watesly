@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "fa7ae1c",
-    "git_commit_message": "Inbox contacts list 396px live",
+    "git_commit": "be19b91",
+    "git_commit_message": "Deep black chat text live",
     "alembic_head": "0064_custom_inboxes",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-Bfmv8oEX.js",
-      "css": "index-C60YS9AW.css"
+      "js": "index-B-Mb_jxu.js",
+      "css": "index-BowG1iFk.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "fa7ae1c",
-  "notes": "Inbox contacts list widened to 396px"
+  "commit": "be19b91",
+  "notes": "Chat dialog message and composer text deep black #000"
 }
