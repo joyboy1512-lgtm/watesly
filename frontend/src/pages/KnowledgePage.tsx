@@ -624,9 +624,15 @@ export default function KnowledgePage() {
             )}
             {(testResult.matched_products ?? []).length > 0 && (
               <div className="knowledge-matched-list">
-                <h3 className="section-title-sm">منتجات مطابقة</h3>
+                <h3 className="section-title-sm">
+                  {testResult.needs_clarification ? "خيارات للتوضيح مع العميل" : "منتجات مطابقة"}
+                </h3>
                 {(testResult.matched_products ?? []).map((product) => (
-                  <p key={product.id} className="hint-text">{product.name} — {product.price_label}</p>
+                  <p key={product.id} className="hint-text">
+                    {product.clarify_option ? `${product.clarify_option}) ` : ""}
+                    {product.name} — {product.price_label}
+                    {product.score != null ? ` · درجة ${Math.round(product.score * 100)}%` : ""}
+                  </p>
                 ))}
               </div>
             )}
