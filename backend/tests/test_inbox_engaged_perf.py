@@ -13,8 +13,19 @@ def test_conversation_list_supports_engaged_only_filter() -> None:
     routes = read("app/api/routes/conversations.py")
     assert "engaged_only: bool = False" in service
     assert "MessageDirection.INBOUND" in service
+    assert "aliased(Message)" in service
+    assert "inbound_message = aliased(Message)" in service
     assert "engaged_only: bool = Query(" in routes
     assert "engaged_only=engaged_only" in routes
+
+
+def test_engaged_only_uses_aliased_message_for_exists() -> None:
+    """EXISTS must alias Message — outer join already uses Message as latest row."""
+    service = read("app/services/conversations.py")
+    engaged_block = service.split("if engaged_only:", 1)[1].split("if archived_only:", 1)[0]
+    assert "aliased(Message)" in engaged_block
+    assert "inbound_message = aliased(Message)" in engaged_block
+    assert "select(Message.id)" not in engaged_block
 
 
 def test_conversation_list_masking_fetches_flags_once() -> None:
