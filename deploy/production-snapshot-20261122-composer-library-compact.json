@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-22",
+  "commit": "636e5fa",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BFWXxohz.js",
+    "css": "index-bSVzo8ze.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Aligned table header/body cells",
+    "Compact dense row height",
+    "Bulk select archive/delete/restore",
+    "Hide zero type-count badge"
+  ],
+  "notes": "Deployed via SSH. PR #169."
+}

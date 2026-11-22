@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — Message Library compact rows
+
+| Item | Value |
+|------|-------|
+| Commit | `636e5fa` |
+| Alembic | `0065_composer_library` |
+| Live assets | `index-BFWXxohz.js`, `index-bSVzo8ze.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-composer-library-compact.json` |
+
 ### Production snapshot (2026-11-22) — Message Library table
 
 | Item | Value |
