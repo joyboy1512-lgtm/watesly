@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "3a7bf0c",
-    "git_commit_message": "Sticky inbox filter pills",
+    "git_commit": "17499bb",
+    "git_commit_message": "Message Library UI refresh live",
     "alembic_head": "0065_composer_library",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-Bg9pzWOv.js",
-      "css": "index-ddV262cZ.css"
+      "js": "index-B-Ar6pGs.js",
+      "css": "index-DX1m8Pvv.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "3a7bf0c",
-  "notes": "Sticky inbox filter pills (filter no longer bounces to الكل)"
+  "commit": "17499bb",
+  "notes": "Message Library page UI refresh (PR #167)"
 }
