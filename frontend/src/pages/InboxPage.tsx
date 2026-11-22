@@ -1636,9 +1636,18 @@ export default function InboxPage() {
             </button>
             <button
               type="button"
-              className="composer-tool-btn"
-              onClick={() => setProductPickerOpen((value) => !value)}
+              className={`composer-tool-btn${productPickerOpen ? " active" : ""}`}
+              onClick={() => {
+                setProductPickerOpen((value) => !value);
+                setSnippetsOpen(false);
+                setShortcutsOpen(false);
+                setEmojiOpen(false);
+                setReplyButtonsOpen(false);
+                setListMessageOpen(false);
+                setFlowSendOpen(false);
+              }}
               disabled={!selectedId || isArchived}
+              title="اختيار منتج من الكتالوج"
             >
               🛒 منتج
             </button>
