@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-22",
+  "commit": "84d9cee",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-COefUqO_.js",
+    "css": "index-DdKUaNEX.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Light-green conversation list header and customer panel",
+    "White conversation and customer cards",
+    "Per-row checkboxes with bulk select/clear/archive bar",
+    "Customer panel select/delete (soft archive) for open chat"
+  ],
+  "notes": "Deployed via SSH. PR #164."
+}
