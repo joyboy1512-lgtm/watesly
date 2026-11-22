@@ -9999,6 +9999,47 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   inset-inline-end: 0.45rem;
   inset-block-start: 0.4rem;
 }
+.composer-library-page {
+  display: grid;
+  gap: 1rem;
+}
+.composer-library-main-tabs {
+  margin-block: 0.25rem 0.5rem;
+}
+.composer-library-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: end;
+  justify-content: space-between;
+}
+.composer-library-toolbar .field-label {
+  min-width: min(240px, 100%);
+}
+.composer-library-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.composer-library-table-wrap .data-table {
+  width: 100%;
+  margin: 0;
+}
+.composer-library-preview {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+.composer-library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
 .composer-send-group {
   display: flex;
   align-items: center;

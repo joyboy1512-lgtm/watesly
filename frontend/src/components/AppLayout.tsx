@@ -42,6 +42,7 @@ export default function AppLayout() {
     ["/knowledge", t("nav.knowledge"), "template"],
     ["/contacts", t("nav.contacts"), "inbox"],
     ["/quick-replies", t("nav.quickReplies"), "template"],
+    ["/composer-library", t("nav.composerLibrary"), "template"],
     ["/crm", t("nav.crm"), "organization"],
     ["/analytics", t("nav.analytics"), "dashboard"],
     ["/reports", t("nav.reports"), "template"],
