@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "2861689",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-p35f0erA.js",
+    "css": "index-Crch5gkv.css"
+  },
+  "alembic_head": "0064_custom_inboxes",
+  "features": [
+    "Reply button titles as three numbered input rows",
+    "List section options as numbered rows with add/remove up to 10"
+  ],
+  "notes": "Deployed via SSH. PR #159."
+}
