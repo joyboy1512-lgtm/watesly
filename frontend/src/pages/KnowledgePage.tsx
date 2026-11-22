@@ -680,9 +680,12 @@ export default function KnowledgePage() {
         )}
       </section>
 
-      <section className="card knowledge-agent-card">
-        <h2 className="section-title">لوحة تحكم الذكاء</h2>
-        <p className="hint-text">أقسام واضحة للتشغيل والإيقاف — بدون الاعتماد على مربع اختيار صغير.</p>
+      <section className="card knowledge-agent-card knowledge-panel-shell">
+        <div className="knowledge-panel-intro">
+          <span className="knowledge-panel-kicker">التحكم</span>
+          <h2 className="section-title">لوحة تحكم الذكاء</h2>
+          <p className="hint-text">أقسام مفصولة بألوان الموقع — شغّل أو أوقف كل جزء بوضوح.</p>
+        </div>
         {settings && (() => {
           const agentOn = settings.agent_enabled !== false;
           const inboundOn = agentOn && settings.auto_kb_on_inbound;
@@ -711,11 +714,14 @@ export default function KnowledgePage() {
               </div>
 
               <div className="agent-section-grid">
-                <article className="agent-section-card">
+                <article className="agent-section-card accent-internal">
                   <header className="agent-section-head">
-                    <div>
-                      <h3>الذكاء الداخلي</h3>
-                      <p>قاعدة المعرفة + الكتالوج + المطابقة العربية/الإنجليزية بدون مفتاح خارجي.</p>
+                    <div className="agent-section-title-row">
+                      <span className="agent-section-index" aria-hidden>1</span>
+                      <div>
+                        <h3>الذكاء الداخلي</h3>
+                        <p>قاعدة المعرفة + الكتالوج + المطابقة العربية/الإنجليزية بدون مفتاح خارجي.</p>
+                      </div>
                     </div>
                     <span className={`agent-state-badge ${agentOn ? "is-on" : "is-off"}`}>
                       {agentOn ? "مفعّل" : "متوقف مع الوكيل"}
@@ -764,14 +770,17 @@ export default function KnowledgePage() {
                   </div>
                 </article>
 
-                <article className="agent-section-card">
+                <article className="agent-section-card accent-inbound">
                   <header className="agent-section-head">
-                    <div>
-                      <h3>اقتراح عند رسالة واردة</h3>
-                      <p>
-                        عندما يكتب العميل رسالة جديدة، يظهر للموظف في الوارد اقتراح رد جاهز (لا يُرسل تلقائيًا).
-                        الموظف يختار: استخدام / غير مناسب / تجاهل.
-                      </p>
+                    <div className="agent-section-title-row">
+                      <span className="agent-section-index" aria-hidden>2</span>
+                      <div>
+                        <h3>اقتراح عند رسالة واردة</h3>
+                        <p>
+                          عندما يكتب العميل رسالة جديدة، يظهر للموظف في الوارد اقتراح رد جاهز (لا يُرسل تلقائيًا).
+                          الموظف يختار: استخدام / غير مناسب / تجاهل.
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -787,11 +796,14 @@ export default function KnowledgePage() {
                   </p>
                 </article>
 
-                <article className="agent-section-card">
+                <article className="agent-section-card accent-external">
                   <header className="agent-section-head">
-                    <div>
-                      <h3>الذكاء الخارجي (LLM)</h3>
-                      <p>يصقل صياغة الرد بعد تجهيزه من المعرفة/الكتالوج. يحتاج مفتاح API.</p>
+                    <div className="agent-section-title-row">
+                      <span className="agent-section-index" aria-hidden>3</span>
+                      <div>
+                        <h3>الذكاء الخارجي (LLM)</h3>
+                        <p>يصقل صياغة الرد بعد تجهيزه من المعرفة/الكتالوج. يحتاج مفتاح API.</p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -860,13 +872,16 @@ export default function KnowledgePage() {
                   </label>
                 </article>
 
-                <article className="agent-section-card">
+                <article className="agent-section-card accent-hours">
                   <header className="agent-section-head">
-                    <div>
-                      <h3>خارج الدوام</h3>
-                      <p>
-                        إذا راسل العميل خارج ساعات العمل ولم يُرد أحد بعد، يُرسل النظام رسالة واحدة تلقائيًا ثم يتوقف.
-                      </p>
+                    <div className="agent-section-title-row">
+                      <span className="agent-section-index" aria-hidden>4</span>
+                      <div>
+                        <h3>خارج الدوام</h3>
+                        <p>
+                          إذا راسل العميل خارج ساعات العمل ولم يُرد أحد بعد، يُرسل النظام رسالة واحدة تلقائيًا ثم يتوقف.
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -954,27 +969,58 @@ export default function KnowledgePage() {
         })()}
       </section>
 
-      <section className="card catalog-manage-card">
-        <h2 className="section-title">إضافة واستيراد</h2>
-        <div className="catalog-actions-grid">
-          <form className="catalog-panel stack-form" onSubmit={(e) => void createArticle(e)}>
-            <h3>إضافة مقال</h3>
+      <section className="card catalog-manage-card knowledge-panel-shell knowledge-tools-shell">
+        <div className="knowledge-panel-intro">
+          <span className="knowledge-panel-kicker">المحتوى</span>
+          <h2 className="section-title">إضافة واستيراد</h2>
+          <p className="hint-text">نفس ترتيب الأقسام وألوان الموقع — أضف يدويًا أو استورد أو ولّد من محادثة.</p>
+        </div>
+        <div className="agent-section-grid knowledge-tools-grid">
+          <form className="agent-section-card accent-create stack-form" onSubmit={(e) => void createArticle(e)}>
+            <header className="agent-section-head">
+              <div className="agent-section-title-row">
+                <span className="agent-section-index" aria-hidden>1</span>
+                <div>
+                  <h3>إضافة مقال</h3>
+                  <p>أنشئ سؤالًا وجوابًا جديدًا لقاعدة المعرفة.</p>
+                </div>
+              </div>
+              <span className="agent-section-tag">يدوي</span>
+            </header>
             {renderArticleFields(createForm, setCreateForm)}
             <button type="submit" className="whatsapp-button">حفظ المقال</button>
           </form>
 
-          <form className="catalog-panel stack-form" onSubmit={(e) => void importCsv(e)}>
-            <h3>استيراد CSV</h3>
+          <form className="agent-section-card accent-import stack-form" onSubmit={(e) => void importCsv(e)}>
+            <header className="agent-section-head">
+              <div className="agent-section-title-row">
+                <span className="agent-section-index" aria-hidden>2</span>
+                <div>
+                  <h3>استيراد CSV</h3>
+                  <p>ارفع ملفًا جاهزًا لإضافة عدة مقالات دفعة واحدة.</p>
+                </div>
+              </div>
+              <span className="agent-section-tag">دفعة</span>
+            </header>
             <label className="field-label">
               <span>ملف CSV</span>
               <input name="file" type="file" accept=".csv,text/csv" required />
             </label>
-            <p className="hint-text">الأعمدة: title · body · category · keywords · sort_order · language</p>
-            <button type="submit">استيراد المقالات</button>
+            <p className="agent-section-note">الأعمدة: title · body · category · keywords · sort_order · language</p>
+            <button type="submit" className="whatsapp-button">استيراد المقالات</button>
           </form>
 
-          <form className="catalog-panel stack-form" onSubmit={(e) => void generateFromConversation(e)}>
-            <h3>توليد FAQ من محادثة</h3>
+          <form className="agent-section-card accent-generate stack-form" onSubmit={(e) => void generateFromConversation(e)}>
+            <header className="agent-section-head">
+              <div className="agent-section-title-row">
+                <span className="agent-section-index" aria-hidden>3</span>
+                <div>
+                  <h3>توليد FAQ من محادثة</h3>
+                  <p>استخرج مسودة سؤال وجواب من محادثة موجودة في الوارد.</p>
+                </div>
+              </div>
+              <span className="agent-section-tag">تلقائي</span>
+            </header>
             <label className="field-label">
               <span>معرّف المحادثة</span>
               <input
@@ -988,7 +1034,9 @@ export default function KnowledgePage() {
               <span>عنوان (اختياري)</span>
               <input value={generateTitle} onChange={(e) => setGenerateTitle(e.target.value)} />
             </label>
-            <button type="submit" disabled={!generateConversationId.trim()}>توليد مسودة</button>
+            <button type="submit" className="whatsapp-button" disabled={!generateConversationId.trim()}>
+              توليد مسودة
+            </button>
           </form>
         </div>
       </section>
