@@ -94,7 +94,7 @@ export function buildQuickReplyPayload(form: QuickReplyForm) {
   return {
     organization_id: form.organizationId,
     channel_id: form.channelId || null,
-    shortcut: form.shortcut.trim(),
+    shortcut: normalizeShortcut(form.shortcut),
     title: form.title.trim(),
     body: form.body.trim(),
     category: form.category || null,
@@ -137,6 +137,12 @@ export async function downloadQuickRepliesReport(format: "xlsx" | "csv") {
   URL.revokeObjectURL(url);
 }
 
+export function normalizeShortcut(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "/";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
 export function matchShortcutAutocomplete(
   text: string,
   replies: QuickReply[]
@@ -144,8 +150,12 @@ export function matchShortcutAutocomplete(
   const match = text.match(/(?:^|\s)(\/[\w\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF_-]*)$/u);
   if (!match) return null;
   const typed = match[1].toLowerCase();
-  const exact = replies.find((item) => item.shortcut.toLowerCase() === typed);
-  if (exact) return exact;
-  const candidates = replies.filter((item) => item.shortcut.toLowerCase().startsWith(typed));
-  return candidates.length === 1 ? candidates[0] : null;
+  const normalizedReplies = replies.map((item) => ({
+    item,
+    shortcut: normalizeShortcut(item.shortcut).toLowerCase()
+  }));
+  const exact = normalizedReplies.find((entry) => entry.shortcut === typed);
+  if (exact) return exact.item;
+  const candidates = normalizedReplies.filter((entry) => entry.shortcut.startsWith(typed));
+  return candidates.length === 1 ? candidates[0].item : null;
 }
