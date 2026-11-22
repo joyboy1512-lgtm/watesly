@@ -8,13 +8,13 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "fa4a703",
-    "git_commit_message": "Fix inbox نشط empty list",
+    "git_commit": "3a7bf0c",
+    "git_commit_message": "Sticky inbox filter pills",
     "alembic_head": "0065_composer_library",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DgZtyuvm.js",
+      "js": "index-Bg9pzWOv.js",
       "css": "index-ddV262cZ.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "fa4a703",
-  "notes": "Fix engaged_only Message EXISTS correlation (PR #166)"
+  "commit": "3a7bf0c",
+  "notes": "Sticky inbox filter pills (filter no longer bounces to الكل)"
 }

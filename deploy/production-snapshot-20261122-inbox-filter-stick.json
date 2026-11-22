@@ -1,0 +1,9 @@
+{
+  "date": "2026-11-22",
+  "commit": "3a7bf0c",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": { "js": "index-Bg9pzWOv.js", "css": "index-ddV262cZ.css" },
+  "alembic_head": "0065_composer_library",
+  "features": ["Inbox filter pills stay selected instead of bouncing to الكل"],
+  "notes": "Deployed via SSH."
+}
