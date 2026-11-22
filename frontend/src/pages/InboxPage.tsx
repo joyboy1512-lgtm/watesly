@@ -1666,9 +1666,22 @@ export default function InboxPage() {
             <button
               type="button"
               className={`composer-tool-btn${shortcutsOpen ? " active" : ""}`}
-              onClick={() => setShortcutsOpen((value) => !value)}
+              onClick={() => {
+                setShortcutsOpen((value) => {
+                  const next = !value;
+                  if (next) {
+                    setSnippetsOpen(false);
+                    setEmojiOpen(false);
+                    setProductPickerOpen(false);
+                    setReplyButtonsOpen(false);
+                    setListMessageOpen(false);
+                    setFlowSendOpen(false);
+                  }
+                  return next;
+                });
+              }}
               disabled={!selectedId || isArchived}
-              title="Shortcuts"
+              title="اختصارات الصفقة والتذكرة والطلب"
             >
               ⚡ اختصارات
             </button>

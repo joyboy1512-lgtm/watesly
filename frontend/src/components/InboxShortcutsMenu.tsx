@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DEAL_STAGES, STAGE_LABELS, type DealStage } from "../lib/crmHelpers";
 
 type Props = {
@@ -28,6 +28,16 @@ export default function InboxShortcutsMenu({
   const [dealStage, setDealStage] = useState<DealStage>("lead");
   const [noteDetails, setNoteDetails] = useState("");
 
+  useEffect(() => {
+    if (!open) {
+      setMode("menu");
+      setDealTitle("");
+      setDealAmount("");
+      setDealStage("lead");
+      setNoteDetails("");
+    }
+  }, [open]);
+
   if (!open) return null;
 
   function resetAndClose() {
@@ -41,8 +51,13 @@ export default function InboxShortcutsMenu({
 
   if (mode === "deal") {
     return (
-      <div className="inbox-shortcuts-menu inbox-shortcuts-form" role="dialog">
-        <strong>إنشاء صفقة CRM</strong>
+      <div className="inbox-shortcuts-menu inbox-shortcuts-form inbox-reply-buttons-panel" role="dialog">
+        <div className="inbox-product-picker-head">
+          <strong>إنشاء صفقة CRM</strong>
+          <button type="button" className="secondary-action" onClick={resetAndClose} aria-label="إغلاق">
+            ×
+          </button>
+        </div>
         <label className="field-label">
           <span>عنوان الصفقة</span>
           <input value={dealTitle} onChange={(e) => setDealTitle(e.target.value)} placeholder="اختياري — يُولَّد تلقائياً" disabled={disabled} />
@@ -84,8 +99,13 @@ export default function InboxShortcutsMenu({
   if (mode === "ticket" || mode === "order") {
     const label = mode === "ticket" ? "تذكرة دعم" : "طلب / أوردر";
     return (
-      <div className="inbox-shortcuts-menu inbox-shortcuts-form" role="dialog">
-        <strong>{label}</strong>
+      <div className="inbox-shortcuts-menu inbox-shortcuts-form inbox-reply-buttons-panel" role="dialog">
+        <div className="inbox-product-picker-head">
+          <strong>{label}</strong>
+          <button type="button" className="secondary-action" onClick={resetAndClose} aria-label="إغلاق">
+            ×
+          </button>
+        </div>
         <label className="field-label">
           <span>التفاصيل</span>
           <textarea
@@ -127,15 +147,21 @@ export default function InboxShortcutsMenu({
   }
 
   return (
-    <div className="inbox-shortcuts-menu" role="menu">
+    <div className="inbox-shortcuts-menu inbox-reply-buttons-panel" role="menu" aria-label="اختصارات سريعة">
+      <div className="inbox-product-picker-head">
+        <strong>اختصارات سريعة</strong>
+        <button type="button" className="secondary-action" onClick={resetAndClose} aria-label="إغلاق">
+          ×
+        </button>
+      </div>
       <button type="button" role="menuitem" disabled={disabled} onClick={() => setMode("deal")}>
-        💼 إنشاء صفقة CRM
+        إنشاء صفقة CRM
       </button>
       <button type="button" role="menuitem" disabled={disabled} onClick={() => setMode("ticket")}>
-        🎫 تذكرة دعم
+        تذكرة دعم
       </button>
       <button type="button" role="menuitem" disabled={disabled} onClick={() => setMode("order")}>
-        📦 طلب / أوردر
+        طلب / أوردر
       </button>
     </div>
   );
