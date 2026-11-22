@@ -26,6 +26,7 @@ import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import {
   AUDIENCE_GENDER_OPTIONS,
   buildAudienceResolvePayload,
+  slugifyInterestLabel,
   type AudienceGenderFilter,
   type InterestCategory
 } from "../lib/interestHelpers";
@@ -213,6 +214,8 @@ export default function CampaignsPage() {
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
   const [audienceGenderFilter, setAudienceGenderFilter] = useState<AudienceGenderFilter>("");
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
+  const [newInterestLabel, setNewInterestLabel] = useState("");
+  const [creatingInterest, setCreatingInterest] = useState(false);
   const [audienceLifecycle, setAudienceLifecycle] = useState("");
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
   const [preflightBusy, setPreflightBusy] = useState(false);
@@ -874,6 +877,28 @@ export default function CampaignsPage() {
       toastStore.getState().show("تعذر تحميل الشريحة.", "error");
     } finally {
       setLoadingSegmentAudience(false);
+    }
+  }
+
+  async function createAudienceInterest() {
+    const label = newInterestLabel.trim();
+    if (!label) return;
+    setCreatingInterest(true);
+    try {
+      const created = await api.post<InterestCategory>("/platform/interests", {
+        label,
+        slug: slugifyInterestLabel(label)
+      });
+      setNewInterestLabel("");
+      setAudienceInterestIds((current) =>
+        current.includes(created.data.id) ? current : [...current, created.data.id]
+      );
+      await client.invalidateQueries({ queryKey: ["interests"] });
+      toastStore.getState().show("تم إنشاء الاهتمام.", "success");
+    } catch {
+      toastStore.getState().show("تعذر إنشاء الاهتمام.", "error");
+    } finally {
+      setCreatingInterest(false);
     }
   }
 
@@ -2095,7 +2120,7 @@ export default function CampaignsPage() {
               </label>
             </div>
             <div className="field-label">
-              <span>الاهتمامات (اختياري)</span>
+              <span>الاهتمامات (اختياري — متعدد)</span>
               <div className="contacts-tags-cell">
                 {(interests.data ?? []).map((interest) => {
                   const active = audienceInterestIds.includes(interest.id);
@@ -2110,6 +2135,21 @@ export default function CampaignsPage() {
                     </button>
                   );
                 })}
+              </div>
+              <div className="contacts-inline-tag-create">
+                <input
+                  value={newInterestLabel}
+                  onChange={(e) => setNewInterestLabel(e.target.value)}
+                  placeholder="اهتمام جديد…"
+                />
+                <button
+                  type="button"
+                  className="contacts-erp-btn"
+                  disabled={creatingInterest || !newInterestLabel.trim()}
+                  onClick={() => void createAudienceInterest()}
+                >
+                  {creatingInterest ? "…" : "+ اهتمام"}
+                </button>
               </div>
             </div>
             <div className="inline-actions">
@@ -2196,6 +2236,7 @@ export default function CampaignsPage() {
                     <th>الاسم</th>
                     <th>الهاتف</th>
                     <th>المنطقة</th>
+                    <th>الاهتمامات</th>
                     <th>حالة واتساب</th>
                     <th>آخر حملة</th>
                   </tr>
@@ -2203,7 +2244,7 @@ export default function CampaignsPage() {
                 <tbody>
                   {filteredContacts.length === 0 && (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <p className="hint-text">لا يوجد عملاء مطابقون للفلاتر الحالية.</p>
                       </td>
                     </tr>
@@ -2232,6 +2273,19 @@ export default function CampaignsPage() {
                         <td>{item.display_name || "—"}</td>
                         <td dir="ltr">{item.external_address}</td>
                         <td>{item.region || "—"}</td>
+                        <td>
+                          {(item.interest_labels ?? []).length > 0 ? (
+                            <div className="contacts-tags-cell">
+                              {(item.interest_labels ?? []).map((label) => (
+                                <span key={`${item.id}-${label}`} className="contacts-tag-chip contacts-interest-chip contacts-tag-chip-active">
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                         <td>
                           <span className={`contacts-wa-status contacts-wa-status-${whatsappStatusTone(item.whatsapp_status)}`}>
                             {formatWhatsAppStatus(item)}
