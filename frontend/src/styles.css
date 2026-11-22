@@ -9926,6 +9926,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 1px solid var(--line);
   border-radius: 10px;
 }
+.inbox-list-option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+.inbox-list-option-remove {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1;
+}
 .composer-send-group {
   display: flex;
   align-items: center;
