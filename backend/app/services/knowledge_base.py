@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import re
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -14,7 +13,6 @@ from app.core.encryption import decrypt_secret, encrypt_secret
 from app.models.ai_agent_settings import AiAgentSettings
 from app.models.knowledge_article import KnowledgeArticle
 from app.services.ai_assistant import (
-    categorize_conversation,
     detect_emotion,
     detect_intent,
     suggest_reply,
@@ -22,14 +20,14 @@ from app.services.ai_assistant import (
 )
 from app.services.business_hours import DEFAULT_HOURS, is_within_business_hours
 from app.services.catalog import build_catalog_reply, search_catalog_products, suggest_catalog_reply
+from app.services.internal_ai import (
+    build_multi_article_body,
+    complementary_articles,
+    evaluate_cases,
+    expand_query_terms,
+    rank_articles,
+)
 from app.services.llm_client import enhance_reply, llm_available
-from app.services.variables import render_template
-
-_TOKEN_SPLIT = re.compile(r"[\s,.;:!?،؟]+")
-
-
-def _tokens(text: str) -> set[str]:
-    return {part.lower() for part in _TOKEN_SPLIT.split(text.lower()) if len(part) >= 2}
 
 
 def _account_llm_api_key(item: AiAgentSettings) -> str | None:
@@ -142,22 +140,52 @@ async def list_knowledge_categories(db: AsyncSession, account_id: UUID) -> list[
     return [row[0] for row in rows if row[0]]
 
 
-def _score_article(article: KnowledgeArticle, query_tokens: set[str], query_text: str) -> float:
-    if not query_tokens:
-        return 0.0
-    haystack = f"{article.title} {article.body} {article.keywords or ''} {article.category}".lower()
-    article_tokens = _tokens(haystack)
-    overlap = len(query_tokens & article_tokens)
-    score = overlap / max(len(query_tokens), 1)
-    lower = query_text.lower()
-    if article.title.lower() in lower or lower in article.title.lower():
-        score += 0.35
-    if article.keywords:
-        for part in article.keywords.split(","):
-            part = part.strip().lower()
-            if part and part in lower:
-                score += 0.2
-    return score
+async def search_knowledge_ranked(
+    db: AsyncSession,
+    account_id: UUID,
+    query_text: str,
+    *,
+    limit: int = 5,
+):
+    """Rank active knowledge articles with the internal AI scorer."""
+    if not query_text.strip():
+        articles = await list_knowledge_articles(db, account_id)
+        return rank_articles(articles, query_text, limit=limit, min_score=0.0)[:limit]
+
+    all_active = await list_knowledge_articles(db, account_id)
+    # Prefer a widened SQL prefilter when the account has many articles, then re-rank.
+    if len(all_active) > 80:
+        raw_terms = {query_text.strip()}
+        raw_terms |= expand_query_terms(query_text)
+        candidates: dict[str, KnowledgeArticle] = {str(item.id): item for item in all_active}
+        narrowed: dict[str, KnowledgeArticle] = {}
+        for term in list(raw_terms)[:12]:
+            if len(term) < 2:
+                continue
+            pattern = f"%{term}%"
+            rows = list(
+                (
+                    await db.execute(
+                        select(KnowledgeArticle).where(
+                            KnowledgeArticle.account_id == account_id,
+                            KnowledgeArticle.is_active.is_(True),
+                            or_(
+                                KnowledgeArticle.title.ilike(pattern),
+                                KnowledgeArticle.body.ilike(pattern),
+                                KnowledgeArticle.keywords.ilike(pattern),
+                            ),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                narrowed[str(row.id)] = row
+        pool = list(narrowed.values()) or list(candidates.values())
+    else:
+        pool = all_active
+    return rank_articles(pool, query_text, limit=limit)
 
 
 async def search_knowledge_articles(
@@ -167,44 +195,29 @@ async def search_knowledge_articles(
     *,
     limit: int = 5,
 ) -> list[KnowledgeArticle]:
-    term = f"%{query_text.strip()}%"
-    if not query_text.strip():
-        return await list_knowledge_articles(db, account_id)
-
-    ilike_result = list(
-        (
-            await db.execute(
-                select(KnowledgeArticle)
-                .where(
-                    KnowledgeArticle.account_id == account_id,
-                    KnowledgeArticle.is_active.is_(True),
-                    or_(
-                        KnowledgeArticle.title.ilike(term),
-                        KnowledgeArticle.body.ilike(term),
-                        KnowledgeArticle.keywords.ilike(term),
-                    ),
-                )
-                .order_by(KnowledgeArticle.sort_order.asc())
-                .limit(limit)
-            )
-        ).scalars().all()
-    )
-    if ilike_result:
-        return ilike_result
-
-    all_active = await list_knowledge_articles(db, account_id)
-    query_tokens = _tokens(query_text)
-    ranked = sorted(
-        (( _score_article(article, query_tokens, query_text), article) for article in all_active),
-        key=lambda item: item[0],
-        reverse=True,
-    )
-    return [article for score, article in ranked if score > 0.15][:limit]
+    ranked = await search_knowledge_ranked(db, account_id, query_text, limit=limit)
+    return [item.article for item in ranked]
 
 
 async def increment_article_usage(db: AsyncSession, article: KnowledgeArticle) -> None:
     article.usage_count = (article.usage_count or 0) + 1
     await db.commit()
+
+
+async def record_article_feedback(
+    db: AsyncSession,
+    article: KnowledgeArticle,
+    *,
+    helpful: bool,
+) -> KnowledgeArticle:
+    if helpful:
+        article.helpful_count = int(article.helpful_count or 0) + 1
+        article.usage_count = int(article.usage_count or 0) + 1
+    else:
+        article.dismiss_count = int(article.dismiss_count or 0) + 1
+    await db.commit()
+    await db.refresh(article)
+    return article
 
 
 def build_knowledge_reply(
@@ -213,27 +226,49 @@ def build_knowledge_reply(
     contact_name: str = "",
     query: str = "",
     contact_context: dict | None = None,
+    scored: list | None = None,
 ) -> dict:
-    if not articles:
+    if not articles and not scored:
         return {}
-    article = articles[0]
+    ranked = scored or rank_articles(articles, query, limit=max(3, len(articles)), min_score=0.0)
+    if not ranked:
+        return {}
     greeting = f"مرحباً {contact_name}! " if contact_name else "مرحباً! "
-    body = article.body.strip()
-    if contact_context:
-        body = render_template(body, contact_context)
-    if len(articles) > 1:
-        extras = "\n".join(f"• {item.title}" for item in articles[1:3])
-        body = f"{body}\n\nمواضيع ذات صلة:\n{extras}"
+    body, confidence = build_multi_article_body(ranked, contact_context=contact_context)
+    extras = complementary_articles(ranked)
+    used = [ranked[0], *extras]
     return {
-        "suggestion": f"{greeting}{body}",
+        "suggestion": f"{greeting}{body}".strip(),
         "matched_articles": [
-            {"id": str(a.id), "title": a.title, "category": a.category, "body": a.body[:200]}
-            for a in articles[:3]
+            {
+                "id": str(item.article.id),
+                "title": item.article.title,
+                "category": item.article.category,
+                "body": (item.article.body or "")[:220],
+                "score": item.score,
+                "reasons": item.reasons,
+                "helpful_count": int(getattr(item.article, "helpful_count", 0) or 0),
+                "dismiss_count": int(getattr(item.article, "dismiss_count", 0) or 0),
+            }
+            for item in used
         ],
-        "confidence": 0.88,
+        "confidence": confidence,
         "source": "knowledge_base",
         "query": query,
+        "expanded_terms": sorted(expand_query_terms(query))[:20],
+        "engine": "internal_v2",
     }
+
+
+async def evaluate_knowledge_quality(
+    db: AsyncSession,
+    account_id: UUID,
+    cases: list[dict],
+    *,
+    limit: int = 5,
+) -> dict:
+    articles = await list_knowledge_articles(db, account_id, active_only=True)
+    return evaluate_cases(articles, cases, limit=limit)
 
 
 def build_combined_reply(
@@ -319,12 +354,21 @@ async def suggest_smart_reply(
     normalized_mode = (mode or settings.default_mode or "kb_first").lower()
     should_llm = settings.llm_enabled if use_llm is None else use_llm
 
+    async def _kb_reply():
+        ranked = await search_knowledge_ranked(db, account_id, query, limit=5)
+        if not ranked:
+            return None
+        return build_knowledge_reply(
+            [item.article for item in ranked],
+            contact_name=contact_name,
+            query=query,
+            contact_context=contact_context,
+            scored=ranked,
+        )
+
     if normalized_mode == "combined":
-        articles = await search_knowledge_articles(db, account_id, query)
+        kb_result = await _kb_reply()
         products = await search_catalog_products(db, account_id, query)
-        kb_result = build_knowledge_reply(
-            articles, contact_name=contact_name, query=query, contact_context=contact_context
-        ) if articles else None
         catalog_result = build_catalog_reply(products, contact_name=contact_name, query=query) if products else None
         if kb_result or catalog_result:
             result = build_combined_reply(
@@ -337,11 +381,8 @@ async def suggest_smart_reply(
             return result
 
     if normalized_mode in {"kb_first", "knowledge_first", "kb"}:
-        articles = await search_knowledge_articles(db, account_id, query)
-        if articles:
-            result = build_knowledge_reply(
-                articles, contact_name=contact_name, query=query, contact_context=contact_context
-            )
+        result = await _kb_reply()
+        if result:
             if should_llm and settings.llm_enabled:
                 result = await _maybe_enhance_with_llm(
                     db, account_id, result, query=query, contact_name=contact_name
@@ -360,16 +401,13 @@ async def suggest_smart_reply(
                     db, account_id, result, query=query, contact_name=contact_name
                 )
             return result
-        articles = await search_knowledge_articles(db, account_id, query)
-        if articles:
-            result = build_knowledge_reply(
-                articles, contact_name=contact_name, query=query, contact_context=contact_context
-            )
+        kb_result = await _kb_reply()
+        if kb_result:
             if should_llm and settings.llm_enabled:
-                result = await _maybe_enhance_with_llm(
-                    db, account_id, result, query=query, contact_name=contact_name
+                kb_result = await _maybe_enhance_with_llm(
+                    db, account_id, kb_result, query=query, contact_name=contact_name
                 )
-            return result
+            return kb_result
         if should_llm and settings.llm_enabled:
             result = await _maybe_enhance_with_llm(db, account_id, result, query=query, contact_name=contact_name)
         return result
@@ -377,12 +415,8 @@ async def suggest_smart_reply(
     if normalized_mode == "local":
         return suggest_reply(last_messages=[query] if query else [], contact_name=contact_name)
 
-    articles = await search_knowledge_articles(db, account_id, query)
-    if articles:
-        result = build_knowledge_reply(
-            articles, contact_name=contact_name, query=query, contact_context=contact_context
-        )
-    else:
+    result = await _kb_reply()
+    if not result:
         products = await search_catalog_products(db, account_id, query)
         result = (
             build_catalog_reply(products, contact_name=contact_name, query=query)

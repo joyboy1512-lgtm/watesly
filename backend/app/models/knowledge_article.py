@@ -20,4 +20,6 @@ class KnowledgeArticle(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    helpful_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    dismiss_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     language: Mapped[str] = mapped_column(String(10), nullable=False, default="ar")

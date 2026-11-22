@@ -3,22 +3,16 @@
 from typing import Any
 
 from app.core.config import settings
+from app.services.internal_ai import (
+    local_emotion,
+    local_intent,
+    local_suggest_reply,
+    normalize_text,
+)
 
 
 def suggest_reply(*, last_messages: list[str], contact_name: str = "") -> dict[str, Any]:
-    if not last_messages:
-        return {"suggestion": "مرحباً! كيف يمكنني مساعدتك اليوم؟", "confidence": 0.5, "source": "local"}
-    last = last_messages[-1].lower()
-    if any(w in last for w in ("price", "cost", "سعر", "كم")):
-        return {"suggestion": "شكراً لتواصلك. سأرسل لك تفاصيل الأسعار فوراً.", "confidence": 0.7, "source": "local"}
-    if any(w in last for w in ("help", "support", "مساعدة")):
-        return {"suggestion": "بالتأكيد، أنا هنا لمساعدتك. ما المشكلة التي تواجهها؟", "confidence": 0.75, "source": "local"}
-    name = contact_name or "عميلنا"
-    return {
-        "suggestion": f"شكراً {name} على رسالتك. سأتابع معك خلال لحظات.",
-        "confidence": 0.6,
-        "source": "local",
-    }
+    return local_suggest_reply(last_messages=last_messages, contact_name=contact_name)
 
 
 def summarize_conversation(messages: list[str]) -> dict[str, Any]:
@@ -26,27 +20,21 @@ def summarize_conversation(messages: list[str]) -> dict[str, Any]:
         return {"summary": "لا توجد رسائل بعد.", "source": "local"}
     inbound = [m for m in messages if m]
     preview = " · ".join(inbound[-3:])
-    return {"summary": f"آخر التفاعلات: {preview[:500]}", "message_count": len(messages), "source": "local"}
+    intent = local_intent(inbound[-1] if inbound else "")
+    return {
+        "summary": f"آخر التفاعلات: {preview[:500]}",
+        "message_count": len(messages),
+        "source": "local",
+        "intent": intent.get("intent"),
+    }
 
 
 def detect_intent(text: str) -> dict[str, Any]:
-    lower = text.lower()
-    if any(w in lower for w in ("buy", "order", "شراء", "طلب")):
-        return {"intent": "purchase", "confidence": 0.8}
-    if any(w in lower for w in ("cancel", "refund", "إلغاء", "استرداد")):
-        return {"intent": "cancellation", "confidence": 0.85}
-    if any(w in lower for w in ("?", "how", "what", "كيف", "ماذا")):
-        return {"intent": "question", "confidence": 0.7}
-    return {"intent": "general", "confidence": 0.5}
+    return local_intent(text)
 
 
 def detect_emotion(text: str) -> dict[str, Any]:
-    lower = text.lower()
-    if any(w in lower for w in ("angry", "bad", "terrible", "غاضب", "سيء")):
-        return {"emotion": "frustrated", "confidence": 0.75}
-    if any(w in lower for w in ("thank", "great", "شكر", "ممتاز")):
-        return {"emotion": "positive", "confidence": 0.8}
-    return {"emotion": "neutral", "confidence": 0.6}
+    return local_emotion(text)
 
 
 def extract_data(text: str) -> dict[str, Any]:
@@ -58,16 +46,25 @@ def extract_data(text: str) -> dict[str, Any]:
         "email": email.group(0) if email else None,
         "phone": phone.group(0) if phone else None,
         "source": "local",
+        "normalized": normalize_text(text)[:200],
     }
 
 
 def categorize_conversation(messages: list[str]) -> dict[str, Any]:
-    combined = " ".join(messages).lower()
-    if any(w in combined for w in ("invoice", "payment", "فاتورة", "دفع")):
+    combined = normalize_text(" ".join(messages))
+    intent = local_intent(combined)
+    mapping = {
+        "pricing": "billing",
+        "cancellation": "support",
+        "shipping": "shipping",
+        "purchase": "sales",
+        "question": "faq",
+    }
+    if any(w in combined for w in ("فاتوره", "فاتورة", "دفع", "payment", "invoice")):
         return {"category": "billing", "source": "local"}
-    if any(w in combined for w in ("bug", "error", "مشكلة", "عطل")):
+    if any(w in combined for w in ("مشكله", "مشكلة", "عطل", "bug", "error")):
         return {"category": "support", "source": "local"}
-    return {"category": "general", "source": "local"}
+    return {"category": mapping.get(intent.get("intent", ""), "general"), "source": "local"}
 
 
 def agent_capabilities() -> dict[str, Any]:
@@ -81,7 +78,10 @@ def agent_capabilities() -> dict[str, Any]:
             "emotion_detection",
             "data_extraction",
             "categorization",
+            "synonym_matching",
+            "feedback_learning",
+            "quality_evaluation",
         ],
         "external_llm": bool(getattr(settings, "ai_api_key", None)),
-        "note": "Connect AI_API_KEY for enhanced responses (Phase 9 — external link deferred).",
+        "note": "Internal engine uses Arabic normalization, synonyms, and feedback-weighted ranking. Optional LLM polishes replies.",
     }
