@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "2861689",
-    "git_commit_message": "Numbered button and list option rows live",
-    "alembic_head": "0064_custom_inboxes",
+    "git_commit": "f03026e",
+    "git_commit_message": "Composer library live",
+    "alembic_head": "0065_composer_library",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-p35f0erA.js",
-      "css": "index-Crch5gkv.css"
+      "js": "index-DhNvY1_l.js",
+      "css": "index-BbntYCfT.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "2861689",
-  "notes": "Numbered rows for reply buttons and list options (PR #159)"
+  "commit": "f03026e",
+  "notes": "Branch-shared button/list composer library (PR #160)"
 }
