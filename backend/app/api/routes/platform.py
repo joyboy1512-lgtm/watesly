@@ -101,8 +101,8 @@ class SegmentCreateRequest(BaseModel):
 
 
 class InterestCreateRequest(BaseModel):
-    slug: str = Field(min_length=1, max_length=80)
     label: str = Field(min_length=1, max_length=160)
+    slug: str | None = Field(default=None, max_length=80)
     exclude_genders: list[str] = Field(default_factory=list)
     include_genders: list[str] | None = None
 
@@ -316,14 +316,19 @@ async def post_interest(
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
-    item = await create_interest(
-        db,
-        account_id=context.account_id,
-        slug=payload.slug,
-        label=payload.label,
-        exclude_genders=payload.exclude_genders,
-        include_genders=payload.include_genders,
-    )
+    try:
+        item = await create_interest(
+            db,
+            account_id=context.account_id,
+            slug=payload.slug,
+            label=payload.label,
+            exclude_genders=payload.exclude_genders,
+            include_genders=payload.include_genders,
+        )
+    except ValueError as exc:
+        if str(exc) == "INTEREST_SLUG_CONFLICT":
+            raise HTTPException(status_code=409, detail="Interest slug already exists") from exc
+        raise
     return InterestResponse(
         id=item.id,
         slug=item.slug,

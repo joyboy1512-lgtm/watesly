@@ -28,6 +28,8 @@ export type Contact = {
   last_campaign_at?: string | null;
   whatsapp_status?: "accepts" | "reachable" | "unreachable" | "invalid" | "dnd" | null;
   whatsapp_status_label?: string | null;
+  interest_ids?: string[];
+  interest_labels?: string[];
 };
 
 export const WHATSAPP_STATUS_LABELS: Record<string, string> = {
@@ -113,6 +115,7 @@ export type SegmentFilterJson = {
   organization_id?: string;
   channel_id?: string;
   tag_id?: string;
+  interest_id?: string;
   lifecycle_stage?: string;
   country_code?: string;
 };
@@ -123,6 +126,7 @@ export function buildSegmentFilterJson(filters: SegmentFilterJson): Record<strin
   if (filters.organization_id) out.organization_id = filters.organization_id;
   if (filters.channel_id) out.channel_id = filters.channel_id;
   if (filters.tag_id) out.tag_id = filters.tag_id;
+  if (filters.interest_id) out.interest_id = filters.interest_id;
   if (filters.lifecycle_stage) out.lifecycle_stage = filters.lifecycle_stage;
   if (filters.country_code?.trim()) out.country_code = filters.country_code.trim().toUpperCase();
   return out;
@@ -134,13 +138,15 @@ export function describeSegmentFilters(
     organizationName?: string;
     channelName?: string;
     tagName?: string;
+    interestName?: string;
   } = {}
 ): string {
   const parts: string[] = [];
   if (filters.search?.trim()) parts.push(`بحث: «${filters.search.trim()}»`);
   if (filters.organization_id) parts.push(`الفرع: ${labels.organizationName ?? filters.organization_id.slice(0, 8)}`);
   if (filters.channel_id) parts.push(`القناة: ${labels.channelName ?? filters.channel_id.slice(0, 8)}`);
-  if (filters.tag_id) parts.push(`الوسم: ${labels.tagName ?? filters.tag_id.slice(0, 8)}`);
+  if (filters.tag_id) parts.push(`التصنيف: ${labels.tagName ?? filters.tag_id.slice(0, 8)}`);
+  if (filters.interest_id) parts.push(`الاهتمام: ${labels.interestName ?? filters.interest_id.slice(0, 8)}`);
   if (filters.lifecycle_stage) parts.push(`المرحلة: ${formatLifecycleStage(filters.lifecycle_stage)}`);
   if (filters.country_code) parts.push(`الدولة: ${filters.country_code.toUpperCase()}`);
   return parts.length > 0 ? parts.join(" · ") : "كل العملاء (بدون فلاتر)";

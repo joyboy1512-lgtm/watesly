@@ -22,7 +22,7 @@ import {
   type Tag
 } from "../lib/contactHelpers";
 import { STAGE_LABELS, formatDealAmount, type Deal } from "../lib/crmHelpers";
-import { type InterestCategory } from "../lib/interestHelpers";
+import { slugifyInterestLabel, type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 
 type CustomFieldDef = { id: string; field_key: string; label: string; field_type: string };
@@ -624,8 +624,11 @@ function ContactInterestsEditor({
   options: InterestCategory[];
   onSaved: () => void;
 }) {
+  const client = useQueryClient();
   const [selected, setSelected] = useState<string[]>(assigned);
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newInterestLabel, setNewInterestLabel] = useState("");
 
   useEffect(() => {
     setSelected(assigned);
@@ -637,10 +640,10 @@ function ContactInterestsEditor({
     );
   }
 
-  async function save() {
+  async function save(nextIds: string[] = selected) {
     setSaving(true);
     try {
-      await api.put(`/contacts/${contactId}/interests`, { interest_ids: selected });
+      await api.put(`/contacts/${contactId}/interests`, { interest_ids: nextIds });
       onSaved();
       toastStore.getState().show("تم حفظ الاهتمامات.", "success");
     } catch {
@@ -650,22 +653,60 @@ function ContactInterestsEditor({
     }
   }
 
+  async function createAndAssign() {
+    const label = newInterestLabel.trim();
+    if (!label) return;
+    setCreating(true);
+    try {
+      const created = await api.post<InterestCategory>("/platform/interests", {
+        label,
+        slug: slugifyInterestLabel(label)
+      });
+      const next = Array.from(new Set([...selected, created.data.id]));
+      setSelected(next);
+      setNewInterestLabel("");
+      await client.invalidateQueries({ queryKey: ["interests"] });
+      await save(next);
+    } catch {
+      toastStore.getState().show("تعذر إنشاء الاهتمام.", "error");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
-    <div className="contacts-tags-cell">
-      {options.length === 0 && <p className="hint-text">لا توجد اهتمامات معرفة بعد.</p>}
-      {options.map((interest) => {
-        const active = selected.includes(interest.id);
-        return (
-          <button
-            key={interest.id}
-            type="button"
-            className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
-            onClick={() => toggle(interest.id)}
-          >
-            {interest.label}
-          </button>
-        );
-      })}
+    <div className="stack-form">
+      <div className="contacts-tags-cell">
+        {options.length === 0 && <p className="hint-text">لا توجد اهتمامات معرفة بعد.</p>}
+        {options.map((interest) => {
+          const active = selected.includes(interest.id);
+          return (
+            <button
+              key={interest.id}
+              type="button"
+              className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
+              onClick={() => toggle(interest.id)}
+            >
+              {interest.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="contacts-inline-tag-create">
+        <input
+          value={newInterestLabel}
+          onChange={(event) => setNewInterestLabel(event.target.value)}
+          placeholder="اهتمام جديد…"
+        />
+        <button
+          type="button"
+          className="contacts-erp-btn"
+          disabled={creating || !newInterestLabel.trim()}
+          onClick={() => void createAndAssign()}
+        >
+          {creating ? "…" : "+ اهتمام"}
+        </button>
+      </div>
       <button type="button" className="contacts-erp-btn" disabled={saving} onClick={() => void save()}>
         {saving ? "جاري الحفظ…" : "حفظ الاهتمامات"}
       </button>

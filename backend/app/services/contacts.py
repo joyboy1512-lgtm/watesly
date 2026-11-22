@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.channel import Channel
 from app.models.contact import Contact
+from app.models.contact_interest import ContactInterest
 from app.models.contact_tag import ContactTag
 from app.models.segment import Segment
 from app.models.tag import Tag
@@ -51,6 +52,8 @@ async def list_contacts(
     organization_id: UUID | None = None,
     tag_id: UUID | None = None,
     tag_ids: list[UUID] | None = None,
+    interest_id: UUID | None = None,
+    interest_ids: list[UUID] | None = None,
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
     region: str | None = None,
@@ -66,6 +69,11 @@ async def list_contacts(
         effective_tag_ids.extend(tag_ids)
     if tag_id is not None and tag_id not in effective_tag_ids:
         effective_tag_ids.append(tag_id)
+    effective_interest_ids: list[UUID] = []
+    if interest_ids:
+        effective_interest_ids.extend(interest_ids)
+    if interest_id is not None and interest_id not in effective_interest_ids:
+        effective_interest_ids.append(interest_id)
     effective_regions: list[str] = []
     if regions:
         effective_regions.extend([item.strip() for item in regions if item and item.strip()])
@@ -93,6 +101,10 @@ async def list_contacts(
                 filters["tag_id"] = str(effective_tag_ids[0])
             elif len(effective_tag_ids) > 1:
                 filters["tag_ids"] = [str(item) for item in effective_tag_ids]
+            if len(effective_interest_ids) == 1:
+                filters["interest_id"] = str(effective_interest_ids[0])
+            elif len(effective_interest_ids) > 1:
+                filters["interest_ids"] = [str(item) for item in effective_interest_ids]
             if len(effective_regions) == 1:
                 filters["region"] = effective_regions[0]
             elif len(effective_regions) > 1:
@@ -128,6 +140,20 @@ async def list_contacts(
                 exists().where(
                     ContactTag.contact_id == Contact.id,
                     ContactTag.tag_id.in_(effective_tag_ids),
+                )
+            )
+        if len(effective_interest_ids) == 1:
+            query = query.where(
+                exists().where(
+                    ContactInterest.contact_id == Contact.id,
+                    ContactInterest.interest_id == effective_interest_ids[0],
+                )
+            )
+        elif len(effective_interest_ids) > 1:
+            query = query.where(
+                exists().where(
+                    ContactInterest.contact_id == Contact.id,
+                    ContactInterest.interest_id.in_(effective_interest_ids),
                 )
             )
         if lifecycle_stage and lifecycle_stage.strip():
