@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
@@ -45,6 +46,22 @@ export function buildCartSummary(products: MatchedCatalogProduct[]) {
   return ["🛒 ملخص الطلب:", ...lines].join("\n");
 }
 
+async function fetchCatalogProducts(query: string, channelId?: string | null) {
+  const params: Record<string, string | number> = {};
+  if (channelId) params.channel_id = channelId;
+  if (query.trim()) {
+    params.q = query.trim();
+    params.limit = 24;
+    const searched = (await api.get<CatalogProduct[]>("/catalog/search", { params })).data;
+    if (searched.length || !channelId) return searched;
+    const { channel_id: _ignored, ...rest } = params;
+    return (await api.get<CatalogProduct[]>("/catalog/search", { params: rest })).data;
+  }
+  const listed = (await api.get<CatalogProduct[]>("/catalog", { params })).data.slice(0, 24);
+  if (listed.length || !channelId) return listed;
+  return (await api.get<CatalogProduct[]>("/catalog")).data.slice(0, 24);
+}
+
 export default function InboxProductPicker({
   open,
   onClose,
@@ -68,16 +85,7 @@ export default function InboxProductPicker({
   const products = useQuery({
     queryKey: ["catalog-picker", query, channelId],
     enabled: open,
-    queryFn: async () => {
-      const params: Record<string, string | number> = {};
-      if (channelId) params.channel_id = channelId;
-      if (query.trim()) {
-        params.q = query.trim();
-        params.limit = 12;
-        return (await api.get<CatalogProduct[]>("/catalog/search", { params })).data;
-      }
-      return (await api.get<CatalogProduct[]>("/catalog", { params })).data.slice(0, 12);
-    }
+    queryFn: () => fetchCatalogProducts(query, channelId)
   });
 
   const rows = useMemo(
@@ -99,18 +107,26 @@ export default function InboxProductPicker({
   }
 
   return (
-    <div className="inbox-product-picker">
+    <div className="inbox-product-picker" role="dialog" aria-label="اختيار منتج من الكتالوج">
       <div className="inbox-product-picker-head">
-        <strong>إدراج منتج / سلة</strong>
-        <button type="button" className="secondary-action" onClick={onClose} aria-label="إغلاق">×</button>
+        <strong>اختر منتجاً من الكتالوج</strong>
+        <div className="inline-actions">
+          <Link to="/catalog" target="_blank" rel="noreferrer">
+            فتح الكتالوج
+          </Link>
+          <button type="button" className="secondary-action" onClick={onClose} aria-label="إغلاق">
+            ×
+          </button>
+        </div>
       </div>
       <div className="inbox-product-picker-search">
         <Icon name="search" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="بحث في الكتالوج…"
+          placeholder="ابحث بالاسم أو SKU…"
           disabled={disabled}
+          autoFocus
         />
       </div>
       {cart.length > 0 && (
@@ -128,7 +144,7 @@ export default function InboxProductPicker({
                 onClose();
               }}
             >
-              إرسال ملخص الطلب
+              إدراج ملخص الطلب
             </button>
             <button type="button" className="secondary-button" onClick={() => setSelectedIds([])}>
               تفريغ
@@ -137,8 +153,24 @@ export default function InboxProductPicker({
         </div>
       )}
       <div className="inbox-product-picker-list">
-        {products.isLoading && <p className="hint-text">جاري التحميل…</p>}
-        {!products.isLoading && rows.length === 0 && <p className="hint-text">لا توجد منتجات.</p>}
+        {products.isLoading && <p className="hint-text">جاري تحميل المنتجات…</p>}
+        {products.isError && (
+          <div className="inbox-state error">
+            <strong>تعذر تحميل الكتالوج</strong>
+            <button type="button" onClick={() => void products.refetch()}>
+              إعادة المحاولة
+            </button>
+          </div>
+        )}
+        {!products.isLoading && !products.isError && rows.length === 0 && (
+          <div className="inbox-state">
+            <strong>لا توجد منتجات مطابقة</strong>
+            <span>أضف منتجات من صفحة الكتالوج ثم أعد المحاولة.</span>
+            <Link className="whatsapp-button" to="/catalog" target="_blank" rel="noreferrer">
+              الذهاب للكتالوج
+            </Link>
+          </div>
+        )}
         {rows.map((product) => {
           const checked = Boolean(product.id && selectedIds.includes(product.id));
           return (

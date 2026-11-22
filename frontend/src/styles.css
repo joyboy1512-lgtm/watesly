@@ -1518,8 +1518,14 @@ select, input, textarea {
 .chat-composer-extras {
   display: grid;
   gap: 6px;
-  max-height: 120px;
+  max-height: min(42vh, 420px);
   overflow-y: auto;
+}
+
+.chat-composer-extras:has(.inbox-product-picker),
+.chat-composer-extras:has(.inbox-reply-buttons-panel),
+.chat-composer-extras:has(.inbox-shortcuts-form) {
+  max-height: min(58vh, 560px);
 }
 
 .chat-composer-bar {
@@ -5829,11 +5835,13 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   margin: 0 0 6px;
 }
 .inbox-product-picker {
-  margin: 0 14px 8px;
+  margin: 0;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: var(--panel);
+  background: #fff;
+  color: var(--text);
   overflow: hidden;
+  box-shadow: 0 8px 24px rgba(7, 94, 84, 0.18);
 }
 .inbox-product-picker-head,
 .inbox-product-picker-search {
@@ -5843,18 +5851,33 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
 }
+.inbox-product-picker-head {
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--primary-soft) 65%, white);
+}
+.inbox-product-picker-head strong {
+  color: var(--primary-darker);
+}
+.inbox-product-picker-head a {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  text-decoration: none;
+}
 .inbox-product-picker-search input {
   flex: 1;
   border: 0;
   background: transparent;
   outline: none;
+  color: #111b21;
 }
 .inbox-product-picker-list {
   display: grid;
   gap: 8px;
   padding: 10px;
-  max-height: 280px;
+  max-height: min(40vh, 360px);
   overflow: auto;
+  background: #fff;
 }
 .ai-suggestion-products {
   display: grid;
