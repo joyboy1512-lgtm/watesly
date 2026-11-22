@@ -7,6 +7,9 @@ import {
   type ButtonTemplate
 } from "../lib/inboxComposerStorage";
 
+const BUTTON_SLOTS = 3;
+const BUTTON_TITLE_MAX = 20;
+
 type Props = {
   open: boolean;
   body: string;
@@ -17,6 +20,17 @@ type Props = {
   onSend: () => void;
   onClose: () => void;
 };
+
+function parseButtonTitles(titles: string): string[] {
+  const rows = titles.split(/\n/).map((item) => item.slice(0, BUTTON_TITLE_MAX));
+  return Array.from({ length: BUTTON_SLOTS }, (_, index) => rows[index] ?? "");
+}
+
+function joinButtonTitles(rows: string[]): string {
+  const trimmed = rows.map((item) => item.trim());
+  while (trimmed.length > 0 && !trimmed[trimmed.length - 1]) trimmed.pop();
+  return trimmed.join("\n");
+}
 
 export default function InboxReplyButtonsPanel({
   open,
@@ -30,10 +44,17 @@ export default function InboxReplyButtonsPanel({
 }: Props) {
   const [templates, setTemplates] = useState<ButtonTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
+  const buttonRows = parseButtonTitles(titles);
 
   useEffect(() => {
     if (open) setTemplates(loadButtonTemplates());
   }, [open]);
+
+  function updateButtonRow(index: number, value: string) {
+    const next = [...buttonRows];
+    next[index] = value.slice(0, BUTTON_TITLE_MAX);
+    onTitlesChange(joinButtonTitles(next));
+  }
 
   if (!open) return null;
 
@@ -78,10 +99,26 @@ export default function InboxReplyButtonsPanel({
           maxLength={1024}
         />
       </label>
-      <label className="field-label">
-        <span>نصوص الأزرار (سطر لكل زر · حتى 3)</span>
-        <textarea rows={3} value={titles} onChange={(e) => onTitlesChange(e.target.value)} maxLength={80} />
-      </label>
+      <div className="field-label inbox-button-titles">
+        <span>نصوص الأزرار (حتى 3)</span>
+        <div className="inbox-button-title-rows" role="group" aria-label="نصوص الأزرار">
+          {buttonRows.map((title, index) => (
+            <label key={index} className="inbox-button-title-row">
+              <span className="inbox-button-title-index" aria-hidden="true">
+                {index + 1}
+              </span>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => updateButtonRow(index, e.target.value)}
+                placeholder={`نص الزر ${index + 1}`}
+                maxLength={BUTTON_TITLE_MAX}
+                aria-label={`نص الزر ${index + 1}`}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
       <div className="inbox-template-save-row">
         <input
           value={templateName}
