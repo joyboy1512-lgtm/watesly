@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — AI control panel status UI
+
+| Item | Value |
+|------|-------|
+| Commit | `791f7e2` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-DwMWz7lw.js`, `index-BnL6m3sE.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-ai-control-ui.json` |
+
 ### Production snapshot (2026-11-22) — Bilingual catalog + clarifying dialogue
 
 | Item | Value |

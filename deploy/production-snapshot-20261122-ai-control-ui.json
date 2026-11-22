@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-22",
+  "commit": "791f7e2",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DwMWz7lw.js",
+    "css": "index-BnL6m3sE.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "AI power button with يعمل الآن / متوقف",
+    "Ordered sections: internal, inbound suggest, external LLM, after-hours",
+    "Per-section يعمل/متوقف status toggles"
+  ],
+  "notes": "Deployed via SSH. PR #175. Frontend-only."
+}
