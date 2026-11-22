@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "36f3d5d",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-Cbda4Kof.js",
+    "css": "index-BH4Qn_C4.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Center-aligned table header and body cells",
+    "Override global .compact padding for dense rows"
+  ],
+  "notes": "Deployed via SSH. PR #170."
+}
