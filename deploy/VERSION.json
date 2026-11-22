@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "191196a",
-    "git_commit_message": "Bilingual catalog matching + clarifying dialogue live",
+    "git_commit": "791f7e2",
+    "git_commit_message": "AI control panel status UI live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-XzxrybLR.js",
-      "css": "index-Ds0DWfmF.css"
+      "js": "index-DwMWz7lw.js",
+      "css": "index-BnL6m3sE.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "191196a",
-  "notes": "Site-wide Arabic↔English catalog lexicon + clarifying dialogue for multi-type products (PR #174)"
+  "commit": "791f7e2",
+  "notes": "AI control panel with clear on/off status buttons and ordered sections (PR #175)"
 }
