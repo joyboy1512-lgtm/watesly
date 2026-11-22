@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-22",
+  "commit": "b9da59f",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BMmt8Zb9.js",
+    "css": "index-DMhpXSTu.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Message Library green-header data table",
+    "Hard delete alongside edit/archive/restore",
+    "Inbox composer panels use-only (no manage)"
+  ],
+  "notes": "Deployed via SSH. PR #168."
+}
