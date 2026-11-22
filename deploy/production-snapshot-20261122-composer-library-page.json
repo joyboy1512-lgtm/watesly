@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "012b3fc",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-B0KHvgYP.js",
+    "css": "index-CzWnGQov.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Standalone Message Library page at /composer-library",
+    "Tabs for replies, buttons, and lists with edit/archive/restore"
+  ],
+  "notes": "Deployed via SSH. PR #161."
+}
