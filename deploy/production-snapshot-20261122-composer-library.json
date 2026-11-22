@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-22",
+  "commit": "f03026e",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DhNvY1_l.js",
+    "css": "index-BbntYCfT.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Branch-shared composer button template library",
+    "Branch-shared composer list template library",
+    "Library / manual tabs in buttons and list dialogs"
+  ],
+  "notes": "Deployed via SSH. PR #160. Migration 0065 applied."
+}
