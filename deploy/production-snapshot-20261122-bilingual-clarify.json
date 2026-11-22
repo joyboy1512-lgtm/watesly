@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-22",
+  "commit": "191196a",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-XzxrybLR.js",
+    "css": "index-Ds0DWfmF.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Site-wide bilingual product lexicon Arabic↔English",
+    "Catalog ranking matches صابون سائل عود to liquid soap oud",
+    "Clarifying dialogue when multiple product types match a broad query"
+  ],
+  "notes": "Deployed via SSH. PR #174. No new migration."
+}
