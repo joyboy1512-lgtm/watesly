@@ -1,7 +1,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, formatApiError, silentRequest } from "../lib/api";
 import { authStore } from "../stores/auth";
 import { toastStore } from "../stores/toast";
@@ -190,6 +190,7 @@ export default function InboxPage() {
         })
       ).data;
     },
+    placeholderData: keepPreviousData,
     refetchInterval: 45_000
   });
   const customInboxesQuery = useQuery({
@@ -295,6 +296,9 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (!requestedConversationId) return;
+    // Wait for the current filter query — an in-flight empty list must not
+    // clear selection or bounce the pill back to «الكل».
+    if (!conversationsQuery.isSuccess || conversationsQuery.isPlaceholderData) return;
     const match = conversations.find((item) => item.id === requestedConversationId);
     if (match) {
       setSelectedId(match.id);
@@ -303,9 +307,23 @@ export default function InboxPage() {
       }
       return;
     }
-    // Deep link may point at a silent (outbound-only) thread — reveal via «الكل».
-    if (engagedOnly) setFilter("all");
-  }, [requestedConversationId, conversations, channelFilter, engagedOnly]);
+    // Thread not in this view (e.g. silent outbound on «نشط») — keep the
+    // filter the user chose; drop the selection instead of forcing «الكل».
+    if (!engagedOnly) return;
+    setSelectedId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("conversation");
+    setSearchParams(next, { replace: true });
+  }, [
+    requestedConversationId,
+    conversations,
+    channelFilter,
+    engagedOnly,
+    conversationsQuery.isSuccess,
+    conversationsQuery.isPlaceholderData,
+    searchParams,
+    setSearchParams
+  ]);
 
   useEffect(() => {
     if (!selectedId) return;
