@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "f03026e",
-    "git_commit_message": "Composer library live",
+    "git_commit": "012b3fc",
+    "git_commit_message": "Message Library page live",
     "alembic_head": "0065_composer_library",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DhNvY1_l.js",
-      "css": "index-BbntYCfT.css"
+      "js": "index-B0KHvgYP.js",
+      "css": "index-CzWnGQov.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "f03026e",
-  "notes": "Branch-shared button/list composer library (PR #160)"
+  "commit": "012b3fc",
+  "notes": "Message Library page for replies/buttons/lists (PR #161)"
 }
