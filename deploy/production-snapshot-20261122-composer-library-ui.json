@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-22",
+  "commit": "17499bb",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-B-Ar6pGs.js",
+    "css": "index-DX1m8Pvv.css"
+  },
+  "alembic_head": "0065_composer_library",
+  "features": [
+    "Message Library hero, type tabs, search/status bar",
+    "WhatsApp-style preview cards and empty state"
+  ],
+  "notes": "Deployed via SSH. PR #167."
+}
