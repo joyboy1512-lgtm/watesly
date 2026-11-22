@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — AI agent control panel
+
+| Item | Value |
+|------|-------|
+| Commit | `dc90c8e` |
+| Alembic | `0067_ai_agent_control_panel` |
+| Live assets | `index-C6a0zhtH.js`, `index-Ds0DWfmF.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-ai-agent-control.json` |
+
 ### Production snapshot (2026-11-22) — Branch logo on orgs + invoices
 
 | Item | Value |
