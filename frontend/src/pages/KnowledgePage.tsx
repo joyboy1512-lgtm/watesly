@@ -401,14 +401,16 @@ export default function KnowledgePage() {
           {settings && (
             <div className="knowledge-status-strip" aria-live="polite">
               <span className={settings.agent_enabled !== false ? "status-pill on" : "status-pill off"}>
-                الوكيل: {settings.agent_enabled !== false ? "يعمل" : "متوقف"}
+                الوكيل: {settings.agent_enabled !== false ? "يعمل الآن" : "متوقف"}
               </span>
-              <span className="status-pill">الوضع: {MODE_LABELS[settings.default_mode] ?? settings.default_mode}</span>
-              <span className={settings.llm_enabled && settings.llm_available ? "status-pill on" : "status-pill"}>
-                LLM: {llmStatusLabel(settings)}
+              <span className={settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "status-pill on" : "status-pill off"}>
+                اقتراح الوارد: {settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "يعمل" : "متوقف"}
               </span>
-              <span className={settings.within_business_hours ? "status-pill on" : "status-pill off"}>
-                الآن: {settings.within_business_hours ? "داخل الدوام" : "خارج الدوام"}
+              <span className={settings.llm_enabled && settings.llm_available ? "status-pill on" : "status-pill off"}>
+                خارجي LLM: {settings.llm_enabled && settings.llm_available ? "يعمل" : "متوقف"}
+              </span>
+              <span className={settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "status-pill on" : "status-pill off"}>
+                خارج الدوام: {settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "يعمل" : "متوقف"}
               </span>
             </div>
           )}
@@ -679,206 +681,277 @@ export default function KnowledgePage() {
       </section>
 
       <section className="card knowledge-agent-card">
-        <h2 className="section-title">سياسات الوكيل الذكي</h2>
-        <p className="hint-text">تُطبَّق على الوارد والاقتراحات التلقائية. أوقف الوكيل لإيقاف كل الردود/الاقتراحات الآلية فورًا.</p>
-        {settings && (
-          <div className="knowledge-agent-grid">
-            <label className="field-label checkbox-row knowledge-field-full agent-master-toggle">
-              <input
-                type="checkbox"
-                checked={settings.agent_enabled !== false}
-                onChange={(e) => void saveAgentSettings({ agent_enabled: e.target.checked })}
-              />
-              <span>
-                <strong>تشغيل الوكيل الذكي</strong>
-                <em> عند الإيقاف: لا اقتراحات واردة ولا رد خارج الدوام. زر AI اليدوي يبقى للاختبار.</em>
-              </span>
-            </label>
-
-            <label className="field-label">
-              <span>الوضع الافتراضي للمحادثات</span>
-              <select
-                value={settings.default_mode}
-                onChange={(e) => void saveAgentSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })}
-              >
-                {Object.entries(MODE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field-label">
-              <span>النبرة</span>
-              <select value={settings.tone} onChange={(e) => void saveAgentSettings({ tone: e.target.value as AgentSettings["tone"] })}>
-                <option value="friendly">ودّية</option>
-                <option value="formal">رسمية</option>
-                <option value="concise">مختصرة</option>
-              </select>
-            </label>
-            <label className="field-label">
-              <span>اللغة</span>
-              <input
-                value={settings.language}
-                onChange={(e) => void saveAgentSettings({ language: e.target.value })}
-                dir="ltr"
-              />
-            </label>
-
-            <div className="knowledge-field-full agent-llm-box">
-              <h3 className="section-title-sm">مفتاح LLM (OpenAI أو متوافق)</h3>
-              <p className="hint-text">
-                الحالة: {llmStatusLabel(settings)}
-                {settings.llm_key_configured ? " · مفتاح محفوظ لهذا الحساب" : ""}
-                {settings.llm_key_source === "env" ? " · يعتمد حاليًا على مفتاح السيرفر" : ""}
-              </p>
-              <div className="knowledge-fields-row">
-                <label className="field-label">
-                  <span>مفتاح API</span>
-                  <input
-                    type="password"
-                    value={llmApiKeyDraft}
-                    onChange={(e) => setLlmApiKeyDraft(e.target.value)}
-                    placeholder={settings.llm_key_configured ? "•••••••• (محفوظ — اكتب جديدًا للاستبدال)" : "sk-..."}
-                    dir="ltr"
-                    autoComplete="off"
-                  />
-                </label>
-                <label className="field-label">
-                  <span>Base URL (اختياري)</span>
-                  <input
-                    value={settings.llm_api_base_url ?? ""}
-                    onBlur={(e) => void saveAgentSettings({ llm_api_base_url: e.target.value.trim() || null })}
-                    placeholder="https://api.openai.com/v1"
-                    dir="ltr"
-                  />
-                </label>
-                <label className="field-label">
-                  <span>النموذج (اختياري)</span>
-                  <input
-                    value={settings.llm_model ?? ""}
-                    onBlur={(e) => void saveAgentSettings({ llm_model: e.target.value.trim() || null })}
-                    placeholder="gpt-4o-mini"
-                    dir="ltr"
-                  />
-                </label>
-              </div>
-              <div className="catalog-card-actions">
-                <button type="button" className="whatsapp-button" onClick={() => void saveLlmApiKey()} disabled={!llmApiKeyDraft.trim()}>
-                  حفظ المفتاح
-                </button>
+        <h2 className="section-title">لوحة تحكم الذكاء</h2>
+        <p className="hint-text">أقسام واضحة للتشغيل والإيقاف — بدون الاعتماد على مربع اختيار صغير.</p>
+        {settings && (() => {
+          const agentOn = settings.agent_enabled !== false;
+          const inboundOn = agentOn && settings.auto_kb_on_inbound;
+          const outsideOn = agentOn && Boolean(settings.auto_reply_outside_hours);
+          const llmOn = Boolean(settings.llm_enabled && settings.llm_available);
+          return (
+            <div className="agent-control-panel">
+              <div className={`agent-power-bar ${agentOn ? "is-on" : "is-off"}`}>
+                <div className="agent-power-copy">
+                  <span className="agent-power-eyebrow">الحالة العامة للوكيل</span>
+                  <strong>{agentOn ? "يعمل الآن" : "متوقف"}</strong>
+                  <p>
+                    {agentOn
+                      ? "الاقتراحات والردود الآلية مفعّلة حسب الأقسام أدناه."
+                      : "كل الآلي متوقف. زر AI في المحادثة يبقى للاختبار اليدوي فقط."}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="secondary-button"
-                  onClick={() => void clearLlmApiKey()}
-                  disabled={!settings.llm_key_configured}
+                  className={`agent-power-button ${agentOn ? "is-on" : "is-off"}`}
+                  onClick={() => void saveAgentSettings({ agent_enabled: !agentOn })}
                 >
-                  حذف المفتاح
+                  <span className="agent-power-dot" aria-hidden />
+                  {agentOn ? "إيقاف الوكيل" : "تشغيل الوكيل"}
                 </button>
-                <label className="field-label checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={settings.llm_enabled}
-                    disabled={!settings.llm_available}
-                    onChange={(e) => void saveAgentSettings({ llm_enabled: e.target.checked })}
-                  />
-                  <span>تفعيل LLM لصقل الردود</span>
-                </label>
               </div>
-            </div>
 
-            <label className="field-label checkbox-row">
-              <input
-                type="checkbox"
-                checked={settings.auto_kb_on_inbound}
-                onChange={(e) => void saveAgentSettings({ auto_kb_on_inbound: e.target.checked })}
-                disabled={settings.agent_enabled === false}
-              />
-              <span>اقتراح تلقائي عند رسالة واردة</span>
-            </label>
-            <label className="field-label checkbox-row">
-              <input
-                type="checkbox"
-                checked={settings.auto_reply_outside_hours ?? false}
-                onChange={(e) => void saveAgentSettings({ auto_reply_outside_hours: e.target.checked })}
-                disabled={settings.agent_enabled === false}
-              />
-              <span>رد تلقائي خارج ساعات العمل (أول رسالة فقط)</span>
-            </label>
-            <label className="field-label knowledge-field-full">
-              <span>رسالة خارج الدوام</span>
-              <textarea
-                value={settings.outside_hours_message ?? ""}
-                onBlur={(e) => void saveAgentSettings({ outside_hours_message: e.target.value || null })}
-                rows={2}
-                placeholder="شكراً لتواصلك. نحن خارج ساعات العمل…"
-              />
-            </label>
-
-            <div className="knowledge-field-full agent-hours-box">
-              <h3 className="section-title-sm">ساعات العمل</h3>
-              <label className="field-label">
-                <span>المنطقة الزمنية</span>
-                <input
-                  value={hoursDraft?.timezone ?? "Asia/Kuwait"}
-                  onChange={(e) => {
-                    setHoursDirty(true);
-                    setHoursDraft((current) => ({
-                      ...(current ?? normalizeBusinessHours(settings.business_hours_json)),
-                      timezone: e.target.value
-                    }));
-                  }}
-                  dir="ltr"
-                />
-              </label>
-              <div className="agent-hours-table">
-                {DAY_ORDER.map((day) => {
-                  const slot = hoursDraft?.days[day] ?? null;
-                  const open = slot != null;
-                  return (
-                    <div key={day} className="agent-hours-row">
-                      <label className="checkbox-row">
-                        <input
-                          type="checkbox"
-                          checked={open}
-                          onChange={(e) => updateHoursDay(day, { open: e.target.checked })}
-                        />
-                        <span>{DAY_LABELS[day]}</span>
-                      </label>
-                      <input
-                        type="time"
-                        value={slot?.[0] ?? "09:00"}
-                        disabled={!open}
-                        onChange={(e) => updateHoursDay(day, { start: e.target.value })}
-                      />
-                      <span className="hint-text">إلى</span>
-                      <input
-                        type="time"
-                        value={slot?.[1] ?? "18:00"}
-                        disabled={!open}
-                        onChange={(e) => updateHoursDay(day, { end: e.target.value })}
-                      />
+              <div className="agent-section-grid">
+                <article className="agent-section-card">
+                  <header className="agent-section-head">
+                    <div>
+                      <h3>الذكاء الداخلي</h3>
+                      <p>قاعدة المعرفة + الكتالوج + المطابقة العربية/الإنجليزية بدون مفتاح خارجي.</p>
                     </div>
-                  );
-                })}
-              </div>
-              <div className="catalog-card-actions">
-                <button type="button" className="whatsapp-button" onClick={() => void saveBusinessHours()} disabled={!hoursDirty}>
-                  حفظ ساعات العمل
-                </button>
-                {hoursDirty && <span className="hint-text">هناك تعديلات غير محفوظة</span>}
+                    <span className={`agent-state-badge ${agentOn ? "is-on" : "is-off"}`}>
+                      {agentOn ? "مفعّل" : "متوقف مع الوكيل"}
+                    </span>
+                  </header>
+                  <div className="knowledge-fields-row">
+                    <label className="field-label">
+                      <span>وضع الرد للمحادثات</span>
+                      <select
+                        value={settings.default_mode}
+                        disabled={!agentOn}
+                        onChange={(e) => void saveAgentSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })}
+                      >
+                        {Object.entries(MODE_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field-label">
+                      <span>النبرة</span>
+                      <select
+                        value={settings.tone}
+                        disabled={!agentOn}
+                        onChange={(e) => void saveAgentSettings({ tone: e.target.value as AgentSettings["tone"] })}
+                      >
+                        <option value="friendly">ودّية</option>
+                        <option value="formal">رسمية</option>
+                        <option value="concise">مختصرة</option>
+                      </select>
+                    </label>
+                    <label className="field-label">
+                      <span>اللغة</span>
+                      <input
+                        value={settings.language}
+                        disabled={!agentOn}
+                        onBlur={(e) => void saveAgentSettings({ language: e.target.value })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          void client.setQueryData(["knowledge-agent-settings"], (prev: AgentSettings | undefined) =>
+                            prev ? { ...prev, language: value } : prev
+                          );
+                        }}
+                        dir="ltr"
+                      />
+                    </label>
+                  </div>
+                </article>
+
+                <article className="agent-section-card">
+                  <header className="agent-section-head">
+                    <div>
+                      <h3>اقتراح عند رسالة واردة</h3>
+                      <p>
+                        عندما يكتب العميل رسالة جديدة، يظهر للموظف في الوارد اقتراح رد جاهز (لا يُرسل تلقائيًا).
+                        الموظف يختار: استخدام / غير مناسب / تجاهل.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${inboundOn ? "is-on" : "is-off"}`}
+                      disabled={!agentOn}
+                      onClick={() => void saveAgentSettings({ auto_kb_on_inbound: !settings.auto_kb_on_inbound })}
+                    >
+                      {inboundOn ? "يعمل" : "متوقف"}
+                    </button>
+                  </header>
+                  <p className="agent-section-note">
+                    هذا ليس ردًا آليًا للعميل — هو مساعدة للموظف فقط داخل الشاشة.
+                  </p>
+                </article>
+
+                <article className="agent-section-card">
+                  <header className="agent-section-head">
+                    <div>
+                      <h3>الذكاء الخارجي (LLM)</h3>
+                      <p>يصقل صياغة الرد بعد تجهيزه من المعرفة/الكتالوج. يحتاج مفتاح API.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${llmOn ? "is-on" : "is-off"}`}
+                      disabled={!settings.llm_available || !agentOn}
+                      onClick={() => void saveAgentSettings({ llm_enabled: !settings.llm_enabled })}
+                      title={!settings.llm_available ? "أضف مفتاح API أولًا" : undefined}
+                    >
+                      {llmOn ? "يعمل" : settings.llm_available ? "متوقف" : "غير جاهز"}
+                    </button>
+                  </header>
+                  <p className="hint-text">الحالة: {llmStatusLabel(settings)}</p>
+                  <div className="knowledge-fields-row">
+                    <label className="field-label">
+                      <span>مفتاح API</span>
+                      <input
+                        type="password"
+                        value={llmApiKeyDraft}
+                        onChange={(e) => setLlmApiKeyDraft(e.target.value)}
+                        placeholder={settings.llm_key_configured ? "•••••••• (محفوظ — اكتب جديدًا للاستبدال)" : "sk-..."}
+                        dir="ltr"
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>Base URL</span>
+                      <input
+                        value={settings.llm_api_base_url ?? ""}
+                        onBlur={(e) => void saveAgentSettings({ llm_api_base_url: e.target.value.trim() || null })}
+                        placeholder="https://api.openai.com/v1"
+                        dir="ltr"
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>النموذج</span>
+                      <input
+                        value={settings.llm_model ?? ""}
+                        onBlur={(e) => void saveAgentSettings({ llm_model: e.target.value.trim() || null })}
+                        placeholder="gpt-4o-mini"
+                        dir="ltr"
+                      />
+                    </label>
+                  </div>
+                  <div className="catalog-card-actions">
+                    <button type="button" className="whatsapp-button" onClick={() => void saveLlmApiKey()} disabled={!llmApiKeyDraft.trim()}>
+                      حفظ المفتاح
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void clearLlmApiKey()}
+                      disabled={!settings.llm_key_configured}
+                    >
+                      حذف المفتاح
+                    </button>
+                  </div>
+                  <label className="field-label">
+                    <span>تعليمات النظام للـ LLM</span>
+                    <textarea
+                      value={settings.llm_system_prompt ?? ""}
+                      onBlur={(e) => void saveAgentSettings({ llm_system_prompt: e.target.value || null })}
+                      rows={3}
+                      placeholder="مثال: أجب باختصار باللهجة الكويتية، ولا تخترع أسعارًا…"
+                      disabled={!agentOn}
+                    />
+                  </label>
+                </article>
+
+                <article className="agent-section-card">
+                  <header className="agent-section-head">
+                    <div>
+                      <h3>خارج الدوام</h3>
+                      <p>
+                        إذا راسل العميل خارج ساعات العمل ولم يُرد أحد بعد، يُرسل النظام رسالة واحدة تلقائيًا ثم يتوقف.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${outsideOn ? "is-on" : "is-off"}`}
+                      disabled={!agentOn}
+                      onClick={() => void saveAgentSettings({ auto_reply_outside_hours: !settings.auto_reply_outside_hours })}
+                    >
+                      {outsideOn ? "يعمل" : "متوقف"}
+                    </button>
+                  </header>
+                  <p className="agent-section-note">
+                    الآن: {settings.within_business_hours ? "داخل الدوام" : "خارج الدوام"}
+                    {outsideOn ? " — الرد الآلي جاهز خارج الساعات." : " — لن يُرسل ردًا تلقائيًا."}
+                  </p>
+                  <label className="field-label">
+                    <span>رسالة خارج الدوام</span>
+                    <textarea
+                      value={settings.outside_hours_message ?? ""}
+                      onBlur={(e) => void saveAgentSettings({ outside_hours_message: e.target.value || null })}
+                      rows={2}
+                      placeholder="شكراً لتواصلك. نحن خارج ساعات العمل…"
+                      disabled={!agentOn}
+                    />
+                  </label>
+                  <div className="agent-hours-box">
+                    <h4 className="section-title-sm">ساعات العمل</h4>
+                    <label className="field-label">
+                      <span>المنطقة الزمنية</span>
+                      <input
+                        value={hoursDraft?.timezone ?? "Asia/Kuwait"}
+                        disabled={!agentOn}
+                        onChange={(e) => {
+                          setHoursDirty(true);
+                          setHoursDraft((current) => ({
+                            ...(current ?? normalizeBusinessHours(settings.business_hours_json)),
+                            timezone: e.target.value
+                          }));
+                        }}
+                        dir="ltr"
+                      />
+                    </label>
+                    <div className="agent-hours-table">
+                      {DAY_ORDER.map((day) => {
+                        const slot = hoursDraft?.days[day] ?? null;
+                        const open = slot != null;
+                        return (
+                          <div key={day} className="agent-hours-row">
+                            <label className="checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={open}
+                                disabled={!agentOn}
+                                onChange={(e) => updateHoursDay(day, { open: e.target.checked })}
+                              />
+                              <span>{DAY_LABELS[day]}</span>
+                            </label>
+                            <input
+                              type="time"
+                              value={slot?.[0] ?? "09:00"}
+                              disabled={!open || !agentOn}
+                              onChange={(e) => updateHoursDay(day, { start: e.target.value })}
+                            />
+                            <span className="hint-text">إلى</span>
+                            <input
+                              type="time"
+                              value={slot?.[1] ?? "18:00"}
+                              disabled={!open || !agentOn}
+                              onChange={(e) => updateHoursDay(day, { end: e.target.value })}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="catalog-card-actions">
+                      <button type="button" className="whatsapp-button" onClick={() => void saveBusinessHours()} disabled={!hoursDirty || !agentOn}>
+                        حفظ ساعات العمل
+                      </button>
+                      {hoursDirty && <span className="hint-text">هناك تعديلات غير محفوظة</span>}
+                    </div>
+                  </div>
+                </article>
               </div>
             </div>
-
-            <label className="field-label knowledge-field-full">
-              <span>تعليمات النظام (LLM)</span>
-              <textarea
-                value={settings.llm_system_prompt ?? ""}
-                onBlur={(e) => void saveAgentSettings({ llm_system_prompt: e.target.value || null })}
-                rows={3}
-                placeholder="تعليمات إضافية للنموذج…"
-              />
-            </label>
-          </div>
-        )}
+          );
+        })()}
       </section>
 
       <section className="card catalog-manage-card">
