@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-22",
+  "commit": "ebe0b7e",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-D8CKaZAO.js",
+    "css": "index-DqmXBeOj.css"
+  },
+  "alembic_head": "0064_custom_inboxes",
+  "features": [
+    "Dashboard green hero and CTAs",
+    "KPI cards solid/soft/outline green tones",
+    "Green quick-action cards",
+    "Green-accent panels and supervisor tiles"
+  ],
+  "notes": "Deployed via SSH. PR #148."
+}
