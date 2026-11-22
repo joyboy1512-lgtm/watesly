@@ -16,6 +16,7 @@ import ContactCreatePage from "./pages/ContactCreatePage";
 import ContactImportPage from "./pages/ContactImportPage";
 import ContactDetailPage from "./pages/ContactDetailPage";
 import QuickRepliesPage from "./pages/QuickRepliesPage";
+import ComposerLibraryPage from "./pages/ComposerLibraryPage";
 import CrmPage from "./pages/CrmPage";
 import DealCreatePage from "./pages/DealCreatePage";
 import DealDetailPage from "./pages/DealDetailPage";
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/contacts/import" element={<ContactImportPage />} />
         <Route path="/contacts/:id" element={<ContactDetailPage />} />
         <Route path="/quick-replies" element={<QuickRepliesPage />} />
+        <Route path="/composer-library" element={<ComposerLibraryPage />} />
         <Route path="/crm" element={<CrmPage />} />
         <Route path="/crm/new" element={<DealCreatePage />} />
         <Route path="/crm/:id" element={<DealDetailPage />} />

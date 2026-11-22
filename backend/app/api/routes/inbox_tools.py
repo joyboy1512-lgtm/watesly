@@ -427,6 +427,7 @@ async def get_conversation_tags(
 @router.get("/composer-button-templates")
 async def get_composer_button_templates(
     organization_id: UUID | None = Query(None),
+    include_inactive: bool = Query(False),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -437,6 +438,7 @@ async def get_composer_button_templates(
         account_id=context.account_id,
         organization_id=organization_id,
         membership=context.membership,
+        active_only=not include_inactive,
     )
 
 
@@ -469,6 +471,35 @@ async def post_composer_button_template(
         raise HTTPException(status_code=409, detail="Template name already exists") from exc
 
 
+@router.patch("/composer-button-templates/{template_id}")
+async def patch_composer_button_template(
+    template_id: UUID,
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.schemas.composer_library import ComposerButtonTemplateUpdate
+    from app.services.composer_library import update_button_template
+
+    try:
+        body = ComposerButtonTemplateUpdate.model_validate(payload)
+        return await update_button_template(
+            db,
+            account_id=context.account_id,
+            template_id=template_id,
+            payload=body,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Template not found") from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Template name already exists") from exc
+
+
 @router.delete("/composer-button-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_composer_button_template(
     template_id: UUID,
@@ -492,6 +523,7 @@ async def delete_composer_button_template(
 @router.get("/composer-list-templates")
 async def get_composer_list_templates(
     organization_id: UUID | None = Query(None),
+    include_inactive: bool = Query(False),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -503,6 +535,7 @@ async def get_composer_list_templates(
         account_id=context.account_id,
         organization_id=organization_id,
         membership=context.membership,
+        active_only=not include_inactive,
     )
     return [ComposerListTemplateResponse.from_orm_item(item) for item in items]
 
@@ -530,6 +563,38 @@ async def post_composer_list_template(
         detail = str(exc)
         if detail == "INVALID_ORGANIZATION":
             raise HTTPException(status_code=400, detail="Invalid organization") from exc
+        if detail == "EMPTY_SECTIONS":
+            raise HTTPException(status_code=400, detail="Add at least one list option") from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Template name already exists") from exc
+
+
+@router.patch("/composer-list-templates/{template_id}")
+async def patch_composer_list_template(
+    template_id: UUID,
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.schemas.composer_library import ComposerListTemplateResponse, ComposerListTemplateUpdate
+    from app.services.composer_library import update_list_template
+
+    try:
+        body = ComposerListTemplateUpdate.model_validate(payload)
+        item = await update_list_template(
+            db,
+            account_id=context.account_id,
+            template_id=template_id,
+            payload=body,
+            membership=context.membership,
+        )
+        return ComposerListTemplateResponse.from_orm_item(item)
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Template not found") from exc
         if detail == "EMPTY_SECTIONS":
             raise HTTPException(status_code=400, detail="Add at least one list option") from exc
         raise HTTPException(status_code=400, detail=detail) from exc

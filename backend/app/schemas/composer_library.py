@@ -25,6 +25,16 @@ class ComposerButtonTemplateUpdate(BaseModel):
     titles: str | None = Field(default=None, min_length=1, max_length=120)
     is_active: bool | None = None
 
+    @field_validator("titles")
+    @classmethod
+    def validate_titles(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        rows = [line.strip() for line in value.split("\n") if line.strip()]
+        if not rows or len(rows) > 3:
+            raise ValueError("titles must include 1 to 3 button labels")
+        return "\n".join(row[:20] for row in rows)
+
 
 class ComposerButtonTemplateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
