@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalog_product import CatalogProduct
 from app.models.channel import Channel
+from app.services.catalog_intelligence import build_precise_catalog_reply, rank_catalog_products
+from app.services.internal_ai import expand_query_terms
 
 
 async def _resolve_channel_for_catalog(
@@ -401,66 +403,52 @@ async def search_catalog_products(
     category: str | None = None,
     membership=None,
 ) -> list[CatalogProduct]:
-    term = f"%{query.strip()}%"
-    if not query.strip():
-        return await list_catalog_products(
-            db,
-            account_id,
-            membership=membership,
-            active_only=active_only,
-            organization_id=organization_id,
-            channel_id=channel_id,
-            category=category,
-        )
-
-    filters = [
-        CatalogProduct.account_id == account_id,
-        or_(
-            CatalogProduct.name.ilike(term),
-            CatalogProduct.description.ilike(term),
-            CatalogProduct.keywords.ilike(term),
-            CatalogProduct.sku.ilike(term),
-        ),
-    ]
-    if active_only:
-        filters.append(CatalogProduct.is_active.is_(True))
-    if organization_id is not None:
-        filters.append(CatalogProduct.organization_id == organization_id)
-    if category:
-        filters.append(CatalogProduct.category == category)
-    if membership is not None:
-        from app.services.membership_access import catalog_scope_clauses
-
-        for clause in await catalog_scope_clauses(
-            db,
-            account_id=account_id,
-            membership=membership,
-            channel_column=CatalogProduct.channel_id,
-            organization_column=CatalogProduct.organization_id,
-        ):
-            filters.append(clause)
-
-    stmt = select(CatalogProduct).where(*filters).order_by(
-        CatalogProduct.sort_order.asc(), CatalogProduct.name.asc()
-    ).limit(limit)
-    stmt = await _apply_catalog_channel_filter(
-        stmt,
-        db=db,
-        account_id=account_id,
+    """Search catalog with bilingual ranking (Arabic↔English site-wide lexicon)."""
+    pool = await list_catalog_products(
+        db,
+        account_id,
+        membership=membership,
+        active_only=active_only,
+        organization_id=organization_id,
         channel_id=channel_id,
+        category=category,
     )
-    items = list((await db.execute(stmt)).scalars().all())
-    if items:
-        return items
-    return (
-        await list_catalog_products(
-            db,
-            account_id,
-            membership=membership,
-            active_only=active_only,
-            channel_id=channel_id,
-        )
-    )[:limit]
+    if not query.strip():
+        return pool[:limit]
+
+    # Optional SQL widen for large catalogs, then always re-rank bilingually.
+    if len(pool) > 120:
+        terms = {query.strip(), *list(expand_query_terms(query))[:14]}
+        narrowed: dict[str, CatalogProduct] = {}
+        for term_raw in terms:
+            if len(term_raw) < 2:
+                continue
+            pattern = f"%{term_raw}%"
+            filters = [
+                CatalogProduct.account_id == account_id,
+                or_(
+                    CatalogProduct.name.ilike(pattern),
+                    CatalogProduct.description.ilike(pattern),
+                    CatalogProduct.keywords.ilike(pattern),
+                    CatalogProduct.sku.ilike(pattern),
+                ),
+            ]
+            if active_only:
+                filters.append(CatalogProduct.is_active.is_(True))
+            if organization_id is not None:
+                filters.append(CatalogProduct.organization_id == organization_id)
+            if category:
+                filters.append(CatalogProduct.category == category)
+            stmt = select(CatalogProduct).where(*filters)
+            stmt = await _apply_catalog_channel_filter(
+                stmt, db=db, account_id=account_id, channel_id=channel_id
+            )
+            for row in (await db.execute(stmt)).scalars().all():
+                narrowed[str(row.id)] = row
+        pool = list(narrowed.values()) or pool
+
+    ranked = rank_catalog_products(pool, query, limit=limit)
+    return [item.product for item in ranked]
 
 
 async def assign_catalog_products_to_channel(
@@ -520,51 +508,32 @@ def format_specs(specs: dict) -> str:
 
 
 def build_catalog_reply(products: list[CatalogProduct], *, contact_name: str = "", query: str = "") -> dict:
+    """Build a catalog reply; asks clarifying questions when multiple types match."""
     if not products:
         name = contact_name or "عميلنا"
         return {
-            "suggestion": f"مرحباً {name}! شكراً لتواصلك. سأتحقق من المنتجات المتاحة وأرد عليك قريباً.",
+            "suggestion": (
+                f"مرحباً {name}! لم أجد منتجًا مطابقًا بوضوح. "
+                "اكتب اسم الصنف أو النوع لأدقق لك دون تخمين."
+            ),
             "matched_products": [],
-            "confidence": 0.4,
+            "confidence": 0.35,
             "source": "catalog",
+            "needs_clarification": False,
+            "engine": "catalog_bilingual_v1",
         }
 
-    lines = []
-    matched = []
-    for product in products[:5]:
-        price = format_price(product)
-        specs = format_specs(product.specs_json or {})
-        line = f"• *{product.name}* — {price}"
-        if specs:
-            line += f"\n  {specs}"
-        if product.description:
-            line += f"\n  {product.description[:120]}"
-        lines.append(line)
-        matched.append({
-            "id": str(product.id),
-            "name": product.name,
-            "price": str(product.price) if product.price is not None else None,
-            "currency": product.currency,
-            "price_label": price,
-            "image_url": product.image_url,
-            "description": (product.description or "")[:160] or None,
-            "specs_preview": specs or None,
-            "product_type": product.product_type,
-            "meta_retailer_id": product.meta_retailer_id,
-            "category": product.category,
-        })
-
-    greeting = f"مرحباً {contact_name}! " if contact_name else "مرحباً! "
-    body = "\n\n".join(lines)
-    suggestion = f"{greeting}إليك ما يناسب استفسارك:\n\n{body}\n\nهل تريد تفاصيل أكثر أو حجز/طلب؟"
-
-    return {
-        "suggestion": suggestion,
-        "matched_products": matched,
-        "confidence": 0.85 if len(products) == 1 else 0.75,
-        "source": "catalog",
-        "query": query,
-    }
+    scored = rank_catalog_products(products, query or products[0].name, limit=max(8, len(products)), min_score=0.0)
+    # Keep only products that were passed in (preserve caller filter) while using scores
+    allowed = {str(p.id) for p in products}
+    scored = [item for item in scored if str(item.product.id) in allowed] or scored
+    return build_precise_catalog_reply(
+        scored,
+        contact_name=contact_name,
+        query=query,
+        format_price=format_price,
+        format_specs=format_specs,
+    )
 
 
 async def import_catalog_from_rows(
@@ -653,16 +622,14 @@ async def suggest_catalog_reply(
     query: str,
     contact_name: str = "",
 ) -> dict:
-    products = await search_catalog_products(db, account_id, query)
-    lower = query.lower()
-    price_words = ("سعر", "price", "cost", "كم", "تكلف", "offer", "عرض")
-    if any(w in lower for w in price_words) and products:
-        return build_catalog_reply(products, contact_name=contact_name, query=query)
+    products = await search_catalog_products(db, account_id, query, limit=10)
     if products and query.strip():
         return build_catalog_reply(products, contact_name=contact_name, query=query)
+    lower = query.lower()
     all_products = await list_catalog_products(db, account_id)
     if all_products and any(w in lower for w in ("منتج", "خدم", "product", "service", "قائمة", "menu")):
-        return build_catalog_reply(all_products[:5], contact_name=contact_name, query=query)
+        # Menu request: clarify among top categories/products rather than dumping randomly
+        return build_catalog_reply(all_products[:8], contact_name=contact_name, query=query or "قائمة منتجات")
     return build_catalog_reply(products, contact_name=contact_name, query=query)
 
 

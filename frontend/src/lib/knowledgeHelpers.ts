@@ -53,6 +53,7 @@ export type SmartReplyResult = {
   confidence?: number;
   engine?: string;
   expanded_terms?: string[];
+  needs_clarification?: boolean;
   matched_articles?: Array<{
     id: string;
     title: string;
@@ -61,7 +62,13 @@ export type SmartReplyResult = {
     score?: number;
     reasons?: string[];
   }>;
-  matched_products?: Array<{ id: string; name: string; price_label: string }>;
+  matched_products?: Array<{
+    id: string;
+    name: string;
+    price_label: string;
+    score?: number;
+    clarify_option?: number;
+  }>;
 };
 
 export type QualityEvalResult = {
@@ -114,6 +121,7 @@ export const MODE_LABELS: Record<string, string> = {
 export const SOURCE_LABELS: Record<string, string> = {
   knowledge_base: "قاعدة المعرفة",
   catalog: "الكتالوج",
+  catalog_clarify: "توضيح أنواع المنتج",
   combined: "مدمج",
   local: "AI محلي",
   "knowledge_base+llm": "KB + LLM",
