@@ -25,10 +25,10 @@ from app.services.knowledge_base import (
     list_knowledge_articles,
     list_knowledge_categories,
     search_knowledge_articles,
+    serialize_agent_settings,
     suggest_smart_reply,
     update_agent_settings,
 )
-from app.services.llm_client import llm_available
 
 router = APIRouter()
 
@@ -37,27 +37,21 @@ class AgentSettingsUpdate(BaseModel):
     default_mode: str | None = Field(default=None, pattern=r"^(kb_first|catalog_first|combined|local)$")
     tone: str | None = Field(default=None, pattern=r"^(friendly|formal|concise)$")
     language: str | None = Field(default=None, max_length=10)
+    agent_enabled: bool | None = None
     llm_enabled: bool | None = None
     auto_kb_on_inbound: bool | None = None
     llm_system_prompt: str | None = None
     auto_reply_outside_hours: bool | None = None
     business_hours_json: dict | None = None
     outside_hours_message: str | None = None
+    llm_api_key: str | None = None
+    clear_llm_api_key: bool | None = None
+    llm_api_base_url: str | None = None
+    llm_model: str | None = None
 
 
 def _agent_settings_payload(item) -> dict:
-    return {
-        "default_mode": item.default_mode,
-        "tone": item.tone,
-        "language": item.language,
-        "llm_enabled": item.llm_enabled,
-        "auto_kb_on_inbound": item.auto_kb_on_inbound,
-        "llm_system_prompt": item.llm_system_prompt,
-        "auto_reply_outside_hours": item.auto_reply_outside_hours,
-        "business_hours_json": item.business_hours_json or {},
-        "outside_hours_message": item.outside_hours_message,
-        "llm_available": llm_available(),
-    }
+    return serialize_agent_settings(item)
 
 
 class GenerateFromConversationRequest(BaseModel):

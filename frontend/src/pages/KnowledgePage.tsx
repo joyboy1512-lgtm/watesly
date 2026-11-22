@@ -3,10 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
   CATEGORY_LABELS,
+  DAY_LABELS,
+  DAY_ORDER,
   downloadKnowledgeExport,
+  llmStatusLabel,
   MODE_LABELS,
+  normalizeBusinessHours,
   SOURCE_LABELS,
   type AgentSettings,
+  type AgentSettingsPatch,
+  type BusinessHoursConfig,
   type KnowledgeArticle,
   type SmartReplyResult
 } from "../lib/knowledgeHelpers";
@@ -74,6 +80,9 @@ export default function KnowledgePage() {
 
   const [generateConversationId, setGenerateConversationId] = useState("");
   const [generateTitle, setGenerateTitle] = useState("");
+  const [llmApiKeyDraft, setLlmApiKeyDraft] = useState("");
+  const [hoursDraft, setHoursDraft] = useState<BusinessHoursConfig | null>(null);
+  const [hoursDirty, setHoursDirty] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
@@ -95,6 +104,11 @@ export default function KnowledgePage() {
       setTestMode(agentSettings.data.default_mode);
     }
   }, [agentSettings.data?.default_mode]);
+
+  useEffect(() => {
+    if (!agentSettings.data || hoursDirty) return;
+    setHoursDraft(normalizeBusinessHours(agentSettings.data.business_hours_json));
+  }, [agentSettings.data, hoursDirty]);
 
   const listQueryKey = ["knowledge", listTab, filterCategory, debouncedSearch] as const;
   const articles = useQuery({
@@ -195,14 +209,54 @@ export default function KnowledgePage() {
     }
   }
 
-  async function saveAgentSettings(patch: Partial<AgentSettings>) {
+  async function saveAgentSettings(patch: AgentSettingsPatch) {
     try {
       await api.patch("/knowledge/agent-settings", patch);
       await client.invalidateQueries({ queryKey: ["knowledge-agent-settings"] });
       toastStore.getState().show("تم حفظ إعدادات الوكيل.", "success");
+      return true;
     } catch {
       toastStore.getState().show("تعذر حفظ الإعدادات.", "error");
+      return false;
     }
+  }
+
+  async function saveLlmApiKey() {
+    const value = llmApiKeyDraft.trim();
+    if (!value) {
+      toastStore.getState().show("أدخل مفتاح API أولاً.", "error");
+      return;
+    }
+    const ok = await saveAgentSettings({ llm_api_key: value });
+    if (ok) setLlmApiKeyDraft("");
+  }
+
+  async function clearLlmApiKey() {
+    if (!window.confirm("حذف مفتاح API المحفوظ لهذا الحساب؟")) return;
+    const ok = await saveAgentSettings({ clear_llm_api_key: true });
+    if (ok) setLlmApiKeyDraft("");
+  }
+
+  async function saveBusinessHours() {
+    if (!hoursDraft) return;
+    const ok = await saveAgentSettings({ business_hours_json: hoursDraft });
+    if (ok) setHoursDirty(false);
+  }
+
+  function updateHoursDay(day: string, patch: { open?: boolean; start?: string; end?: string }) {
+    setHoursDraft((current) => {
+      const base = current ?? normalizeBusinessHours(agentSettings.data?.business_hours_json);
+      const existing = base.days[day];
+      const open = patch.open ?? existing != null;
+      const nextSlot = open
+        ? ([patch.start ?? existing?.[0] ?? "09:00", patch.end ?? existing?.[1] ?? "18:00"] as [string, string])
+        : null;
+      setHoursDirty(true);
+      return {
+        ...base,
+        days: { ...base.days, [day]: nextSlot }
+      };
+    });
   }
 
   async function testAi() {
@@ -302,13 +356,20 @@ export default function KnowledgePage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">AI Agent</span>
           <h1>قاعدة المعرفة</h1>
-          <p>قواعد FAQ مرتّبة أفقياً للرد التلقائي في Inbox — KB → كatalog → AI محلي مع LLM اختياري.</p>
+          <p>قواعد FAQ للرد الذكي في الوارد — مع لوحة تحكم لتشغيل/إيقاف الوكيل ومفتاح API وساعات العمل.</p>
           {settings && (
-            <p className="hint-text">
-              LLM: {settings.llm_available ? (settings.llm_enabled ? "مفعّل" : "متاح — غير مفعّل") : "غير متاح (أضف AI_API_KEY)"}
-              {" · "}
-              الوضع الافتراضي: {MODE_LABELS[settings.default_mode] ?? settings.default_mode}
-            </p>
+            <div className="knowledge-status-strip" aria-live="polite">
+              <span className={settings.agent_enabled !== false ? "status-pill on" : "status-pill off"}>
+                الوكيل: {settings.agent_enabled !== false ? "يعمل" : "متوقف"}
+              </span>
+              <span className="status-pill">الوضع: {MODE_LABELS[settings.default_mode] ?? settings.default_mode}</span>
+              <span className={settings.llm_enabled && settings.llm_available ? "status-pill on" : "status-pill"}>
+                LLM: {llmStatusLabel(settings)}
+              </span>
+              <span className={settings.within_business_hours ? "status-pill on" : "status-pill off"}>
+                الآن: {settings.within_business_hours ? "داخل الدوام" : "خارج الدوام"}
+              </span>
+            </div>
           )}
         </div>
       </header>
@@ -512,11 +573,23 @@ export default function KnowledgePage() {
 
       <section className="card knowledge-agent-card">
         <h2 className="section-title">سياسات الوكيل الذكي</h2>
-        <p className="hint-text">تُطبَّق على Inbox الوارد والاقتراحات التلقائية.</p>
+        <p className="hint-text">تُطبَّق على الوارد والاقتراحات التلقائية. أوقف الوكيل لإيقاف كل الردود/الاقتراحات الآلية فورًا.</p>
         {settings && (
           <div className="knowledge-agent-grid">
+            <label className="field-label checkbox-row knowledge-field-full agent-master-toggle">
+              <input
+                type="checkbox"
+                checked={settings.agent_enabled !== false}
+                onChange={(e) => void saveAgentSettings({ agent_enabled: e.target.checked })}
+              />
+              <span>
+                <strong>تشغيل الوكيل الذكي</strong>
+                <em> عند الإيقاف: لا اقتراحات واردة ولا رد خارج الدوام. زر AI اليدوي يبقى للاختبار.</em>
+              </span>
+            </label>
+
             <label className="field-label">
-              <span>الوضع الافتراضي</span>
+              <span>الوضع الافتراضي للمحادثات</span>
               <select
                 value={settings.default_mode}
                 onChange={(e) => void saveAgentSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })}
@@ -542,20 +615,75 @@ export default function KnowledgePage() {
                 dir="ltr"
               />
             </label>
-            <label className="field-label checkbox-row">
-              <input
-                type="checkbox"
-                checked={settings.llm_enabled}
-                disabled={!settings.llm_available}
-                onChange={(e) => void saveAgentSettings({ llm_enabled: e.target.checked })}
-              />
-              <span>تفعيل LLM {settings.llm_available ? "" : "(يتطلب AI_API_KEY)"}</span>
-            </label>
+
+            <div className="knowledge-field-full agent-llm-box">
+              <h3 className="section-title-sm">مفتاح LLM (OpenAI أو متوافق)</h3>
+              <p className="hint-text">
+                الحالة: {llmStatusLabel(settings)}
+                {settings.llm_key_configured ? " · مفتاح محفوظ لهذا الحساب" : ""}
+                {settings.llm_key_source === "env" ? " · يعتمد حاليًا على مفتاح السيرفر" : ""}
+              </p>
+              <div className="knowledge-fields-row">
+                <label className="field-label">
+                  <span>مفتاح API</span>
+                  <input
+                    type="password"
+                    value={llmApiKeyDraft}
+                    onChange={(e) => setLlmApiKeyDraft(e.target.value)}
+                    placeholder={settings.llm_key_configured ? "•••••••• (محفوظ — اكتب جديدًا للاستبدال)" : "sk-..."}
+                    dir="ltr"
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="field-label">
+                  <span>Base URL (اختياري)</span>
+                  <input
+                    value={settings.llm_api_base_url ?? ""}
+                    onBlur={(e) => void saveAgentSettings({ llm_api_base_url: e.target.value.trim() || null })}
+                    placeholder="https://api.openai.com/v1"
+                    dir="ltr"
+                  />
+                </label>
+                <label className="field-label">
+                  <span>النموذج (اختياري)</span>
+                  <input
+                    value={settings.llm_model ?? ""}
+                    onBlur={(e) => void saveAgentSettings({ llm_model: e.target.value.trim() || null })}
+                    placeholder="gpt-4o-mini"
+                    dir="ltr"
+                  />
+                </label>
+              </div>
+              <div className="catalog-card-actions">
+                <button type="button" className="whatsapp-button" onClick={() => void saveLlmApiKey()} disabled={!llmApiKeyDraft.trim()}>
+                  حفظ المفتاح
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void clearLlmApiKey()}
+                  disabled={!settings.llm_key_configured}
+                >
+                  حذف المفتاح
+                </button>
+                <label className="field-label checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={settings.llm_enabled}
+                    disabled={!settings.llm_available}
+                    onChange={(e) => void saveAgentSettings({ llm_enabled: e.target.checked })}
+                  />
+                  <span>تفعيل LLM لصقل الردود</span>
+                </label>
+              </div>
+            </div>
+
             <label className="field-label checkbox-row">
               <input
                 type="checkbox"
                 checked={settings.auto_kb_on_inbound}
                 onChange={(e) => void saveAgentSettings({ auto_kb_on_inbound: e.target.checked })}
+                disabled={settings.agent_enabled === false}
               />
               <span>اقتراح تلقائي عند رسالة واردة</span>
             </label>
@@ -564,8 +692,9 @@ export default function KnowledgePage() {
                 type="checkbox"
                 checked={settings.auto_reply_outside_hours ?? false}
                 onChange={(e) => void saveAgentSettings({ auto_reply_outside_hours: e.target.checked })}
+                disabled={settings.agent_enabled === false}
               />
-              <span>رد تلقائي خارج ساعات العمل (أول رسالة)</span>
+              <span>رد تلقائي خارج ساعات العمل (أول رسالة فقط)</span>
             </label>
             <label className="field-label knowledge-field-full">
               <span>رسالة خارج الدوام</span>
@@ -576,9 +705,62 @@ export default function KnowledgePage() {
                 placeholder="شكراً لتواصلك. نحن خارج ساعات العمل…"
               />
             </label>
-            <p className="hint-text knowledge-field-full">
-              ساعات العمل الافتراضية: الأحد–الخميس 09:00–18:00 (Asia/Kuwait). يمكن تخصيصها عبر API.
-            </p>
+
+            <div className="knowledge-field-full agent-hours-box">
+              <h3 className="section-title-sm">ساعات العمل</h3>
+              <label className="field-label">
+                <span>المنطقة الزمنية</span>
+                <input
+                  value={hoursDraft?.timezone ?? "Asia/Kuwait"}
+                  onChange={(e) => {
+                    setHoursDirty(true);
+                    setHoursDraft((current) => ({
+                      ...(current ?? normalizeBusinessHours(settings.business_hours_json)),
+                      timezone: e.target.value
+                    }));
+                  }}
+                  dir="ltr"
+                />
+              </label>
+              <div className="agent-hours-table">
+                {DAY_ORDER.map((day) => {
+                  const slot = hoursDraft?.days[day] ?? null;
+                  const open = slot != null;
+                  return (
+                    <div key={day} className="agent-hours-row">
+                      <label className="checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={open}
+                          onChange={(e) => updateHoursDay(day, { open: e.target.checked })}
+                        />
+                        <span>{DAY_LABELS[day]}</span>
+                      </label>
+                      <input
+                        type="time"
+                        value={slot?.[0] ?? "09:00"}
+                        disabled={!open}
+                        onChange={(e) => updateHoursDay(day, { start: e.target.value })}
+                      />
+                      <span className="hint-text">إلى</span>
+                      <input
+                        type="time"
+                        value={slot?.[1] ?? "18:00"}
+                        disabled={!open}
+                        onChange={(e) => updateHoursDay(day, { end: e.target.value })}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="catalog-card-actions">
+                <button type="button" className="whatsapp-button" onClick={() => void saveBusinessHours()} disabled={!hoursDirty}>
+                  حفظ ساعات العمل
+                </button>
+                {hoursDirty && <span className="hint-text">هناك تعديلات غير محفوظة</span>}
+              </div>
+            </div>
+
             <label className="field-label knowledge-field-full">
               <span>تعليمات النظام (LLM)</span>
               <textarea

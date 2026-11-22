@@ -3276,6 +3276,83 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
+.knowledge-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.knowledge-status-strip .status-pill,
+.inbox-ai-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.knowledge-status-strip .status-pill.on,
+.inbox-ai-status-chip.is-on {
+  border-color: color-mix(in srgb, var(--whatsapp, #128c7e) 35%, var(--line));
+  background: color-mix(in srgb, var(--whatsapp, #128c7e) 12%, transparent);
+}
+.knowledge-status-strip .status-pill.off,
+.inbox-ai-status-chip.is-off {
+  border-color: color-mix(in srgb, #b45309 30%, var(--line));
+  background: color-mix(in srgb, #b45309 10%, transparent);
+}
+.agent-master-toggle {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.agent-master-toggle span {
+  display: grid;
+  gap: 4px;
+}
+.agent-master-toggle em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.agent-llm-box,
+.agent-hours-box {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-soft) 70%, transparent);
+}
+.agent-hours-table {
+  display: grid;
+  gap: 8px;
+}
+.agent-hours-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.2fr) minmax(110px, 1fr) auto minmax(110px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.agent-hours-row input[type="time"] {
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .agent-hours-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .agent-hours-row .checkbox-row {
+    grid-column: 1 / -1;
+  }
+}
 .knowledge-preview-layout { display: grid; gap: 12px; margin-top: 12px; }
 .knowledge-matched-list { display: grid; gap: 8px; }
 @media (max-width: 1024px) and (min-width: 769px) {
