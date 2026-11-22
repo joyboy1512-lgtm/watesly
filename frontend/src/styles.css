@@ -1379,7 +1379,7 @@ select, input, textarea {
 .message.incoming {
   align-self: flex-start;
   background: var(--bubble-in);
-  color: #111b21;
+  color: #000000;
   border: none;
   border-end-start-radius: 4px;
 }
@@ -1387,7 +1387,7 @@ select, input, textarea {
 .message.outgoing {
   align-self: flex-end;
   background: var(--bubble-out);
-  color: #111b21;
+  color: #000000;
   margin-inline-start: auto;
   border: none;
   border-end-end-radius: 4px;
@@ -1395,6 +1395,7 @@ select, input, textarea {
 
 .message-text {
   white-space: pre-wrap;
+  color: #000000;
 }
 
 .message small {
@@ -1410,12 +1411,17 @@ select, input, textarea {
 
 .message.outgoing small { color: #667781; }
 
-:root[data-theme="dark"] .message.outgoing {
+:root[data-theme="dark"] .message.outgoing,
+:root[data-theme="dark"] .message.incoming {
   color: #e9edef;
 }
 
 :root[data-theme="dark"] .message.incoming {
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] .message-text {
+  color: inherit;
 }
 
 :root[data-theme="dark"] .message.outgoing small {
@@ -1497,6 +1503,12 @@ select, input, textarea {
   background: transparent;
   padding: 6px 4px;
   line-height: 1.45;
+  color: #000000;
+  caret-color: #000000;
+}
+
+.chat-composer-bar .composer-textarea::placeholder {
+  color: #667781;
 }
 
 .chat-composer-bar .composer-icon-button,
@@ -2430,7 +2442,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: block;
 }
 .message-media audio { width: min(260px, 100%); }
-.message-media p { margin: 4px 0 0; white-space: pre-wrap; line-height: 1.5; }
+.message-media p { margin: 4px 0 0; white-space: pre-wrap; line-height: 1.5; color: inherit; }
 .message-media-document a {
   display: inline-flex;
   align-items: center;
