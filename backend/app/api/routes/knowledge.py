@@ -17,6 +17,7 @@ from app.schemas.growth import (
 )
 from app.services.knowledge_base import (
     conversation_copilot,
+    evaluate_knowledge_quality,
     export_knowledge_csv,
     generate_article_from_messages,
     get_agent_settings,
@@ -24,6 +25,7 @@ from app.services.knowledge_base import (
     increment_article_usage,
     list_knowledge_articles,
     list_knowledge_categories,
+    record_article_feedback,
     search_knowledge_articles,
     serialize_agent_settings,
     suggest_smart_reply,
@@ -31,6 +33,22 @@ from app.services.knowledge_base import (
 )
 
 router = APIRouter()
+
+
+def _article_response(item: KnowledgeArticle) -> KnowledgeArticleResponse:
+    return KnowledgeArticleResponse(
+        id=item.id,
+        title=item.title,
+        body=item.body,
+        category=item.category,
+        keywords=item.keywords,
+        is_active=item.is_active,
+        sort_order=item.sort_order,
+        usage_count=item.usage_count or 0,
+        helpful_count=int(getattr(item, "helpful_count", 0) or 0),
+        dismiss_count=int(getattr(item, "dismiss_count", 0) or 0),
+        language=item.language,
+    )
 
 
 class AgentSettingsUpdate(BaseModel):
@@ -73,20 +91,7 @@ async def get_knowledge_articles(
     items = await list_knowledge_articles(
         db, context.account_id, active_only=not include_inactive, category=category
     )
-    return [
-        KnowledgeArticleResponse(
-            id=item.id,
-            title=item.title,
-            body=item.body,
-            category=item.category,
-            keywords=item.keywords,
-            is_active=item.is_active,
-            sort_order=item.sort_order,
-            usage_count=item.usage_count,
-            language=item.language,
-        )
-        for item in items
-    ]
+    return [_article_response(item) for item in items]
 
 
 @router.get("/search")
@@ -172,17 +177,7 @@ async def post_knowledge_article(
     db.add(item)
     await db.commit()
     await db.refresh(item)
-    return KnowledgeArticleResponse(
-        id=item.id,
-        title=item.title,
-        body=item.body,
-        category=item.category,
-        keywords=item.keywords,
-        is_active=item.is_active,
-        sort_order=item.sort_order,
-        usage_count=item.usage_count,
-        language=item.language,
-    )
+    return _article_response(item)
 
 
 @router.post("/generate-from-conversation")
@@ -246,6 +241,33 @@ async def post_knowledge_suggest_reply(
     )
 
 
+class EvaluateCase(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+    expected_article_id: UUID | None = None
+    expected_title: str | None = Field(default=None, max_length=200)
+
+
+class EvaluateRequest(BaseModel):
+    cases: list[EvaluateCase] = Field(min_length=1, max_length=100)
+
+
+class ArticleFeedbackRequest(BaseModel):
+    helpful: bool
+
+
+@router.post("/evaluate")
+async def post_evaluate_knowledge(
+    payload: EvaluateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await evaluate_knowledge_quality(
+        db,
+        context.account_id,
+        [case.model_dump(mode="json") for case in payload.cases],
+    )
+
+
 @router.post("/copilot")
 async def post_copilot(
     payload: CopilotRequest,
@@ -296,17 +318,7 @@ async def get_knowledge_article(
     item = await db.get(KnowledgeArticle, article_id)
     if item is None or item.account_id != context.account_id:
         raise HTTPException(status_code=404, detail="Article not found")
-    return KnowledgeArticleResponse(
-        id=item.id,
-        title=item.title,
-        body=item.body,
-        category=item.category,
-        keywords=item.keywords,
-        is_active=item.is_active,
-        sort_order=item.sort_order,
-        usage_count=item.usage_count,
-        language=item.language,
-    )
+    return _article_response(item)
 
 
 @router.patch("/{article_id}", response_model=KnowledgeArticleResponse)
@@ -323,17 +335,7 @@ async def patch_knowledge_article(
         setattr(item, key, value)
     await db.commit()
     await db.refresh(item)
-    return KnowledgeArticleResponse(
-        id=item.id,
-        title=item.title,
-        body=item.body,
-        category=item.category,
-        keywords=item.keywords,
-        is_active=item.is_active,
-        sort_order=item.sort_order,
-        usage_count=item.usage_count,
-        language=item.language,
-    )
+    return _article_response(item)
 
 
 @router.post("/{article_id}/usage", status_code=204)
@@ -346,6 +348,20 @@ async def post_article_usage(
     if item is None or item.account_id != context.account_id:
         raise HTTPException(status_code=404, detail="Article not found")
     await increment_article_usage(db, item)
+
+
+@router.post("/{article_id}/feedback")
+async def post_article_feedback(
+    article_id: UUID,
+    payload: ArticleFeedbackRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await db.get(KnowledgeArticle, article_id)
+    if item is None or item.account_id != context.account_id:
+        raise HTTPException(status_code=404, detail="Article not found")
+    updated = await record_article_feedback(db, item, helpful=payload.helpful)
+    return _article_response(updated)
 
 
 @router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)

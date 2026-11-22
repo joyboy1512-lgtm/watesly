@@ -9,6 +9,8 @@ export type KnowledgeArticle = {
   is_active: boolean;
   sort_order: number;
   usage_count: number;
+  helpful_count?: number;
+  dismiss_count?: number;
   language: string;
 };
 
@@ -49,9 +51,42 @@ export type SmartReplyResult = {
   suggestion: string;
   source?: string;
   confidence?: number;
-  matched_articles?: Array<{ id: string; title: string; category: string; body?: string }>;
+  engine?: string;
+  expanded_terms?: string[];
+  matched_articles?: Array<{
+    id: string;
+    title: string;
+    category: string;
+    body?: string;
+    score?: number;
+    reasons?: string[];
+  }>;
   matched_products?: Array<{ id: string; name: string; price_label: string }>;
 };
+
+export type QualityEvalResult = {
+  total: number;
+  hits: number;
+  hit_rate: number;
+  results: Array<{
+    index: number;
+    query: string;
+    matched: boolean;
+    top_article_id?: string | null;
+    top_title?: string | null;
+    top_score: number;
+    reasons: string[];
+    candidates: Array<{ id: string; title: string; score: number; category: string }>;
+  }>;
+};
+
+export async function sendArticleFeedback(articleId: string, helpful: boolean) {
+  return api.post(`/knowledge/${articleId}/feedback`, { helpful });
+}
+
+export async function evaluateKnowledgeQuality(cases: Array<{ query: string; expected_title?: string }>) {
+  return api.post<QualityEvalResult>("/knowledge/evaluate", { cases });
+}
 
 export type CopilotResult = {
   summary?: string;

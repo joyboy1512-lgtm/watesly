@@ -32,6 +32,8 @@ class KnowledgeArticleResponse(BaseModel):
     is_active: bool
     sort_order: int
     usage_count: int = 0
+    helpful_count: int = 0
+    dismiss_count: int = 0
     language: str = "ar"
 
 
