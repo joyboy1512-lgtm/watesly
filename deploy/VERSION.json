@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "f78543e",
-    "git_commit_message": "Campaign audience columns and header filters live",
+    "git_commit": "ddc5519",
+    "git_commit_message": "Campaign audience polish live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-CK2IoXGj.js",
-      "css": "index-BBgSkdWO.css"
+      "js": "index-DsTNxqUj.js",
+      "css": "index-DqSDUOmS.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "f78543e",
-  "notes": "Expanded campaign audience table columns with green header filters (PR #180)"
+  "commit": "ddc5519",
+  "notes": "Campaign audience polish: top filters, last-campaign date Excel filter, striped rows (PR #181)"
 }
