@@ -8356,6 +8356,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
   vertical-align: middle;
 }
+.campaigns-audience-table-wide {
+  min-width: 1180px;
+}
+.campaigns-audience-table-wide td,
+.campaigns-audience-table-wide th {
+  white-space: nowrap;
+}
+.campaigns-audience-table-wide .contacts-tags-cell {
+  white-space: normal;
+  min-width: 120px;
+}
 .campaign-tag-multiselect {
   position: relative;
 }

@@ -80,6 +80,7 @@ def _contact_permissions(context: AuthContext) -> set[str]:
 
 
 async def _serialize_contacts(context: AuthContext, db: AsyncSession, contacts: list) -> list[ContactResponse]:
+    from app.services.contact_management import load_tags_for_contacts
     from app.services.interests import load_interests_for_contacts
 
     flags = await get_feature_flags(db, account_id=context.account_id)
@@ -96,6 +97,11 @@ async def _serialize_contacts(context: AuthContext, db: AsyncSession, contacts: 
         account_id=context.account_id,
         contact_ids=contact_ids,
     )
+    tags_by_contact = await load_tags_for_contacts(
+        db,
+        account_id=context.account_id,
+        contact_ids=contact_ids,
+    )
     return attach_last_campaigns(
         contacts,
         role=context.membership.role,
@@ -103,10 +109,12 @@ async def _serialize_contacts(context: AuthContext, db: AsyncSession, contacts: 
         privacy_mask_enabled=mask,
         last_campaigns=last_campaigns,
         interests_by_contact=interests_by_contact,
+        tags_by_contact=tags_by_contact,
     )
 
 
 async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) -> ContactResponse:
+    from app.services.contact_management import load_tags_for_contacts
     from app.services.interests import load_interests_for_contacts
 
     flags = await get_feature_flags(db, account_id=context.account_id)
@@ -120,7 +128,13 @@ async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) ->
         account_id=context.account_id,
         contact_ids=[contact.id],
     )
+    tags_by_contact = await load_tags_for_contacts(
+        db,
+        account_id=context.account_id,
+        contact_ids=[contact.id],
+    )
     interest_rows = interests_by_contact.get(contact.id) or []
+    tag_rows = tags_by_contact.get(contact.id) or []
     return contact_to_response(
         contact,
         role=context.membership.role,
@@ -129,6 +143,8 @@ async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) ->
         last_campaign=last_campaigns.get(contact.id),
         interest_ids=[item.id for item in interest_rows],
         interest_labels=[item.label for item in interest_rows],
+        tag_ids=[item.id for item in tag_rows],
+        tag_labels=[item.name for item in tag_rows],
     )
 
 

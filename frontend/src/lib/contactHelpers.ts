@@ -30,6 +30,8 @@ export type Contact = {
   whatsapp_status_label?: string | null;
   interest_ids?: string[];
   interest_labels?: string[];
+  tag_ids?: string[];
+  tag_labels?: string[];
 };
 
 export const WHATSAPP_STATUS_LABELS: Record<string, string> = {
