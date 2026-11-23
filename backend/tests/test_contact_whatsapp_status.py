@@ -24,6 +24,8 @@ def test_whatsapp_status_helpers_wired() -> None:
     assert "whatsapp_status" in schema
     assert "whatsapp_status_label" in schema
     assert "whatsapp_status" in routes
-    assert 'status_filter == "dnd"' in contacts
+    assert "whatsapp_statuses" in routes
+    assert "def _whatsapp_status_clause" in contacts
+    assert 'key == "dnd"' in contacts
     assert "حالة واتساب" in page
-    assert "whatsapp_status" in page
+    assert "whatsappStatusFilters" in page

@@ -271,13 +271,27 @@ def _apply_segment_filters(query, filters: dict):
             or_(Contact.display_name.ilike(term), Contact.external_address.ilike(term), Contact.email.ilike(term))
         )
     if tag_ids := filters.get("tag_ids"):
-        query = query.join(ContactTag, ContactTag.contact_id == Contact.id).where(
-            ContactTag.tag_id.in_([UUID(str(i)) for i in tag_ids])
+        query = query.where(
+            exists().where(
+                ContactTag.contact_id == Contact.id,
+                ContactTag.tag_id.in_([UUID(str(i)) for i in tag_ids]),
+            )
         )
     if tag_id := filters.get("tag_id"):
-        query = query.join(ContactTag, ContactTag.contact_id == Contact.id).where(
-            ContactTag.tag_id == UUID(str(tag_id))
+        query = query.where(
+            exists().where(
+                ContactTag.contact_id == Contact.id,
+                ContactTag.tag_id == UUID(str(tag_id)),
+            )
         )
+    if organization_ids := filters.get("organization_ids"):
+        query = query.where(Contact.organization_id.in_([UUID(str(i)) for i in organization_ids]))
+    if channel_ids := filters.get("channel_ids"):
+        query = query.where(Contact.channel_id.in_([UUID(str(i)) for i in channel_ids]))
+    if lifecycle_stages := filters.get("lifecycle_stages"):
+        stages = [str(item).strip() for item in lifecycle_stages if str(item).strip()]
+        if stages:
+            query = query.where(Contact.lifecycle_stage.in_(stages))
     if lifecycle_stage := filters.get("lifecycle_stage"):
         query = query.where(Contact.lifecycle_stage == str(lifecycle_stage))
     if filters.get("marketing_opt_in") is True:
