@@ -43,42 +43,104 @@ async def find_contact_on_channel_by_phone(
     return None
 
 
+def _merge_uuid_filters(
+    singular: UUID | None,
+    plural: list[UUID] | None,
+) -> list[UUID]:
+    values: list[UUID] = []
+    if plural:
+        values.extend(plural)
+    if singular is not None and singular not in values:
+        values.append(singular)
+    return values
+
+
+def _whatsapp_status_clause(statuses: list[str]):
+    from app.services.contact_reachability import ReachabilityStatus
+
+    clauses = []
+    for status in statuses:
+        key = status.strip().lower()
+        if key == "dnd":
+            clauses.append(Contact.marketing_opt_in.is_(False))
+        elif key == "unreachable":
+            clauses.append(
+                (Contact.marketing_opt_in.is_(True))
+                & (Contact.reachability_status == ReachabilityStatus.UNREACHABLE)
+            )
+        elif key == "invalid":
+            clauses.append(
+                (Contact.marketing_opt_in.is_(True))
+                & (Contact.reachability_status == ReachabilityStatus.INVALID)
+            )
+        elif key == "reachable":
+            clauses.append(
+                (Contact.marketing_opt_in.is_(True))
+                & (Contact.reachability_status == ReachabilityStatus.REACHABLE)
+            )
+        elif key == "accepts":
+            clauses.append(
+                (Contact.marketing_opt_in.is_(True))
+                & (
+                    (Contact.reachability_status.is_(None))
+                    | (Contact.reachability_status == ReachabilityStatus.RISKY)
+                )
+            )
+    if not clauses:
+        return None
+    if len(clauses) == 1:
+        return clauses[0]
+    return or_(*clauses)
+
+
 async def list_contacts(
     db: AsyncSession,
     account_id: UUID,
     *,
     limit: int = 100,
     channel_id: UUID | None = None,
+    channel_ids: list[UUID] | None = None,
     organization_id: UUID | None = None,
+    organization_ids: list[UUID] | None = None,
     tag_id: UUID | None = None,
     tag_ids: list[UUID] | None = None,
     interest_id: UUID | None = None,
     interest_ids: list[UUID] | None = None,
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
+    lifecycle_stages: list[str] | None = None,
     region: str | None = None,
     regions: list[str] | None = None,
     whatsapp_status: str | None = None,
+    whatsapp_statuses: list[str] | None = None,
+    last_campaign_ids: list[UUID] | None = None,
     contact_ids: list[UUID] | None = None,
     q: str | None = None,
     accessible_channel_ids: list[UUID] | None = None,
     accessible_organization_ids: list[UUID] | None = None,
 ) -> list[Contact]:
-    effective_tag_ids: list[UUID] = []
-    if tag_ids:
-        effective_tag_ids.extend(tag_ids)
-    if tag_id is not None and tag_id not in effective_tag_ids:
-        effective_tag_ids.append(tag_id)
-    effective_interest_ids: list[UUID] = []
-    if interest_ids:
-        effective_interest_ids.extend(interest_ids)
-    if interest_id is not None and interest_id not in effective_interest_ids:
-        effective_interest_ids.append(interest_id)
+    effective_tag_ids = _merge_uuid_filters(tag_id, tag_ids)
+    effective_interest_ids = _merge_uuid_filters(interest_id, interest_ids)
+    effective_org_ids = _merge_uuid_filters(organization_id, organization_ids)
+    effective_channel_ids = _merge_uuid_filters(channel_id, channel_ids)
     effective_regions: list[str] = []
     if regions:
         effective_regions.extend([item.strip() for item in regions if item and item.strip()])
     if region and region.strip() and region.strip() not in effective_regions:
         effective_regions.append(region.strip())
+    effective_lifecycle: list[str] = []
+    if lifecycle_stages:
+        effective_lifecycle.extend([item.strip() for item in lifecycle_stages if item and item.strip()])
+    if lifecycle_stage and lifecycle_stage.strip() and lifecycle_stage.strip() not in effective_lifecycle:
+        effective_lifecycle.append(lifecycle_stage.strip())
+    effective_whatsapp: list[str] = []
+    if whatsapp_statuses:
+        effective_whatsapp.extend([item.strip().lower() for item in whatsapp_statuses if item and item.strip()])
+    if whatsapp_status and whatsapp_status.strip():
+        value = whatsapp_status.strip().lower()
+        if value not in effective_whatsapp:
+            effective_whatsapp.append(value)
+
     query = (
         select(Contact)
         .where(Contact.account_id == account_id, Contact.deleted_at.is_(None))
@@ -93,10 +155,14 @@ async def list_contacts(
         segment = await db.get(Segment, segment_id)
         if segment is not None and segment.account_id == account_id:
             filters = dict(segment.filter_json or {})
-            if channel_id is not None:
-                filters["channel_id"] = str(channel_id)
-            if organization_id is not None:
-                filters["organization_id"] = str(organization_id)
+            if len(effective_channel_ids) == 1:
+                filters["channel_id"] = str(effective_channel_ids[0])
+            elif len(effective_channel_ids) > 1:
+                filters["channel_ids"] = [str(item) for item in effective_channel_ids]
+            if len(effective_org_ids) == 1:
+                filters["organization_id"] = str(effective_org_ids[0])
+            elif len(effective_org_ids) > 1:
+                filters["organization_ids"] = [str(item) for item in effective_org_ids]
             if len(effective_tag_ids) == 1:
                 filters["tag_id"] = str(effective_tag_ids[0])
             elif len(effective_tag_ids) > 1:
@@ -109,6 +175,10 @@ async def list_contacts(
                 filters["region"] = effective_regions[0]
             elif len(effective_regions) > 1:
                 filters["regions"] = effective_regions
+            if len(effective_lifecycle) == 1:
+                filters["lifecycle_stage"] = effective_lifecycle[0]
+            elif len(effective_lifecycle) > 1:
+                filters["lifecycle_stages"] = effective_lifecycle
             if q and q.strip():
                 filters["search"] = q.strip()
             query = _apply_segment_filters(query, filters)
@@ -120,14 +190,14 @@ async def list_contacts(
             if not accessible_organization_ids:
                 return []
             query = query.where(Contact.organization_id.in_(accessible_organization_ids))
-        if channel_id is not None:
-            query = query.where(Contact.channel_id == channel_id)
+        if effective_channel_ids:
+            query = query.where(Contact.channel_id.in_(effective_channel_ids))
         elif accessible_channel_ids is not None:
             if not accessible_channel_ids:
                 return []
             query = query.where(Contact.channel_id.in_(accessible_channel_ids))
-        if organization_id is not None:
-            query = query.where(Contact.organization_id == organization_id)
+        if effective_org_ids:
+            query = query.where(Contact.organization_id.in_(effective_org_ids))
         if len(effective_tag_ids) == 1:
             query = query.where(
                 exists().where(
@@ -156,8 +226,10 @@ async def list_contacts(
                     ContactInterest.interest_id.in_(effective_interest_ids),
                 )
             )
-        if lifecycle_stage and lifecycle_stage.strip():
-            query = query.where(Contact.lifecycle_stage == lifecycle_stage.strip())
+        if len(effective_lifecycle) == 1:
+            query = query.where(Contact.lifecycle_stage == effective_lifecycle[0])
+        elif len(effective_lifecycle) > 1:
+            query = query.where(Contact.lifecycle_stage.in_(effective_lifecycle))
         if len(effective_regions) == 1:
             query = query.where(Contact.region == effective_regions[0])
         elif len(effective_regions) > 1:
@@ -172,32 +244,9 @@ async def list_contacts(
                     Contact.region.ilike(term),
                 )
             )
-        status_filter = (whatsapp_status or "").strip().lower()
-        if status_filter == "dnd":
-            query = query.where(Contact.marketing_opt_in.is_(False))
-        elif status_filter == "unreachable":
-            query = query.where(
-                Contact.marketing_opt_in.is_(True),
-                Contact.reachability_status == "unreachable",
-            )
-        elif status_filter == "invalid":
-            query = query.where(
-                Contact.marketing_opt_in.is_(True),
-                Contact.reachability_status == "invalid",
-            )
-        elif status_filter == "reachable":
-            query = query.where(
-                Contact.marketing_opt_in.is_(True),
-                Contact.reachability_status == "reachable",
-            )
-        elif status_filter == "accepts":
-            query = query.where(
-                Contact.marketing_opt_in.is_(True),
-                or_(
-                    Contact.reachability_status.is_(None),
-                    Contact.reachability_status == "risky",
-                ),
-            )
+        status_clause = _whatsapp_status_clause(effective_whatsapp)
+        if status_clause is not None:
+            query = query.where(status_clause)
 
     contacts = list((await db.execute(query)).scalars().all())
 
@@ -212,14 +261,29 @@ async def list_contacts(
         for contact in contacts:
             await db.refresh(contact)
 
-    status_filter = (whatsapp_status or "").strip().lower()
-    if status_filter in {"accepts", "reachable", "invalid"}:
+    if effective_whatsapp:
         from app.services.contact_reachability import resolve_whatsapp_contact_status
 
+        allowed = set(effective_whatsapp)
         contacts = [
             contact
             for contact in contacts
-            if resolve_whatsapp_contact_status(contact).value == status_filter
+            if resolve_whatsapp_contact_status(contact).value in allowed
+        ]
+
+    if last_campaign_ids:
+        from app.services.contact_campaign_groups import load_last_campaigns_for_contacts
+
+        last_map = await load_last_campaigns_for_contacts(
+            db,
+            account_id=account_id,
+            contact_ids=[item.id for item in contacts],
+        )
+        wanted = set(last_campaign_ids)
+        contacts = [
+            contact
+            for contact in contacts
+            if last_map.get(contact.id, {}).get("last_campaign_id") in wanted
         ]
 
     return contacts

@@ -17,6 +17,6 @@ def test_contacts_list_supports_multiple_tag_ids() -> None:
     assert "tag_ids: list[UUID] | None = None" in contacts
     assert "ContactTag.tag_id.in_(effective_tag_ids)" in contacts
     assert "audienceTagIds" in page
-    assert "campaign-tag-multiselect" in page
+    assert "SearchableMultiFilter" in page
     assert "ContactTagsEditor" in detail
     assert "تصنيف جديد" in detail
