@@ -14,20 +14,21 @@ def test_campaign_audience_table_has_requested_columns() -> None:
     management = read("app/services/contact_management.py")
 
     for needle in [
-        'label="الجنس"',
-        'label="الفرع"',
-        'label="القناة"',
-        'label="المنطقة"',
-        'label="التصنيف"',
-        'label="الاهتمامات"',
-        'label="حالة واتساب"',
-        'label="المرحلة"',
-        'label="آخر حملة"',
-        "tag_labels",
+        "تاريخ آخر حملة",
+        "campaign-audience-filters-top",
+        "campaigns-audience-table-striped",
+        "audienceLastCampaignDates",
         "formatLifecycleStage",
         "formatGenderLabel",
+        "tag_labels",
     ]:
         assert needle in page
+
+    assert 'label="الفرع"' not in page
+    assert 'label="القناة"' not in page
+    assert "دمج الاهتمام/الجنس/المرحلة في الجمهور" not in page
+    assert "آخر حملة من" not in page
+    assert "آخر حملة إلى" not in page
 
     assert "tag_ids: list[UUID]" in schema
     assert "tag_labels: list[str]" in schema
