@@ -75,6 +75,8 @@ class ContactResponse(BaseModel):
     whatsapp_status_label: str | None = None
     interest_ids: list[UUID] = Field(default_factory=list)
     interest_labels: list[str] = Field(default_factory=list)
+    tag_ids: list[UUID] = Field(default_factory=list)
+    tag_labels: list[str] = Field(default_factory=list)
 
 
 class ContactActivityResponse(BaseModel):

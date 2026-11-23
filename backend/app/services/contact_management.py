@@ -182,6 +182,29 @@ async def list_contact_tags(db: AsyncSession, account_id: UUID, contact_id: UUID
     return list(result.scalars().all())
 
 
+async def load_tags_for_contacts(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_ids: list[UUID],
+) -> dict[UUID, list[Tag]]:
+    if not contact_ids:
+        return {}
+    result = await db.execute(
+        select(ContactTag.contact_id, Tag)
+        .join(Tag, Tag.id == ContactTag.tag_id)
+        .where(
+            ContactTag.contact_id.in_(contact_ids),
+            Tag.account_id == account_id,
+        )
+        .order_by(Tag.name.asc())
+    )
+    mapping: dict[UUID, list[Tag]] = {contact_id: [] for contact_id in contact_ids}
+    for contact_id, tag in result.all():
+        mapping.setdefault(contact_id, []).append(tag)
+    return mapping
+
+
 async def create_custom_field(
     db: AsyncSession, *, account_id: UUID, entity_type: str, field_key: str, label: str, field_type: str = "text"
 ) -> CustomFieldDefinition:
