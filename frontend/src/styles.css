@@ -8195,31 +8195,59 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: grid;
   gap: 8px;
   align-content: start;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--line));
-  border-radius: 12px;
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--primary-soft) 88%, white) 0%,
-    color-mix(in srgb, #d9fdd3 55%, white) 100%
-  );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary) 12%, transparent);
+  padding: 14px 16px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
+  box-shadow: 0 8px 22px rgba(7, 94, 84, 0.22);
+  color: #fff;
 }
 .campaign-audience-source-card > strong {
   font-size: 14px;
-  color: var(--primary-darker);
-}
-.campaign-audience-source-card .hint-text {
-  color: color-mix(in srgb, var(--primary-dark) 70%, var(--muted));
-}
-.campaign-audience-source-card .field-label span {
-  color: var(--primary-darker);
+  color: #fff;
   font-weight: 700;
 }
-.campaign-audience-source-card .secondary-button {
-  background: color-mix(in srgb, white 70%, var(--primary-soft));
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+.campaign-audience-source-card .hint-text {
+  color: rgba(255, 255, 255, 0.86);
+}
+.campaign-audience-source-card .field-label span {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+.campaign-audience-source-card .field-label select,
+.campaign-audience-source-card .field-label input[type="file"],
+.campaign-audience-source-card .field-label input:not([type="checkbox"]):not([type="radio"]) {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(255, 255, 255, 0.55);
+  color: var(--text);
+}
+.campaign-audience-source-card .campaigns-excel-columns strong {
+  color: #fff;
+}
+.campaign-audience-source-card .campaigns-audience-warning {
+  color: #fff3cd;
+}
+.campaign-audience-source-card .whatsapp-button {
+  background: #fff;
   color: var(--primary-darker);
+  border-color: #fff;
+}
+.campaign-audience-source-card .whatsapp-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #fff 88%, var(--primary-soft));
+  color: var(--primary-darker);
+}
+.campaign-audience-source-card .secondary-button {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+.campaign-audience-source-card .secondary-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.26);
+  color: #fff;
+}
+.campaign-audience-source-card .secondary-button:disabled,
+.campaign-audience-source-card .whatsapp-button:disabled {
+  opacity: 0.55;
 }
 .campaign-audience-merge-banner {
   display: flex;
@@ -8472,25 +8500,24 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   flex: 0 1 140px;
 }
 .campaign-audience-filters-top {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: end;
 }
 .campaign-audience-filters-top > .field-label,
 .campaign-audience-filters-top .searchable-multi-filter {
+  flex: 0 1 160px;
+  width: 160px;
+  max-width: 180px;
+  min-width: 140px;
+}
+.campaign-audience-filters-top > .field-label select {
   width: 100%;
-  min-width: 0;
-  flex: 1 1 auto;
 }
 .campaign-audience-filters-top .searchable-multi-filter {
   display: grid;
   gap: 6px;
-}
-@media (max-width: 720px) {
-  .campaign-audience-filters-top {
-    grid-template-columns: 1fr;
-  }
 }
 .campaigns-audience-select-actions {
   display: flex;
