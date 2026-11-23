@@ -19,6 +19,7 @@ def test_campaign_sent_period_helpers_exist() -> None:
     assert "get_campaign_sent_contact_ids_in_period" in reachability
     assert "filter_exclude_campaign_sent_in_period" in reachability
     assert "list_campaigns_in_period" in reachability
+    assert "audience_match_count" in reachability
     assert "exclude_sent_in_period: bool = False" in schemas
     assert "exclude_sent_from" in schemas
     assert "exclude_campaign_ids" in schemas
@@ -30,5 +31,10 @@ def test_campaign_sent_period_helpers_exist() -> None:
     assert "excludePeriodDays" in page
     assert "الاستبعاد حسب الفترة" in page
     assert "الاستبعاد حسب الحملات" in page
+    assert "من الجمهور" in page
+    assert "audience_match_count" in page
+    assert "autoDndApplied" in page
+    assert "تم استبعاد" in page
+    assert "بسبب عدم الإزعاج" in page
     assert "استبعد أُرسل لهم في الفترة" in page
     assert "إظهار زر «عدم الإزعاج» في الرسالة" in page
