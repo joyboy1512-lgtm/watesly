@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "cb6108d",
-    "git_commit_message": "Campaign exclude stages live",
+    "git_commit": "efbf22c",
+    "git_commit_message": "Campaign exclude smart table and auto DND live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-CxKtl3Ao.js",
-      "css": "index-XpdWnwCt.css"
+      "js": "index-BkIB2Yan.js",
+      "css": "index-DTr_Ronu.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "cb6108d",
-  "notes": "Campaign exclude stages: period lookback, campaign table, Meta green cards, post-check excludes, DND (PR #183)"
+  "commit": "efbf22c",
+  "notes": "Auto DND exclude + smart overlapping campaign table with sticky header and from-audience column (PR #185)"
 }

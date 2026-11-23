@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-23",
+  "commit": "efbf22c",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BkIB2Yan.js",
+    "css": "index-DTr_Ronu.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Auto-apply DND exclude after Meta preflight with applied button + count message",
+    "Campaign exclude table only shows audience-overlapping campaigns",
+    "New column: from-audience match count per campaign",
+    "Sticky campaign table header while scrolling",
+    "Final sendable count aligned with create/send"
+  ],
+  "notes": "Deployed via SSH. PR #184 + #185."
+}
