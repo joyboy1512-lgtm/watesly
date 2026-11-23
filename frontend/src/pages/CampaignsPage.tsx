@@ -681,8 +681,27 @@ export default function CampaignsPage() {
       });
       const data = res.data as CampaignPreflight;
       setPreflight(data);
-      const dndIds = (data.marketing_opt_out_contact_ids ?? []).filter((id) =>
-        channelScopedSelectedContacts.includes(id)
+
+      // Period lookback: remove matching contacts so Meta check + campaign table
+      // both follow the reduced audience (same cascade as final send count).
+      const periodIds =
+        excludeLookback.from || excludeSentInPeriod
+          ? (data.sent_in_period_contact_ids ?? []).filter((id) =>
+              channelScopedSelectedContacts.includes(id)
+            )
+          : [];
+      if (periodIds.length) {
+        const remove = new Set(periodIds);
+        setSelectedContacts((current) => current.filter((id) => !remove.has(id)));
+        setExcludeSentInPeriod(true);
+        toastStore.getState().show(
+          `تم استبعاد ${periodIds.length.toLocaleString("ar")} بسبب الفترة السابقة — يتحدّث فحص Meta والحملات تلقائياً.`,
+          "success"
+        );
+      }
+
+      const dndIds = (data.marketing_opt_out_contact_ids ?? []).filter(
+        (id) => channelScopedSelectedContacts.includes(id) && !periodIds.includes(id)
       );
       if (dndIds.length) {
         const remove = new Set(dndIds);
@@ -698,8 +717,9 @@ export default function CampaignsPage() {
         setAutoDndExcludedCount(0);
       }
       if (!options?.silent) {
+        const checkedTotal = data.selected_after_isolation ?? data.total;
         toastStore.getState().show(
-          `نتيجة الفحص: ${data.eligible_recipients ?? 0} مؤهل للإرسال من ${data.total}.`,
+          `نتيجة الفحص: ${data.eligible_recipients ?? 0} مؤهل للإرسال من ${checkedTotal}.`,
           "success"
         );
       }
@@ -1556,7 +1576,7 @@ export default function CampaignsPage() {
                   <div>
                     <h4 id="exclude-stage-2">الاستبعاد حسب الحملات</h4>
                     <p className="hint-text">
-                      تظهر فقط الحملات التي تضم عملاء من الجمهور المختار سبق إرسالهم — العملاء الجدد لا تظهر لهم حملات.
+                      تظهر فقط الحملات المتقاطعة مع الجمهور المتبقي بعد استبعاد الفترة — ومع نافذة الفترة إن وُجدت.
                     </p>
                   </div>
                 </div>
@@ -1692,7 +1712,13 @@ export default function CampaignsPage() {
                   >
                     {preflightBusy ? "جاري فحص الجمهور…" : "فحص الجمهور"}
                   </button>
-                  <p className="hint-text">الجمهور الحالي: {channelScopedSelectedContacts.length.toLocaleString("ar")}</p>
+                  <p className="hint-text">
+                    الجمهور الحالي بعد الاستبعادات:{" "}
+                    {(preflight?.selected_after_isolation ?? channelScopedSelectedContacts.length).toLocaleString("ar")}
+                    {typeof preflight?.sent_in_period === "number" && preflight.sent_in_period > 0
+                      ? ` · استُبعد بالفترة ${preflight.sent_in_period.toLocaleString("ar")}`
+                      : ""}
+                  </p>
                 </div>
                 {preflight && (
                   <div className="campaign-preflight-panel campaign-preflight-panel-brand">
@@ -1703,7 +1729,12 @@ export default function CampaignsPage() {
                       <span>{preflight.messaging_tier_hint}</span>
                     </div>
                     <div className="campaign-preflight-stats campaign-preflight-stats-brand">
-                      <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
+                      <div>
+                        <strong>
+                          {(preflight.selected_after_isolation ?? preflight.total).toLocaleString("ar")}
+                        </strong>
+                        <span>إجمالي بعد الاستبعاد</span>
+                      </div>
                       <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
                       <div><strong>{preflight.reachable ?? 0}</strong><span>قابل للوصول</span></div>
                       <div><strong>{preflight.unreachable ?? 0}</strong><span>غير قابل</span></div>

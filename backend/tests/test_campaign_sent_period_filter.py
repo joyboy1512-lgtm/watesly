@@ -20,6 +20,7 @@ def test_campaign_sent_period_helpers_exist() -> None:
     assert "filter_exclude_campaign_sent_in_period" in reachability
     assert "list_campaigns_in_period" in reachability
     assert "audience_match_count" in reachability
+    assert "lookback_active" in window
     assert "exclude_sent_in_period: bool = False" in schemas
     assert "exclude_sent_from" in schemas
     assert "exclude_campaign_ids" in schemas
