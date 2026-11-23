@@ -27,8 +27,14 @@ import {
 } from "../lib/contactHelpers";
 import Icon from "../components/Icon";
 import ContactsSegmentsModal from "../components/ContactsSegmentsModal";
+import SearchableMultiFilter, {
+  parseMultiParam,
+  serializeMultiParam
+} from "../components/SearchableMultiFilter";
 import { slugifyInterestLabel, type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
+
+type CampaignOption = { id: string; name: string };
 
 type Segment = { id: string; name: string; filter_json: Record<string, unknown> };
 type SegmentCount = { segment_id: string; count: number };
@@ -42,14 +48,31 @@ export default function ContactsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [channelFilter, setChannelFilter] = useState(searchParams.get("channel_id") ?? "");
-  const [organizationFilter, setOrganizationFilter] = useState(searchParams.get("organization_id") ?? "");
-  const [tagFilter, setTagFilter] = useState(searchParams.get("tag_id") ?? "");
-  const [interestFilter, setInterestFilter] = useState(searchParams.get("interest_id") ?? "");
+  const [channelFilters, setChannelFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("channel_ids") ?? searchParams.get("channel_id"))
+  );
+  const [organizationFilters, setOrganizationFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("organization_ids") ?? searchParams.get("organization_id"))
+  );
+  const [tagFilters, setTagFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("tag_ids") ?? searchParams.get("tag_id"))
+  );
+  const [interestFilters, setInterestFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("interest_ids") ?? searchParams.get("interest_id"))
+  );
   const [segmentFilter, setSegmentFilter] = useState(searchParams.get("segment_id") ?? "");
-  const [lifecycleFilter, setLifecycleFilter] = useState(searchParams.get("lifecycle_stage") ?? "");
-  const [regionFilter, setRegionFilter] = useState(searchParams.get("region") ?? "");
-  const [whatsappStatusFilter, setWhatsappStatusFilter] = useState(searchParams.get("whatsapp_status") ?? "");
+  const [lifecycleFilters, setLifecycleFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("lifecycle_stages") ?? searchParams.get("lifecycle_stage"))
+  );
+  const [regionFilters, setRegionFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("regions") ?? searchParams.get("region"))
+  );
+  const [whatsappStatusFilters, setWhatsappStatusFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("whatsapp_statuses") ?? searchParams.get("whatsapp_status"))
+  );
+  const [lastCampaignFilters, setLastCampaignFilters] = useState<string[]>(() =>
+    parseMultiParam(searchParams.get("last_campaign_ids"))
+  );
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState("");
@@ -74,14 +97,6 @@ export default function ContactsPage() {
   useEffect(() => {
     const query = searchParams.get("q");
     if (query) setSearch(query);
-    const channel = searchParams.get("channel_id");
-    if (channel) setChannelFilter(channel);
-    const organization = searchParams.get("organization_id");
-    if (organization) setOrganizationFilter(organization);
-    const tag = searchParams.get("tag_id");
-    if (tag) setTagFilter(tag);
-    const interest = searchParams.get("interest_id");
-    if (interest) setInterestFilter(interest);
     const segment = searchParams.get("segment_id");
     if (segment) setSegmentFilter(segment);
   }, [searchParams]);
@@ -94,38 +109,64 @@ export default function ContactsPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [debouncedSearch, channelFilter, organizationFilter, tagFilter, interestFilter, segmentFilter, lifecycleFilter, regionFilter, whatsappStatusFilter]);
+  }, [
+    debouncedSearch,
+    channelFilters,
+    organizationFilters,
+    tagFilters,
+    interestFilters,
+    segmentFilter,
+    lifecycleFilters,
+    regionFilters,
+    whatsappStatusFilters,
+    lastCampaignFilters
+  ]);
 
-  function updateFilterParam(key: string, value: string) {
+  function syncFilterParams(patch: Record<string, string[] | string>) {
     const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
+    const multiKeys = [
+      "channel_ids",
+      "organization_ids",
+      "tag_ids",
+      "interest_ids",
+      "lifecycle_stages",
+      "regions",
+      "whatsapp_statuses",
+      "last_campaign_ids"
+    ];
+    const singularKeys = [
+      "channel_id",
+      "organization_id",
+      "tag_id",
+      "interest_id",
+      "lifecycle_stage",
+      "region",
+      "whatsapp_status"
+    ];
+    for (const key of singularKeys) next.delete(key);
+    for (const [key, value] of Object.entries(patch)) {
+      if (Array.isArray(value)) {
+        const serialized = serializeMultiParam(value);
+        if (serialized) next.set(key, serialized);
+        else next.delete(key);
+      } else if (value) {
+        next.set(key, value);
+      } else {
+        next.delete(key);
+      }
+    }
+    for (const key of multiKeys) {
+      if (!(key in patch) && !next.get(key)) next.delete(key);
+    }
     setSearchParams(next, { replace: true });
-  }
-
-  function onChannelFilterChange(value: string) {
-    setChannelFilter(value);
-    updateFilterParam("channel_id", value);
-  }
-
-  function onOrganizationFilterChange(value: string) {
-    setOrganizationFilter(value);
-    updateFilterParam("organization_id", value);
-  }
-
-  function onTagFilterChange(value: string) {
-    setTagFilter(value);
-    updateFilterParam("tag_id", value);
-  }
-
-  function onInterestFilterChange(value: string) {
-    setInterestFilter(value);
-    updateFilterParam("interest_id", value);
   }
 
   function onSegmentFilterChange(value: string) {
     setSegmentFilter(value);
-    updateFilterParam("segment_id", value);
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("segment_id", value);
+    else next.delete("segment_id");
+    setSearchParams(next, { replace: true });
   }
 
   const organizations = useQuery({
@@ -148,38 +189,51 @@ export default function ContactsPage() {
     queryKey: [
       "contacts",
       debouncedSearch,
-      channelFilter,
-      organizationFilter,
-      tagFilter,
-      interestFilter,
+      channelFilters,
+      organizationFilters,
+      tagFilters,
+      interestFilters,
       segmentFilter,
-      lifecycleFilter,
-      regionFilter,
-      whatsappStatusFilter
+      lifecycleFilters,
+      regionFilters,
+      whatsappStatusFilters,
+      lastCampaignFilters
     ],
     queryFn: async () => {
       const params: Record<string, string | number> = { limit: CONTACTS_LIST_LIMIT };
       if (debouncedSearch) params.q = debouncedSearch;
-      if (channelFilter) params.channel_id = channelFilter;
-      if (organizationFilter) params.organization_id = organizationFilter;
-      if (tagFilter) params.tag_id = tagFilter;
-      if (interestFilter) params.interest_id = interestFilter;
+      if (channelFilters.length === 1) params.channel_id = channelFilters[0];
+      if (channelFilters.length > 1) params.channel_ids = serializeMultiParam(channelFilters);
+      if (organizationFilters.length === 1) params.organization_id = organizationFilters[0];
+      if (organizationFilters.length > 1) params.organization_ids = serializeMultiParam(organizationFilters);
+      if (tagFilters.length === 1) params.tag_id = tagFilters[0];
+      if (tagFilters.length > 1) params.tag_ids = serializeMultiParam(tagFilters);
+      if (interestFilters.length === 1) params.interest_id = interestFilters[0];
+      if (interestFilters.length > 1) params.interest_ids = serializeMultiParam(interestFilters);
       if (segmentFilter) params.segment_id = segmentFilter;
-      if (lifecycleFilter) params.lifecycle_stage = lifecycleFilter;
-      if (regionFilter) params.region = regionFilter;
-      if (whatsappStatusFilter) params.whatsapp_status = whatsappStatusFilter;
+      if (lifecycleFilters.length === 1) params.lifecycle_stage = lifecycleFilters[0];
+      if (lifecycleFilters.length > 1) params.lifecycle_stages = serializeMultiParam(lifecycleFilters);
+      if (regionFilters.length === 1) params.region = regionFilters[0];
+      if (regionFilters.length > 1) params.regions = serializeMultiParam(regionFilters);
+      if (whatsappStatusFilters.length === 1) params.whatsapp_status = whatsappStatusFilters[0];
+      if (whatsappStatusFilters.length > 1) params.whatsapp_statuses = serializeMultiParam(whatsappStatusFilters);
+      if (lastCampaignFilters.length) params.last_campaign_ids = serializeMultiParam(lastCampaignFilters);
       return (await api.get<Contact[]>("/contacts", { params })).data;
     },
     refetchOnMount: "always"
   });
   const regions = useQuery({
-    queryKey: ["contact-regions", organizationFilter, channelFilter],
+    queryKey: ["contact-regions", organizationFilters, channelFilters],
     queryFn: async () => {
       const params: Record<string, string> = {};
-      if (organizationFilter) params.organization_id = organizationFilter;
-      if (channelFilter) params.channel_id = channelFilter;
+      if (organizationFilters.length === 1) params.organization_id = organizationFilters[0];
+      if (channelFilters.length === 1) params.channel_id = channelFilters[0];
       return (await api.get<Array<{ region: string; count: number }>>("/contacts/regions", { params })).data;
     }
+  });
+  const campaignOptions = useQuery({
+    queryKey: ["campaigns", "filter-options"],
+    queryFn: async () => (await api.get<CampaignOption[]>("/campaigns")).data
   });
   const stats = useQuery({
     queryKey: ["contacts-stats"],
@@ -330,7 +384,7 @@ export default function ContactsPage() {
     const name = groupName.trim();
     if (!name || !selectedCount) return;
     const selectedRows = rows.filter((item) => selectedIds.has(item.id));
-    const organizationId = organizationFilter || selectedRows[0]?.organization_id;
+    const organizationId = organizationFilters[0] || selectedRows[0]?.organization_id;
     if (!organizationId) {
       toastStore.getState().show("اختر الفرع أولاً أو حدّد عملاء من نفس الفرع.", "error");
       return;
@@ -368,11 +422,11 @@ export default function ContactsPage() {
       name: segmentName,
       filter_json: buildSegmentFilterJson({
         search: debouncedSearch,
-        organization_id: organizationFilter,
-        channel_id: channelFilter,
-        tag_id: tagFilter,
-        interest_id: interestFilter,
-        lifecycle_stage: lifecycleFilter
+        organization_id: organizationFilters[0],
+        channel_id: channelFilters[0],
+        tag_id: tagFilters[0],
+        interest_id: interestFilters[0],
+        lifecycle_stage: lifecycleFilters[0]
       })
     });
     setSegmentName("");
@@ -516,98 +570,97 @@ export default function ContactsPage() {
                 </option>
               ))}
             </select>
-            <select
-              value={organizationFilter}
-              onChange={(e) => onOrganizationFilterChange(e.target.value)}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب الفرع"
-            >
-              <option value="">كل الأفرع</option>
-              {(organizations.data ?? []).map((org) => (
-                <option key={org.id} value={org.id}>{org.name}</option>
-              ))}
-            </select>
-            <select
-              value={tagFilter}
-              onChange={(e) => onTagFilterChange(e.target.value)}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب التصنيف"
-            >
-              <option value="">كل التصنيفات</option>
-              {(tags.data ?? []).map((tag) => (
-                <option key={tag.id} value={tag.id}>{tag.name}</option>
-              ))}
-            </select>
-            <select
-              value={interestFilter}
-              onChange={(e) => onInterestFilterChange(e.target.value)}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب الاهتمام"
-            >
-              <option value="">كل الاهتمامات</option>
-              {(interests.data ?? []).map((interest) => (
-                <option key={interest.id} value={interest.id}>{interest.label}</option>
-              ))}
-            </select>
-            <select
-              value={lifecycleFilter}
-              onChange={(e) => {
-                setLifecycleFilter(e.target.value);
-                setPage(1);
+            <SearchableMultiFilter
+              compact
+              label="الفرع"
+              allLabel="كل الأفرع"
+              values={organizationFilters}
+              options={(organizations.data ?? []).map((org) => ({ value: org.id, label: org.name }))}
+              onChange={(values) => {
+                setOrganizationFilters(values);
+                syncFilterParams({ organization_ids: values });
               }}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب مرحلة العميل"
-            >
-              <option value="">كل المراحل</option>
-              {Object.entries(LIFECYCLE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-            <select
-              value={regionFilter}
-              onChange={(e) => {
-                const value = e.target.value;
-                setRegionFilter(value);
-                updateFilterParam("region", value);
-                setPage(1);
+            />
+            <SearchableMultiFilter
+              compact
+              label="القناة"
+              allLabel="كل القنوات"
+              values={channelFilters}
+              options={(channels.data ?? []).map((channel) => ({ value: channel.id, label: channel.name }))}
+              onChange={(values) => {
+                setChannelFilters(values);
+                syncFilterParams({ channel_ids: values });
               }}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب المنطقة"
-            >
-              <option value="">كل المناطق</option>
-              {(regions.data ?? []).map((item) => (
-                <option key={item.region} value={item.region}>
-                  {item.region} ({item.count.toLocaleString("ar")})
-                </option>
-              ))}
-            </select>
-            <select
-              value={whatsappStatusFilter}
-              onChange={(e) => {
-                const value = e.target.value;
-                setWhatsappStatusFilter(value);
-                updateFilterParam("whatsapp_status", value);
-                setPage(1);
+            />
+            <SearchableMultiFilter
+              compact
+              label="التصنيف"
+              allLabel="كل التصنيفات"
+              values={tagFilters}
+              options={(tags.data ?? []).map((tag) => ({ value: tag.id, label: tag.name }))}
+              onChange={(values) => {
+                setTagFilters(values);
+                syncFilterParams({ tag_ids: values });
               }}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب حالة واتساب"
-            >
-              <option value="">كل حالات واتساب</option>
-              {Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-            <select
-              value={channelFilter}
-              onChange={(e) => onChannelFilterChange(e.target.value)}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب القناة"
-            >
-              <option value="">كل القنوات</option>
-              {(channels.data ?? []).map((channel) => (
-                <option key={channel.id} value={channel.id}>{channel.name}</option>
-              ))}
-            </select>
+            />
+            <SearchableMultiFilter
+              compact
+              label="الاهتمامات"
+              allLabel="كل الاهتمامات"
+              values={interestFilters}
+              options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
+              onChange={(values) => {
+                setInterestFilters(values);
+                syncFilterParams({ interest_ids: values });
+              }}
+            />
+            <SearchableMultiFilter
+              compact
+              label="المرحلة"
+              allLabel="كل المراحل"
+              values={lifecycleFilters}
+              options={Object.entries(LIFECYCLE_LABELS).map(([value, label]) => ({ value, label }))}
+              onChange={(values) => {
+                setLifecycleFilters(values);
+                syncFilterParams({ lifecycle_stages: values });
+              }}
+            />
+            <SearchableMultiFilter
+              compact
+              label="المنطقة"
+              allLabel="كل المناطق"
+              values={regionFilters}
+              options={(regions.data ?? []).map((item) => ({
+                value: item.region,
+                label: `${item.region} (${item.count.toLocaleString("ar")})`
+              }))}
+              onChange={(values) => {
+                setRegionFilters(values);
+                syncFilterParams({ regions: values });
+              }}
+            />
+            <SearchableMultiFilter
+              compact
+              label="حالة واتساب"
+              allLabel="كل الحالات"
+              values={whatsappStatusFilters}
+              options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+              onChange={(values) => {
+                setWhatsappStatusFilters(values);
+                syncFilterParams({ whatsapp_statuses: values });
+              }}
+            />
+            <SearchableMultiFilter
+              compact
+              label="آخر حملة"
+              allLabel="كل الحملات"
+              values={lastCampaignFilters}
+              options={(campaignOptions.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
+              onChange={(values) => {
+                setLastCampaignFilters(values);
+                syncFilterParams({ last_campaign_ids: values });
+              }}
+            />
             <div className="contacts-erp-search">
               <Icon name="search" size={16} />
               <input
@@ -726,11 +779,11 @@ export default function ContactsPage() {
         tags={tags.data ?? []}
         activeFilters={{
           search: debouncedSearch,
-          organization_id: organizationFilter || undefined,
-          channel_id: channelFilter || undefined,
-          tag_id: tagFilter || undefined,
-          interest_id: interestFilter || undefined,
-          lifecycle_stage: lifecycleFilter || undefined
+          organization_id: organizationFilters[0] || undefined,
+          channel_id: channelFilters[0] || undefined,
+          tag_id: tagFilters[0] || undefined,
+          interest_id: interestFilters[0] || undefined,
+          lifecycle_stage: lifecycleFilters[0] || undefined
         }}
         onApplySegment={(segmentId) => onSegmentFilterChange(segmentId)}
       />

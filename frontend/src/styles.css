@@ -8167,6 +8167,108 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   flex: 0 0 auto;
   white-space: nowrap;
 }
+.searchable-multi-filter {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+}
+.searchable-multi-filter.is-compact {
+  min-width: 140px;
+}
+.searchable-multi-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.searchable-multi-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  text-align: start;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.searchable-multi-filter-trigger.is-active {
+  border-color: color-mix(in srgb, var(--primary-dark) 35%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 55%, var(--panel));
+  color: var(--primary-darker);
+}
+.searchable-multi-filter-trigger-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.searchable-multi-filter-caret {
+  color: var(--muted);
+  font-size: 11px;
+}
+.searchable-multi-filter-menu {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  display: grid;
+  gap: 6px;
+  min-width: 220px;
+  max-height: 300px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.searchable-multi-filter-search input {
+  width: 100%;
+  margin: 0;
+}
+.searchable-multi-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.searchable-multi-filter-options {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+}
+.searchable-multi-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+.searchable-multi-filter-option:hover {
+  background: var(--panel-soft);
+}
+.searchable-multi-filter-option input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px;
+  min-width: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--primary);
+}
+.contacts-erp-meta {
+  align-items: end;
+}
+.contacts-erp-meta .searchable-multi-filter {
+  flex: 0 1 160px;
+}
 .campaign-tag-multiselect {
   position: relative;
 }

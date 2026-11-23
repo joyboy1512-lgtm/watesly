@@ -132,18 +132,38 @@ async def _serialize_contact(context: AuthContext, db: AsyncSession, contact) ->
     )
 
 
+def _parse_uuid_csv(raw: str | None, *, label: str) -> list[UUID] | None:
+    if not raw:
+        return None
+    try:
+        values = [UUID(item.strip()) for item in raw.split(",") if item.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {label}") from exc
+    return values or None
+
+
+def _parse_str_csv(raw: str | None) -> list[str] | None:
+    if not raw:
+        return None
+    values = [item.strip() for item in raw.split(",") if item.strip()]
+    return values or None
+
+
 @router.get("", response_model=list[ContactResponse])
 async def get_contacts(
     limit: int = Query(100, ge=1, le=5000),
     q: str | None = None,
     channel_id: UUID | None = None,
+    channel_ids: str | None = Query(None, description="Comma-separated channel IDs (OR match)"),
     organization_id: UUID | None = None,
+    organization_ids: str | None = Query(None, description="Comma-separated organization IDs (OR match)"),
     tag_id: UUID | None = None,
     tag_ids: str | None = Query(None, description="Comma-separated tag IDs (OR match)"),
     interest_id: UUID | None = None,
     interest_ids: str | None = Query(None, description="Comma-separated interest IDs (OR match)"),
     segment_id: UUID | None = None,
     lifecycle_stage: str | None = None,
+    lifecycle_stages: str | None = Query(None, description="Comma-separated lifecycle stages (OR match)"),
     region: str | None = Query(None, max_length=120, description="Exact contact region/area filter"),
     regions: str | None = Query(None, description="Comma-separated regions (OR match)"),
     ids: str | None = Query(None, description="Comma-separated contact IDs (e.g. Excel audience lock)"),
@@ -151,6 +171,11 @@ async def get_contacts(
         default=None,
         pattern=r"^(accepts|reachable|unreachable|invalid|dnd)$",
     ),
+    whatsapp_statuses: str | None = Query(
+        None,
+        description="Comma-separated WhatsApp statuses (OR match)",
+    ),
+    last_campaign_ids: str | None = Query(None, description="Comma-separated last campaign IDs (OR match)"),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -160,53 +185,47 @@ async def get_contacts(
     accessible_orgs = await resolve_accessible_organization_ids(
         db, account_id=context.account_id, membership=context.membership
     )
+    parsed_channel_ids = _parse_uuid_csv(channel_ids, label="channel IDs")
+    parsed_org_ids = _parse_uuid_csv(organization_ids, label="organization IDs")
     if channel_id is not None and accessible_channels is not None and channel_id not in accessible_channels:
         return []
     if organization_id is not None and accessible_orgs is not None and organization_id not in accessible_orgs:
         return []
-    contact_ids: list[UUID] | None = None
-    if ids:
-        try:
-            contact_ids = [UUID(item.strip()) for item in ids.split(",") if item.strip()]
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid contact IDs") from exc
-        if not contact_ids:
+    if parsed_channel_ids and accessible_channels is not None:
+        parsed_channel_ids = [item for item in parsed_channel_ids if item in accessible_channels]
+        if not parsed_channel_ids:
             return []
-    parsed_tag_ids: list[UUID] | None = None
-    if tag_ids:
-        try:
-            parsed_tag_ids = [UUID(item.strip()) for item in tag_ids.split(",") if item.strip()]
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid tag IDs") from exc
-        if not parsed_tag_ids:
-            parsed_tag_ids = None
-    parsed_interest_ids: list[UUID] | None = None
-    if interest_ids:
-        try:
-            parsed_interest_ids = [UUID(item.strip()) for item in interest_ids.split(",") if item.strip()]
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid interest IDs") from exc
-        if not parsed_interest_ids:
-            parsed_interest_ids = None
+    if parsed_org_ids and accessible_orgs is not None:
+        parsed_org_ids = [item for item in parsed_org_ids if item in accessible_orgs]
+        if not parsed_org_ids:
+            return []
+    contact_ids = _parse_uuid_csv(ids, label="contact IDs")
+    if ids is not None and contact_ids is None:
+        return []
     contacts = await list_contacts(
         db,
         context.account_id,
         limit=limit,
         channel_id=channel_id,
+        channel_ids=parsed_channel_ids,
         organization_id=organization_id,
+        organization_ids=parsed_org_ids,
         tag_id=tag_id,
-        tag_ids=parsed_tag_ids,
+        tag_ids=_parse_uuid_csv(tag_ids, label="tag IDs"),
         interest_id=interest_id,
-        interest_ids=parsed_interest_ids,
+        interest_ids=_parse_uuid_csv(interest_ids, label="interest IDs"),
         segment_id=segment_id,
         lifecycle_stage=lifecycle_stage,
+        lifecycle_stages=_parse_str_csv(lifecycle_stages),
         region=region,
-        regions=[item.strip() for item in regions.split(",") if item.strip()] if regions else None,
+        regions=_parse_str_csv(regions),
         whatsapp_status=whatsapp_status,
+        whatsapp_statuses=_parse_str_csv(whatsapp_statuses),
+        last_campaign_ids=_parse_uuid_csv(last_campaign_ids, label="last campaign IDs"),
         contact_ids=contact_ids,
         q=q,
-        accessible_channel_ids=accessible_channels if channel_id is None else None,
-        accessible_organization_ids=accessible_orgs if organization_id is None else None,
+        accessible_channel_ids=accessible_channels if channel_id is None and not parsed_channel_ids else None,
+        accessible_organization_ids=accessible_orgs if organization_id is None and not parsed_org_ids else None,
     )
     return await _serialize_contacts(context, db, contacts)
 

@@ -17,12 +17,14 @@ import {
   downloadContactsImportTemplate,
   formatContactDate,
   formatWhatsAppStatus,
+  LIFECYCLE_LABELS,
   WHATSAPP_STATUS_LABELS,
   whatsappStatusTone,
   type Contact as ContactRow,
   type Tag
 } from "../lib/contactHelpers";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
+import SearchableMultiFilter, { serializeMultiParam } from "../components/SearchableMultiFilter";
 import {
   AUDIENCE_GENDER_OPTIONS,
   buildAudienceResolvePayload,
@@ -195,13 +197,10 @@ export default function CampaignsPage() {
   const [loadingSegmentAudience, setLoadingSegmentAudience] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [audienceTagIds, setAudienceTagIds] = useState<string[]>([]);
-  const [audienceTagMenuOpen, setAudienceTagMenuOpen] = useState(false);
-  const audienceTagMenuRef = useRef<HTMLDivElement | null>(null);
-  const [audienceWhatsappStatus, setAudienceWhatsappStatus] = useState("");
+  const [audienceWhatsappStatuses, setAudienceWhatsappStatuses] = useState<string[]>([]);
   const [audienceRegions, setAudienceRegions] = useState<string[]>([]);
-  const [audienceRegionMenuOpen, setAudienceRegionMenuOpen] = useState(false);
-  const audienceRegionMenuRef = useRef<HTMLDivElement | null>(null);
   const [audienceSegmentFilterId, setAudienceSegmentFilterId] = useState("");
+  const [audienceLastCampaignIds, setAudienceLastCampaignIds] = useState<string[]>([]);
   const [audienceLastCampaignFrom, setAudienceLastCampaignFrom] = useState("");
   const [audienceLastCampaignTo, setAudienceLastCampaignTo] = useState("");
   const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
@@ -216,7 +215,7 @@ export default function CampaignsPage() {
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
   const [newInterestLabel, setNewInterestLabel] = useState("");
   const [creatingInterest, setCreatingInterest] = useState(false);
-  const [audienceLifecycle, setAudienceLifecycle] = useState("");
+  const [audienceLifecycleStages, setAudienceLifecycleStages] = useState<string[]>([]);
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
   const [preflightBusy, setPreflightBusy] = useState(false);
   const [includeOptOutOption, setIncludeOptOutOption] = useState(true);
@@ -247,19 +246,28 @@ export default function CampaignsPage() {
       audienceChannelId,
       excelAudienceIds,
       audienceTagIds,
-      audienceWhatsappStatus,
+      audienceWhatsappStatuses,
       audienceRegions,
-      audienceSegmentFilterId
+      audienceSegmentFilterId,
+      audienceInterestIds,
+      audienceLifecycleStages,
+      audienceLastCampaignIds
     ],
     queryFn: async () => {
       const base: Record<string, string | number> = { limit: CAMPAIGN_AUDIENCE_LIMIT };
       if (organizationId) base.organization_id = organizationId;
       if (audienceChannelId) base.channel_id = audienceChannelId;
       if (audienceTagIds.length === 1) base.tag_id = audienceTagIds[0];
-      if (audienceTagIds.length > 1) base.tag_ids = audienceTagIds.join(",");
-      if (audienceWhatsappStatus) base.whatsapp_status = audienceWhatsappStatus;
+      if (audienceTagIds.length > 1) base.tag_ids = serializeMultiParam(audienceTagIds);
+      if (audienceWhatsappStatuses.length === 1) base.whatsapp_status = audienceWhatsappStatuses[0];
+      if (audienceWhatsappStatuses.length > 1) base.whatsapp_statuses = serializeMultiParam(audienceWhatsappStatuses);
       if (audienceRegions.length === 1) base.region = audienceRegions[0];
-      if (audienceRegions.length > 1) base.regions = audienceRegions.join(",");
+      if (audienceRegions.length > 1) base.regions = serializeMultiParam(audienceRegions);
+      if (audienceInterestIds.length === 1) base.interest_id = audienceInterestIds[0];
+      if (audienceInterestIds.length > 1) base.interest_ids = serializeMultiParam(audienceInterestIds);
+      if (audienceLifecycleStages.length === 1) base.lifecycle_stage = audienceLifecycleStages[0];
+      if (audienceLifecycleStages.length > 1) base.lifecycle_stages = serializeMultiParam(audienceLifecycleStages);
+      if (audienceLastCampaignIds.length) base.last_campaign_ids = serializeMultiParam(audienceLastCampaignIds);
       if (audienceSegmentFilterId) base.segment_id = audienceSegmentFilterId;
       const libraryRows = (await api.get<Contact[]>("/contacts", { params: base })).data;
       if (!excelAudienceIds.length) return libraryRows;
@@ -411,36 +419,10 @@ export default function CampaignsPage() {
     }
   }, [organizations.data, organizationId]);
 
-  useEffect(() => {
-    if (!audienceTagMenuOpen) return;
-    function onDocClick(event: MouseEvent) {
-      if (audienceTagMenuRef.current && !audienceTagMenuRef.current.contains(event.target as Node)) {
-        setAudienceTagMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [audienceTagMenuOpen]);
-
-  useEffect(() => {
-    if (!audienceRegionMenuOpen) return;
-    function onDocClick(event: MouseEvent) {
-      if (audienceRegionMenuRef.current && !audienceRegionMenuRef.current.contains(event.target as Node)) {
-        setAudienceRegionMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [audienceRegionMenuOpen]);
-
   const organizationTags = useMemo(
     () =>
       (tags.data ?? []).filter((tag) => !organizationId || tag.organization_id === organizationId),
     [tags.data, organizationId]
-  );
-  const selectedAudienceTags = useMemo(
-    () => organizationTags.filter((tag) => audienceTagIds.includes(tag.id)),
-    [organizationTags, audienceTagIds]
   );
   const availableRegions = useMemo(
     () => (contactRegions.data ?? []).map((item) => item.region),
@@ -902,12 +884,6 @@ export default function CampaignsPage() {
     }
   }
 
-  function toggleAudienceInterest(interestId: string) {
-    setAudienceInterestIds((current) =>
-      current.includes(interestId) ? current.filter((id) => id !== interestId) : [...current, interestId]
-    );
-  }
-
   async function applyAudienceFilter() {
     if (!organizationId) {
       toastStore.getState().show("اختر الفرع في نموذج الحملة أولاً.", "error");
@@ -919,7 +895,7 @@ export default function CampaignsPage() {
       return;
     }
     const hasAudienceFilter = Boolean(
-      audienceGenderFilter || audienceInterestIds.length > 0 || audienceLifecycle
+      audienceGenderFilter || audienceInterestIds.length > 0 || audienceLifecycleStages.length > 0
     );
     if (!hasAudienceFilter) {
       toastStore.getState().show(
@@ -929,22 +905,27 @@ export default function CampaignsPage() {
       return;
     }
     try {
-      const payload = buildAudienceResolvePayload({
-        organizationId,
-        channelId: audienceChannelId,
-        genderFilter: audienceGenderFilter,
-        interestIds: audienceInterestIds,
-        lifecycleStage: audienceLifecycle || undefined,
-        marketingOptInOnly: true
-      });
-      const result = await api.post<{
-        count: number;
-        contact_ids: string[];
-        warnings: string[];
-      }>("/platform/audience/resolve", payload);
-      const ids = result.data.contact_ids ?? [];
+      const stages = audienceLifecycleStages.length > 0 ? audienceLifecycleStages : [undefined];
+      const mergedIds = new Set<string>();
+      for (const stage of stages) {
+        const payload = buildAudienceResolvePayload({
+          organizationId,
+          channelId: audienceChannelId,
+          genderFilter: audienceGenderFilter,
+          interestIds: audienceInterestIds,
+          lifecycleStage: stage,
+          marketingOptInOnly: true
+        });
+        const result = await api.post<{
+          count: number;
+          contact_ids: string[];
+          warnings: string[];
+        }>("/platform/audience/resolve", payload);
+        for (const id of result.data.contact_ids ?? []) mergedIds.add(id);
+      }
+      const ids = Array.from(mergedIds);
       setSelectedContacts((current) => mergeContactIds(current, ids));
-      toastStore.getState().show(`تم دمج ${result.data.count} عميل مطابق للفلتر مع الجمهور.`, "success");
+      toastStore.getState().show(`تم دمج ${ids.length} عميل مطابق للفلتر مع الجمهور.`, "success");
       setPreflight(null);
     } catch {
       toastStore.getState().show("تعذر تطبيق فلتر الجمهور.", "error");
@@ -1942,148 +1923,52 @@ export default function CampaignsPage() {
               )}
 
             <div className="campaign-audience-filters">
-                  <div className="field-label campaign-tag-multiselect" ref={audienceTagMenuRef}>
-                    <span>التصنيف</span>
-                    <button
-                      type="button"
-                      className="campaign-tag-multiselect-trigger"
-                      onClick={() => setAudienceTagMenuOpen((open) => !open)}
-                    >
-                      {selectedAudienceTags.length === 0
-                        ? "كل التصنيفات"
-                        : selectedAudienceTags.length === 1
-                          ? selectedAudienceTags[0].name
-                          : `${selectedAudienceTags.length} تصنيفات محددةة`}
-                    </button>
-                    {audienceTagMenuOpen && (
-                      <div className="campaign-tag-multiselect-menu" role="listbox" aria-multiselectable="true">
-                        <div className="campaign-tag-multiselect-toolbar">
-                          <button
-                            type="button"
-                            className="secondary-button compact"
-                            onClick={() => setAudienceTagIds([])}
-                          >
-                            مسح التحديد
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button compact"
-                            onClick={() => setAudienceTagIds(organizationTags.map((tag) => tag.id))}
-                            disabled={organizationTags.length === 0}
-                          >
-                            تحديد الكل
-                          </button>
-                        </div>
-                        {organizationTags.length === 0 && (
-                          <p className="hint-text">لا توجد تصنيفات لهذا الفرع.</p>
-                        )}
-                        {organizationTags.map((tag) => {
-                          const checked = audienceTagIds.includes(tag.id);
-                          return (
-                            <label key={tag.id} className="campaign-tag-multiselect-option">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => {
-                                  setAudienceTagIds((current) =>
-                                    checked
-                                      ? current.filter((id) => id !== tag.id)
-                                      : [...current, tag.id]
-                                  );
-                                }}
-                              />
-                              <span>{tag.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <label className="field-label">
-                    <span>تصفية بالشريحة</span>
-                    <select
-                      value={audienceSegmentFilterId}
-                      onChange={(e) => setAudienceSegmentFilterId(e.target.value)}
-                    >
-                      <option value="">كل الشرائح</option>
-                      {(segments.data ?? []).map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
-                      ))}
-                    </select>
-                  </label>
-              <div className="field-label campaign-tag-multiselect" ref={audienceRegionMenuRef}>
-                <span>المنطقة</span>
-                <button
-                  type="button"
-                  className="campaign-tag-multiselect-trigger"
-                  onClick={() => setAudienceRegionMenuOpen((open) => !open)}
-                >
-                  {audienceRegions.length === 0
-                    ? "كل المناطق"
-                    : audienceRegions.length === 1
-                      ? audienceRegions[0]
-                      : `${audienceRegions.length} مناطق محددةة`}
-                </button>
-                {audienceRegionMenuOpen && (
-                  <div className="campaign-tag-multiselect-menu" role="listbox" aria-multiselectable="true">
-                    <div className="campaign-tag-multiselect-toolbar">
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        onClick={() => setAudienceRegions([])}
-                      >
-                        مسح التحديد
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        onClick={() => setAudienceRegions(availableRegions)}
-                        disabled={availableRegions.length === 0}
-                      >
-                        تحديد الكل
-                      </button>
-                    </div>
-                    {availableRegions.length === 0 && (
-                      <p className="hint-text">لا توجد مناطق مسجّلة بعد على العملاء.</p>
-                    )}
-                    {availableRegions.map((regionName) => {
-                      const checked = audienceRegions.includes(regionName);
-                      const count = regionCountByName.get(regionName) ?? 0;
-                      return (
-                        <label key={regionName} className="campaign-tag-multiselect-option">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setAudienceRegions((current) =>
-                                checked
-                                  ? current.filter((item) => item !== regionName)
-                                  : [...current, regionName]
-                              );
-                            }}
-                          />
-                          <span>
-                            {regionName}
-                            {count > 0 ? ` (${count.toLocaleString("ar")})` : ""}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <SearchableMultiFilter
+                label="التصنيف"
+                allLabel="كل التصنيفات"
+                values={audienceTagIds}
+                options={organizationTags.map((tag) => ({ value: tag.id, label: tag.name }))}
+                onChange={setAudienceTagIds}
+              />
               <label className="field-label">
-                <span>حالة واتساب</span>
+                <span>تصفية بالشريحة</span>
                 <select
-                  value={audienceWhatsappStatus}
-                  onChange={(e) => setAudienceWhatsappStatus(e.target.value)}
+                  value={audienceSegmentFilterId}
+                  onChange={(e) => setAudienceSegmentFilterId(e.target.value)}
                 >
-                  <option value="">كل الحالات</option>
-                  {Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                  <option value="">كل الشرائح</option>
+                  {(segments.data ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
                 </select>
               </label>
+              <SearchableMultiFilter
+                label="المنطقة"
+                allLabel="كل المناطق"
+                values={audienceRegions}
+                options={availableRegions.map((regionName) => {
+                  const count = regionCountByName.get(regionName) ?? 0;
+                  return {
+                    value: regionName,
+                    label: count > 0 ? `${regionName} (${count.toLocaleString("ar")})` : regionName
+                  };
+                })}
+                onChange={setAudienceRegions}
+              />
+              <SearchableMultiFilter
+                label="حالة واتساب"
+                allLabel="كل الحالات"
+                values={audienceWhatsappStatuses}
+                options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+                onChange={setAudienceWhatsappStatuses}
+              />
+              <SearchableMultiFilter
+                label="آخر حملة"
+                allLabel="كل الحملات"
+                values={audienceLastCampaignIds}
+                options={(campaigns.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
+                onChange={setAudienceLastCampaignIds}
+              />
               <label className="field-label">
                 <span>آخر حملة من</span>
                 <input
@@ -2108,49 +1993,35 @@ export default function CampaignsPage() {
                   ))}
                 </select>
               </label>
-              <label className="field-label">
-                <span>مرحلة العميل</span>
-                <select value={audienceLifecycle} onChange={(e) => setAudienceLifecycle(e.target.value)}>
-                  <option value="">كل المراحل</option>
-                  <option value="lead">عميل محتمل</option>
-                  <option value="prospect">مهتم</option>
-                  <option value="customer">عميل</option>
-                  <option value="churned">متوقف</option>
-                </select>
-              </label>
+              <SearchableMultiFilter
+                label="مرحلة العميل"
+                allLabel="كل المراحل"
+                values={audienceLifecycleStages}
+                options={Object.entries(LIFECYCLE_LABELS).map(([value, label]) => ({ value, label }))}
+                onChange={setAudienceLifecycleStages}
+              />
+              <SearchableMultiFilter
+                label="الاهتمامات"
+                allLabel="كل الاهتمامات"
+                values={audienceInterestIds}
+                options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
+                onChange={setAudienceInterestIds}
+              />
             </div>
-            <div className="field-label">
-              <span>الاهتمامات (اختياري — متعدد)</span>
-              <div className="contacts-tags-cell">
-                {(interests.data ?? []).map((interest) => {
-                  const active = audienceInterestIds.includes(interest.id);
-                  return (
-                    <button
-                      key={interest.id}
-                      type="button"
-                      className={`contacts-tag-chip ${active ? "contacts-tag-chip-active" : ""}`}
-                      onClick={() => toggleAudienceInterest(interest.id)}
-                    >
-                      {interest.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="contacts-inline-tag-create">
-                <input
-                  value={newInterestLabel}
-                  onChange={(e) => setNewInterestLabel(e.target.value)}
-                  placeholder="اهتمام جديد…"
-                />
-                <button
-                  type="button"
-                  className="contacts-erp-btn"
-                  disabled={creatingInterest || !newInterestLabel.trim()}
-                  onClick={() => void createAudienceInterest()}
-                >
-                  {creatingInterest ? "…" : "+ اهتمام"}
-                </button>
-              </div>
+            <div className="contacts-inline-tag-create">
+              <input
+                value={newInterestLabel}
+                onChange={(e) => setNewInterestLabel(e.target.value)}
+                placeholder="اهتمام جديد…"
+              />
+              <button
+                type="button"
+                className="contacts-erp-btn"
+                disabled={creatingInterest || !newInterestLabel.trim()}
+                onClick={() => void createAudienceInterest()}
+              >
+                {creatingInterest ? "…" : "+ اهتمام"}
+              </button>
             </div>
             <div className="inline-actions">
               <button type="button" className="contacts-erp-btn contacts-erp-btn-primary" onClick={() => void applyAudienceFilter()}>
