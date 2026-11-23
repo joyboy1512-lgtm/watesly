@@ -630,6 +630,23 @@ export default function CampaignsPage() {
     excludeLookback.from || excludeCampaignIds.length > 0 || excludeSentInPeriod
   );
 
+  /** Count that will actually be sent after Meta/compliance filters (matches create button). */
+  const sendableAudienceCount = useMemo(() => {
+    if (!preflight || !channelScopedSelectedContacts.length) {
+      return channelScopedSelectedContacts.length;
+    }
+    if (Array.isArray(preflight.eligible_contact_ids)) {
+      const eligible = new Set(preflight.eligible_contact_ids);
+      return channelScopedSelectedContacts.filter((id) => eligible.has(id)).length;
+    }
+    return preflight.eligible_recipients ?? channelScopedSelectedContacts.length;
+  }, [preflight, channelScopedSelectedContacts]);
+
+  const autoExcludedBeforeSend = Math.max(
+    0,
+    channelScopedSelectedContacts.length - sendableAudienceCount
+  );
+
   async function runAudiencePreflight(options?: { silent?: boolean }) {
     if (!templateId || !channelScopedSelectedContacts.length) {
       setPreflight(null);
@@ -752,7 +769,7 @@ export default function CampaignsPage() {
     });
   }
 
-  function applyEligibleAudienceOnly() {
+  function applyEligibleAudienceOnly(options?: { silent?: boolean }) {
     const ids = (preflight?.eligible_contact_ids ?? []).filter((id) =>
       channelScopedSelectedContacts.includes(id)
     );
@@ -766,17 +783,42 @@ export default function CampaignsPage() {
         return true;
       });
       if (!fallback.length) {
-        toastStore.getState().show("لا يوجد عملاء مؤهلون بعد الفحص.", "error");
+        if (!options?.silent) {
+          toastStore.getState().show("لا يوجد عملاء مؤهلون بعد الفحص.", "error");
+        }
+        setSelectedContacts([]);
         return;
       }
+      const removed = channelScopedSelectedContacts.length - fallback.length;
       setSelectedContacts(fallback);
-      setExcludeUnreachable(true);
-      toastStore.getState().show(`تم الإبقاء على ${fallback.length} عميلاً مؤهلاً فقط.`, "success");
+      if (!options?.silent) {
+        toastStore.getState().show(`تم الإبقاء على ${fallback.length} عميلاً مؤهلاً فقط.`, "success");
+      } else if (removed > 0) {
+        toastStore.getState().show(
+          `تم استبعاد ${removed} تلقائياً قبل الإرسال (عدم إزعاج / غير مؤهل) — تبقّى ${fallback.length}.`,
+          "success"
+        );
+      }
       return;
     }
+    const removed = channelScopedSelectedContacts.length - ids.length;
     setSelectedContacts(ids);
-    setExcludeUnreachable(true);
-    toastStore.getState().show(`تم الإبقاء على ${ids.length} عميلاً مؤهلاً فقط (بعد فحص الأرقام).`, "success");
+    if (!options?.silent) {
+      toastStore.getState().show(`تم الإبقاء على ${ids.length} عميلاً مؤهلاً فقط (بعد فحص الأرقام).`, "success");
+    } else if (removed > 0) {
+      toastStore.getState().show(
+        `تم استبعاد ${removed} تلقائياً قبل الإرسال (عدم إزعاج / غير مؤهل) — تبقّى ${ids.length}.`,
+        "success"
+      );
+    }
+  }
+
+  function goWizardNext() {
+    if (createStep === 3 && preflight) {
+      // Align selection with who create() will actually send (DND always filtered).
+      applyEligibleAudienceOnly({ silent: true });
+    }
+    setCreateStep((step) => (step < 4 ? ((step + 1) as 1 | 2 | 3 | 4) : step));
   }
 
   async function importAudience(event: FormEvent<HTMLFormElement>) {
@@ -1793,9 +1835,17 @@ export default function CampaignsPage() {
                     )}
                   </div>
                   <div className="campaign-exclude-final-count" role="status">
-                    <strong>{channelScopedSelectedContacts.length.toLocaleString("ar")}</strong>
-                    <span>العدد النهائي للجمهور بعد الاستبعاد</span>
+                    <strong>{sendableAudienceCount.toLocaleString("ar")}</strong>
+                    <span>العدد النهائي للإرسال بعد الاستبعاد</span>
                   </div>
+                  {autoExcludedBeforeSend > 0 && (
+                    <p className="hint-text campaign-exclude-auto-hint">
+                      المحدّد حالياً {channelScopedSelectedContacts.length.toLocaleString("ar")} —
+                      وسيُستبعد تلقائياً عند الإرسال {autoExcludedBeforeSend.toLocaleString("ar")}{" "}
+                      (مثل عدم الإزعاج) حتى دون الضغط على زر الاستبعاد.
+                      اضغط «استبعد عدم الإزعاج» أو «التالي» لمزامنة الجمهور.
+                    </p>
+                  )}
                 </section>
               )}
 
@@ -2258,7 +2308,7 @@ export default function CampaignsPage() {
                   <button
                     type="button"
                     className="whatsapp-button"
-                    onClick={() => setCreateStep((step) => (step < 4 ? ((step + 1) as 1 | 2 | 3 | 4) : step))}
+                    onClick={goWizardNext}
                   >
                     التالي
                   </button>
@@ -2299,11 +2349,11 @@ export default function CampaignsPage() {
                 type="submit"
                 form="campaign-create-form"
                 className="whatsapp-button"
-                disabled={!channelScopedSelectedContacts.length || preflight?.eligible_recipients === 0}
+                disabled={!channelScopedSelectedContacts.length || sendableAudienceCount === 0}
               >
                 {scheduledAtLocal
-                  ? `جدولة الحملة (${preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})`
-                  : `إنشاء وبدء الحملة (${preflight?.eligible_recipients ?? channelScopedSelectedContacts.length})`}
+                  ? `جدولة الحملة (${sendableAudienceCount})`
+                  : `إنشاء وبدء الحملة (${sendableAudienceCount})`}
               </button>
               )}
             </div>

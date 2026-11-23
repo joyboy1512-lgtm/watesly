@@ -3014,6 +3014,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 600;
   color: var(--primary-dark);
 }
+.campaign-exclude-auto-hint {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #fef3c7 70%, white);
+  color: #92400e;
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--line));
+}
 .campaign-exclude-dnd-card .campaign-dnd-toggle {
   display: flex;
   align-items: center;
