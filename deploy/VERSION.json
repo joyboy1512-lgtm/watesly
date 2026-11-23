@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "664be25",
-    "git_commit_message": "Campaign green header filters and Excel dates live",
+    "git_commit": "cb6108d",
+    "git_commit_message": "Campaign exclude stages live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-QqhDL5NG.js",
-      "css": "index-EBlZQDRP.css"
+      "js": "index-CxKtl3Ao.js",
+      "css": "index-XpdWnwCt.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "664be25",
-  "notes": "Green header filters restored; Excel month/day date filter; striped rows (PR #182)"
+  "commit": "cb6108d",
+  "notes": "Campaign exclude stages: period lookback, campaign table, Meta green cards, post-check excludes, DND (PR #183)"
 }

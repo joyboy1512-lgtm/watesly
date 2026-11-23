@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-23",
+  "commit": "cb6108d",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CxKtl3Ao.js",
+    "css": "index-XpdWnwCt.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Exclude step staged cards: period lookback (day/month/year)",
+    "Campaign exclude striped table with ~7-row scroll",
+    "Meta preflight green brand result cards (recheckable)",
+    "Post-check exclude buttons + final audience count",
+    "Do Not Disturb toggle before send"
+  ],
+  "notes": "Deployed via SSH. PR #183."
+}
