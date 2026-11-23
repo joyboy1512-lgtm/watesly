@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-23",
+  "commit": "9b9a29b",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-C9eIU2yV.js",
+    "css": "index-Dmjh1CCz.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Green brand audience source cards (Excel / segment / contacts)",
+    "Equal-width segment, branch, channel top filters",
+    "Removed campaign interest create controls from top bar",
+    "Show selected only toggle with count"
+  ],
+  "notes": "Deployed via SSH. PR #186."
+}
