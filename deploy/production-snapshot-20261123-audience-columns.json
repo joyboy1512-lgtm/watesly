@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-23",
+  "commit": "f78543e",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CK2IoXGj.js",
+    "css": "index-BBgSkdWO.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Campaign audience columns: name, phone, gender, branch, channel, region, tags, interests, WhatsApp, lifecycle, last campaign",
+    "Header filters + search across those fields",
+    "Contact list returns tag_ids/tag_labels"
+  ],
+  "notes": "Deployed via SSH. PR #180."
+}
