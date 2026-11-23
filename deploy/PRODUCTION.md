@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-23) — Campaign exclude smart + auto DND
+
+| Item | Value |
+|------|-------|
+| Commit | `efbf22c` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-BkIB2Yan.js`, `index-DTr_Ronu.css` |
+| Snapshot record | `deploy/production-snapshot-20261123-exclude-smart.json` |
+
 ### Production snapshot (2026-11-23) — Campaign exclude stages
 
 | Item | Value |
