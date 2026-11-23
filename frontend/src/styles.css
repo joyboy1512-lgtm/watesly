@@ -8227,27 +8227,40 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaign-audience-source-card .campaigns-audience-warning {
   color: #fff3cd;
 }
+.campaign-audience-source-card .campaigns-excel-actions {
+  margin-top: 4px;
+  gap: 10px;
+}
+.campaign-audience-source-card .campaigns-excel-actions > button {
+  min-height: 40px;
+  padding: 10px 16px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
 .campaign-audience-source-card .whatsapp-button {
-  background: #fff;
-  color: var(--primary-darker);
-  border-color: #fff;
+  background: #fff !important;
+  color: var(--primary-darker) !important;
+  border: 2px solid #fff !important;
 }
 .campaign-audience-source-card .whatsapp-button:hover:not(:disabled) {
-  background: color-mix(in srgb, #fff 88%, var(--primary-soft));
-  color: var(--primary-darker);
+  background: #f0fff6 !important;
+  color: var(--primary-darker) !important;
 }
 .campaign-audience-source-card .secondary-button {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.45);
-  color: #fff;
+  background: #fff !important;
+  border: 2px solid rgba(255, 255, 255, 0.95) !important;
+  color: var(--primary-darker) !important;
 }
 .campaign-audience-source-card .secondary-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.26);
-  color: #fff;
+  background: #e8fceb !important;
+  color: var(--primary-darker) !important;
 }
 .campaign-audience-source-card .secondary-button:disabled,
 .campaign-audience-source-card .whatsapp-button:disabled {
-  opacity: 0.55;
+  opacity: 0.6;
+  box-shadow: none;
 }
 .campaign-audience-merge-banner {
   display: flex;
@@ -8503,21 +8516,44 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  align-items: end;
+  align-items: stretch;
 }
 .campaign-audience-filters-top > .field-label,
 .campaign-audience-filters-top .searchable-multi-filter {
-  flex: 0 1 160px;
-  width: 160px;
-  max-width: 180px;
-  min-width: 140px;
-}
-.campaign-audience-filters-top > .field-label select {
-  width: 100%;
-}
-.campaign-audience-filters-top .searchable-multi-filter {
+  flex: 0 0 150px;
+  width: 150px;
+  max-width: 150px;
+  min-width: 150px;
   display: grid;
+  grid-template-rows: auto 38px;
   gap: 6px;
+  align-content: start;
+  margin: 0;
+}
+.campaign-audience-filters-top > .field-label > span,
+.campaign-audience-filters-top .searchable-multi-filter-label {
+  min-height: 16px;
+  line-height: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.campaign-audience-filters-top > .field-label select,
+.campaign-audience-filters-top .searchable-multi-filter-trigger {
+  width: 100%;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 36px;
 }
 .campaigns-audience-select-actions {
   display: flex;
@@ -8537,6 +8573,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
   border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
   vertical-align: middle;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 .campaigns-audience-table-wide {
   min-width: 980px;
@@ -8728,10 +8767,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaigns-audience-table {
   margin: 0;
   min-width: 640px;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 .campaigns-audience-table th,
 .campaigns-audience-table td {
   white-space: nowrap;
+}
+.campaigns-audience-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-darker) 80%, #000);
 }
 .campaigns-audience-table .contacts-col-check {
   width: 42px;
