@@ -3106,7 +3106,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-exclude-table {
   margin: 0;
-  min-width: 420px;
+  min-width: 520px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.campaign-exclude-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--primary-darker) !important;
+  color: #fff !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-darker) 80%, black);
 }
 .campaign-exclude-table-striped tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--primary-soft) 45%, var(--panel)) !important;
@@ -3116,6 +3126,25 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-exclude-table-striped tbody tr.contacts-row-selected td {
   background: color-mix(in srgb, var(--primary) 18%, var(--panel)) !important;
+}
+.campaign-audience-match-count {
+  color: var(--primary-darker);
+}
+.campaign-exclude-btn-applied {
+  background: color-mix(in srgb, var(--primary-soft) 70%, white) !important;
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line)) !important;
+  color: var(--primary-darker) !important;
+  font-weight: 700;
+}
+.campaign-exclude-dnd-applied {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-soft) 75%, white);
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--line));
+  color: var(--primary-darker);
+  font-weight: 700;
+  font-size: 13px;
 }
 .campaigns-send-panel {
   align-content: start;

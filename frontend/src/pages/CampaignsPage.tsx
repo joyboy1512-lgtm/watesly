@@ -69,6 +69,7 @@ type CampaignPeriodGroup = {
   completed_at: string | null;
   status: string;
   sent_count: number;
+  audience_match_count?: number;
   first_sent_at: string | null;
   last_sent_at: string | null;
 };
@@ -254,6 +255,8 @@ export default function CampaignsPage() {
   const [excludePeriodMonths, setExcludePeriodMonths] = useState("");
   const [excludePeriodYears, setExcludePeriodYears] = useState("");
   const [excludeCampaignIds, setExcludeCampaignIds] = useState<string[]>([]);
+  const [autoDndApplied, setAutoDndApplied] = useState(false);
+  const [autoDndExcludedCount, setAutoDndExcludedCount] = useState(0);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
   const [linkCampaignId, setLinkCampaignId] = useState("");
@@ -675,6 +678,22 @@ export default function CampaignsPage() {
       });
       const data = res.data as CampaignPreflight;
       setPreflight(data);
+      const dndIds = (data.marketing_opt_out_contact_ids ?? []).filter((id) =>
+        channelScopedSelectedContacts.includes(id)
+      );
+      if (dndIds.length) {
+        const remove = new Set(dndIds);
+        setSelectedContacts((current) => current.filter((id) => !remove.has(id)));
+        setAutoDndApplied(true);
+        setAutoDndExcludedCount(dndIds.length);
+        toastStore.getState().show(
+          `تم استبعاد ${dndIds.length.toLocaleString("ar")} بسبب عدم الإزعاج تلقائياً.`,
+          "success"
+        );
+      } else if (!data.marketing_opt_out) {
+        setAutoDndApplied(false);
+        setAutoDndExcludedCount(0);
+      }
       if (!options?.silent) {
         toastStore.getState().show(
           `نتيجة الفحص: ${data.eligible_recipients ?? 0} مؤهل للإرسال من ${data.total}.`,
@@ -1554,27 +1573,28 @@ export default function CampaignsPage() {
                   <span className="campaign-exclude-stage-num">2</span>
                   <div>
                     <h4 id="exclude-stage-2">الاستبعاد حسب الحملات</h4>
-                    <p className="hint-text">اختر الحملات السابقة لاستبعاد من أُرسل لهم فيها من الجمهور الحالي.</p>
+                    <p className="hint-text">
+                      تظهر فقط الحملات التي تضم عملاء من الجمهور المختار سبق إرسالهم — العملاء الجدد لا تظهر لهم حملات.
+                    </p>
                   </div>
                 </div>
                 {(() => {
-                  const periodGroups = preflight?.campaigns_in_period?.length
-                    ? preflight.campaigns_in_period
-                    : (campaigns.data ?? [])
-                        .filter((item) => !item.archived_at && (item.report.sent + item.report.delivered + item.report.read) > 0)
-                        .slice(0, 40)
-                        .map((item) => ({
-                          id: item.id,
-                          name: item.name,
-                          started_at: item.started_at,
-                          completed_at: item.completed_at,
-                          status: item.status,
-                          sent_count: item.report.sent + item.report.delivered + item.report.read,
-                          first_sent_at: item.started_at,
-                          last_sent_at: item.completed_at || item.started_at
-                        }));
+                  const periodGroups = (preflight?.campaigns_in_period ?? []).filter(
+                    (item) => (item.audience_match_count ?? item.sent_count ?? 0) > 0
+                  );
+                  if (!preflight) {
+                    return (
+                      <p className="hint-text campaign-period-empty">
+                        افحص الجمهور أولاً لعرض الحملات المتقاطعة مع التحديد الحالي.
+                      </p>
+                    );
+                  }
                   if (!periodGroups.length) {
-                    return <p className="hint-text campaign-period-empty">لا توجد حملات سابقة للاختيار منها بعد.</p>;
+                    return (
+                      <p className="hint-text campaign-period-empty">
+                        لا توجد حملات تتقاطع مع هذا الجمهور (عملاء جدد أو لم يُرسل لهم من حملات سابقة).
+                      </p>
+                    );
                   }
                   const allSelected =
                     periodGroups.length > 0 &&
@@ -1582,7 +1602,7 @@ export default function CampaignsPage() {
                   return (
                     <div className="campaign-period-groups">
                       <div className="campaign-period-groups-toolbar">
-                        <small className="hint-text">حدد الحملات للاستبعاد</small>
+                        <small className="hint-text">حملات تتقاطع مع الجمهور المحدد</small>
                         <button
                           type="button"
                           className="secondary-button compact"
@@ -1619,6 +1639,7 @@ export default function CampaignsPage() {
                               </th>
                               <th>اسم الحملة</th>
                               <th>التاريخ</th>
+                              <th>من الجمهور</th>
                               <th>المستلمون</th>
                             </tr>
                           </thead>
@@ -1633,6 +1654,7 @@ export default function CampaignsPage() {
                                     day: "numeric"
                                   })
                                 : "—";
+                              const audienceMatch = item.audience_match_count ?? 0;
                               return (
                                 <tr key={item.id} className={checked ? "contacts-row-selected" : undefined}>
                                   <td className="contacts-col-check">
@@ -1654,6 +1676,11 @@ export default function CampaignsPage() {
                                     <strong>{item.name}</strong>
                                   </td>
                                   <td>{labelDate}</td>
+                                  <td>
+                                    <strong className="campaign-audience-match-count">
+                                      {audienceMatch.toLocaleString("ar")}
+                                    </strong>
+                                  </td>
                                   <td>{item.sent_count.toLocaleString("ar")}</td>
                                 </tr>
                               );
@@ -1685,7 +1712,7 @@ export default function CampaignsPage() {
                   </button>
                   <p className="hint-text">الجمهور الحالي: {channelScopedSelectedContacts.length.toLocaleString("ar")}</p>
                 </div>
-                {preflight && channelScopedSelectedContacts.length > 0 && (
+                {preflight && (
                   <div className="campaign-preflight-panel campaign-preflight-panel-brand">
                     <div className="campaign-preflight-meta">
                       {preflight.quality_rating && (
@@ -1705,6 +1732,11 @@ export default function CampaignsPage() {
                       <div><strong>{preflight.previously_sent ?? 0}</strong><span>سبق إرسالهم</span></div>
                       <div><strong>{preflight.sent_in_period ?? 0}</strong><span>أُرسل لهم في الفترة</span></div>
                     </div>
+                    {autoDndApplied && autoDndExcludedCount > 0 && (
+                      <p className="campaign-exclude-dnd-applied" role="status">
+                        تم استبعاد {autoDndExcludedCount.toLocaleString("ar")} بسبب عدم الإزعاج تلقائياً.
+                      </p>
+                    )}
                     {preflight.warnings.slice(0, 4).map((warning) => (
                       <p key={warning} className="campaign-warning">⚠ {warning}</p>
                     ))}
@@ -1712,7 +1744,7 @@ export default function CampaignsPage() {
                 )}
               </section>
 
-              {preflight && channelScopedSelectedContacts.length > 0 && (
+              {preflight && (
                 <section className="campaign-exclude-stage-card" aria-labelledby="exclude-stage-4">
                   <div className="campaign-exclude-stage-head">
                     <span className="campaign-exclude-stage-num">4</span>
@@ -1772,18 +1804,28 @@ export default function CampaignsPage() {
                     </button>
                     <button
                       type="button"
-                      className="secondary-button compact"
-                      disabled={!(preflight.marketing_opt_out_contact_ids?.length)}
-                      onClick={() =>
-                        removeContactsFromSelection(
-                          (preflight.marketing_opt_out_contact_ids ?? []).filter((id) =>
-                            channelScopedSelectedContacts.includes(id)
-                          ),
-                          "عدم الإزعاج"
-                        )
+                      className={
+                        autoDndApplied
+                          ? "secondary-button compact campaign-exclude-btn-applied"
+                          : "secondary-button compact"
                       }
+                      disabled={
+                        autoDndApplied
+                          ? true
+                          : !(preflight.marketing_opt_out_contact_ids?.length)
+                      }
+                      aria-pressed={autoDndApplied}
+                      onClick={() => {
+                        const ids = (preflight.marketing_opt_out_contact_ids ?? []).filter((id) =>
+                          channelScopedSelectedContacts.includes(id)
+                        );
+                        removeContactsFromSelection(ids, "عدم الإزعاج");
+                        setAutoDndApplied(true);
+                        setAutoDndExcludedCount(ids.length || autoDndExcludedCount);
+                      }}
                     >
-                      استبعد عدم الإزعاج ({preflight.marketing_opt_out ?? 0})
+                      استبعد عدم الإزعاج ({(autoDndApplied ? autoDndExcludedCount : preflight.marketing_opt_out) ?? 0})
+                      {autoDndApplied ? " ✓" : ""}
                     </button>
                     <button
                       type="button"
@@ -1834,18 +1876,15 @@ export default function CampaignsPage() {
                       </button>
                     )}
                   </div>
+                  {autoDndApplied && autoDndExcludedCount > 0 && (
+                    <p className="campaign-exclude-dnd-applied" role="status">
+                      تم استبعاد {autoDndExcludedCount.toLocaleString("ar")} بسبب عدم الإزعاج.
+                    </p>
+                  )}
                   <div className="campaign-exclude-final-count" role="status">
                     <strong>{sendableAudienceCount.toLocaleString("ar")}</strong>
                     <span>العدد النهائي للإرسال بعد الاستبعاد</span>
                   </div>
-                  {autoExcludedBeforeSend > 0 && (
-                    <p className="hint-text campaign-exclude-auto-hint">
-                      المحدّد حالياً {channelScopedSelectedContacts.length.toLocaleString("ar")} —
-                      وسيُستبعد تلقائياً عند الإرسال {autoExcludedBeforeSend.toLocaleString("ar")}{" "}
-                      (مثل عدم الإزعاج) حتى دون الضغط على زر الاستبعاد.
-                      اضغط «استبعد عدم الإزعاج» أو «التالي» لمزامنة الجمهور.
-                    </p>
-                  )}
                 </section>
               )}
 
