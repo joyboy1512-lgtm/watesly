@@ -122,6 +122,18 @@ export default function ContactsPage() {
     lastCampaignFilters
   ]);
 
+  const hasColumnFilters =
+    organizationFilters.length > 0 ||
+    channelFilters.length > 0 ||
+    tagFilters.length > 0 ||
+    interestFilters.length > 0 ||
+    lifecycleFilters.length > 0 ||
+    regionFilters.length > 0 ||
+    whatsappStatusFilters.length > 0 ||
+    lastCampaignFilters.length > 0 ||
+    Boolean(segmentFilter) ||
+    Boolean(debouncedSearch);
+
   function syncFilterParams(patch: Record<string, string[] | string>) {
     const next = new URLSearchParams(searchParams);
     const multiKeys = [
@@ -570,97 +582,6 @@ export default function ContactsPage() {
                 </option>
               ))}
             </select>
-            <SearchableMultiFilter
-              compact
-              label="الفرع"
-              allLabel="كل الأفرع"
-              values={organizationFilters}
-              options={(organizations.data ?? []).map((org) => ({ value: org.id, label: org.name }))}
-              onChange={(values) => {
-                setOrganizationFilters(values);
-                syncFilterParams({ organization_ids: values });
-              }}
-            />
-            <SearchableMultiFilter
-              compact
-              label="القناة"
-              allLabel="كل القنوات"
-              values={channelFilters}
-              options={(channels.data ?? []).map((channel) => ({ value: channel.id, label: channel.name }))}
-              onChange={(values) => {
-                setChannelFilters(values);
-                syncFilterParams({ channel_ids: values });
-              }}
-            />
-            <SearchableMultiFilter
-              compact
-              label="التصنيف"
-              allLabel="كل التصنيفات"
-              values={tagFilters}
-              options={(tags.data ?? []).map((tag) => ({ value: tag.id, label: tag.name }))}
-              onChange={(values) => {
-                setTagFilters(values);
-                syncFilterParams({ tag_ids: values });
-              }}
-            />
-            <SearchableMultiFilter
-              compact
-              label="الاهتمامات"
-              allLabel="كل الاهتمامات"
-              values={interestFilters}
-              options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
-              onChange={(values) => {
-                setInterestFilters(values);
-                syncFilterParams({ interest_ids: values });
-              }}
-            />
-            <SearchableMultiFilter
-              compact
-              label="المرحلة"
-              allLabel="كل المراحل"
-              values={lifecycleFilters}
-              options={Object.entries(LIFECYCLE_LABELS).map(([value, label]) => ({ value, label }))}
-              onChange={(values) => {
-                setLifecycleFilters(values);
-                syncFilterParams({ lifecycle_stages: values });
-              }}
-            />
-            <SearchableMultiFilter
-              compact
-              label="المنطقة"
-              allLabel="كل المناطق"
-              values={regionFilters}
-              options={(regions.data ?? []).map((item) => ({
-                value: item.region,
-                label: `${item.region} (${item.count.toLocaleString("ar")})`
-              }))}
-              onChange={(values) => {
-                setRegionFilters(values);
-                syncFilterParams({ regions: values });
-              }}
-            />
-            <SearchableMultiFilter
-              compact
-              label="حالة واتساب"
-              allLabel="كل الحالات"
-              values={whatsappStatusFilters}
-              options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
-              onChange={(values) => {
-                setWhatsappStatusFilters(values);
-                syncFilterParams({ whatsapp_statuses: values });
-              }}
-            />
-            <SearchableMultiFilter
-              compact
-              label="آخر حملة"
-              allLabel="كل الحملات"
-              values={lastCampaignFilters}
-              options={(campaignOptions.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
-              onChange={(values) => {
-                setLastCampaignFilters(values);
-                syncFilterParams({ last_campaign_ids: values });
-              }}
-            />
             <div className="contacts-erp-search">
               <Icon name="search" size={16} />
               <input
@@ -698,7 +619,7 @@ export default function ContactsPage() {
             </div>
           )}
 
-          {!contacts.isLoading && !contacts.isError && total === 0 && (
+          {!contacts.isLoading && !contacts.isError && total === 0 && !hasColumnFilters && (
             <div className="contacts-erp-empty">
               <strong>لا يوجد عملاء</strong>
               <p>ابدأ بإنشاء عميل أو رفع ملف Excel.</p>
@@ -709,8 +630,8 @@ export default function ContactsPage() {
             </div>
           )}
 
-          {total > 0 && !contacts.isLoading && (
-            <table className="contacts-erp-table">
+          {!contacts.isLoading && !contacts.isError && (total > 0 || hasColumnFilters) && (
+            <table className="contacts-erp-table contacts-erp-table-filter-headers">
               <thead>
                 <tr>
                   <th className="contacts-col-check">
@@ -725,44 +646,151 @@ export default function ContactsPage() {
                     />
                   </th>
                   <th>الاسم</th>
-                  <th>حالة واتساب</th>
-                  <th>المرحلة</th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="حالة واتساب"
+                      allLabel="كل الحالات"
+                      values={whatsappStatusFilters}
+                      options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+                      onChange={(values) => {
+                        setWhatsappStatusFilters(values);
+                        syncFilterParams({ whatsapp_statuses: values });
+                      }}
+                    />
+                  </th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="المرحلة"
+                      allLabel="كل المراحل"
+                      values={lifecycleFilters}
+                      options={Object.entries(LIFECYCLE_LABELS).map(([value, label]) => ({ value, label }))}
+                      onChange={(values) => {
+                        setLifecycleFilters(values);
+                        syncFilterParams({ lifecycle_stages: values });
+                      }}
+                    />
+                  </th>
                   <th>الجنس</th>
                   <th>الهاتف</th>
-                  <th>المنطقة</th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="المنطقة"
+                      allLabel="كل المناطق"
+                      values={regionFilters}
+                      options={(regions.data ?? []).map((item) => ({
+                        value: item.region,
+                        label: `${item.region} (${item.count.toLocaleString("ar")})`
+                      }))}
+                      onChange={(values) => {
+                        setRegionFilters(values);
+                        syncFilterParams({ regions: values });
+                      }}
+                    />
+                  </th>
                   <th>البريد</th>
-                  <th>الفرع</th>
-                  <th>القناة</th>
-                  <th>التصنيفات</th>
-                  <th>الاهتمامات</th>
-                  <th>آخر حملة</th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="الفرع"
+                      allLabel="كل الأفرع"
+                      values={organizationFilters}
+                      options={(organizations.data ?? []).map((org) => ({ value: org.id, label: org.name }))}
+                      onChange={(values) => {
+                        setOrganizationFilters(values);
+                        syncFilterParams({ organization_ids: values });
+                      }}
+                    />
+                  </th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="القناة"
+                      allLabel="كل القنوات"
+                      values={channelFilters}
+                      options={(channels.data ?? []).map((channel) => ({ value: channel.id, label: channel.name }))}
+                      onChange={(values) => {
+                        setChannelFilters(values);
+                        syncFilterParams({ channel_ids: values });
+                      }}
+                    />
+                  </th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="التصنيفات"
+                      allLabel="كل التصنيفات"
+                      values={tagFilters}
+                      options={(tags.data ?? []).map((tag) => ({ value: tag.id, label: tag.name }))}
+                      onChange={(values) => {
+                        setTagFilters(values);
+                        syncFilterParams({ tag_ids: values });
+                      }}
+                    />
+                  </th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="الاهتمامات"
+                      allLabel="كل الاهتمامات"
+                      values={interestFilters}
+                      options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
+                      onChange={(values) => {
+                        setInterestFilters(values);
+                        syncFilterParams({ interest_ids: values });
+                      }}
+                    />
+                  </th>
+                  <th className="contacts-th-filter">
+                    <SearchableMultiFilter
+                      variant="header"
+                      label="آخر حملة"
+                      allLabel="كل الحملات"
+                      values={lastCampaignFilters}
+                      options={(campaignOptions.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
+                      onChange={(values) => {
+                        setLastCampaignFilters(values);
+                        syncFilterParams({ last_campaign_ids: values });
+                      }}
+                    />
+                  </th>
                   <th>التسويق</th>
                   <th>تاريخ الإضافة</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedRows.map((item) => (
-                  <ContactRow
-                    key={item.id}
-                    contact={item}
-                    tags={tags.data ?? []}
-                    interests={interests.data ?? []}
-                    organizationName={orgMap.get(item.organization_id) ?? "—"}
-                    channelName={channelMap.get(item.channel_id) ?? "—"}
-                    selected={selectedIds.has(item.id)}
-                    isDuplicate={duplicatePhones.has(item.external_address)}
-                    onToggleSelect={() => toggleRow(item.id)}
-                    onMessage={async () => {
-                      try {
-                        const conversationId = await openContactConversation(item.id);
-                        navigate(`/inbox?conversation=${conversationId}`);
-                      } catch {
-                        toastStore.getState().show("تعذر فتح المحادثة.", "error");
-                      }
-                    }}
-                  />
-                ))}
+                {paginatedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={16} className="admin-table-empty">
+                      لا يوجد عملاء مطابقون للفلاتر الحالية.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedRows.map((item) => (
+                    <ContactRow
+                      key={item.id}
+                      contact={item}
+                      tags={tags.data ?? []}
+                      interests={interests.data ?? []}
+                      organizationName={orgMap.get(item.organization_id) ?? "—"}
+                      channelName={channelMap.get(item.channel_id) ?? "—"}
+                      selected={selectedIds.has(item.id)}
+                      isDuplicate={duplicatePhones.has(item.external_address)}
+                      onToggleSelect={() => toggleRow(item.id)}
+                      onMessage={async () => {
+                        try {
+                          const conversationId = await openContactConversation(item.id);
+                          navigate(`/inbox?conversation=${conversationId}`);
+                        } catch {
+                          toastStore.getState().show("تعذر فتح المحادثة.", "error");
+                        }
+                      }}
+                    />
+                  ))
+                )}
               </tbody>
             </table>
           )}

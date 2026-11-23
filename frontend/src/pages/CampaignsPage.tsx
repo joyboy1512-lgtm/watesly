@@ -1922,8 +1922,9 @@ export default function CampaignsPage() {
                 </p>
               )}
 
-            <div className="campaign-audience-filters">
+            <div className="campaign-audience-filters campaign-audience-filters-extra">
               <SearchableMultiFilter
+                compact
                 label="التصنيف"
                 allLabel="كل التصنيفات"
                 values={audienceTagIds}
@@ -1942,33 +1943,6 @@ export default function CampaignsPage() {
                   ))}
                 </select>
               </label>
-              <SearchableMultiFilter
-                label="المنطقة"
-                allLabel="كل المناطق"
-                values={audienceRegions}
-                options={availableRegions.map((regionName) => {
-                  const count = regionCountByName.get(regionName) ?? 0;
-                  return {
-                    value: regionName,
-                    label: count > 0 ? `${regionName} (${count.toLocaleString("ar")})` : regionName
-                  };
-                })}
-                onChange={setAudienceRegions}
-              />
-              <SearchableMultiFilter
-                label="حالة واتساب"
-                allLabel="كل الحالات"
-                values={audienceWhatsappStatuses}
-                options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
-                onChange={setAudienceWhatsappStatuses}
-              />
-              <SearchableMultiFilter
-                label="آخر حملة"
-                allLabel="كل الحملات"
-                values={audienceLastCampaignIds}
-                options={(campaigns.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
-                onChange={setAudienceLastCampaignIds}
-              />
               <label className="field-label">
                 <span>آخر حملة من</span>
                 <input
@@ -1994,18 +1968,12 @@ export default function CampaignsPage() {
                 </select>
               </label>
               <SearchableMultiFilter
+                compact
                 label="مرحلة العميل"
                 allLabel="كل المراحل"
                 values={audienceLifecycleStages}
                 options={Object.entries(LIFECYCLE_LABELS).map(([value, label]) => ({ value, label }))}
                 onChange={setAudienceLifecycleStages}
-              />
-              <SearchableMultiFilter
-                label="الاهتمامات"
-                allLabel="كل الاهتمامات"
-                values={audienceInterestIds}
-                options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
-                onChange={setAudienceInterestIds}
               />
             </div>
             <div className="contacts-inline-tag-create">
@@ -2082,7 +2050,7 @@ export default function CampaignsPage() {
             )}
 
             <div className="admin-table-wrap campaigns-audience-table-wrap">
-              <table className="admin-erp-table campaigns-audience-table">
+              <table className="admin-erp-table campaigns-audience-table contacts-erp-table-filter-headers">
                 <thead>
                   <tr>
                     <th className="contacts-col-check">
@@ -2106,10 +2074,52 @@ export default function CampaignsPage() {
                     </th>
                     <th>الاسم</th>
                     <th>الهاتف</th>
-                    <th>المنطقة</th>
-                    <th>الاهتمامات</th>
-                    <th>حالة واتساب</th>
-                    <th>آخر حملة</th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="المنطقة"
+                        allLabel="كل المناطق"
+                        values={audienceRegions}
+                        options={availableRegions.map((regionName) => {
+                          const count = regionCountByName.get(regionName) ?? 0;
+                          return {
+                            value: regionName,
+                            label: count > 0 ? `${regionName} (${count.toLocaleString("ar")})` : regionName
+                          };
+                        })}
+                        onChange={setAudienceRegions}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="الاهتمامات"
+                        allLabel="كل الاهتمامات"
+                        values={audienceInterestIds}
+                        options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
+                        onChange={setAudienceInterestIds}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="حالة واتساب"
+                        allLabel="كل الحالات"
+                        values={audienceWhatsappStatuses}
+                        options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+                        onChange={setAudienceWhatsappStatuses}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="آخر حملة"
+                        allLabel="كل الحملات"
+                        values={audienceLastCampaignIds}
+                        options={(campaigns.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
+                        onChange={setAudienceLastCampaignIds}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
