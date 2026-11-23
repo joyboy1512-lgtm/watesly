@@ -8,13 +8,13 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "b5c9bdc",
-    "git_commit_message": "Knowledge UI brand polish live",
+    "git_commit": "7b86e54",
+    "git_commit_message": "Interests parity with tags live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DBKgyvy6.js",
+      "js": "index-Ca7NH6EN.js",
       "css": "index-DCfk6lGe.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "b5c9bdc",
-  "notes": "Knowledge AI panel + add/import sections polished with brand teal accents (PR #176)"
+  "commit": "7b86e54",
+  "notes": "Contact interests create/filter/list parity with tags (PR #177)"
 }
