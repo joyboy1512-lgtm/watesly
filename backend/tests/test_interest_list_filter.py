@@ -28,8 +28,9 @@ def test_contacts_list_supports_interest_filter() -> None:
     assert "interest_labels" in schema
     assert "كل الاهتمامات" in page
     assert "+ اهتمام" in page
-    assert "createAudienceInterest" in campaigns
+    assert "audienceInterestIds" in campaigns
     assert "الاهتمامات" in campaigns
+    assert "إظهار المحدد فقط" in campaigns
 
 
 def test_segment_filters_include_interest_id() -> None:

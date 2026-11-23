@@ -29,10 +29,7 @@ import {
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import SearchableMultiFilter, { serializeMultiParam } from "../components/SearchableMultiFilter";
 import ExcelDateMultiFilter from "../components/ExcelDateMultiFilter";
-import {
-  slugifyInterestLabel,
-  type InterestCategory
-} from "../lib/interestHelpers";
+import { type InterestCategory } from "../lib/interestHelpers";
 import { toastStore } from "../stores/toast";
 import {
   CampaignResultsTable,
@@ -241,8 +238,7 @@ export default function CampaignsPage() {
   const [audienceOrganizationIds, setAudienceOrganizationIds] = useState<string[]>([]);
   const [audienceChannelIds, setAudienceChannelIds] = useState<string[]>([]);
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
-  const [newInterestLabel, setNewInterestLabel] = useState("");
-  const [creatingInterest, setCreatingInterest] = useState(false);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [audienceLifecycleStages, setAudienceLifecycleStages] = useState<string[]>([]);
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
   const [preflightBusy, setPreflightBusy] = useState(false);
@@ -537,9 +533,22 @@ export default function CampaignsPage() {
     return Array.from(keys).sort((a, b) => b.localeCompare(a));
   }, [contacts.data]);
 
+  const channelScopedSelectedContacts = useMemo(() => {
+    return selectedContacts.filter((id) => {
+      if (!selectedAccountChannelId) return true;
+      const contact = contactById.get(id);
+      if (!contact) return true;
+      return contact.channel_id === selectedAccountChannelId;
+    });
+  }, [selectedContacts, selectedAccountChannelId, contactById]);
+  const selectedContactIdSet = useMemo(
+    () => new Set(channelScopedSelectedContacts),
+    [channelScopedSelectedContacts]
+  );
   const filteredContacts = useMemo(() => {
     const term = contactSearch.trim().toLowerCase();
     return (contacts.data ?? []).filter((item) => {
+      if (showSelectedOnly && !selectedContactIdSet.has(item.id)) return false;
       if (selectedAccountChannelId && item.channel_id !== selectedAccountChannelId) return false;
       if (audienceOrganizationIds.length > 0 && !audienceOrganizationIds.includes(item.organization_id)) return false;
       if (audienceChannelIds.length > 0 && !audienceChannelIds.includes(item.channel_id)) return false;
@@ -575,19 +584,13 @@ export default function CampaignsPage() {
     audienceChannelIds,
     audienceRegions,
     audienceGenders,
-    audienceLastCampaignDates
+    audienceLastCampaignDates,
+    showSelectedOnly,
+    selectedContactIdSet
   ]);
-  const channelScopedSelectedContacts = useMemo(() => {
-    return selectedContacts.filter((id) => {
-      if (!selectedAccountChannelId) return true;
-      const contact = contactById.get(id);
-      if (!contact) return true;
-      return contact.channel_id === selectedAccountChannelId;
-    });
-  }, [selectedContacts, selectedAccountChannelId, contactById]);
   const hiddenSelectedCount = selectedContacts.length - channelScopedSelectedContacts.length;
   const visibleSelectedCount = filteredContacts.filter((item) =>
-    channelScopedSelectedContacts.includes(item.id)
+    selectedContactIdSet.has(item.id)
   ).length;
   const excelSelectedCount = channelScopedSelectedContacts.filter((id) => excelIdSet.has(id)).length;
   const segmentSelectedCount = channelScopedSelectedContacts.filter((id) => segmentIdSet.has(id)).length;
@@ -771,6 +774,7 @@ export default function CampaignsPage() {
     setSelectedContacts([]);
     setExcelAudienceIds([]);
     setSegmentAudienceIds([]);
+    setShowSelectedOnly(false);
     setPreflight(null);
     toastStore.getState().show("تم مسح جمهور الحملة.", "success");
   }
@@ -992,28 +996,6 @@ export default function CampaignsPage() {
       toastStore.getState().show("تعذر تحميل الشريحة.", "error");
     } finally {
       setLoadingSegmentAudience(false);
-    }
-  }
-
-  async function createAudienceInterest() {
-    const label = newInterestLabel.trim();
-    if (!label) return;
-    setCreatingInterest(true);
-    try {
-      const created = await api.post<InterestCategory>("/platform/interests", {
-        label,
-        slug: slugifyInterestLabel(label)
-      });
-      setNewInterestLabel("");
-      setAudienceInterestIds((current) =>
-        current.includes(created.data.id) ? current : [...current, created.data.id]
-      );
-      await client.invalidateQueries({ queryKey: ["interests"] });
-      toastStore.getState().show("تم إنشاء الاهتمام.", "success");
-    } catch {
-      toastStore.getState().show("تعذر إنشاء الاهتمام.", "error");
-    } finally {
-      setCreatingInterest(false);
     }
   }
 
@@ -2076,21 +2058,6 @@ export default function CampaignsPage() {
                 options={orgChannels.map((channel) => ({ value: channel.id, label: channel.name }))}
                 onChange={setAudienceChannelIds}
               />
-              <div className="contacts-inline-tag-create">
-                <input
-                  value={newInterestLabel}
-                  onChange={(e) => setNewInterestLabel(e.target.value)}
-                  placeholder="اهتمام جديد…"
-                />
-                <button
-                  type="button"
-                  className="contacts-erp-btn"
-                  disabled={creatingInterest || !newInterestLabel.trim()}
-                  onClick={() => void createAudienceInterest()}
-                >
-                  {creatingInterest ? "…" : "+ اهتمام"}
-                </button>
-              </div>
             </div>
 
             <div className="campaigns-audience-toolbar">
@@ -2102,7 +2069,7 @@ export default function CampaignsPage() {
                   placeholder="اسم، رقم، منطقة، تصنيف…"
                 />
               </label>
-              <div className="inline-actions">
+              <div className="inline-actions campaigns-audience-select-actions">
                 <button
                   type="button"
                   className="secondary-button"
@@ -2131,11 +2098,18 @@ export default function CampaignsPage() {
                 <button type="button" className="secondary-button" onClick={clearAllAudience}>
                   إلغاء الكل
                 </button>
-                {channelScopedSelectedContacts.length > 0 && (
-                  <span className="hint-text">
-                    {visibleSelectedCount} ظاهر محدد · {channelScopedSelectedContacts.length} للإرسال
-                  </span>
-                )}
+                <button
+                  type="button"
+                  className={
+                    showSelectedOnly
+                      ? "secondary-button campaign-audience-selected-only-btn is-active"
+                      : "secondary-button campaign-audience-selected-only-btn"
+                  }
+                  aria-pressed={showSelectedOnly}
+                  onClick={() => setShowSelectedOnly((current) => !current)}
+                >
+                  إظهار المحدد فقط ({channelScopedSelectedContacts.length})
+                </button>
               </div>
             </div>
 
