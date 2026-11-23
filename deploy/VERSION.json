@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "9b9a29b",
-    "git_commit_message": "Campaign audience green cards live",
+    "git_commit": "e4c2d45",
+    "git_commit_message": "Audience cards match brand stats green",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-C9eIU2yV.js",
-      "css": "index-Dmjh1CCz.css"
+      "js": "index-BXPqNlR2.js",
+      "css": "index-CtID4NkW.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "9b9a29b",
-  "notes": "Green audience source cards; equal segment/branch/channel filters; show-selected-only (PR #186)"
+  "commit": "e4c2d45",
+  "notes": "Audience source cards match إجمالي الحملات / قيد الإرسال solid green; compact top filters"
 }

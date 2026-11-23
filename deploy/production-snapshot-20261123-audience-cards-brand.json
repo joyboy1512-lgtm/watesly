@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-23",
+  "commit": "e4c2d45",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BXPqNlR2.js",
+    "css": "index-CtID4NkW.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Audience source cards use solid brand green like إجمالي الحملات / قيد الإرسال",
+    "Compact equal segment/branch/channel filters"
+  ],
+  "notes": "Deployed via SSH."
+}

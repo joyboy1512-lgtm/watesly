@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-23) — Audience cards match brand stats
+
+| Item | Value |
+|------|-------|
+| Commit | `e4c2d45` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-BXPqNlR2.js`, `index-CtID4NkW.css` |
+| Snapshot record | `deploy/production-snapshot-20261123-audience-cards-brand.json` |
+
 ### Production snapshot (2026-11-23) — Campaign audience green cards
 
 | Item | Value |
