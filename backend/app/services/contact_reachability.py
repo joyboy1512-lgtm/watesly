@@ -180,6 +180,7 @@ async def summarize_reachability(
             "unreachable_contact_ids": [],
             "invalid_phone_contact_ids": [],
             "marketing_opt_out_contact_ids": [],
+            "cold_audience_contact_ids": [],
         }
 
     result = await db.execute(
@@ -198,6 +199,7 @@ async def summarize_reachability(
     unreachable_ids: list[UUID] = []
     invalid_ids: list[UUID] = []
     opt_out_ids: list[UUID] = []
+    cold_ids: list[UUID] = []
     for contact in contacts:
         if contact.marketing_opt_in is False:
             opt_out_ids.append(contact.id)
@@ -210,6 +212,7 @@ async def summarize_reachability(
         inbound_at = last_inbound.get(contact.id) or contact.last_inbound_at
         if inbound_at is None:
             cold_audience += 1
+            cold_ids.append(contact.id)
         else:
             warm_audience += 1
 
@@ -235,6 +238,7 @@ async def summarize_reachability(
         "unreachable_contact_ids": unreachable_ids,
         "invalid_phone_contact_ids": invalid_ids,
         "marketing_opt_out_contact_ids": opt_out_ids,
+        "cold_audience_contact_ids": cold_ids,
     }
 
 

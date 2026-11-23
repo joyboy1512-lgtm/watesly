@@ -27,5 +27,8 @@ def test_campaign_sent_period_helpers_exist() -> None:
     assert "campaigns_in_period" in window
     assert "ALL_RECIPIENTS_SENT_IN_PERIOD" in routes
     assert "excludeSentInPeriod" in page
-    assert "فلتر حسب الحملة / التاريخ" in page
-    assert "عزل التحديد: استبعد من أُرسل لهم في الفترة" in page
+    assert "excludePeriodDays" in page
+    assert "الاستبعاد حسب الفترة" in page
+    assert "الاستبعاد حسب الحملات" in page
+    assert "استبعد أُرسل لهم في الفترة" in page
+    assert "إظهار زر «عدم الإزعاج» في الرسالة" in page

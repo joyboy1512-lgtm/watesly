@@ -312,6 +312,7 @@ async def campaign_audience_preflight(
         "previously_sent": previously_sent,
         "never_sent": never_sent,
         "never_sent_contact_ids": [str(item) for item in never_sent_contact_ids],
+        "previously_sent_contact_ids": [str(item) for item in previously_sent_ids],
         "sent_in_period": len(sent_in_period_ids),
         "sent_in_period_contact_ids": [str(item) for item in sent_in_period_ids],
         "kept_after_period_exclude_contact_ids": [
@@ -338,6 +339,9 @@ async def campaign_audience_preflight(
         "invalid_phone_contact_ids": [str(item) for item in reachability.get("invalid_phone_contact_ids", [])],
         "marketing_opt_out_contact_ids": [
             str(item) for item in reachability.get("marketing_opt_out_contact_ids", [])
+        ],
+        "cold_audience_contact_ids": [
+            str(item) for item in reachability.get("cold_audience_contact_ids", [])
         ],
         "only_never_sent": only_never_sent,
         "template_has_opt_out_button": has_opt_out_button,

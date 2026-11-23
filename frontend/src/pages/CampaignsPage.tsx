@@ -78,6 +78,7 @@ type CampaignPreflight = {
   previously_sent?: number;
   never_sent?: number;
   never_sent_contact_ids?: string[];
+  previously_sent_contact_ids?: string[];
   sent_in_period?: number;
   sent_in_period_contact_ids?: string[];
   kept_after_period_exclude_contact_ids?: string[];
@@ -102,6 +103,7 @@ type CampaignPreflight = {
   unreachable_contact_ids?: string[];
   invalid_phone_contact_ids?: string[];
   marketing_opt_out_contact_ids?: string[];
+  cold_audience_contact_ids?: string[];
   template_has_opt_out_button?: boolean;
   include_opt_out_option?: boolean;
   warnings: string[];
@@ -110,6 +112,30 @@ type CampaignPreflight = {
   messaging_limit?: number | null;
   checks?: PreflightCheck[];
 };
+
+function buildLookbackRange(days: number, months: number, years: number) {
+  if (days <= 0 && months <= 0 && years <= 0) {
+    return { from: null as string | null, to: null as string | null };
+  }
+  const to = new Date();
+  const from = new Date();
+  if (years > 0) from.setFullYear(from.getFullYear() - years);
+  if (months > 0) from.setMonth(from.getMonth() - months);
+  if (days > 0) from.setDate(from.getDate() - days);
+  const toIso = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  return { from: toIso(from), to: toIso(to) };
+}
+
+function parsePeriodCount(raw: string) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.floor(value);
+}
 type CampaignListItem = {
   id: string;
   name: string;
@@ -220,12 +246,13 @@ export default function CampaignsPage() {
   const [preflight, setPreflight] = useState<CampaignPreflight | null>(null);
   const [preflightBusy, setPreflightBusy] = useState(false);
   const [includeOptOutOption, setIncludeOptOutOption] = useState(true);
-  const [excludeUnreachable, setExcludeUnreachable] = useState(true);
+  const [excludeUnreachable, setExcludeUnreachable] = useState(false);
   const [excludeRisky, setExcludeRisky] = useState(false);
   const [onlyNeverSent, setOnlyNeverSent] = useState(false);
   const [excludeSentInPeriod, setExcludeSentInPeriod] = useState(false);
-  const [excludeSentFrom, setExcludeSentFrom] = useState("");
-  const [excludeSentTo, setExcludeSentTo] = useState("");
+  const [excludePeriodDays, setExcludePeriodDays] = useState("");
+  const [excludePeriodMonths, setExcludePeriodMonths] = useState("");
+  const [excludePeriodYears, setExcludePeriodYears] = useState("");
   const [excludeCampaignIds, setExcludeCampaignIds] = useState<string[]>([]);
   const [linkName, setLinkName] = useState("");
   const [linkMessage, setLinkMessage] = useState("");
@@ -590,6 +617,19 @@ export default function CampaignsPage() {
     });
   }, [selectedAccountChannelId, contactById]);
 
+  const excludeLookback = useMemo(
+    () =>
+      buildLookbackRange(
+        parsePeriodCount(excludePeriodDays),
+        parsePeriodCount(excludePeriodMonths),
+        parsePeriodCount(excludePeriodYears)
+      ),
+    [excludePeriodDays, excludePeriodMonths, excludePeriodYears]
+  );
+  const excludePeriodActive = Boolean(
+    excludeLookback.from || excludeCampaignIds.length > 0 || excludeSentInPeriod
+  );
+
   async function runAudiencePreflight(options?: { silent?: boolean }) {
     if (!templateId || !channelScopedSelectedContacts.length) {
       setPreflight(null);
@@ -608,12 +648,12 @@ export default function CampaignsPage() {
         contact_ids: channelScopedSelectedContacts,
         whatsapp_account_id: accountId || null,
         include_opt_out_option: includeOptOutOption,
-        exclude_unreachable: excludeUnreachable,
-        exclude_risky: excludeRisky,
-        only_never_sent: onlyNeverSent,
-        exclude_sent_in_period: excludeSentInPeriod,
-        exclude_sent_from: excludeSentFrom ? `${excludeSentFrom}T00:00:00` : null,
-        exclude_sent_to: excludeSentTo ? `${excludeSentTo}T00:00:00` : null,
+        exclude_unreachable: false,
+        exclude_risky: false,
+        only_never_sent: false,
+        exclude_sent_in_period: excludePeriodActive,
+        exclude_sent_from: excludeLookback.from ? `${excludeLookback.from}T00:00:00` : null,
+        exclude_sent_to: excludeLookback.to ? `${excludeLookback.to}T23:59:59` : null,
         exclude_campaign_ids: excludeCampaignIds
       });
       const data = res.data as CampaignPreflight;
@@ -648,12 +688,9 @@ export default function CampaignsPage() {
     channelScopedSelectedContacts,
     accountId,
     includeOptOutOption,
-    excludeUnreachable,
-    excludeRisky,
-    onlyNeverSent,
-    excludeSentInPeriod,
-    excludeSentFrom,
-    excludeSentTo,
+    excludePeriodActive,
+    excludeLookback.from,
+    excludeLookback.to,
     excludeCampaignIds
   ]);
 
@@ -982,9 +1019,9 @@ export default function CampaignsPage() {
         exclude_unreachable: excludeUnreachable,
         exclude_risky: excludeRisky,
         only_never_sent: onlyNeverSent,
-        exclude_sent_in_period: excludeSentInPeriod,
-        exclude_sent_from: excludeSentFrom ? `${excludeSentFrom}T00:00:00` : null,
-        exclude_sent_to: excludeSentTo ? `${excludeSentTo}T00:00:00` : null,
+        exclude_sent_in_period: excludePeriodActive,
+        exclude_sent_from: excludeLookback.from ? `${excludeLookback.from}T00:00:00` : null,
+        exclude_sent_to: excludeLookback.to ? `${excludeLookback.to}T23:59:59` : null,
         exclude_campaign_ids: excludeCampaignIds,
         recipients: recipientIds.map((contact_id) => ({
           contact_id,
@@ -1405,86 +1442,85 @@ export default function CampaignsPage() {
               <div className="admin-table-header campaigns-exclude-card-head">
                 <div>
                   <h3 className="section-title-sm">الاستبعادات والفحص قبل الإرسال</h3>
-                  <p className="hint-text">حدّد الفترة أولاً، ثم خيارات الاستبعاد وجدول من أُرسل لهم جنباً إلى جنب — فوق جدول العملاء.</p>
+                  <p className="hint-text">مراحل منظمة: فترة الإرسال، ثم الحملات، ثم فحص Meta، ثم الاستبعاد بعد النتيجة.</p>
                 </div>
               </div>
-              <div className="campaign-period-filter">
-                <strong>فلتر حسب الحملة / التاريخ</strong>
-                <p className="hint-text">
-                  استبعد من أُرسل لهم ضمن فترة معيّنة، أو اختر حملات سابقة من القائمة.
-                </p>
-                <div className="campaign-period-dates">
+
+              <section className="campaign-exclude-stage-card" aria-labelledby="exclude-stage-1">
+                <div className="campaign-exclude-stage-head">
+                  <span className="campaign-exclude-stage-num">1</span>
+                  <div>
+                    <h4 id="exclude-stage-1">الاستبعاد حسب الفترة</h4>
+                    <p className="hint-text">
+                      اكتب عدد الأيام أو الأشهر أو السنوات — يُستبعد من أُرسل لهم من الآن إلى هذه المدة السابقة إن كانوا ضمن الجمهور المختار.
+                    </p>
+                  </div>
+                </div>
+                <div className="campaign-period-units">
                   <label className="field-label">
-                    <span>من تاريخ</span>
+                    <span>يوم</span>
                     <input
-                      type="date"
-                      value={excludeSentFrom}
-                      onChange={(event) => setExcludeSentFrom(event.target.value)}
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={excludePeriodDays}
+                      onChange={(event) => {
+                        setExcludePeriodDays(event.target.value);
+                        if (parsePeriodCount(event.target.value) > 0) setExcludeSentInPeriod(true);
+                      }}
                     />
                   </label>
                   <label className="field-label">
-                    <span>إلى تاريخ</span>
+                    <span>شهر</span>
                     <input
-                      type="date"
-                      value={excludeSentTo}
-                      onChange={(event) => setExcludeSentTo(event.target.value)}
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={excludePeriodMonths}
+                      onChange={(event) => {
+                        setExcludePeriodMonths(event.target.value);
+                        if (parsePeriodCount(event.target.value) > 0) setExcludeSentInPeriod(true);
+                      }}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>سنة</span>
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={excludePeriodYears}
+                      onChange={(event) => {
+                        setExcludePeriodYears(event.target.value);
+                        if (parsePeriodCount(event.target.value) > 0) setExcludeSentInPeriod(true);
+                      }}
                     />
                   </label>
                 </div>
-                <label className="campaign-check-row">
-                  <input
-                    type="checkbox"
-                    checked={excludeSentInPeriod}
-                    onChange={(event) => setExcludeSentInPeriod(event.target.checked)}
-                    disabled={!excludeSentFrom && !excludeSentTo && excludeCampaignIds.length === 0}
-                  />
-                  <span>استبعاد من أُرسل لهم في الفترة أو الحملات المحددة</span>
-                </label>
-              </div>
-              <div className="campaign-exclude-columns">
-                <div className="campaign-exclude-options" role="group" aria-label="خيارات الاستبعاد">
-                  <strong className="campaign-exclude-options-title">خيارات الاستبعاد قبل الإرسال</strong>
-                  <label className="campaign-check-row">
-                    <input
-                      type="checkbox"
-                      checked={includeOptOutOption}
-                      onChange={(event) => setIncludeOptOutOption(event.target.checked)}
-                    />
-                    <span>إظهار خيار «عدم الإزعاج» للعملاء واستبعاد من اختاروه تلقائياً</span>
-                  </label>
-                  <label className="campaign-check-row">
-                    <input
-                      type="checkbox"
-                      checked={excludeUnreachable}
-                      onChange={(event) => setExcludeUnreachable(event.target.checked)}
-                    />
-                    <span>استبعاد العملاء غير القابلين للوصول (فشل سابق أو رقم غير صالح)</span>
-                  </label>
-                  <label className="campaign-check-row">
-                    <input
-                      type="checkbox"
-                      checked={excludeRisky}
-                      onChange={(event) => setExcludeRisky(event.target.checked)}
-                    />
-                    <span>استبعاد العملاء بدون تفاعل سابق (محفوف بالمخاطر)</span>
-                  </label>
-                  <label className="campaign-check-row">
-                    <input
-                      type="checkbox"
-                      checked={onlyNeverSent}
-                      onChange={(event) => setOnlyNeverSent(event.target.checked)}
-                    />
-                    <span>عملاء جدد فقط — من لم يُرسل لهم رسالة من قبل (عزل من سبق إرسالهم)</span>
-                  </label>
+                {excludeLookback.from && (
+                  <p className="hint-text campaign-period-summary">
+                    الفترة النشطة: من {excludeLookback.from} إلى {excludeLookback.to} (حتى الآن).
+                  </p>
+                )}
+              </section>
+
+              <section className="campaign-exclude-stage-card" aria-labelledby="exclude-stage-2">
+                <div className="campaign-exclude-stage-head">
+                  <span className="campaign-exclude-stage-num">2</span>
+                  <div>
+                    <h4 id="exclude-stage-2">الاستبعاد حسب الحملات</h4>
+                    <p className="hint-text">اختر الحملات السابقة لاستبعاد من أُرسل لهم فيها من الجمهور الحالي.</p>
+                  </div>
                 </div>
-                <div className="campaign-period-groups-panel">
-                  <strong className="campaign-exclude-options-title">استبعاد من أُرسل لهم (حملات سابقة)</strong>
-                  {(() => {
+                {(() => {
                   const periodGroups = preflight?.campaigns_in_period?.length
                     ? preflight.campaigns_in_period
                     : (campaigns.data ?? [])
                         .filter((item) => !item.archived_at && (item.report.sent + item.report.delivered + item.report.read) > 0)
-                        .slice(0, 30)
+                        .slice(0, 40)
                         .map((item) => ({
                           id: item.id,
                           name: item.name,
@@ -1504,30 +1540,24 @@ export default function CampaignsPage() {
                   return (
                     <div className="campaign-period-groups">
                       <div className="campaign-period-groups-toolbar">
-                        <small className="hint-text">
-                          {preflight?.campaigns_in_period?.length
-                            ? "حملات في الفترة — اختر للاستبعاد:"
-                            : "حملات سابقة حسب التاريخ — اختر للاستبعاد:"}
-                        </small>
-                        <div className="inline-actions">
-                          <button
-                            type="button"
-                            className="secondary-button compact"
-                            onClick={() => {
-                              if (allSelected) {
-                                setExcludeCampaignIds([]);
-                                return;
-                              }
-                              setExcludeCampaignIds(periodGroups.map((item) => item.id));
-                              setExcludeSentInPeriod(true);
-                            }}
-                          >
-                            {allSelected ? "إلغاء تحديد الكل" : "تحديد كل الحملات"}
-                          </button>
-                        </div>
+                        <small className="hint-text">حدد الحملات للاستبعاد</small>
+                        <button
+                          type="button"
+                          className="secondary-button compact"
+                          onClick={() => {
+                            if (allSelected) {
+                              setExcludeCampaignIds([]);
+                              return;
+                            }
+                            setExcludeCampaignIds(periodGroups.map((item) => item.id));
+                            setExcludeSentInPeriod(true);
+                          }}
+                        >
+                          {allSelected ? "إلغاء تحديد الكل" : "تحديد كل الحملات"}
+                        </button>
                       </div>
-                      <div className="admin-table-wrap campaign-exclude-table-wrap">
-                        <table className="admin-erp-table campaign-exclude-table">
+                      <div className="admin-table-wrap campaign-exclude-table-wrap campaign-exclude-table-scroll">
+                        <table className="admin-erp-table campaign-exclude-table campaign-exclude-table-striped">
                           <thead>
                             <tr>
                               <th className="contacts-col-check">
@@ -1592,181 +1622,200 @@ export default function CampaignsPage() {
                     </div>
                   );
                 })()}
-                </div>
-              </div>
-              <div className="campaign-preflight-actions">
-                <button
-                  type="button"
-                  className="whatsapp-button"
-                  disabled={preflightBusy || !templateId || !channelScopedSelectedContacts.length}
-                  onClick={() => void runAudiencePreflight()}
-                >
-                  {preflightBusy ? "جاري فحص الجمهور…" : "فحص الجمهور"}
-                </button>
-                <p className="hint-text">
-                  يمكنك الضغط مراراً بعد تعديل خيارات الاستبعاد لتعظيم عدد المؤهلين للإرسال.
-                </p>
-              </div>
-              {preflight && channelScopedSelectedContacts.length > 0 && (
-                <div className="campaign-preflight-panel">
-                  <strong>نتيجة فحص الجمهور</strong>
-                  <div className="campaign-preflight-stats">
-                    <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
-                    <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
-                    <div><strong>{preflight.reachable ?? 0}</strong><span>قابل للوصول</span></div>
-                    <div><strong>{preflight.unreachable ?? 0}</strong><span>غير قابل</span></div>
-                    <div><strong>{preflight.invalid_phone ?? 0}</strong><span>رقم غير صالح</span></div>
-                    <div><strong>{preflight.risky ?? 0}</strong><span>محفوف بالمخاطر</span></div>
-                    <div><strong>{preflight.marketing_opt_out ?? 0}</strong><span>عدم الإزعاج</span></div>
-                    <div><strong>{preflight.cold_audience ?? preflight.never_messaged}</strong><span>بدون تفاعل</span></div>
-                    <div><strong>{preflight.warm_audience ?? preflight.window_open + preflight.window_closed}</strong><span>تفاعل سابق</span></div>
-                    <div><strong>{preflight.never_sent ?? 0}</strong><span>لم يُرسل لهم</span></div>
-                    <div><strong>{preflight.previously_sent ?? 0}</strong><span>سبق إرسالهم</span></div>
-                    <div><strong>{preflight.sent_in_period ?? 0}</strong><span>أُرسل لهم في الفترة</span></div>
+              </section>
+
+              <section className="campaign-exclude-stage-card" aria-labelledby="exclude-stage-3">
+                <div className="campaign-exclude-stage-head">
+                  <span className="campaign-exclude-stage-num">3</span>
+                  <div>
+                    <h4 id="exclude-stage-3">فحص الجمهور عبر Meta</h4>
+                    <p className="hint-text">افحص مراراً بعد تعديل الاستبعادات — النتيجة مرتبطة بحساب WhatsApp وجودة الأرقام.</p>
                   </div>
-                  <div className="campaign-preflight-trim" role="group" aria-label="تحكم بجمهور الحملة بعد الفحص">
-                    <strong className="campaign-exclude-options-title">تحكم بجمهور الحملة بعد الفحص</strong>
-                    <div className="campaign-preflight-trim-actions">
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        onClick={applyEligibleAudienceOnly}
-                      >
-                        أبقِ المؤهلين فقط ({preflight.eligible_recipients ?? 0})
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        disabled={!(preflight.invalid_phone_contact_ids?.length)}
-                        onClick={() =>
-                          removeContactsFromSelection(
-                            (preflight.invalid_phone_contact_ids ?? []).filter((id) =>
-                              channelScopedSelectedContacts.includes(id)
-                            ),
-                            "رقم غير صالح"
-                          )
-                        }
-                      >
-                        استبعد رقم غير صالح ({preflight.invalid_phone ?? 0})
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        disabled={!(preflight.unreachable_contact_ids?.length)}
-                        onClick={() =>
-                          removeContactsFromSelection(
-                            (preflight.unreachable_contact_ids ?? []).filter((id) =>
-                              channelScopedSelectedContacts.includes(id)
-                            ),
-                            "غير قابل للوصول"
-                          )
-                        }
-                      >
-                        استبعد غير قابل للوصول ({preflight.unreachable ?? 0})
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        disabled={!(preflight.risky_contact_ids?.length)}
-                        onClick={() =>
-                          removeContactsFromSelection(
-                            (preflight.risky_contact_ids ?? []).filter((id) =>
-                              channelScopedSelectedContacts.includes(id)
-                            ),
-                            "محفوف بالمخاطر"
-                          )
-                        }
-                      >
-                        استبعد محفوف بالمخاطر ({preflight.risky ?? 0})
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        disabled={!(preflight.marketing_opt_out_contact_ids?.length)}
-                        onClick={() =>
-                          removeContactsFromSelection(
-                            (preflight.marketing_opt_out_contact_ids ?? []).filter((id) =>
-                              channelScopedSelectedContacts.includes(id)
-                            ),
-                            "عدم الإزعاج"
-                          )
-                        }
-                      >
-                        استبعد عدم الإزعاج ({preflight.marketing_opt_out ?? 0})
-                      </button>
-                      {excelAudienceIds.length > 0 && (
-                        <button type="button" className="secondary-button compact" onClick={restoreExcelAudience}>
-                          أعد دمج أرقام Excel
-                        </button>
+                </div>
+                <div className="campaign-preflight-actions">
+                  <button
+                    type="button"
+                    className="whatsapp-button"
+                    disabled={preflightBusy || !templateId || !channelScopedSelectedContacts.length}
+                    onClick={() => void runAudiencePreflight()}
+                  >
+                    {preflightBusy ? "جاري فحص الجمهور…" : "فحص الجمهور"}
+                  </button>
+                  <p className="hint-text">الجمهور الحالي: {channelScopedSelectedContacts.length.toLocaleString("ar")}</p>
+                </div>
+                {preflight && channelScopedSelectedContacts.length > 0 && (
+                  <div className="campaign-preflight-panel campaign-preflight-panel-brand">
+                    <div className="campaign-preflight-meta">
+                      {preflight.quality_rating && (
+                        <span>جودة الحساب: <strong>{preflight.quality_rating}</strong></span>
                       )}
+                      <span>{preflight.messaging_tier_hint}</span>
+                    </div>
+                    <div className="campaign-preflight-stats campaign-preflight-stats-brand">
+                      <div><strong>{preflight.total}</strong><span>إجمالي</span></div>
+                      <div><strong>{preflight.eligible_recipients ?? preflight.marketing_opt_in ?? preflight.total}</strong><span>مؤهل للإرسال</span></div>
+                      <div><strong>{preflight.reachable ?? 0}</strong><span>قابل للوصول</span></div>
+                      <div><strong>{preflight.unreachable ?? 0}</strong><span>غير قابل</span></div>
+                      <div><strong>{preflight.invalid_phone ?? 0}</strong><span>رقم غير صالح</span></div>
+                      <div><strong>{preflight.risky ?? 0}</strong><span>محفوف بالمخاطر</span></div>
+                      <div><strong>{preflight.marketing_opt_out ?? 0}</strong><span>عدم الإزعاج</span></div>
+                      <div><strong>{preflight.cold_audience ?? preflight.never_messaged}</strong><span>بدون تفاعل</span></div>
+                      <div><strong>{preflight.previously_sent ?? 0}</strong><span>سبق إرسالهم</span></div>
+                      <div><strong>{preflight.sent_in_period ?? 0}</strong><span>أُرسل لهم في الفترة</span></div>
+                    </div>
+                    {preflight.warnings.slice(0, 4).map((warning) => (
+                      <p key={warning} className="campaign-warning">⚠ {warning}</p>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {preflight && channelScopedSelectedContacts.length > 0 && (
+                <section className="campaign-exclude-stage-card" aria-labelledby="exclude-stage-4">
+                  <div className="campaign-exclude-stage-head">
+                    <span className="campaign-exclude-stage-num">4</span>
+                    <div>
+                      <h4 id="exclude-stage-4">الاستبعاد بعد الفحص</h4>
+                      <p className="hint-text">اضغط لاستبعاد الفئات من الجمهور — يظهر العدد الصحيح مباشرة.</p>
                     </div>
                   </div>
-                  {preflight.warnings.map((warning) => (
-                    <p key={warning} className="campaign-warning">⚠ {warning}</p>
-                  ))}
-                  {(preflight.checks ?? []).map((check) => (
-                    <p
-                      key={check.code}
-                      className={
-                        check.level === "error"
-                          ? "campaign-warning"
-                          : check.level === "warning"
-                            ? "campaign-warning"
-                            : "hint-text"
+                  <div className="campaign-preflight-trim-actions campaign-postcheck-actions">
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      disabled={!(preflight.invalid_phone_contact_ids?.length)}
+                      onClick={() => {
+                        removeContactsFromSelection(
+                          (preflight.invalid_phone_contact_ids ?? []).filter((id) =>
+                            channelScopedSelectedContacts.includes(id)
+                          ),
+                          "رقم غير صالح"
+                        );
+                        setExcludeUnreachable(true);
+                      }}
+                    >
+                      استبعد رقم غير صالح ({preflight.invalid_phone ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      disabled={!(preflight.unreachable_contact_ids?.length)}
+                      onClick={() => {
+                        removeContactsFromSelection(
+                          (preflight.unreachable_contact_ids ?? []).filter((id) =>
+                            channelScopedSelectedContacts.includes(id)
+                          ),
+                          "غير قابل للوصول"
+                        );
+                        setExcludeUnreachable(true);
+                      }}
+                    >
+                      استبعد غير قابل للوصول ({preflight.unreachable ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      disabled={!(preflight.risky_contact_ids?.length)}
+                      onClick={() => {
+                        removeContactsFromSelection(
+                          (preflight.risky_contact_ids ?? []).filter((id) =>
+                            channelScopedSelectedContacts.includes(id)
+                          ),
+                          "محفوف بالمخاطر"
+                        );
+                        setExcludeRisky(true);
+                      }}
+                    >
+                      استبعد محفوف بالمخاطر ({preflight.risky ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      disabled={!(preflight.marketing_opt_out_contact_ids?.length)}
+                      onClick={() =>
+                        removeContactsFromSelection(
+                          (preflight.marketing_opt_out_contact_ids ?? []).filter((id) =>
+                            channelScopedSelectedContacts.includes(id)
+                          ),
+                          "عدم الإزعاج"
+                        )
                       }
                     >
-                      {check.level === "info" ? "ℹ" : "⚠"} {check.message}
-                    </p>
-                  ))}
-                  {preflight.quality_rating && (
-                    <p className="hint-text">جودة الحساب: {preflight.quality_rating}</p>
-                  )}
-                  <p className="hint-text">{preflight.messaging_tier_hint}</p>
+                      استبعد عدم الإزعاج ({preflight.marketing_opt_out ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      disabled={!(preflight.cold_audience_contact_ids?.length)}
+                      onClick={() =>
+                        removeContactsFromSelection(
+                          (preflight.cold_audience_contact_ids ?? []).filter((id) =>
+                            channelScopedSelectedContacts.includes(id)
+                          ),
+                          "بدون تفاعل"
+                        )
+                      }
+                    >
+                      استبعد بدون تفاعل ({preflight.cold_audience ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      disabled={!(preflight.previously_sent_contact_ids?.length)}
+                      onClick={() => {
+                        removeContactsFromSelection(
+                          (preflight.previously_sent_contact_ids ?? []).filter((id) =>
+                            channelScopedSelectedContacts.includes(id)
+                          ),
+                          "سبق إرسالهم"
+                        );
+                        setOnlyNeverSent(true);
+                      }}
+                    >
+                      استبعد سبق إرسالهم ({preflight.previously_sent ?? 0})
+                    </button>
+                    {Boolean(preflight.sent_in_period_contact_ids?.length) && (
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        onClick={() => {
+                          removeContactsFromSelection(
+                            (preflight.sent_in_period_contact_ids ?? []).filter((id) =>
+                              channelScopedSelectedContacts.includes(id)
+                            ),
+                            "أُرسل لهم في الفترة"
+                          );
+                          setExcludeSentInPeriod(true);
+                        }}
+                      >
+                        استبعد أُرسل لهم في الفترة ({preflight.sent_in_period ?? 0})
+                      </button>
+                    )}
+                  </div>
+                  <div className="campaign-exclude-final-count" role="status">
+                    <strong>{channelScopedSelectedContacts.length.toLocaleString("ar")}</strong>
+                    <span>العدد النهائي للجمهور بعد الاستبعاد</span>
+                  </div>
+                </section>
+              )}
+
+              <section className="campaign-exclude-stage-card campaign-exclude-dnd-card" aria-labelledby="exclude-stage-dnd">
+                <div className="campaign-exclude-stage-head">
+                  <span className="campaign-exclude-stage-num">5</span>
+                  <div>
+                    <h4 id="exclude-stage-dnd">قبل الانتقال للإرسال</h4>
+                    <p className="hint-text">فعّل خيار عدم الإزعاج في الرسالة للعملاء.</p>
+                  </div>
                 </div>
-              )}
-              {Boolean(preflight?.never_sent_contact_ids?.length) && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    const ids = (preflight?.never_sent_contact_ids ?? []).filter((id) =>
-                      channelScopedSelectedContacts.includes(id)
-                    );
-                    if (!ids.length) {
-                      toastStore.getState().show("لا يوجد ضمن التحديد عملاء لم يُرسل لهم من قبل.", "error");
-                      return;
-                    }
-                    setSelectedContacts(ids);
-                    setOnlyNeverSent(true);
-                    toastStore.getState().show(`تم عزل ${ids.length} عميلاً جديداً فقط.`, "success");
-                  }}
-                >
-                  عزل التحديد: اختر فقط من لم يُرسل لهم ({preflight?.never_sent ?? 0})
-                </button>
-              )}
-              {Boolean(preflight?.sent_in_period) && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    const kept = (preflight?.kept_after_period_exclude_contact_ids ?? []).filter((id) =>
-                      channelScopedSelectedContacts.includes(id)
-                    );
-                    if (!kept.length) {
-                      toastStore.getState().show("بعد الاستبعاد لا يتبقى أحد ضمن التحديد.", "error");
-                      return;
-                    }
-                    setSelectedContacts(kept);
-                    setExcludeSentInPeriod(true);
-                    toastStore.getState().show(
-                      `تم استبعاد ${(preflight?.sent_in_period ?? 0)} عميلاً — تبقّى ${kept.length}.`,
-                      "success"
-                    );
-                  }}
-                >
-                  عزل التحديد: استبعد من أُرسل لهم في الفترة ({preflight?.sent_in_period ?? 0})
-                </button>
-              )}
+                <label className="campaign-dnd-toggle">
+                  <input
+                    type="checkbox"
+                    checked={includeOptOutOption}
+                    onChange={(event) => setIncludeOptOutOption(event.target.checked)}
+                  />
+                  <span>إظهار زر «عدم الإزعاج» في الرسالة</span>
+                </label>
+              </section>
             </div>
 
             <div className="campaigns-audience-panel">
