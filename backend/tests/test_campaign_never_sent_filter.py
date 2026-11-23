@@ -23,5 +23,6 @@ def test_only_never_sent_campaign_filter_exists() -> None:
     assert "never_sent_contact_ids" in window
     assert "ALL_RECIPIENTS_PREVIOUSLY_SENT" in routes
     assert "onlyNeverSent" in page
-    assert "عملاء جدد فقط" in page
-    assert "عزل التحديد" in page
+    assert "previously_sent_contact_ids" in page
+    assert "استبعد سبق إرسالهم" in page
+    assert "buildLookbackRange" in page
