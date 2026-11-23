@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "efbf22c",
-    "git_commit_message": "Campaign exclude smart table and auto DND live",
+    "git_commit": "9b9a29b",
+    "git_commit_message": "Campaign audience green cards live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BkIB2Yan.js",
-      "css": "index-DTr_Ronu.css"
+      "js": "index-C9eIU2yV.js",
+      "css": "index-Dmjh1CCz.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "efbf22c",
-  "notes": "Auto DND exclude + smart overlapping campaign table with sticky header and from-audience column (PR #185)"
+  "commit": "9b9a29b",
+  "notes": "Green audience source cards; equal segment/branch/channel filters; show-selected-only (PR #186)"
 }
