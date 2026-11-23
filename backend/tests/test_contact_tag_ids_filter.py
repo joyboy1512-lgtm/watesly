@@ -18,6 +18,6 @@ def test_contacts_list_supports_multiple_tag_ids() -> None:
     assert "ContactTag.tag_id.in_(effective_tag_ids)" in contacts
     assert "audienceTagIds" in page
     assert "SearchableMultiFilter" in page
-    assert 'variant="header"' in page
+    assert "campaign-audience-filters-top" in page
     assert "ContactTagsEditor" in detail
     assert "تصنيف جديد" in detail

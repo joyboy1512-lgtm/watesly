@@ -8346,18 +8346,25 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .contacts-erp-meta .searchable-multi-filter {
   flex: 0 1 140px;
 }
-.campaign-audience-filters-extra {
+.campaign-audience-filters-top {
   align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.campaign-audience-filters-top .searchable-multi-filter {
+  flex: 0 1 140px;
+  min-width: 120px;
 }
 .campaigns-audience-table.contacts-erp-table-filter-headers thead th {
-  padding: 6px 8px;
+  padding: 8px 10px;
   color: #fff;
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
   border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
   vertical-align: middle;
 }
 .campaigns-audience-table-wide {
-  min-width: 1180px;
+  min-width: 980px;
 }
 .campaigns-audience-table-wide td,
 .campaigns-audience-table-wide th {
@@ -8366,6 +8373,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaigns-audience-table-wide .contacts-tags-cell {
   white-space: normal;
   min-width: 120px;
+}
+.campaigns-audience-table-striped tbody tr:nth-child(even):not(.contacts-row-selected) {
+  background: rgba(7, 94, 84, 0.045);
+}
+.campaigns-audience-table-striped tbody tr:nth-child(odd):not(.contacts-row-selected) {
+  background: var(--panel);
+}
+.campaigns-audience-table-striped tbody tr:hover:not(.contacts-row-selected) {
+  background: rgba(7, 94, 84, 0.08);
 }
 .campaign-tag-multiselect {
   position: relative;
