@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-23",
+  "commit": "84ffecc",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-qtsP63pi.js",
+    "css": "index-7AJHoHYh.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Searchable multi-select filters on contacts",
+    "Same filters on campaign audience list",
+    "WhatsApp status, lifecycle, region, branch, channel, tags, interests, last campaign"
+  ],
+  "notes": "Deployed via SSH. PR #178."
+}

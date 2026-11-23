@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-23) — Searchable multi-select filters
+
+| Item | Value |
+|------|-------|
+| Commit | `84ffecc` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-qtsP63pi.js`, `index-7AJHoHYh.css` |
+| Snapshot record | `deploy/production-snapshot-20261123-multiselect-filters.json` |
+
 ### Production snapshot (2026-11-22) — Interests parity with tags
 
 | Item | Value |
