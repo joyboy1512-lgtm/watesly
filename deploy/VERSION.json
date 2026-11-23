@@ -8,13 +8,13 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "a5fcb69",
-    "git_commit_message": "Audience UI polish: buttons, sticky header, equal filters",
+    "git_commit": "a5ce9cc",
+    "git_commit_message": "Sync Meta check and campaign table with period exclusions",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BxoMOdgA.js",
+      "js": "index-0fJxtY6V.js",
       "css": "index-CP6qzJoz.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "a5fcb69",
-  "notes": "High-contrast merge buttons; sticky green audience table header; equal filter heights"
+  "commit": "a5ce9cc",
+  "notes": "Period lookback cascades into Meta preflight totals and campaign-exclude table"
 }

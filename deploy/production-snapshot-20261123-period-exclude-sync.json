@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-23",
+  "commit": "a5ce9cc",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-0fJxtY6V.js",
+    "css": "index-CP6qzJoz.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Period lookback removes matched contacts from selection",
+    "Meta preflight totals use remaining audience after period exclude",
+    "Campaign exclude table scoped to remaining audience + lookback window"
+  ],
+  "notes": "Deployed via SSH. PR #187."
+}

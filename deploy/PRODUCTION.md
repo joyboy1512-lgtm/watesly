@@ -16,13 +16,22 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-23) — Period exclude sync Meta + campaigns
+
+| Item | Value |
+|------|-------|
+| Commit | `a5ce9cc` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-0fJxtY6V.js`, `index-CP6qzJoz.css` |
+| Snapshot record | `deploy/production-snapshot-20261123-period-exclude-sync.json` |
+
 ### Production snapshot (2026-11-23) — Audience UI polish
 
 | Item | Value |
 |------|-------|
-| Commit | `$COMMIT` |
+| Commit | `a5fcb69` |
 | Alembic | `0068_internal_ai_feedback` |
-| Live assets | `$JS_FILE`, `$CSS_FILE` |
+| Live assets | `index-BxoMOdgA.js`, `index-CP6qzJoz.css` |
 | Snapshot record | `deploy/production-snapshot-20261123-audience-ui-polish.json` |
 
 ### Production snapshot (2026-11-23) — Audience cards match brand stats
