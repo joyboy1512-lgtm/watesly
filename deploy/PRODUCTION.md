@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-23) — Audience UI polish
+
+| Item | Value |
+|------|-------|
+| Commit | `$COMMIT` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `$JS_FILE`, `$CSS_FILE` |
+| Snapshot record | `deploy/production-snapshot-20261123-audience-ui-polish.json` |
+
 ### Production snapshot (2026-11-23) — Audience cards match brand stats
 
 | Item | Value |

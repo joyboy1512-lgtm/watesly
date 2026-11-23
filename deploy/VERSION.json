@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "e4c2d45",
-    "git_commit_message": "Audience cards match brand stats green",
+    "git_commit": "a5fcb69",
+    "git_commit_message": "Audience UI polish: buttons, sticky header, equal filters",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-BXPqNlR2.js",
-      "css": "index-CtID4NkW.css"
+      "js": "index-BxoMOdgA.js",
+      "css": "index-CP6qzJoz.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "e4c2d45",
-  "notes": "Audience source cards match إجمالي الحملات / قيد الإرسال solid green; compact top filters"
+  "commit": "a5fcb69",
+  "notes": "High-contrast merge buttons; sticky green audience table header; equal filter heights"
 }
