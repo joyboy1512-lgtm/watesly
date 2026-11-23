@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-23) — Header filters + Excel dates
+
+| Item | Value |
+|------|-------|
+| Commit | `664be25` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-QqhDL5NG.js`, `index-EBlZQDRP.css` |
+| Snapshot record | `deploy/production-snapshot-20261123-header-filters-fix.json` |
+
 ### Production snapshot (2026-11-23) — Campaign audience polish
 
 | Item | Value |
