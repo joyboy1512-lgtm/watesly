@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "84ffecc",
-    "git_commit_message": "Searchable multi-select contact filters live",
+    "git_commit": "47dc123",
+    "git_commit_message": "Green column-header filters live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-qtsP63pi.js",
-      "css": "index-7AJHoHYh.css"
+      "js": "index-DNQBT_lU.js",
+      "css": "index-BsWUhsAP.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "84ffecc",
-  "notes": "Excel-like searchable multi-select filters for contacts and campaigns (PR #178)"
+  "commit": "47dc123",
+  "notes": "Green column-header multi-select filters for contacts and campaigns (PR #179)"
 }
