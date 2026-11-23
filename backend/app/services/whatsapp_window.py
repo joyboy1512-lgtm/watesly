@@ -135,7 +135,14 @@ async def campaign_audience_preflight(
         or exclude_sent_to is not None
     )
     sent_in_period_ids: set = set()
-    campaigns_in_period: list[dict] = []
+    # Always list campaigns that overlap the selected audience (hide zero-overlap / new-only).
+    campaigns_in_period: list[dict] = await list_campaigns_in_period(
+        db,
+        account_id=account_id,
+        sent_from=None,
+        sent_to=None,
+        contact_ids=original_contact_ids,
+    )
     if period_active:
         sent_in_period_ids = await get_campaign_sent_contact_ids_in_period(
             db,
@@ -144,13 +151,6 @@ async def campaign_audience_preflight(
             sent_from=exclude_sent_from,
             sent_to=exclude_sent_to,
             campaign_ids=exclude_campaign_ids or None,
-        )
-        campaigns_in_period = await list_campaigns_in_period(
-            db,
-            account_id=account_id,
-            sent_from=exclude_sent_from,
-            sent_to=exclude_sent_to,
-            contact_ids=original_contact_ids,
         )
 
     contact_ids = original_contact_ids

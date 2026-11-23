@@ -410,10 +410,19 @@ async def list_campaigns_in_period(
     sent_to: datetime | None = None,
     contact_ids: list[UUID] | None = None,
 ) -> list[dict]:
-    """Campaign groups that had sends in the period (for UI filters)."""
+    """Campaigns that sent to the given audience (optionally within a date window).
+
+    When ``contact_ids`` is provided, only campaigns that overlap that audience are
+    returned — new audiences with no prior campaign sends yield an empty list.
+    ``audience_match_count`` is how many of those contacts appear in each campaign.
+    """
     from app.models.campaign import Campaign
     from app.models.campaign_recipient import CampaignRecipient
     from sqlalchemy import func
+
+    # Smart audience mode: no overlapping recipients → nothing to show.
+    if contact_ids is not None and not contact_ids:
+        return []
 
     start, end = _normalize_period_bounds(sent_from, sent_to)
     sent_at = func.coalesce(
@@ -434,6 +443,17 @@ async def list_campaigns_in_period(
     if end is not None:
         conditions.append(sent_at <= end)
 
+    total_sent_subq = (
+        select(func.count(CampaignRecipient.id))
+        .where(
+            CampaignRecipient.campaign_id == Campaign.id,
+            CampaignRecipient.status.in_(_campaign_sent_statuses()),
+        )
+        .correlate(Campaign)
+        .scalar_subquery()
+    )
+    audience_match = func.count(func.distinct(CampaignRecipient.contact_id))
+
     rows = await db.execute(
         select(
             Campaign.id,
@@ -441,7 +461,8 @@ async def list_campaigns_in_period(
             Campaign.started_at,
             Campaign.completed_at,
             Campaign.status,
-            func.count(CampaignRecipient.id),
+            audience_match,
+            total_sent_subq,
             func.min(sent_at),
             func.max(sent_at),
         )
@@ -454,11 +475,13 @@ async def list_campaigns_in_period(
             Campaign.completed_at,
             Campaign.status,
         )
+        .having(audience_match > 0)
         .order_by(func.max(sent_at).desc())
         .limit(100)
     )
     items: list[dict] = []
     for row in rows.all():
+        audience_match_count = int(row[5] or 0)
         items.append(
             {
                 "id": str(row[0]),
@@ -466,9 +489,10 @@ async def list_campaigns_in_period(
                 "started_at": row[2].isoformat() if row[2] else None,
                 "completed_at": row[3].isoformat() if row[3] else None,
                 "status": row[4].value if hasattr(row[4], "value") else str(row[4]),
-                "sent_count": int(row[5] or 0),
-                "first_sent_at": row[6].isoformat() if row[6] else None,
-                "last_sent_at": row[7].isoformat() if row[7] else None,
+                "audience_match_count": audience_match_count,
+                "sent_count": int(row[6] or audience_match_count or 0),
+                "first_sent_at": row[7].isoformat() if row[7] else None,
+                "last_sent_at": row[8].isoformat() if row[8] else None,
             }
         )
     return items
