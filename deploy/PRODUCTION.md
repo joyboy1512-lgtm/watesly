@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-23) — Green column-header filters
+
+| Item | Value |
+|------|-------|
+| Commit | `47dc123` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-DNQBT_lU.js`, `index-BsWUhsAP.css` |
+| Snapshot record | `deploy/production-snapshot-20261123-header-filters.json` |
+
 ### Production snapshot (2026-11-23) — Searchable multi-select filters
 
 | Item | Value |
