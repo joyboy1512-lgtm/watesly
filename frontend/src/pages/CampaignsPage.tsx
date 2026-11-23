@@ -28,6 +28,7 @@ import {
 } from "../lib/contactHelpers";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
 import SearchableMultiFilter, { serializeMultiParam } from "../components/SearchableMultiFilter";
+import ExcelDateMultiFilter from "../components/ExcelDateMultiFilter";
 import {
   slugifyInterestLabel,
   type InterestCategory
@@ -210,6 +211,8 @@ export default function CampaignsPage() {
   const [testingSend, setTestingSend] = useState(false);
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
   const [audienceGenders, setAudienceGenders] = useState<string[]>([]);
+  const [audienceOrganizationIds, setAudienceOrganizationIds] = useState<string[]>([]);
+  const [audienceChannelIds, setAudienceChannelIds] = useState<string[]>([]);
   const [audienceInterestIds, setAudienceInterestIds] = useState<string[]>([]);
   const [newInterestLabel, setNewInterestLabel] = useState("");
   const [creatingInterest, setCreatingInterest] = useState(false);
@@ -242,6 +245,8 @@ export default function CampaignsPage() {
       "campaign-audience",
       organizationId,
       audienceChannelId,
+      audienceOrganizationIds,
+      audienceChannelIds,
       excelAudienceIds,
       audienceTagIds,
       audienceWhatsappStatuses,
@@ -252,8 +257,20 @@ export default function CampaignsPage() {
     ],
     queryFn: async () => {
       const base: Record<string, string | number> = { limit: CAMPAIGN_AUDIENCE_LIMIT };
-      if (organizationId) base.organization_id = organizationId;
-      if (audienceChannelId) base.channel_id = audienceChannelId;
+      const orgIds = audienceOrganizationIds.length
+        ? audienceOrganizationIds
+        : organizationId
+          ? [organizationId]
+          : [];
+      const channelIds = audienceChannelIds.length
+        ? audienceChannelIds
+        : audienceChannelId
+          ? [audienceChannelId]
+          : [];
+      if (orgIds.length === 1) base.organization_id = orgIds[0];
+      if (orgIds.length > 1) base.organization_ids = serializeMultiParam(orgIds);
+      if (channelIds.length === 1) base.channel_id = channelIds[0];
+      if (channelIds.length > 1) base.channel_ids = serializeMultiParam(channelIds);
       if (audienceTagIds.length === 1) base.tag_id = audienceTagIds[0];
       if (audienceTagIds.length > 1) base.tag_ids = serializeMultiParam(audienceTagIds);
       if (audienceWhatsappStatuses.length === 1) base.whatsapp_status = audienceWhatsappStatuses[0];
@@ -481,24 +498,21 @@ export default function CampaignsPage() {
   );
   const excelIdSet = useMemo(() => new Set(excelAudienceIds), [excelAudienceIds]);
   const segmentIdSet = useMemo(() => new Set(segmentAudienceIds), [segmentAudienceIds]);
-  const lastCampaignDateOptions = useMemo(() => {
+  const lastCampaignDates = useMemo(() => {
     const keys = new Set<string>();
     for (const item of contacts.data ?? []) {
       if (!item.last_campaign_at) continue;
       keys.add(item.last_campaign_at.slice(0, 10));
     }
-    return Array.from(keys)
-      .sort((a, b) => b.localeCompare(a))
-      .map((value) => ({
-        value,
-        label: formatContactDate(`${value}T12:00:00`)
-      }));
+    return Array.from(keys).sort((a, b) => b.localeCompare(a));
   }, [contacts.data]);
 
   const filteredContacts = useMemo(() => {
     const term = contactSearch.trim().toLowerCase();
     return (contacts.data ?? []).filter((item) => {
       if (selectedAccountChannelId && item.channel_id !== selectedAccountChannelId) return false;
+      if (audienceOrganizationIds.length > 0 && !audienceOrganizationIds.includes(item.organization_id)) return false;
+      if (audienceChannelIds.length > 0 && !audienceChannelIds.includes(item.channel_id)) return false;
       if (audienceRegions.length > 0 && !audienceRegions.includes(item.region || "")) return false;
       if (audienceGenders.length > 0 && !audienceGenders.includes(item.gender || "unknown")) return false;
       if (audienceLastCampaignDates.length > 0) {
@@ -527,6 +541,8 @@ export default function CampaignsPage() {
     contacts.data,
     selectedAccountChannelId,
     contactSearch,
+    audienceOrganizationIds,
+    audienceChannelIds,
     audienceRegions,
     audienceGenders,
     audienceLastCampaignDates
@@ -1908,69 +1924,19 @@ export default function CampaignsPage() {
               </label>
               <SearchableMultiFilter
                 compact
-                label="الجنس"
-                allLabel="كل الأجناس"
-                values={audienceGenders}
-                options={[
-                  { value: "male", label: "ذكر" },
-                  { value: "female", label: "أنثى" },
-                  { value: "unknown", label: "غير محدد" }
-                ]}
-                onChange={setAudienceGenders}
+                label="الفرع"
+                allLabel="كل الأفرع"
+                values={audienceOrganizationIds}
+                options={(organizations.data ?? []).map((org) => ({ value: org.id, label: org.name }))}
+                onChange={setAudienceOrganizationIds}
               />
               <SearchableMultiFilter
                 compact
-                label="المنطقة"
-                allLabel="كل المناطق"
-                values={audienceRegions}
-                options={availableRegions.map((regionName) => {
-                  const count = regionCountByName.get(regionName) ?? 0;
-                  return {
-                    value: regionName,
-                    label: count > 0 ? `${regionName} (${count.toLocaleString("ar")})` : regionName
-                  };
-                })}
-                onChange={setAudienceRegions}
-              />
-              <SearchableMultiFilter
-                compact
-                label="التصنيف"
-                allLabel="كل التصنيفات"
-                values={audienceTagIds}
-                options={organizationTags.map((tag) => ({ value: tag.id, label: tag.name }))}
-                onChange={setAudienceTagIds}
-              />
-              <SearchableMultiFilter
-                compact
-                label="الاهتمامات"
-                allLabel="كل الاهتمامات"
-                values={audienceInterestIds}
-                options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
-                onChange={setAudienceInterestIds}
-              />
-              <SearchableMultiFilter
-                compact
-                label="حالة واتساب"
-                allLabel="كل الحالات"
-                values={audienceWhatsappStatuses}
-                options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
-                onChange={setAudienceWhatsappStatuses}
-              />
-              <SearchableMultiFilter
-                compact
-                label="المرحلة"
-                allLabel="كل المراحل"
-                values={audienceLifecycleStages}
-                options={Object.entries(LIFECYCLE_LABELS).map(([value, label]) => ({ value, label }))}
-                onChange={setAudienceLifecycleStages}
-              />
-              <SearchableMultiFilter
-                compact
-                label="تاريخ آخر حملة"
-                allLabel="كل التواريخ"
-                values={audienceLastCampaignDates}
-                options={lastCampaignDateOptions}
-                onChange={setAudienceLastCampaignDates}
+                label="القناة"
+                allLabel="كل القنوات"
+                values={audienceChannelIds}
+                options={orgChannels.map((channel) => ({ value: channel.id, label: channel.name }))}
+                onChange={setAudienceChannelIds}
               />
               <div className="contacts-inline-tag-create">
                 <input
@@ -2066,13 +2032,86 @@ export default function CampaignsPage() {
                     </th>
                     <th>الاسم</th>
                     <th>الهاتف</th>
-                    <th>الجنس</th>
-                    <th>المنطقة</th>
-                    <th>التصنيف</th>
-                    <th>الاهتمامات</th>
-                    <th>حالة واتساب</th>
-                    <th>المرحلة</th>
-                    <th>تاريخ آخر حملة</th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="الجنس"
+                        allLabel="كل الأجناس"
+                        values={audienceGenders}
+                        options={[
+                          { value: "male", label: "ذكر" },
+                          { value: "female", label: "أنثى" },
+                          { value: "unknown", label: "غير محدد" }
+                        ]}
+                        onChange={setAudienceGenders}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="المنطقة"
+                        allLabel="كل المناطق"
+                        values={audienceRegions}
+                        options={availableRegions.map((regionName) => {
+                          const count = regionCountByName.get(regionName) ?? 0;
+                          return {
+                            value: regionName,
+                            label: count > 0 ? `${regionName} (${count.toLocaleString("ar")})` : regionName
+                          };
+                        })}
+                        onChange={setAudienceRegions}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="التصنيف"
+                        allLabel="كل التصنيفات"
+                        values={audienceTagIds}
+                        options={organizationTags.map((tag) => ({ value: tag.id, label: tag.name }))}
+                        onChange={setAudienceTagIds}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="الاهتمامات"
+                        allLabel="كل الاهتمامات"
+                        values={audienceInterestIds}
+                        options={(interests.data ?? []).map((interest) => ({ value: interest.id, label: interest.label }))}
+                        onChange={setAudienceInterestIds}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="حالة واتساب"
+                        allLabel="كل الحالات"
+                        values={audienceWhatsappStatuses}
+                        options={Object.entries(WHATSAPP_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+                        onChange={setAudienceWhatsappStatuses}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <SearchableMultiFilter
+                        variant="header"
+                        label="المرحلة"
+                        allLabel="كل المراحل"
+                        values={audienceLifecycleStages}
+                        options={Object.entries(LIFECYCLE_LABELS).map(([value, label]) => ({ value, label }))}
+                        onChange={setAudienceLifecycleStages}
+                      />
+                    </th>
+                    <th className="contacts-th-filter">
+                      <ExcelDateMultiFilter
+                        variant="header"
+                        label="تاريخ آخر حملة"
+                        allLabel="كل التواريخ"
+                        dates={lastCampaignDates}
+                        values={audienceLastCampaignDates}
+                        onChange={setAudienceLastCampaignDates}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

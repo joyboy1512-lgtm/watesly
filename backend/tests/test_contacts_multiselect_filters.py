@@ -21,7 +21,8 @@ def test_contacts_api_supports_multi_filters() -> None:
     assert "last_campaign_ids" in routes
     assert "def _whatsapp_status_clause" in service
     assert 'variant="header"' in page
-    assert "SearchableMultiFilter" in campaigns
+    assert 'variant="header"' in campaigns
+    assert "ExcelDateMultiFilter" in campaigns
     assert "campaign-audience-filters-top" in campaigns
     assert "contacts-erp-table-filter-headers" in page
     assert "تحديد الظاهر" in component

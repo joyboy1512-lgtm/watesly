@@ -9,26 +9,30 @@ def read(path: str) -> str:
 
 def test_campaign_audience_table_has_requested_columns() -> None:
     page = read("../frontend/src/pages/CampaignsPage.tsx")
+    date_filter = read("../frontend/src/components/ExcelDateMultiFilter.tsx")
+    styles = read("../frontend/src/styles.css")
     schema = read("app/schemas/contact.py")
     serialization = read("app/services/contact_serialization.py")
     management = read("app/services/contact_management.py")
 
     for needle in [
+        'variant="header"',
+        "ExcelDateMultiFilter",
         "تاريخ آخر حملة",
         "campaign-audience-filters-top",
         "campaigns-audience-table-striped",
         "audienceLastCampaignDates",
-        "formatLifecycleStage",
-        "formatGenderLabel",
+        'label="الفرع"',
+        'label="القناة"',
         "tag_labels",
     ]:
         assert needle in page
 
-    assert 'label="الفرع"' not in page
-    assert 'label="القناة"' not in page
+    assert "excel-date-filter-months" in date_filter
+    assert "monthLabel" in date_filter
+    assert "campaigns-audience-table-striped tbody tr:nth-child(even)" in styles
     assert "دمج الاهتمام/الجنس/المرحلة في الجمهور" not in page
     assert "آخر حملة من" not in page
-    assert "آخر حملة إلى" not in page
 
     assert "tag_ids: list[UUID]" in schema
     assert "tag_labels: list[str]" in schema
