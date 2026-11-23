@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-22) — Interests parity with tags
+
+| Item | Value |
+|------|-------|
+| Commit | `7b86e54` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-Ca7NH6EN.js`, `index-DCfk6lGe.css` |
+| Snapshot record | `deploy/production-snapshot-20261122-interests-parity.json` |
+
 ### Production snapshot (2026-11-22) — Knowledge UI brand polish
 
 | Item | Value |
