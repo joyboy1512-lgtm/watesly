@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-23",
+  "commit": "47dc123",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DNQBT_lU.js",
+    "css": "index-BsWUhsAP.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Green table header filters aligned to columns",
+    "Compact searchable multi-select in contacts and campaigns audience"
+  ],
+  "notes": "Deployed via SSH. PR #179."
+}
