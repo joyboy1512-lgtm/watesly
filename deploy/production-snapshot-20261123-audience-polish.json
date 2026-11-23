@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-23",
+  "commit": "ddc5519",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DsTNxqUj.js",
+    "css": "index-DqSDUOmS.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Hide branch/channel from audience table",
+    "Filters beside segment at top",
+    "Last campaign date column with Excel-like date multi-filter",
+    "Striped audience rows",
+    "Removed merge banner and from/to date range"
+  ],
+  "notes": "Deployed via SSH. PR #181."
+}
