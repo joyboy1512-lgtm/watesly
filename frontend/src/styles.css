@@ -8374,14 +8374,67 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   white-space: normal;
   min-width: 120px;
 }
-.campaigns-audience-table-striped tbody tr:nth-child(even):not(.contacts-row-selected) {
-  background: rgba(7, 94, 84, 0.045);
+.campaigns-audience-table.campaigns-audience-table-striped tbody tr:nth-child(even):not(.contacts-row-selected) > td {
+  background: #eef7f3;
 }
-.campaigns-audience-table-striped tbody tr:nth-child(odd):not(.contacts-row-selected) {
-  background: var(--panel);
+.campaigns-audience-table.campaigns-audience-table-striped tbody tr:nth-child(odd):not(.contacts-row-selected) > td {
+  background: #ffffff;
 }
-.campaigns-audience-table-striped tbody tr:hover:not(.contacts-row-selected) {
-  background: rgba(7, 94, 84, 0.08);
+.campaigns-audience-table.campaigns-audience-table-striped tbody tr:hover:not(.contacts-row-selected) > td {
+  background: #dff1e9;
+}
+.excel-date-filter-menu {
+  max-height: 340px;
+}
+.excel-date-filter-months {
+  display: grid;
+  gap: 4px;
+  max-height: 250px;
+  overflow: auto;
+}
+.excel-date-filter-month-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.excel-date-filter-month-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+.excel-date-filter-month-check:hover {
+  background: var(--panel-soft);
+}
+.excel-date-filter-month-check em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 600;
+}
+.excel-date-filter-expand {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.excel-date-filter-days {
+  display: grid;
+  gap: 2px;
+  padding: 0 4px 6px 18px;
+}
+.excel-date-filter-month.is-expanded {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-soft) 70%, white);
 }
 .campaign-tag-multiselect {
   position: relative;
