@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-24) — Campaign report compact + sticky recipients
+
+| Item | Value |
+|------|-------|
+| Commit | `5296619` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-2LIz2zZC.js`, `index-D02f1nPH.css` |
+| Snapshot record | `deploy/production-snapshot-20261124-campaign-report-compact.json` |
+
 ### Production snapshot (2026-11-24) — Campaign headers match active green
 
 | Item | Value |
