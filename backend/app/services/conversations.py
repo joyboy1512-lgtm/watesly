@@ -130,6 +130,7 @@ async def list_conversations(
     organization_id: UUID | None = None,
     inbox_scope: str | None = None,
     custom_inbox_id: UUID | None = None,
+    needs_reply: bool | None = None,
 ) -> list[tuple[Conversation, Contact, Message | None, int]]:
     latest_message_id = (
         select(Message.id)
@@ -230,7 +231,15 @@ async def list_conversations(
                 )
             )
         if filters.get("needs_reply") is True:
-            query = query.where(Message.direction == MessageDirection.INBOUND)
+            query = query.where(
+                Message.direction == MessageDirection.INBOUND,
+                Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
+            )
+    if needs_reply is True:
+        # Same definition as dashboard/inbox «تنتظر الرد».
+        from app.services.conversation_attention import waiting_reply_predicates
+
+        query = query.where(*waiting_reply_predicates(now=now))
     if _limited_to_assigned_conversations(membership) and scope not in {"mine", "team"}:
         query = query.where(Conversation.assigned_membership_id == membership.id)
     rows = list((await db.execute(query)).all())

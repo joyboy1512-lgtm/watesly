@@ -6,6 +6,7 @@ import Icon from "../components/Icon";
 import MacWorkspaceBalance from "../components/MacWorkspaceBalance";
 import { formatMacUsagePercent } from "../lib/macHelpers";
 import { useCurrentUser, useHasPermission } from "../hooks/usePermissions";
+import { useWorkspaceOrganizationId } from "../hooks/useWorkspace";
 
 type WaitingConversation = {
   id: string;
@@ -54,12 +55,31 @@ type DashboardSummary = {
   alerts: DashboardAlert[];
 };
 
-const quickActions = [
-  { to: "/inbox", label: "صندوق الوارد", hint: "رد على المحادثات", icon: "inbox" as const },
-  { to: "/campaigns?action=create", label: "حملة WhatsApp", hint: "إرسال جماعي بقالب", icon: "campaign" as const },
-  { to: "/catalog/new", label: "منتج أو خدمة", hint: "إضافة للكتالوج", icon: "template" as const },
-  { to: "/analytics", label: "التحليلات", hint: "أداء الفريق وCSAT", icon: "dashboard" as const }
-];
+type AttentionCard = {
+  id: string;
+  label: string;
+  count: number | null;
+  href: string;
+  status: "ok" | "unavailable" | "error" | string;
+  hint?: string | null;
+  meta?: string | null;
+};
+
+type AttentionPayload = {
+  role: string;
+  audience: "employee" | "supervisor" | "owner" | string;
+  updated_at: string;
+  question: string;
+  primary_action: {
+    title: string;
+    detail: string;
+    href: string;
+    count: number | null;
+  };
+  cards: AttentionCard[];
+  waiting_reply_count: number;
+  waiting_preview: WaitingConversation[];
+};
 
 const campaignStatusLabels: Record<string, string> = {
   draft: "مسودة",
@@ -72,14 +92,10 @@ const campaignStatusLabels: Record<string, string> = {
   failed: "فشلت"
 };
 
-const CHANNEL_TYPE_LABELS: Record<string, string> = {
-  whatsapp: "WhatsApp",
-  instagram: "Instagram",
-  email: "Email",
-  sms: "SMS",
-  web_chat: "Web Chat",
-  telegram: "Telegram",
-  messenger: "Messenger"
+const AUDIENCE_LABELS: Record<string, string> = {
+  employee: "عرض الموظف",
+  supervisor: "عرض المشرف",
+  owner: "عرض المالك"
 };
 
 function formatWaiting(minutes: number | null) {
@@ -92,7 +108,31 @@ function formatWaiting(minutes: number | null) {
 
 function formatTime(value: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("ar", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ar", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "numeric",
+    month: "short"
+  }).format(new Date(value));
+}
+
+function formatUpdatedAt(value: string | undefined) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("ar", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    day: "numeric",
+    month: "short"
+  }).format(new Date(value));
+}
+
+function cardValue(card: AttentionCard, loading: boolean, failed: boolean) {
+  if (failed || card.status === "error") return "تعذّر التحميل";
+  if (card.status === "unavailable") return "غير متاح";
+  if (loading) return "…";
+  if (card.count == null) return "—";
+  return String(card.count);
 }
 
 export default function DashboardPage() {
@@ -100,28 +140,29 @@ export default function DashboardPage() {
   const profile = useCurrentUser();
   const canViewReports = useHasPermission("reports.view");
   const canViewBilling = useHasPermission("billing.view");
+  const canViewConversations = useHasPermission("conversations.view");
+  const workspaceOrganizationId = useWorkspaceOrganizationId();
+
+  const attention = useQuery({
+    queryKey: ["dashboard-attention", workspaceOrganizationId],
+    enabled: canViewConversations,
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (workspaceOrganizationId) params.organization_id = workspaceOrganizationId;
+      return (
+        await api.get<AttentionPayload>("/dashboard/attention", {
+          params,
+          ...silentRequest
+        })
+      ).data;
+    },
+    refetchInterval: canViewConversations ? 60_000 : false
+  });
 
   const summary = useQuery({
     queryKey: ["dashboard-summary"],
     enabled: canViewReports,
     queryFn: async () => (await api.get<DashboardSummary>("/dashboard/summary")).data,
-    refetchInterval: canViewReports ? 60_000 : false
-  });
-
-  const supervisor = useQuery({
-    queryKey: ["supervisor-summary"],
-    enabled: canViewReports,
-    queryFn: async () =>
-      (
-        await api.get<{
-          waiting_conversations: number;
-          snoozed_conversations: number;
-          sla_breached_conversations: number;
-          unresolved_over_1h?: number;
-          by_channel?: Array<{ channel_type: string; open_conversations: number }>;
-          agents?: Array<{ membership_id: string; full_name: string; open_conversations: number }>;
-        }>("/inbox-tools/supervisor-summary", silentRequest)
-      ).data,
     refetchInterval: canViewReports ? 60_000 : false
   });
 
@@ -142,44 +183,12 @@ export default function DashboardPage() {
   });
 
   const data = summary.data;
-
-  const stats = [
-    {
-      label: "المحادثات المفتوحة",
-      value: String(data?.open_conversations ?? 0),
-      change: `${data?.pending_conversations ?? 0} قيد الانتظار`,
-      icon: "inbox" as const,
-      to: "/inbox",
-      tone: "solid" as const
-    },
-    {
-      label: "الرسائل اليوم",
-      value: String((data?.sent_messages_today ?? 0) + (data?.received_messages_today ?? 0)),
-      change: `${data?.received_messages_today ?? 0} واردة · ${data?.sent_messages_today ?? 0} صادرة`,
-      icon: "dashboard" as const,
-      to: "/inbox",
-      tone: "soft" as const
-    },
-    {
-      label: "CSAT",
-      value: data?.csat_average != null ? `${data.csat_average}` : "—",
-      change: data?.csat_total_ratings ? `${data.csat_total_ratings} تقييم · ${data.csat_promoters_pct ?? 0}% ≥4` : "لا توجد تقييمات بعد",
-      icon: "dashboard" as const,
-      to: "/analytics",
-      tone: "soft" as const
-    },
-    {
-      label: "متوسط أول رد",
-      value: data?.first_response_avg_minutes != null ? `${data.first_response_avg_minutes} د` : "—",
-      change: "آخر 7 أيام",
-      icon: "team" as const,
-      to: "/analytics",
-      tone: "outline" as const
-    }
-  ] as const;
-
-  const campaign = data?.latest_campaign;
+  const attentionData = attention.data;
   const firstName = profile.data?.full_name?.split(" ")[0] ?? "فريق Watesly";
+  const campaign = data?.latest_campaign;
+  const primary = attentionData?.primary_action;
+  const attentionFailed = attention.isError;
+  const attentionLoading = attention.isLoading;
 
   return (
     <main className="page page-dashboard">
@@ -187,155 +196,139 @@ export default function DashboardPage() {
         <div className="dashboard-hero-copy">
           <span className="dashboard-hero-eyebrow">{t("eyebrow.wateslyWorkspace")}</span>
           <h1>مرحباً، {firstName}</h1>
-          <p>ملخص أداء الفريق والقنوات اليوم — ركّز على ما يحتاج رداً الآن.</p>
+          <p>{attentionData?.question ?? "ماذا يتطلب انتباهي اليوم؟"}</p>
+          {attentionData?.audience && (
+            <small className="dashboard-audience-chip">
+              {AUDIENCE_LABELS[attentionData.audience] ?? attentionData.audience}
+              {attentionData.role ? ` · ${attentionData.role}` : ""}
+            </small>
+          )}
         </div>
         <div className="dashboard-hero-actions">
-          <Link to="/inbox" className="dashboard-hero-btn dashboard-hero-btn-primary">
-            فتح صندوق الوارد
-          </Link>
-          <Link to="/campaigns?action=create" className="dashboard-hero-btn dashboard-hero-btn-ghost">
-            إنشاء حملة
-          </Link>
+          {primary ? (
+            <Link to={primary.href} className="dashboard-hero-btn dashboard-hero-btn-primary">
+              {primary.title}
+              {primary.count != null && primary.count > 0 ? ` (${primary.count})` : ""}
+            </Link>
+          ) : (
+            <Link to="/inbox" className="dashboard-hero-btn dashboard-hero-btn-primary">
+              فتح صندوق الوارد
+            </Link>
+          )}
+          {canViewReports && (
+            <Link to="/campaigns?action=create" className="dashboard-hero-btn dashboard-hero-btn-ghost">
+              إنشاء حملة
+            </Link>
+          )}
         </div>
       </section>
 
-      {subscription.data?.included_mac != null && (
-        <MacWorkspaceBalance
-          showPolicy={false}
-          summary={{
-            cycle_month: subscription.data.cycle_month,
-            mac_count: subscription.data.mac_count ?? 0,
-            included_mac: subscription.data.included_mac,
-            mac_remaining: subscription.data.mac_remaining ?? 0,
-            is_over_mac: Boolean(subscription.data.is_over_mac),
-            over_mac_count: subscription.data.over_mac_count ?? 0,
-            estimated_over_mac_charge: subscription.data.estimated_over_mac_charge ?? 0,
-            plan_name: subscription.data.plan_name
-          }}
-        />
-      )}
-
-      {(data?.alerts ?? []).length > 0 && (
-        <section className="dashboard-alerts">
-          {(data?.alerts ?? []).map((alert) => (
-            alert.action_path ? (
-              <Link
-                key={alert.code}
-                to={alert.action_path}
-                className={`dashboard-alert dashboard-alert-${alert.level}`}
-              >
-                {alert.message}
-              </Link>
-            ) : (
-              <div key={alert.code} className={`dashboard-alert dashboard-alert-${alert.level}`}>
-                {alert.message}
-              </div>
-            )
-          ))}
+      {primary && (
+        <section className="dashboard-primary-action" aria-label="أهم إجراء اليوم">
+          <div className="dashboard-primary-copy">
+            <span>أهم إجراء الآن</span>
+            <strong>{primary.title}</strong>
+            <p>{primary.detail}</p>
+          </div>
+          <Link to={primary.href} className="whatsapp-button">
+            فتح
+          </Link>
         </section>
       )}
 
-      <section className="dashboard-quick-actions" aria-label="اختصارات سريعة">
-        {quickActions.map((item) => (
-          <Link key={item.to} to={item.to} className="dashboard-quick-card">
-            <span className="dashboard-quick-icon"><Icon name={item.icon} /></span>
-            <div>
-              <strong>{item.label}</strong>
-              <small>{item.hint}</small>
-            </div>
-          </Link>
-        ))}
+      <section className="dashboard-attention" aria-label="بطاقات الانتباه">
+        <div className="dashboard-attention-head">
+          <div>
+            <h2>يتطلب انتباهك</h2>
+            <p>كل بطاقة تفتح قائمة بنفس الفلتر والحالة.</p>
+          </div>
+          <small className="dashboard-updated-at">
+            آخر تحديث:{" "}
+            {attentionFailed
+              ? "تعذّر التحديث"
+              : attentionLoading
+                ? "جاري التحديث…"
+                : formatUpdatedAt(attentionData?.updated_at)}
+          </small>
+        </div>
+
+        {!canViewConversations && (
+          <p className="hint-text">لا توجد صلاحية لعرض محادثات الانتباه (conversations.view).</p>
+        )}
+
+        {canViewConversations && attentionFailed && (
+          <p className="dashboard-attention-error" role="alert">
+            تعذّر تحميل مؤشرات الانتباه. الأرقام أدناه غير موثوقة حتى يعاد التحميل.
+          </p>
+        )}
+
+        {canViewConversations && (
+          <div className="dashboard-attention-grid">
+            {(attentionData?.cards ?? (attentionLoading ? [{ id: "loading", label: "…", count: null, href: "#", status: "ok" }] : [])).map(
+              (card) => {
+                const unavailable = card.status === "unavailable" || card.status === "error" || attentionFailed;
+                const content = (
+                  <>
+                    <span className="dashboard-attention-label">{card.label}</span>
+                    <strong className="dashboard-attention-value">
+                      {cardValue(card, attentionLoading, attentionFailed)}
+                    </strong>
+                    <small className="dashboard-attention-meta">
+                      {unavailable
+                        ? card.hint || "غير متاح لهذا الدور/الصلاحية"
+                        : card.meta || card.hint || "اضغط للفتح"}
+                    </small>
+                  </>
+                );
+                if (unavailable || card.href === "#") {
+                  return (
+                    <div
+                      key={card.id}
+                      className={`dashboard-attention-card dashboard-attention-${card.status}${attentionFailed ? " is-error" : ""}`}
+                      aria-disabled="true"
+                    >
+                      {content}
+                    </div>
+                  );
+                }
+                return (
+                  <Link
+                    key={card.id}
+                    to={card.href}
+                    className={`dashboard-attention-card dashboard-attention-${card.status}${card.count ? " has-count" : ""}`}
+                  >
+                    {content}
+                  </Link>
+                );
+              }
+            )}
+          </div>
+        )}
+
+        {canViewConversations && !attentionLoading && !attentionFailed && attentionData?.waiting_reply_count === 0 && (
+          <p className="hint-text">صفر حقيقي: لا محادثات تنتظر الرد وفق تعريف صندوق الوارد.</p>
+        )}
       </section>
 
-      <section className="dashboard-kpi-grid" aria-label="مؤشرات الأداء">
-        {stats.map((item) => (
-          <Link
-            to={item.to}
-            className={`dashboard-kpi-card dashboard-kpi-${item.tone}`}
-            key={item.label}
-          >
-            <div className="dashboard-kpi-top">
-              <span className="dashboard-kpi-icon"><Icon name={item.icon} /></span>
-              <span className="dashboard-kpi-label">{item.label}</span>
-            </div>
-            <strong className="dashboard-kpi-value">{summary.isLoading ? "…" : item.value}</strong>
-            <small className="dashboard-kpi-meta">{item.change}</small>
-          </Link>
-        ))}
-      </section>
-
-      <section className="dashboard-panel dashboard-panel-green" aria-label="غرفة قيادة المشرف">
-        <div className="dashboard-panel-head">
-          <div>
-            <h2>غرفة قيادة المشرف</h2>
-            <p>انتظار · SLA · حمل الموظفين · القنوات</p>
-          </div>
-          <Link to="/assignments" className="dashboard-panel-link">التعيينات</Link>
-        </div>
-        <div className="dashboard-supervisor-grid">
-          <article className="dashboard-supervisor-tile">
-            <span>تنتظر رداً</span>
-            <strong>{supervisor.isLoading ? "…" : supervisor.data?.waiting_conversations ?? 0}</strong>
-          </article>
-          <article className="dashboard-supervisor-tile">
-            <span>مؤجلة</span>
-            <strong>{supervisor.isLoading ? "…" : supervisor.data?.snoozed_conversations ?? 0}</strong>
-          </article>
-          <article className="dashboard-supervisor-tile dashboard-supervisor-alert">
-            <span>تجاوز SLA</span>
-            <strong>{supervisor.isLoading ? "…" : supervisor.data?.sla_breached_conversations ?? 0}</strong>
-          </article>
-          <article className="dashboard-supervisor-tile dashboard-supervisor-alert">
-            <span>بدون حل +1 ساعة</span>
-            <strong>{supervisor.isLoading ? "…" : supervisor.data?.unresolved_over_1h ?? 0}</strong>
-          </article>
-        </div>
-        <div className="dashboard-supervisor-columns">
-          <div>
-            <h3>حمل الموظفين</h3>
-            {!(supervisor.data?.agents ?? []).length && <p className="hint-text">لا توجد محادثات معيّنة حالياً.</p>}
-            <ul className="dashboard-rank-list">
-              {(supervisor.data?.agents ?? []).map((agent) => (
-                <li key={agent.membership_id}>
-                  <strong>{agent.full_name}</strong>
-                  <span>{agent.open_conversations} مفتوحة</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3>القنوات النشطة</h3>
-            {!(supervisor.data?.by_channel ?? []).length && <p className="hint-text">لا توجد محادثات مفتوحة.</p>}
-            <ul className="dashboard-rank-list">
-              {(supervisor.data?.by_channel ?? []).map((row) => (
-                <li key={row.channel_type}>
-                  <strong>{CHANNEL_TYPE_LABELS[row.channel_type] ?? row.channel_type}</strong>
-                  <span>{row.open_conversations}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="dashboard-split">
-        <article className="dashboard-panel dashboard-panel-green">
+      {canViewConversations && (attentionData?.waiting_preview?.length ?? 0) > 0 && (
+        <section className="dashboard-panel dashboard-panel-green" aria-label="معاينة من ينتظر الرد">
           <div className="dashboard-panel-head">
             <div>
-              <h2>تنتظر ردّك</h2>
-              <p>آخر محادثات برسالة واردة من العميل</p>
+              <h2>أحدث من ينتظر الرد</h2>
+              <p>نفس تعريف «تنتظر الرد» في الوارد</p>
             </div>
-            <Link to="/inbox" className="dashboard-panel-link">صندوق الوارد</Link>
+            <Link
+              to={attentionData?.cards.find((c) => c.id === "waiting_reply")?.href || "/inbox?filter=waiting&needs_reply=1"}
+              className="dashboard-panel-link"
+            >
+              عرض الكل ({attentionData?.waiting_reply_count ?? 0})
+            </Link>
           </div>
           <div className="dashboard-waiting-list">
-            {summary.isLoading && <p className="hint-text">جاري التحميل…</p>}
-            {!summary.isLoading && !(data?.waiting_conversations ?? []).length && (
-              <p className="hint-text">لا توجد محادثات تنتظر رداً حالياً.</p>
-            )}
-            {(data?.waiting_conversations ?? []).map((item) => (
+            {(attentionData?.waiting_preview ?? []).map((item) => (
               <Link
                 key={item.id}
-                to={`/inbox?conversation=${item.id}`}
+                to={`/inbox?conversation=${item.id}&filter=waiting&needs_reply=1`}
                 className="dashboard-waiting-row"
               >
                 <div className="avatar avatar-soft">
@@ -352,133 +345,128 @@ export default function DashboardPage() {
               </Link>
             ))}
           </div>
-        </article>
+        </section>
+      )}
 
-        <article className="dashboard-panel dashboard-panel-green">
-          <div className="dashboard-panel-head">
-            <div>
-              <h2>آخر حملة</h2>
-              <p>حالة الإرسال والتسليم</p>
-            </div>
-            {campaign && (
-              <Link to="/campaigns" className="dashboard-panel-link">كل الحملات</Link>
-            )}
-          </div>
-          {!campaign && !summary.isLoading && (
-            <div className="dashboard-empty-state">
-              <p className="hint-text">لم تُنشأ حملات بعد.</p>
-              <Link to="/campaigns?action=create" className="whatsapp-button">إنشاء أول حملة</Link>
-            </div>
+      {subscription.data?.included_mac != null && canViewBilling && (
+        <MacWorkspaceBalance
+          showPolicy={false}
+          summary={{
+            cycle_month: subscription.data.cycle_month,
+            mac_count: subscription.data.mac_count ?? 0,
+            included_mac: subscription.data.included_mac,
+            mac_remaining: subscription.data.mac_remaining ?? 0,
+            is_over_mac: Boolean(subscription.data.is_over_mac),
+            over_mac_count: subscription.data.over_mac_count ?? 0,
+            estimated_over_mac_charge: subscription.data.estimated_over_mac_charge ?? 0,
+            plan_name: subscription.data.plan_name
+          }}
+        />
+      )}
+
+      {canViewReports && (data?.alerts ?? []).length > 0 && (
+        <section className="dashboard-alerts">
+          {(data?.alerts ?? []).map((alert) =>
+            alert.action_path ? (
+              <Link
+                key={alert.code}
+                to={alert.action_path}
+                className={`dashboard-alert dashboard-alert-${alert.level}`}
+              >
+                {alert.message}
+              </Link>
+            ) : (
+              <div key={alert.code} className={`dashboard-alert dashboard-alert-${alert.level}`}>
+                {alert.message}
+              </div>
+            )
           )}
-          {campaign && (
-            <div className="dashboard-campaign-card">
-              <div className="dashboard-campaign-head">
-                <strong>{campaign.name}</strong>
-                <span className={`campaign-status-badge status-${campaign.status}`}>
-                  {campaignStatusLabels[campaign.status] ?? campaign.status}
-                </span>
+        </section>
+      )}
+
+      {canViewReports && (
+        <section className="dashboard-split">
+          <article className="dashboard-panel dashboard-panel-green">
+            <div className="dashboard-panel-head">
+              <div>
+                <h2>ملخص المحادثات</h2>
+                <p>يتطلب reports.view</p>
               </div>
-              <div className="dashboard-campaign-stats">
-                <div><strong>{campaign.total}</strong><span>إجمالي</span></div>
-                <div><strong>{campaign.sent}</strong><span>مُرسل</span></div>
-                <div><strong>{campaign.delivered}</strong><span>مُسلّم</span></div>
-                <div><strong>{campaign.read}</strong><span>مقروء</span></div>
-                <div><strong>{campaign.failed}</strong><span>فشل</span></div>
+            </div>
+            {summary.isError ? (
+              <p className="hint-text">تعذّر تحميل الملخص.</p>
+            ) : (
+              <div className="dashboard-summary-list">
+                <Link to="/inbox?filter=engaged" className="dashboard-summary-item">
+                  <span>مفتوحة</span>
+                  <strong>{summary.isLoading ? "…" : data?.open_conversations ?? 0}</strong>
+                </Link>
+                <Link to="/inbox?filter=waiting&needs_reply=1" className="dashboard-summary-item">
+                  <span>تنتظر الرد</span>
+                  <strong>
+                    {attentionFailed
+                      ? "—"
+                      : attentionLoading
+                        ? "…"
+                        : attentionData?.waiting_reply_count ?? 0}
+                  </strong>
+                </Link>
+                <div className="dashboard-summary-item">
+                  <span>مغلقة</span>
+                  <strong>{summary.isLoading ? "…" : data?.closed_conversations ?? 0}</strong>
+                </div>
+                <Link to="/contacts" className="dashboard-summary-item">
+                  <span>جهات الاتصال</span>
+                  <strong>{summary.isLoading ? "…" : data?.total_contacts ?? 0}</strong>
+                </Link>
               </div>
-              {campaign.completed_at && (
-                <p className="hint-text">انتهت: {formatTime(campaign.completed_at)}</p>
+            )}
+          </article>
+
+          <article className="dashboard-panel dashboard-panel-green">
+            <div className="dashboard-panel-head">
+              <div>
+                <h2>آخر حملة</h2>
+                <p>حالة الإرسال والتسليم</p>
+              </div>
+              {campaign && (
+                <Link to="/campaigns" className="dashboard-panel-link">كل الحملات</Link>
               )}
             </div>
-          )}
-        </article>
-      </section>
-
-      <section className="dashboard-split dashboard-split-narrow">
-        <article className="dashboard-panel dashboard-panel-green">
-          <div className="dashboard-panel-head">
-            <div>
-              <h2>ملخص المحادثات</h2>
-              <p>الحالة الحالية</p>
-            </div>
-          </div>
-          <div className="dashboard-summary-list">
-            <Link to="/inbox" className="dashboard-summary-item">
-              <span>مفتوحة</span>
-              <strong>{data?.open_conversations ?? 0}</strong>
-            </Link>
-            <Link to="/inbox" className="dashboard-summary-item">
-              <span>قيد الانتظار</span>
-              <strong>{data?.pending_conversations ?? 0}</strong>
-            </Link>
-            <div className="dashboard-summary-item">
-              <span>مغلقة</span>
-              <strong>{data?.closed_conversations ?? 0}</strong>
-            </div>
-            <Link to="/contacts" className="dashboard-summary-item">
-              <span>جهات الاتصال</span>
-              <strong>{data?.total_contacts ?? 0}</strong>
-            </Link>
-          </div>
-        </article>
-
-        <article className="dashboard-panel dashboard-panel-green">
-          <div className="dashboard-panel-head">
-            <div>
-              <h2>الاشتراك</h2>
-              <p>استخدام الخطة الحالية</p>
-            </div>
-            <Link to="/billing" className="dashboard-panel-link">الفوترة</Link>
-          </div>
-          <div className="dashboard-plan-card">
-            <span className="dashboard-plan-badge">{subscription.data?.plan_name ?? "Trial"}</span>
-            <h3>{subscription.data?.status ?? "trial"}</h3>
-            <div className="progress-row">
-              <span>الموظفون</span>
-              <strong>{data?.active_users ?? 0}/{subscription.data?.max_users ?? "-"}</strong>
-            </div>
-            <div className="progress-track">
-              <div style={{ width: `${Math.min(100, ((data?.active_users ?? 0) / Math.max(1, subscription.data?.max_users ?? 1)) * 100)}%` }} />
-            </div>
-            <div className="progress-row">
-              <span>القنوات</span>
-              <strong>{data?.total_channels ?? 0}/{subscription.data?.max_channels ?? "-"}</strong>
-            </div>
-            <div className="progress-track">
-              <div style={{ width: `${Math.min(100, ((data?.total_channels ?? 0) / Math.max(1, subscription.data?.max_channels ?? 1)) * 100)}%` }} />
-            </div>
-            {subscription.data?.included_mac != null && (
-              <>
-                <div className="progress-row">
-                  <span>MAC — مساحة العمل</span>
-                  <strong>
-                    {subscription.data.mac_count ?? 0}/{subscription.data.included_mac ?? "-"}
-                    {" "}({formatMacUsagePercent(subscription.data.mac_count ?? 0, subscription.data.included_mac ?? 0)}%)
-                  </strong>
-                </div>
-                <div className="progress-track">
-                  <div
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        ((subscription.data.mac_count ?? 0) / Math.max(1, subscription.data.included_mac ?? 1)) * 100
-                      )}%`
-                    }}
-                  />
-                </div>
-                {subscription.data.is_over_mac ? (
-                  <small className="hint-text">
-                    Over MAC: +{subscription.data.over_mac_count} · تقدير ${subscription.data.estimated_over_mac_charge?.toFixed(2) ?? "0"}
-                  </small>
-                ) : (
-                  <small className="hint-text">
-                    {subscription.data.mac_remaining ?? 0} MAC متبقٍ · {subscription.data.cycle_month ?? ""}
-                  </small>
-                )}
-              </>
+            {summary.isError && <p className="hint-text">تعذّر تحميل بيانات الحملة.</p>}
+            {!campaign && !summary.isLoading && !summary.isError && (
+              <div className="dashboard-empty-state">
+                <p className="hint-text">لم تُنشأ حملات بعد.</p>
+                <Link to="/campaigns?action=create" className="whatsapp-button">إنشاء أول حملة</Link>
+              </div>
             )}
-          </div>
-        </article>
-      </section>
+            {campaign && (
+              <div className="dashboard-campaign-card">
+                <div className="dashboard-campaign-head">
+                  <strong>{campaign.name}</strong>
+                  <span className={`campaign-status-badge status-${campaign.status}`}>
+                    {campaignStatusLabels[campaign.status] ?? campaign.status}
+                  </span>
+                </div>
+                <div className="dashboard-campaign-stats">
+                  <div><strong>{campaign.total}</strong><span>إجمالي</span></div>
+                  <div><strong>{campaign.sent}</strong><span>مُرسل</span></div>
+                  <div><strong>{campaign.delivered}</strong><span>مُسلّم</span></div>
+                  <div><strong>{campaign.read}</strong><span>مقروء</span></div>
+                  <div><strong>{campaign.failed}</strong><span>فشل</span></div>
+                </div>
+                {campaign.completed_at && (
+                  <p className="hint-text">انتهت: {formatTime(campaign.completed_at)}</p>
+                )}
+              </div>
+            )}
+          </article>
+        </section>
+      )}
+
+      {!canViewReports && canViewConversations && (
+        <p className="hint-text">ملخص الأداء الكامل يتطلب صلاحية reports.view — يظهر هنا انتباه محادثاتك فقط.</p>
+      )}
     </main>
   );
 }

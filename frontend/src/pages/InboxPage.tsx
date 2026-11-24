@@ -47,7 +47,7 @@ import InboxMergeSuggestions from "../components/InboxMergeSuggestions";
 import type { Conversation, Message } from "../types/api";
 import type { Tag, Note } from "../types/inbox";
 import Icon from "../components/Icon";
-import { useWorkspaceOrganizationId } from "../hooks/useWorkspace";
+import { useSetWorkspaceOrganization, useWorkspaceOrganizationId } from "../hooks/useWorkspace";
 
 type InboxFilter = "engaged" | "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
 type InboxScope = "all" | "mine" | "team" | "custom";
@@ -102,13 +102,20 @@ export default function InboxPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const channelFilter = searchParams.get("channel_id") ?? "";
+  const urlFilter = searchParams.get("filter");
+  const urlInboxScope = searchParams.get("inbox_scope");
+  const urlNeedsReply = searchParams.get("needs_reply");
+  const urlOrganizationId = searchParams.get("organization_id");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
   const [noteText, setNoteText] = useState("");
-  const [filter, setFilter] = useState<InboxFilter>("engaged");
+  const [filter, setFilter] = useState<InboxFilter>(() => {
+    const allowed: InboxFilter[] = ["engaged", "all", "unread", "waiting", "mine", "starred", "archived", "snoozed"];
+    return allowed.includes(urlFilter as InboxFilter) ? (urlFilter as InboxFilter) : "engaged";
+  });
   const [listLimit, setListLimit] = useState(INBOX_CONVERSATIONS_PAGE_SIZE);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
@@ -136,7 +143,12 @@ export default function InboxPage() {
   const [newConversationName, setNewConversationName] = useState("");
   const [startingConversation, setStartingConversation] = useState(false);
   const [switchingChannelId, setSwitchingChannelId] = useState<string | null>(null);
-  const [inboxScope, setInboxScope] = useState<InboxScope>("all");
+  const [inboxScope, setInboxScope] = useState<InboxScope>(() => {
+    if (urlInboxScope === "mine" || urlInboxScope === "team" || urlInboxScope === "custom") {
+      return urlInboxScope;
+    }
+    return "all";
+  });
   const [customInboxId, setCustomInboxId] = useState("");
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [closeNote, setCloseNote] = useState("");
@@ -155,6 +167,7 @@ export default function InboxPage() {
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const workspaceOrganizationId = useWorkspaceOrganizationId();
+  const setWorkspaceOrganizationId = useSetWorkspaceOrganization();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageSearchRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<number | null>(null);
@@ -162,13 +175,16 @@ export default function InboxPage() {
   const showArchived = filter === "archived";
   const showSnoozed = filter === "snoozed";
   /** Default: only conversations with customer inbound activity; «الكل» turns this off. */
-  const engagedOnly = filter !== "all";
+  const engagedOnly = filter !== "all" && filter !== "waiting";
+  const needsReplyOnly =
+    filter === "waiting" || urlNeedsReply === "1" || urlNeedsReply === "true";
   const conversationsQuery = useQuery({
     queryKey: [
       "conversations",
       showArchived,
       showSnoozed,
       engagedOnly,
+      needsReplyOnly,
       listLimit,
       channelFilter,
       workspaceOrganizationId,
@@ -182,6 +198,7 @@ export default function InboxPage() {
         engaged_only: engagedOnly,
         limit: listLimit
       };
+      if (needsReplyOnly) params.needs_reply = true;
       if (channelFilter) params.channel_id = channelFilter;
       if (workspaceOrganizationId) params.organization_id = workspaceOrganizationId;
       if (inboxScope === "mine" || inboxScope === "team") params.inbox_scope = inboxScope;
@@ -197,6 +214,26 @@ export default function InboxPage() {
     placeholderData: keepPreviousData,
     refetchInterval: 45_000
   });
+
+  useEffect(() => {
+    const allowed: InboxFilter[] = ["engaged", "all", "unread", "waiting", "mine", "starred", "archived", "snoozed"];
+    if (urlFilter && allowed.includes(urlFilter as InboxFilter) && urlFilter !== filter) {
+      setFilter(urlFilter as InboxFilter);
+    }
+  }, [urlFilter, filter]);
+
+  useEffect(() => {
+    if (urlInboxScope === "mine" || urlInboxScope === "team" || urlInboxScope === "custom" || urlInboxScope === "all") {
+      const nextScope = urlInboxScope === "all" ? "all" : urlInboxScope;
+      if (nextScope !== inboxScope) setInboxScope(nextScope);
+    }
+  }, [urlInboxScope, inboxScope]);
+
+  useEffect(() => {
+    if (urlOrganizationId && urlOrganizationId !== workspaceOrganizationId) {
+      setWorkspaceOrganizationId(urlOrganizationId);
+    }
+  }, [urlOrganizationId, workspaceOrganizationId, setWorkspaceOrganizationId]);
   const customInboxesQuery = useQuery({
     queryKey: ["custom-inboxes", workspaceOrganizationId],
     queryFn: async () =>
@@ -279,8 +316,11 @@ export default function InboxPage() {
     [conversations, channelFilter]
   );
   const waitingCount = useMemo(
-    () => channelScopedConversations.filter((item) => item.needs_reply).length,
-    [channelScopedConversations]
+    () =>
+      needsReplyOnly
+        ? channelScopedConversations.length
+        : channelScopedConversations.filter((item) => item.needs_reply).length,
+    [channelScopedConversations, needsReplyOnly]
   );
   const requestedConversationId = searchParams.get("conversation");
   const filtered = useMemo(() => channelScopedConversations.filter((item) => {
@@ -295,8 +335,10 @@ export default function InboxPage() {
   }), [channelScopedConversations, filter, search]);
 
   useEffect(() => {
-    setListLimit(INBOX_CONVERSATIONS_PAGE_SIZE);
-  }, [showArchived, showSnoozed, engagedOnly, channelFilter, workspaceOrganizationId, inboxScope, customInboxId]);
+    // When opening «تنتظر الرد» (e.g. from dashboard), load up to the inbox
+    // ceiling so the list length can match the attention card count.
+    setListLimit(needsReplyOnly ? INBOX_CONVERSATIONS_LIMIT : INBOX_CONVERSATIONS_PAGE_SIZE);
+  }, [showArchived, showSnoozed, engagedOnly, needsReplyOnly, channelFilter, workspaceOrganizationId, inboxScope, customInboxId]);
 
   useEffect(() => {
     if (!requestedConversationId) return;
@@ -1218,6 +1260,10 @@ export default function InboxPage() {
                 onClick={() => {
                   setInboxScope(value);
                   if (value !== "custom") setCustomInboxId("");
+                  const next = new URLSearchParams(searchParams);
+                  if (value === "all") next.delete("inbox_scope");
+                  else next.set("inbox_scope", value);
+                  setSearchParams(next, { replace: true });
                 }}
               >
                 {label}
@@ -1273,7 +1319,15 @@ export default function InboxPage() {
               <button
                 key={value}
                 className={filter === value ? "active" : ""}
-                onClick={() => setFilter(value)}
+                onClick={() => {
+                  setFilter(value);
+                  const next = new URLSearchParams(searchParams);
+                  if (value === "engaged") next.delete("filter");
+                  else next.set("filter", value);
+                  if (value === "waiting") next.set("needs_reply", "1");
+                  else next.delete("needs_reply");
+                  setSearchParams(next, { replace: true });
+                }}
                 title={
                   value === "engaged"
                     ? "محادثات تفاعل معها العميل (رسالة أو زر)"
