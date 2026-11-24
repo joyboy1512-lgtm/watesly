@@ -93,8 +93,8 @@ function RecipientTable({ title, rows }: { title: string; rows: CampaignRecipien
   return (
     <div className="campaign-recipient-group">
       <h4>{title} ({rows.length})</h4>
-      <div className="admin-table-wrap">
-        <table className="admin-erp-table">
+      <div className="admin-table-wrap campaign-report-table-wrap">
+        <table className="admin-erp-table campaign-report-table">
           <thead>
             <tr>
               <th>الاسم</th>
@@ -250,14 +250,29 @@ export function CampaignRecipientsPanel({
         </div>
       )}
       {report && (
-        <div className="stats-grid campaign-details-stats">
-          <article className="metric-card"><span>إجمالي</span><strong>{report.total}</strong></article>
-          <article className="metric-card">
-            <span>تم الإرسال</span>
-            <strong>{campaignSentCount(report)}</strong>
-          </article>
-          <article className="metric-card"><span>فشل</span><strong>{report.failed}</strong></article>
-          <article className="metric-card"><span>لم يُرسل بعد</span><strong>{report.pending ?? notSent.length}</strong></article>
+        <div className="admin-table-wrap campaign-report-table-wrap">
+          <table className="admin-erp-table campaign-report-table campaign-report-summary-table">
+            <thead>
+              <tr>
+                <th>إجمالي</th>
+                <th>تم الإرسال</th>
+                <th>فشل</th>
+                <th>لم يُرسل بعد</th>
+                <th>تسليم</th>
+                <th>قراءة</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{report.total.toLocaleString("ar")}</td>
+                <td>{campaignSentCount(report).toLocaleString("ar")}</td>
+                <td>{report.failed.toLocaleString("ar")}</td>
+                <td>{(report.pending ?? notSent.length).toLocaleString("ar")}</td>
+                <td>{formatDeliveryRate(report.delivery_rate, report)}</td>
+                <td>{formatReadRate(report.read_rate, report)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       )}
       <div className="inline-actions">
@@ -598,9 +613,9 @@ export function CampaignResultsTable({
   }
 
   return (
-    <div className="admin-table-wrap">
+    <div className="admin-table-wrap campaigns-erp-table-wrap">
       <table className="admin-erp-table campaigns-erp-table">
-        <thead>
+        <thead className="campaigns-erp-thead-brand">
           <tr>
             <th>الحملة / القالب</th>
             <th>الحالة</th>
