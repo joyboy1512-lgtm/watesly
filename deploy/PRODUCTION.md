@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-24) — Campaign headers match active green
+
+| Item | Value |
+|------|-------|
+| Commit | `2604405` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-D1MybPNu.js`, `index-Dx_kBA4_.css` |
+| Snapshot record | `deploy/production-snapshot-20261124-campaign-header-active-green.json` |
+
 ### Production snapshot (2026-11-24) — Campaign report sticky + close
 
 | Item | Value |

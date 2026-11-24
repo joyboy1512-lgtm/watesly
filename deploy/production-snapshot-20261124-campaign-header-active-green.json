@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-24",
+  "commit": "2604405",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-D1MybPNu.js",
+    "css": "index-Dx_kBA4_.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Main campaigns table header uses active-campaigns WhatsApp green",
+    "Report summary and recipient table headers match the same green",
+    "Sticky report header bar matches active green"
+  ],
+  "notes": "Deployed via SSH. PR #190."
+}
