@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "e4319bf",
-    "git_commit_message": "Style campaign report tables with green headers and column lines",
+    "git_commit": "e4ac555",
+    "git_commit_message": "Polish campaign report: sticky row, close, light header, scroll",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-Cb9lZBCD.js",
-      "css": "index-BD8d2lep.css"
+      "js": "index-DUKWtALB.js",
+      "css": "index-DnGkgl9g.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "e4319bf",
-  "notes": "Campaign report tables: brand-green sticky headers and lined columns"
+  "commit": "e4ac555",
+  "notes": "Sticky campaign row + light-green report header, إغلاق, 10-row recipient scroll"
 }

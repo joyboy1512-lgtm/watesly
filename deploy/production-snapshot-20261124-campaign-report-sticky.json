@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-24",
+  "commit": "e4ac555",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DUKWtALB.js",
+    "css": "index-DnGkgl9g.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Campaign action buttons stay on one row",
+    "Open campaign row sticks under table header",
+    "Light-green sticky report header with إغلاق",
+    "Recipient tables show ~10 rows then scroll; phone/status centered"
+  ],
+  "notes": "Deployed via SSH. PR #189."
+}
