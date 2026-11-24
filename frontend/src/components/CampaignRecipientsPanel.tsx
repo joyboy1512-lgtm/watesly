@@ -88,35 +88,36 @@ export async function downloadCampaignRecipients(campaignId: string, format: "xl
   URL.revokeObjectURL(url);
 }
 
-function RecipientTable({ title, rows }: { title: string; rows: CampaignRecipient[] }) {
-  if (!rows.length) return null;
+type ReportTabId = "summary" | "sent" | "failed" | "pending";
+
+function RecipientTable({ rows, emptyLabel }: { rows: CampaignRecipient[]; emptyLabel: string }) {
+  if (!rows.length) {
+    return <p className="hint-text campaign-report-tab-empty">{emptyLabel}</p>;
+  }
   return (
-    <div className="campaign-recipient-group">
-      <h4>{title} ({rows.length})</h4>
-      <div className="admin-table-wrap campaign-report-table-wrap campaign-recipient-table-scroll">
-        <table className="admin-erp-table campaign-report-table campaign-recipient-table">
-          <thead>
-            <tr>
-              <th>الاسم</th>
-              <th>الرقم</th>
-              <th>الحالة</th>
-              <th>ملاحظة</th>
+    <div className="admin-table-wrap campaign-report-table-wrap">
+      <table className="admin-erp-table campaign-report-table campaign-recipient-table">
+        <thead>
+          <tr>
+            <th>الاسم</th>
+            <th>الرقم</th>
+            <th>الحالة</th>
+            <th>ملاحظة</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((item) => (
+            <tr key={`${item.contact_id}-${item.status}`}>
+              <td>{item.display_name || "—"}</td>
+              <td className="campaign-report-cell-center" dir="ltr">{item.phone}</td>
+              <td className="campaign-report-cell-center">
+                {RECIPIENT_STATUS_LABELS[item.status] ?? item.status}
+              </td>
+              <td>{item.error_message || "—"}</td>
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((item) => (
-              <tr key={`${item.contact_id}-${item.status}`}>
-                <td>{item.display_name || "—"}</td>
-                <td className="campaign-report-cell-center" dir="ltr">{item.phone}</td>
-                <td className="campaign-report-cell-center">
-                  {RECIPIENT_STATUS_LABELS[item.status] ?? item.status}
-                </td>
-                <td>{item.error_message || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -154,6 +155,7 @@ export function CampaignRecipientsPanel({
   const client = useQueryClient();
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [retrying, setRetrying] = useState(false);
+  const [activeTab, setActiveTab] = useState<ReportTabId>("summary");
 
   const recipients = useQuery({
     queryKey: ["campaign-recipients", campaignId],
@@ -176,6 +178,7 @@ export function CampaignRecipientsPanel({
   const sent = rows.filter((r) => SUCCESS_STATUSES.has(r.status));
   const failed = rows.filter((r) => r.status === "failed");
   const notSent = rows.filter((r) => PENDING_STATUSES.has(r.status));
+  const pendingCount = report?.pending ?? notSent.length;
   const canArchive = status ? ARCHIVABLE_STATUSES.has(status) && !archivedAt : false;
   const canUnarchive = Boolean(archivedAt);
   const canRetry =
@@ -183,6 +186,10 @@ export function CampaignRecipientsPanel({
     !archivedAt &&
     !showArchived &&
     (failedReasons.data?.failed_total ?? failed.length) > 0;
+
+  useEffect(() => {
+    setActiveTab("summary");
+  }, [campaignId]);
 
   const reasonGroups = failedReasons.data?.reasons ?? [];
   const selectedCount = useMemo(() => {
@@ -245,6 +252,13 @@ export function CampaignRecipientsPanel({
     }
   }
 
+  const tabs: { id: ReportTabId; label: string; count: number }[] = [
+    { id: "summary", label: "الملخص", count: report?.total ?? rows.length },
+    { id: "sent", label: "تم الإرسال", count: report ? campaignSentCount(report) : sent.length },
+    { id: "failed", label: "فشل", count: report?.failed ?? failed.length },
+    { id: "pending", label: "لم يُرسل", count: pendingCount }
+  ];
+
   return (
     <div className="campaign-details-panel">
       <div className="campaign-result-header campaign-result-header-sticky">
@@ -294,102 +308,148 @@ export function CampaignRecipientsPanel({
           )}
         </div>
       </div>
-      {report && (
-        <div className="admin-table-wrap campaign-report-table-wrap">
-          <table className="admin-erp-table campaign-report-table campaign-report-summary-table">
-            <thead>
-              <tr>
-                <th>إجمالي</th>
-                <th>تم الإرسال</th>
-                <th>فشل</th>
-                <th>لم يُرسل بعد</th>
-                <th>تسليم</th>
-                <th>قراءة</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{report.total.toLocaleString("ar")}</td>
-                <td>{campaignSentCount(report).toLocaleString("ar")}</td>
-                <td>{report.failed.toLocaleString("ar")}</td>
-                <td>{(report.pending ?? notSent.length).toLocaleString("ar")}</td>
-                <td>{formatDeliveryRate(report.delivery_rate, report)}</td>
-                <td>{formatReadRate(report.read_rate, report)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
-      {canRetry && (
-        <div className="campaign-retry-panel">
-          <strong>إعادة إرسال الفاشلة حسب السبب</strong>
-          <p className="hint-text">
-            اختر أسباب الفشل المؤكدة فقط. النظام يطابق الحالة أولاً ولن يعيد إرسال من وصلتهم الرسالة
-            أو من فشلهم غير مؤكد (انقطاع العامل).
-          </p>
-          <div className="campaign-retry-reasons">
-            {reasonGroups.map((item) => {
-              const checked = selectedReasons.includes(item.reason_key);
-              return (
-                <label key={item.reason_key} className="field-label checkbox-inline">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      setSelectedReasons((current) =>
-                        checked
-                          ? current.filter((key) => key !== item.reason_key)
-                          : [...current, item.reason_key]
-                      );
-                    }}
-                  />
-                  <span>
-                    {item.label} · {item.count}
-                    {item.sample_errors[0] ? ` — ${item.sample_errors[0].slice(0, 80)}` : ""}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          <div className="inline-actions">
-            <button
-              type="button"
-              className="secondary-button compact"
-              onClick={() => setSelectedReasons(reasonGroups.map((item) => item.reason_key))}
-            >
-              تحديد الكل
-            </button>
-            <button
-              type="button"
-              className="secondary-button compact"
-              onClick={() =>
-                setSelectedReasons(
-                  reasonGroups
-                    .filter((item) =>
-                      ["rate_limit", "other", "template_policy"].includes(item.reason_key)
-                    )
-                    .map((item) => item.reason_key)
-                )
-              }
-            >
-              القابلة للمحاولة فقط
-            </button>
-            <button
-              type="button"
-              className="whatsapp-button compact"
-              disabled={retrying || actionBusy || selectedCount === 0}
-              onClick={() => void retrySelectedFailures()}
-            >
-              {retrying ? "جاري إعادة الجدولة…" : `إعادة إرسال المحددة (${selectedCount})`}
-            </button>
-          </div>
-        </div>
-      )}
-      {recipients.isLoading && <p className="hint-text">جاري تحميل الأرقام…</p>}
-      <RecipientTable title="تم الإرسال لهم" rows={sent} />
-      <RecipientTable title="فشل الإرسال" rows={failed} />
-      <RecipientTable title="لم يُرسل بعد" rows={notSent} />
-      {!recipients.isLoading && !rows.length && <p className="hint-text">لا توجد بيانات مستلمين.</p>}
+
+      <div className="campaign-report-tabs" role="tablist" aria-label="أقسام تقرير الحملة">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={activeTab === tab.id ? "campaign-report-tab active" : "campaign-report-tab"}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <span>{tab.label}</span>
+            <strong>{tab.count.toLocaleString("ar")}</strong>
+          </button>
+        ))}
+      </div>
+
+      <div className="campaign-report-tab-body" role="tabpanel">
+        {activeTab === "summary" && (
+          <>
+            {report ? (
+              <div className="admin-table-wrap campaign-report-table-wrap">
+                <table className="admin-erp-table campaign-report-table campaign-report-summary-table">
+                  <thead>
+                    <tr>
+                      <th>إجمالي</th>
+                      <th>تم الإرسال</th>
+                      <th>فشل</th>
+                      <th>لم يُرسل بعد</th>
+                      <th>تسليم</th>
+                      <th>قراءة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{report.total.toLocaleString("ar")}</td>
+                      <td>{campaignSentCount(report).toLocaleString("ar")}</td>
+                      <td>{report.failed.toLocaleString("ar")}</td>
+                      <td>{pendingCount.toLocaleString("ar")}</td>
+                      <td>{formatDeliveryRate(report.delivery_rate, report)}</td>
+                      <td>{formatReadRate(report.read_rate, report)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="hint-text">لا يتوفر ملخص لهذه الحملة بعد.</p>
+            )}
+          </>
+        )}
+
+        {activeTab === "sent" && (
+          recipients.isLoading ? (
+            <p className="hint-text">جاري تحميل الأرقام…</p>
+          ) : (
+            <RecipientTable rows={sent} emptyLabel="لا يوجد مستلمون في حالة الإرسال." />
+          )
+        )}
+
+        {activeTab === "failed" && (
+          <>
+            {canRetry && (
+              <div className="campaign-retry-panel">
+                <strong>إعادة إرسال الفاشلة حسب السبب</strong>
+                <p className="hint-text">
+                  اختر أسباب الفشل المؤكدة فقط. النظام يطابق الحالة أولاً ولن يعيد إرسال من وصلتهم الرسالة
+                  أو من فشلهم غير مؤكد (انقطاع العامل).
+                </p>
+                <div className="campaign-retry-reasons">
+                  {reasonGroups.map((item) => {
+                    const checked = selectedReasons.includes(item.reason_key);
+                    return (
+                      <label key={item.reason_key} className="field-label checkbox-inline">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedReasons((current) =>
+                              checked
+                                ? current.filter((key) => key !== item.reason_key)
+                                : [...current, item.reason_key]
+                            );
+                          }}
+                        />
+                        <span>
+                          {item.label} · {item.count}
+                          {item.sample_errors[0] ? ` — ${item.sample_errors[0].slice(0, 80)}` : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    onClick={() => setSelectedReasons(reasonGroups.map((item) => item.reason_key))}
+                  >
+                    تحديد الكل
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    onClick={() =>
+                      setSelectedReasons(
+                        reasonGroups
+                          .filter((item) =>
+                            ["rate_limit", "other", "template_policy"].includes(item.reason_key)
+                          )
+                          .map((item) => item.reason_key)
+                      )
+                    }
+                  >
+                    القابلة للمحاولة فقط
+                  </button>
+                  <button
+                    type="button"
+                    className="whatsapp-button compact"
+                    disabled={retrying || actionBusy || selectedCount === 0}
+                    onClick={() => void retrySelectedFailures()}
+                  >
+                    {retrying ? "جاري إعادة الجدولة…" : `إعادة إرسال المحددة (${selectedCount})`}
+                  </button>
+                </div>
+              </div>
+            )}
+            {recipients.isLoading ? (
+              <p className="hint-text">جاري تحميل الأرقام…</p>
+            ) : (
+              <RecipientTable rows={failed} emptyLabel="لا توجد رسائل فاشلة." />
+            )}
+          </>
+        )}
+
+        {activeTab === "pending" && (
+          recipients.isLoading ? (
+            <p className="hint-text">جاري تحميل الأرقام…</p>
+          ) : (
+            <RecipientTable rows={notSent} emptyLabel="لا توجد رسائل معلّقة." />
+          )
+        )}
+      </div>
     </div>
   );
 }

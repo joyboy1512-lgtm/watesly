@@ -3178,7 +3178,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaign-retry-reasons {
   display: grid;
   gap: 6px;
-  max-height: 200px;
+  max-height: none;
   overflow: auto;
   padding: 8px;
   border: 1px solid var(--line);
@@ -8175,18 +8175,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-details-panel {
   max-height: min(58vh, 620px);
-  overflow: auto;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
 }
 .campaign-result-header-sticky {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 6;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   flex-wrap: nowrap;
-  margin: 0 0 8px;
+  margin: 0;
   padding: 5px 10px;
   min-height: 36px;
   border-radius: 10px;
@@ -8194,6 +8196,57 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: linear-gradient(135deg, #25d366, #128c7e);
   color: #fff;
   box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-dark) 55%, transparent);
+}
+.campaign-report-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px;
+}
+.campaign-report-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  background: #fff;
+  color: var(--primary-darker);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.campaign-report-tab strong {
+  min-width: 1.5em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-soft) 80%, #fff);
+  font-size: 11px;
+}
+.campaign-report-tab.active {
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  border-color: transparent;
+  color: #fff;
+}
+.campaign-report-tab.active strong {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.campaign-report-tab-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding-bottom: 4px;
+}
+.campaign-report-tab-empty {
+  margin: 8px 0;
 }
 .campaign-result-header-main {
   display: flex;
@@ -8254,17 +8307,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
 }
 .campaign-report-table-wrap {
-  overflow: auto;
+  overflow: visible;
   border: 1px solid color-mix(in srgb, var(--primary-dark) 22%, var(--line));
   border-radius: 12px;
   background: var(--panel);
-}
-.campaign-recipient-table-scroll {
-  /* header (~36px) + 10 body rows (~36px) */
-  max-height: 396px;
-  overflow-x: auto;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 .campaign-report-table {
   margin: 0;
@@ -9074,16 +9120,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-details-row td { background: var(--panel-soft); padding: 0 !important; }
 .campaign-details-panel {
-  padding: 10px 12px 14px;
-  display: grid;
-  gap: 10px;
+  padding: 10px 12px 12px;
   align-content: start;
 }
-.campaign-recipient-group {
-  min-width: 0;
+.campaign-retry-panel {
+  margin-top: 0;
 }
-.campaign-recipient-group h4 { margin: 0 0 6px; font-size: 13px; color: var(--primary-darker); }
-.campaign-recipient-group table { width: 100%; font-size: 13px; }
+.campaign-retry-reasons {
+  max-height: none;
+}
 .campaign-result-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .campaign-result-badge { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; font-size: 13px; }
 .campaign-result-badge strong { font-size: 14px; }
