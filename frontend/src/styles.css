@@ -8094,6 +8094,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
 }
 .campaigns-erp-table-wrap {
+  --campaigns-thead-h: 44px;
   overflow: auto;
   max-height: min(70vh, 720px);
   border: 1px solid color-mix(in srgb, var(--primary-dark) 22%, var(--line));
@@ -8110,7 +8111,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaigns-erp-table thead th {
   position: sticky;
   top: 0;
-  z-index: 4;
+  z-index: 5;
   padding: 11px 12px;
   text-align: start;
   font-size: 12px;
@@ -8144,26 +8145,86 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaigns-erp-table tbody tr.campaign-row-active > td {
   background: color-mix(in srgb, var(--primary) 10%, var(--panel));
 }
+.campaigns-erp-table tbody tr.campaign-row-sticky > td {
+  position: sticky;
+  top: var(--campaigns-thead-h);
+  z-index: 4;
+  background: color-mix(in srgb, var(--primary-soft) 78%, #fff) !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-dark) 22%, var(--line));
+}
 .campaigns-erp-table .campaign-row-actions,
 .campaigns-erp-table .admin-actions {
-  flex-wrap: wrap;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  min-width: max-content;
 }
 .campaign-row-actions .secondary-button.compact,
 .campaign-row-actions .whatsapp-button.compact {
-  padding: 6px 10px;
+  padding: 5px 9px;
   font-size: 12px;
+  flex: 0 0 auto;
 }
 .campaign-expand-row td {
   background: color-mix(in srgb, var(--primary) 4%, var(--panel-soft)) !important;
   padding: 0 !important;
   border-inline-end: none !important;
 }
+.campaign-details-panel {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+}
+.campaign-result-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 88%, #fff);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.campaign-result-header-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.campaign-result-header-main .section-title-sm {
+  margin: 0;
+  color: var(--primary-darker);
+}
+.campaign-result-header-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.campaign-report-close-btn {
+  font-weight: 700;
+  border-color: color-mix(in srgb, var(--primary-dark) 35%, var(--line)) !important;
+  color: var(--primary-darker) !important;
+}
 .campaign-report-table-wrap {
   overflow: auto;
   border: 1px solid color-mix(in srgb, var(--primary-dark) 22%, var(--line));
   border-radius: 12px;
   background: var(--panel);
+}
+.campaign-recipient-table-scroll {
+  /* header (~40px) + 10 body rows (~38px) */
+  max-height: 420px;
+  overflow: auto;
 }
 .campaign-report-table {
   margin: 0;
@@ -8180,16 +8241,16 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
-  color: #fff !important;
-  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
-  border-inline-end: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--primary-darker) !important;
+  background: color-mix(in srgb, var(--primary-soft) 92%, #fff) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  border-inline-end: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
 }
 .campaign-report-table thead th:last-child {
   border-inline-end: none;
 }
 .campaign-report-table tbody td {
-  padding: 10px 12px;
+  padding: 8px 12px;
   vertical-align: middle;
   border-bottom: 1px solid var(--line);
   border-inline-end: 1px solid color-mix(in srgb, var(--primary-dark) 12%, var(--line));
@@ -8200,6 +8261,13 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-report-table tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--primary-soft) 40%, #fff);
+}
+.campaign-report-cell-center {
+  text-align: center !important;
+}
+.campaign-recipient-table thead th:nth-child(2),
+.campaign-recipient-table thead th:nth-child(3) {
+  text-align: center;
 }
 .campaign-report-summary-table {
   min-width: 560px;
@@ -8957,7 +9025,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-radius: 10px;
 }
 .campaign-details-row td { background: var(--panel-soft); padding: 0 !important; }
-.campaign-details-panel { padding: 16px; display: grid; gap: 14px; }
+.campaign-details-panel {
+  padding: 12px 14px 16px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
 .campaign-recipient-group h4 { margin: 0 0 8px; font-size: 14px; color: var(--primary-darker); }
 .campaign-recipient-group table { width: 100%; font-size: 13px; }
 .campaign-result-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
