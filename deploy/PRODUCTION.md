@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Dashboard attention board
+
+| Item | Value |
+|------|-------|
+| Commit | `fc35ccf` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-BXdPaMLN.js`, `index-DqyTk2e7.css` |
+| Snapshot record | `deploy/production-snapshot-20261125-dashboard-attention.json` |
+
 ### Production snapshot (2026-11-25) — Campaign report tabs
 
 | Item | Value |

@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-25",
+  "commit": "fc35ccf",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BXdPaMLN.js",
+    "css": "index-DqyTk2e7.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Dashboard attention board: ماذا يتطلب انتباهي اليوم؟",
+    "Role-aware cards for employee / supervisor / owner",
+    "Shared waiting-reply definition with inbox needs_reply",
+    "Deep links preserve branch/channel/status",
+    "Last-updated + real zero vs load failure"
+  ],
+  "notes": "Deployed via SSH. PR #193."
+}
