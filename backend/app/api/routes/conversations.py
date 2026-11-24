@@ -103,6 +103,10 @@ async def get_conversations(
     organization_id: UUID | None = Query(None),
     inbox_scope: str | None = Query(None, description="all | mine | team"),
     custom_inbox_id: UUID | None = Query(None),
+    needs_reply: bool | None = Query(
+        None,
+        description="When true, only conversations waiting for a reply (latest inbound, open/pending)",
+    ),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConversationResponse]:
@@ -120,6 +124,7 @@ async def get_conversations(
         organization_id=organization_id,
         inbox_scope=inbox_scope,
         custom_inbox_id=custom_inbox_id,
+        needs_reply=needs_reply,
     )
     conversation_ids = [row[0].id for row in rows]
     last_inbound_map = await get_last_inbound_by_conversation(db, conversation_ids)

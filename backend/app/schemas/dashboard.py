@@ -49,3 +49,31 @@ class DashboardSummaryResponse(BaseModel):
     waiting_conversations: list[DashboardWaitingConversation] = Field(default_factory=list)
     latest_campaign: DashboardLatestCampaign | None = None
     alerts: list[DashboardAlert] = Field(default_factory=list)
+
+
+class DashboardAttentionCard(BaseModel):
+    id: str
+    label: str
+    count: int | None = None
+    href: str
+    status: str = "ok"  # ok | unavailable | error
+    hint: str | None = None
+    meta: str | None = None
+
+
+class DashboardAttentionPrimary(BaseModel):
+    title: str
+    detail: str
+    href: str
+    count: int | None = None
+
+
+class DashboardAttentionResponse(BaseModel):
+    role: str
+    audience: str  # employee | supervisor | owner
+    updated_at: datetime
+    question: str = "ماذا يتطلب انتباهي اليوم؟"
+    primary_action: DashboardAttentionPrimary
+    cards: list[DashboardAttentionCard] = Field(default_factory=list)
+    waiting_reply_count: int = 0
+    waiting_preview: list[DashboardWaitingConversation] = Field(default_factory=list)
