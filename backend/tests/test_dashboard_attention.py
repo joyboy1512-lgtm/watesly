@@ -18,6 +18,7 @@ def test_waiting_reply_definition_is_shared() -> None:
     conversations = read("app/services/conversations.py")
     assert "needs_reply: bool | None = None" in conversations
     assert "waiting_reply_predicates" in conversations
+    assert "last_message_at.asc()" in conversations or "asc().nulls_last()" in conversations
 
     inbox_tools = read("app/services/inbox_tools.py")
     assert "count_waiting_reply" in inbox_tools

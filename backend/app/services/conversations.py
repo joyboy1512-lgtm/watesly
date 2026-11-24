@@ -155,7 +155,6 @@ async def list_conversations(
             Conversation.deleted_at.is_(None),
             Contact.deleted_at.is_(None),
         )
-        .order_by(desc(Conversation.last_message_at))
         .limit(min(max(limit, 1), _LIST_LIMIT_MAX))
     )
     if engaged_only:
@@ -242,6 +241,11 @@ async def list_conversations(
         query = query.where(*waiting_reply_predicates(now=now))
     if _limited_to_assigned_conversations(membership) and scope not in {"mine", "team"}:
         query = query.where(Conversation.assigned_membership_id == membership.id)
+    # Waiting queue: oldest inbound needing a reply first; otherwise newest activity.
+    if needs_reply is True:
+        query = query.order_by(Conversation.last_message_at.asc().nulls_last())
+    else:
+        query = query.order_by(desc(Conversation.last_message_at))
     rows = list((await db.execute(query)).all())
     result = []
     for conversation, contact, message, unread in rows:
