@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "867cbb7",
-    "git_commit_message": "Simplify campaign report with tabs and a single scroll",
+    "git_commit": "fc35ccf",
+    "git_commit_message": "Dashboard attention board live",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-DZ9NTFna.js",
-      "css": "index-AoHcMUYa.css"
+      "js": "index-BXdPaMLN.js",
+      "css": "index-DqyTk2e7.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "867cbb7",
-  "notes": "Campaign report tabs: ملخص / تم الإرسال / فشل / لم يُرسل with one scroll"
+  "commit": "fc35ccf",
+  "notes": "Role-aware dashboard attention board: ماذا يتطلب انتباهي اليوم؟ (PR #193)"
 }
