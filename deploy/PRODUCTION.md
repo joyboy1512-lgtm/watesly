@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-24) — Campaign report table green headers
+
+| Item | Value |
+|------|-------|
+| Commit | `e4319bf` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-Cb9lZBCD.js`, `index-BD8d2lep.css` |
+| Snapshot record | `deploy/production-snapshot-20261124-campaign-report-table.json` |
+
 ### Production snapshot (2026-11-23) — Period exclude sync Meta + campaigns
 
 | Item | Value |

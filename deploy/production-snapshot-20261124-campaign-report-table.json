@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-24",
+  "commit": "e4319bf",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-Cb9lZBCD.js",
+    "css": "index-BD8d2lep.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Campaigns list table with brand-green sticky header and column lines",
+    "Expanded campaign report summary as lined table",
+    "Recipient tables match green header + grid borders"
+  ],
+  "notes": "Deployed via SSH. PR #188."
+}
