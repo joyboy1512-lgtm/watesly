@@ -27,12 +27,59 @@ export function phonesMatch(left: string, right: string, countryCode = DEFAULT_C
   return Boolean(leftNorm && rightNorm && leftNorm === rightNorm);
 }
 
+/** Human waiting duration: minutes → hours → days for long waits. */
 export function formatWaitingMinutes(minutes: number | null | undefined) {
   if (minutes == null) return "";
-  if (minutes < 60) return `${minutes} د`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest ? `${hours} س ${rest} د` : `${hours} س`;
+  const total = Math.max(0, Math.floor(minutes));
+  if (total < 60) return `${total} د`;
+  if (total < 1440) {
+    const hours = Math.floor(total / 60);
+    const rest = total % 60;
+    return rest ? `${hours} س ${rest} د` : `${hours} س`;
+  }
+  const days = Math.floor(total / 1440);
+  const remHours = Math.floor((total % 1440) / 60);
+  return remHours ? `${days} ي ${remHours} س` : `${days} ي`;
+}
+
+/** Exact timestamp for waiting tooltip (last inbound / last message). */
+export function formatWaitingExactTime(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ar", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+/** Oldest waiting = highest waiting_minutes (longest since last inbound needing reply). */
+export function pickOldestWaitingConversation<T extends { waiting_minutes?: number | null; last_inbound_at?: string | null; last_message_at?: string | null }>(
+  items: T[]
+): T | null {
+  if (!items.length) return null;
+  return [...items].sort((a, b) => {
+    const waitDiff = (b.waiting_minutes ?? 0) - (a.waiting_minutes ?? 0);
+    if (waitDiff !== 0) return waitDiff;
+    const aAt = a.last_inbound_at || a.last_message_at || "";
+    const bAt = b.last_inbound_at || b.last_message_at || "";
+    return aAt.localeCompare(bAt);
+  })[0] ?? null;
+}
+
+export function sortWaitingOldestFirst<T extends { waiting_minutes?: number | null; last_inbound_at?: string | null; last_message_at?: string | null }>(
+  items: T[]
+): T[] {
+  return [...items].sort((a, b) => {
+    const waitDiff = (b.waiting_minutes ?? 0) - (a.waiting_minutes ?? 0);
+    if (waitDiff !== 0) return waitDiff;
+    const aAt = a.last_inbound_at || a.last_message_at || "";
+    const bAt = b.last_inbound_at || b.last_message_at || "";
+    return aAt.localeCompare(bAt);
+  });
 }
 
 const messageStatusLabels: Record<string, string> = {

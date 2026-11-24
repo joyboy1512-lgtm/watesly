@@ -8,7 +8,20 @@ import { toastStore } from "../stores/toast";
 import { useHasPermission } from "../hooks/usePermissions";
 import { uploadFile } from "../lib/uploads";
 import { formatWindowExpiry } from "../lib/serviceWindow";
-import { formatSnoozedUntil, formatWaitingMinutes, INBOX_CONVERSATIONS_LIMIT, INBOX_CONVERSATIONS_PAGE_SIZE, isCurrentlySnoozed, normalizeWhatsAppPhone, phonesMatch, snoozeUntilTomorrowMorning, startConversationOnChannel } from "../lib/inboxHelpers";
+import {
+  formatSnoozedUntil,
+  formatWaitingExactTime,
+  formatWaitingMinutes,
+  INBOX_CONVERSATIONS_LIMIT,
+  INBOX_CONVERSATIONS_PAGE_SIZE,
+  isCurrentlySnoozed,
+  normalizeWhatsAppPhone,
+  phonesMatch,
+  pickOldestWaitingConversation,
+  snoozeUntilTomorrowMorning,
+  sortWaitingOldestFirst,
+  startConversationOnChannel
+} from "../lib/inboxHelpers";
 import { formatAppTime } from "../lib/language";
 import { insertReplyVariable, REPLY_VARIABLES, type ConversationContext } from "../lib/replyVariables";
 import {
@@ -166,11 +179,17 @@ export default function InboxPage() {
   const [newCustomInboxName, setNewCustomInboxName] = useState("");
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [composerMoreOpen, setComposerMoreOpen] = useState(false);
   const workspaceOrganizationId = useWorkspaceOrganizationId();
   const setWorkspaceOrganizationId = useSetWorkspaceOrganization();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageSearchRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<number | null>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const savedListScrollRef = useRef(0);
+  const draftsByConversationRef = useRef<Record<string, string>>({});
+  const textRef = useRef(text);
+  textRef.current = text;
 
   const showArchived = filter === "archived";
   const showSnoozed = filter === "snoozed";
@@ -323,16 +342,37 @@ export default function InboxPage() {
     [channelScopedConversations, needsReplyOnly]
   );
   const requestedConversationId = searchParams.get("conversation");
-  const filtered = useMemo(() => channelScopedConversations.filter((item) => {
-    const haystack = `${item.contact_name ?? ""} ${item.contact_address} ${item.last_message_text ?? ""}`.toLowerCase();
-    const matchesSearch = haystack.includes(search.trim().toLowerCase());
-    const matchesFilter = filter === "engaged" || filter === "all" || filter === "archived" || filter === "snoozed"
-      || (filter === "unread" && (item.unread_count ?? 0) > 0)
-      || (filter === "waiting" && item.needs_reply)
-      || (filter === "mine" && Boolean(item.assigned_membership_id))
-      || (filter === "starred" && item.is_starred);
-    return matchesSearch && matchesFilter;
-  }), [channelScopedConversations, filter, search]);
+  const filtered = useMemo(() => {
+    const rows = channelScopedConversations.filter((item) => {
+      const haystack = `${item.contact_name ?? ""} ${item.contact_address} ${item.last_message_text ?? ""}`.toLowerCase();
+      const matchesSearch = haystack.includes(search.trim().toLowerCase());
+      const matchesFilter = filter === "engaged" || filter === "all" || filter === "archived" || filter === "snoozed"
+        || (filter === "unread" && (item.unread_count ?? 0) > 0)
+        || (filter === "waiting" && item.needs_reply)
+        || (filter === "mine" && Boolean(item.assigned_membership_id))
+        || (filter === "starred" && item.is_starred);
+      return matchesSearch && matchesFilter;
+    });
+    // Waiting queue: oldest inbound needing a reply first (longest wait).
+    if (filter === "waiting" || needsReplyOnly) {
+      return sortWaitingOldestFirst(rows);
+    }
+    return rows;
+  }, [channelScopedConversations, filter, search, needsReplyOnly]);
+
+  const waitingConversations = useMemo(
+    () =>
+      needsReplyOnly
+        ? filtered
+        : channelScopedConversations.filter((item) => item.needs_reply),
+    [needsReplyOnly, filtered, channelScopedConversations]
+  );
+  const oldestWaiting = useMemo(
+    () => pickOldestWaitingConversation(waitingConversations),
+    [waitingConversations]
+  );
+  const longestWaitMinutes = oldestWaiting?.waiting_minutes ?? null;
+  const nextWaitingPreview = oldestWaiting?.last_message_text?.trim() || "رسالة واردة بانتظار الرد";
 
   useEffect(() => {
     // When opening «تنتظر الرد» (e.g. from dashboard), load up to the inbox
@@ -347,7 +387,14 @@ export default function InboxPage() {
     if (!conversationsQuery.isSuccess || conversationsQuery.isPlaceholderData) return;
     const match = conversations.find((item) => item.id === requestedConversationId);
     if (match) {
-      setSelectedId(match.id);
+      setSelectedId((prev) => {
+        if (prev !== match.id) {
+          if (prev) persistDraftForSelected(prev);
+          const draft = draftsByConversationRef.current[match.id] ?? "";
+          queueMicrotask(() => setText(draft));
+        }
+        return match.id;
+      });
       if (match.channel_id && match.channel_id !== channelFilter) {
         setChannelFilter(match.channel_id);
       }
@@ -387,12 +434,44 @@ export default function InboxPage() {
     setSearchParams(next, { replace: true });
   }
 
+  function persistDraftForSelected(currentId: string | null = selectedId) {
+    if (currentId) {
+      draftsByConversationRef.current[currentId] = textRef.current;
+    }
+  }
+
   function openConversation(conversation: Conversation) {
+    persistDraftForSelected();
+    if (listScrollRef.current) {
+      savedListScrollRef.current = listScrollRef.current.scrollTop;
+    }
     setSelectedId(conversation.id);
+    setText(draftsByConversationRef.current[conversation.id] ?? "");
+    setComposerMoreOpen(false);
     const next = new URLSearchParams(searchParams);
     next.set("conversation", conversation.id);
     next.set("channel_id", conversation.channel_id);
     setSearchParams(next, { replace: true });
+  }
+
+  function clearConversationSelection() {
+    persistDraftForSelected();
+    setSelectedId(null);
+    setText("");
+    setComposerMoreOpen(false);
+    const next = new URLSearchParams(searchParams);
+    next.delete("conversation");
+    setSearchParams(next, { replace: true });
+    requestAnimationFrame(() => {
+      if (listScrollRef.current) {
+        listScrollRef.current.scrollTop = savedListScrollRef.current;
+      }
+    });
+  }
+
+  function openOldestWaiting() {
+    if (!oldestWaiting) return;
+    openConversation(oldestWaiting);
   }
 
   async function openConversationOnChannel(targetChannelId: string) {
@@ -765,6 +844,7 @@ export default function InboxPage() {
       const account = accounts.data.find((item: { channel_id: string }) => item.channel_id === conversation.channel_id);
       if (!account) throw new Error("WhatsApp account not found");
       await api.post(`/whatsapp/accounts/${account.id}/messages/${endpoint}`, { to: conversation.contact_address, media_url: uploaded.public_url, caption: text.trim() || null, filename: uploaded.filename });
+      if (selectedId) delete draftsByConversationRef.current[selectedId];
       setText(""); await Promise.all([queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] }), queryClient.invalidateQueries({ queryKey: ["conversations"] })]);
       toastStore.getState().show("تم إرسال المرفق.", "success");
     } catch { toastStore.getState().show("تعذر إرسال المرفق.", "error"); }
@@ -781,6 +861,7 @@ export default function InboxPage() {
     setSending(true);
     try {
       await api.post(`/conversations/${selectedId}/messages/text`, { text: text.trim() });
+      if (selectedId) delete draftsByConversationRef.current[selectedId];
       setText("");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] }),
@@ -1010,6 +1091,7 @@ export default function InboxPage() {
   }
   function onComposerChange(value: string) {
     setText(value);
+    if (selectedId) draftsByConversationRef.current[selectedId] = value;
     setSlashHint(matchShortcutAutocomplete(value, quickReplies));
     if (!selectedId || isArchived) return;
     if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
@@ -1375,7 +1457,32 @@ export default function InboxPage() {
             </div>
           </div>
         )}
-        <div className="conversation-scroll">
+        <div className="conversation-scroll" ref={listScrollRef}>
+          {(filter === "waiting" || needsReplyOnly) && (
+            <div className="inbox-waiting-summary" role="status">
+              <div className="inbox-waiting-summary-copy">
+                <strong>{waitingConversations.length.toLocaleString("ar")} تنتظر الرد</strong>
+                <span>
+                  {longestWaitMinutes != null
+                    ? `أقدم انتظار: ${formatWaitingMinutes(longestWaitMinutes)}`
+                    : "لا محادثات بانتظار الرد الآن"}
+                </span>
+                {oldestWaiting && (
+                  <small title={formatWaitingExactTime(oldestWaiting.last_inbound_at || oldestWaiting.last_message_at)}>
+                    آخر طلب: {nextWaitingPreview}
+                  </small>
+                )}
+              </div>
+              <button
+                type="button"
+                className="whatsapp-button compact"
+                disabled={!oldestWaiting}
+                onClick={openOldestWaiting}
+              >
+                فتح أقدم محادثة تنتظر الرد
+              </button>
+            </div>
+          )}
           {conversationsQuery.isLoading && Array.from({ length: 6 }).map((_, index) => <div className="conversation-skeleton" key={index}><span /><div><b /><i /></div></div>)}
           {conversationsQuery.isError && <div className="inbox-state error"><strong>تعذر تحميل المحادثات</strong><button onClick={() => conversationsQuery.refetch()}>إعادة المحاولة</button></div>}
           {!conversationsQuery.isLoading && filtered.length === 0 && <div className="inbox-state"><strong>لا توجد نتائج</strong><span>جرّب تغيير البحث أو الفلتر.</span></div>}
@@ -1407,7 +1514,12 @@ export default function InboxPage() {
                     <div className="conversation-preview">
                       <span>{item.last_message_text || "رسالة غير نصية"}</span>
                       {item.needs_reply && item.waiting_minutes != null && (
-                        <small className="waiting-badge">{formatWaitingMinutes(item.waiting_minutes)}</small>
+                        <small
+                          className="waiting-badge"
+                          title={formatWaitingExactTime(item.last_inbound_at || item.last_message_at) || undefined}
+                        >
+                          {formatWaitingMinutes(item.waiting_minutes)}
+                        </small>
                       )}
                       {item.sla_breached_at && <small className="waiting-badge" style={{ background: "#ea4335" }}>SLA</small>}
                       {isCurrentlySnoozed(item.snoozed_until) && (
@@ -1450,7 +1562,7 @@ export default function InboxPage() {
       <section className={`chat-column${!selectedId ? " chat-column-idle" : ""}`}>
         <header className="chat-header">
           <div className="chat-user">
-            <button className="mobile-back-button" onClick={() => setSelectedId(null)}>‹</button>
+            <button className="mobile-back-button" onClick={clearConversationSelection} aria-label="العودة للقائمة">‹</button>
             <div className="avatar avatar-online">{(selectedConversation?.contact_name || selectedConversation?.contact_address || "?").slice(0, 2).toUpperCase()}</div>
             <div>
               <h2>{selectedConversation?.contact_name || selectedConversation?.contact_address || t("inbox.selectConversation")}</h2>
@@ -1598,23 +1710,50 @@ export default function InboxPage() {
           {messagesQuery.isLoading && <div className="message-loading"><span /><span /><span /></div>}
           {messagesQuery.isError && <div className="inbox-state error"><strong>تعذر تحميل الرسائل</strong><button onClick={() => messagesQuery.refetch()}>إعادة المحاولة</button></div>}
           {!selectedId && (
-            <div className="empty-conversation chat-idle-state">
-              <div className="chat-date-pill">اليوم</div>
-              <div className="chat-idle-samples">
-                <div className="message incoming">
-                  <div className="message-text">السلام عليكم، كم سعر الباقة؟</div>
-                </div>
-                <div className="message outgoing">
-                  <div className="message-text">أهلاً! الباقة 25 د.ك — تشمل 500 رسالة.</div>
-                </div>
-                <div className="chat-idle-deal-card">
-                  <span>صفقة CRM</span>
-                  <strong>باقة WhatsApp — 25 د.ك</strong>
-                  <em>من المحادثة</em>
-                </div>
-              </div>
-              <h3>المحادثات</h3>
-              <p>اختر محادثة من القائمة لبدء الرد — نفس شكل الواجهة التعريفية.</p>
+            <div className="empty-conversation inbox-workbench-idle" aria-label="ملخص الانتظار">
+              <h3>ماذا ينتظرك الآن؟</h3>
+              {waitingConversations.length > 0 ? (
+                <>
+                  <p>
+                    <strong>{waitingConversations.length.toLocaleString("ar")}</strong> محادثة تنتظر الرد
+                    {longestWaitMinutes != null ? ` · أقدمها منذ ${formatWaitingMinutes(longestWaitMinutes)}` : ""}.
+                  </p>
+                  <div className="inbox-workbench-next">
+                    <span>آخر طلب</span>
+                    <strong title={formatWaitingExactTime(oldestWaiting?.last_inbound_at || oldestWaiting?.last_message_at)}>
+                      {nextWaitingPreview}
+                    </strong>
+                    <small>
+                      من {oldestWaiting?.contact_name || oldestWaiting?.contact_address || "عميل"}
+                      {longestWaitMinutes != null
+                        ? ` · ينتظر ${formatWaitingMinutes(longestWaitMinutes)}`
+                        : ""}
+                    </small>
+                  </div>
+                  <p className="inbox-workbench-step">الخطوة التالية: افتح أقدم محادثة واردة تحتاج ردًا.</p>
+                  <button type="button" className="whatsapp-button" onClick={openOldestWaiting}>
+                    فتح أقدم محادثة تنتظر الرد
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p>لا محادثات بانتظار الرد حاليًا. اختر محادثة من القائمة للمتابعة.</p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setFilter("waiting");
+                      const next = new URLSearchParams(searchParams);
+                      next.set("filter", "waiting");
+                      next.set("needs_reply", "1");
+                      next.delete("conversation");
+                      setSearchParams(next, { replace: true });
+                    }}
+                  >
+                    عرض قائمة الانتظار
+                  </button>
+                </>
+              )}
             </div>
           )}
           {selectedId && !messagesQuery.isLoading && !messagesQuery.isError && (messagesQuery.data ?? []).length === 0 && <div className="empty-conversation"><h3>بداية محادثة جديدة</h3><p>أرسل أول رسالة من مربع الكتابة.</p></div>}
@@ -1869,11 +2008,12 @@ export default function InboxPage() {
               <code dir="ltr">{slashHint.shortcut}</code>
             </div>
           )}
-          <div className="composer-toolbar">
+          <div className="composer-toolbar" role="toolbar" aria-label="أدوات الكتابة">
             <button
               type="button"
               className={`composer-tool-btn${snippetsOpen ? " active" : ""}`}
               onClick={() => {
+                setComposerMoreOpen(false);
                 setSnippetsOpen((value) => {
                   const next = !value;
                   if (next) {
@@ -1895,30 +2035,11 @@ export default function InboxPage() {
             </button>
             <button
               type="button"
-              className={`composer-tool-btn${shortcutsOpen ? " active" : ""}`}
-              onClick={() => {
-                setShortcutsOpen((value) => {
-                  const next = !value;
-                  if (next) {
-                    setSnippetsOpen(false);
-                    setEmojiOpen(false);
-                    setProductPickerOpen(false);
-                    setReplyButtonsOpen(false);
-                    setListMessageOpen(false);
-                    setFlowSendOpen(false);
-                  }
-                  return next;
-                });
-              }}
-              disabled={!selectedId || isArchived}
-              title="اختصارات الصفقة والتذكرة والطلب"
-            >
-              ⚡ اختصارات
-            </button>
-            <button
-              type="button"
               className={`composer-tool-btn${emojiOpen ? " active" : ""}`}
-              onClick={() => setEmojiOpen((value) => !value)}
+              onClick={() => {
+                setComposerMoreOpen(false);
+                setEmojiOpen((value) => !value);
+              }}
               disabled={!selectedId}
               title="Emoji"
             >
@@ -1928,6 +2049,7 @@ export default function InboxPage() {
               type="button"
               className={`composer-tool-btn${productPickerOpen ? " active" : ""}`}
               onClick={() => {
+                setComposerMoreOpen(false);
                 setProductPickerOpen((value) => !value);
                 setSnippetsOpen(false);
                 setShortcutsOpen(false);
@@ -1941,40 +2063,88 @@ export default function InboxPage() {
             >
               🛒 منتج
             </button>
-            <button
-              type="button"
-              className={`composer-tool-btn${replyButtonsOpen ? " active" : ""}`}
-              onClick={() => {
-                setReplyButtonsOpen((value) => !value);
-                setListMessageOpen(false);
-                if (!replyButtonBody.trim() && text.trim()) setReplyButtonBody(text);
-              }}
-              disabled={!selectedId || isArchived || windowClosed}
-              title="إرسال أزرار رد سريع"
-            >
-              أزرار
-            </button>
-            <button
-              type="button"
-              className={`composer-tool-btn${listMessageOpen ? " active" : ""}`}
-              onClick={() => {
-                setListMessageOpen((value) => !value);
-                setReplyButtonsOpen(false);
-              }}
-              disabled={!selectedId || isArchived || windowClosed}
-              title="رسالة قائمة"
-            >
-              قائمة
-            </button>
-            <button
-              type="button"
-              className={`composer-tool-btn${flowSendOpen ? " active" : ""}`}
-              onClick={() => setFlowSendOpen((value) => !value)}
-              disabled={!selectedId || isArchived}
-              title="WhatsApp Flow"
-            >
-              Flow
-            </button>
+            <div className="composer-more">
+              <button
+                type="button"
+                className={`composer-tool-btn${composerMoreOpen || shortcutsOpen || replyButtonsOpen || listMessageOpen || flowSendOpen ? " active" : ""}`}
+                onClick={() => {
+                  setComposerMoreOpen((value) => !value);
+                  setSnippetsOpen(false);
+                  setEmojiOpen(false);
+                  setProductPickerOpen(false);
+                }}
+                disabled={!selectedId}
+                title="المزيد من أدوات الكتابة"
+                aria-expanded={composerMoreOpen}
+              >
+                المزيد
+              </button>
+              {composerMoreOpen && (
+                <div className="composer-more-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={shortcutsOpen ? "active" : undefined}
+                    onClick={() => {
+                      setShortcutsOpen((value) => !value);
+                      setReplyButtonsOpen(false);
+                      setListMessageOpen(false);
+                      setFlowSendOpen(false);
+                      setComposerMoreOpen(false);
+                    }}
+                    disabled={isArchived}
+                  >
+                    ⚡ اختصارات
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={replyButtonsOpen ? "active" : undefined}
+                    onClick={() => {
+                      setReplyButtonsOpen((value) => !value);
+                      setListMessageOpen(false);
+                      setShortcutsOpen(false);
+                      setFlowSendOpen(false);
+                      if (!replyButtonBody.trim() && text.trim()) setReplyButtonBody(text);
+                      setComposerMoreOpen(false);
+                    }}
+                    disabled={isArchived || windowClosed}
+                  >
+                    أزرار
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={listMessageOpen ? "active" : undefined}
+                    onClick={() => {
+                      setListMessageOpen((value) => !value);
+                      setReplyButtonsOpen(false);
+                      setShortcutsOpen(false);
+                      setFlowSendOpen(false);
+                      setComposerMoreOpen(false);
+                    }}
+                    disabled={isArchived || windowClosed}
+                  >
+                    قائمة
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={flowSendOpen ? "active" : undefined}
+                    onClick={() => {
+                      setFlowSendOpen((value) => !value);
+                      setShortcutsOpen(false);
+                      setReplyButtonsOpen(false);
+                      setListMessageOpen(false);
+                      setComposerMoreOpen(false);
+                    }}
+                    disabled={isArchived}
+                  >
+                    Flow
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <InboxShortcutsMenu
             open={shortcutsOpen}
