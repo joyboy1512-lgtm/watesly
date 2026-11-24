@@ -8184,11 +8184,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  gap: 8px;
+  flex-wrap: nowrap;
+  margin: 0 0 8px;
+  padding: 5px 10px;
+  min-height: 36px;
+  border-radius: 10px;
   border: 0;
   background: linear-gradient(135deg, #25d366, #128c7e);
   color: #fff;
@@ -8197,19 +8198,38 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .campaign-result-header-main {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
   min-width: 0;
 }
 .campaign-result-header-main .section-title-sm {
   margin: 0;
+  font-size: 13px;
+  line-height: 1.2;
   color: #fff;
+  white-space: nowrap;
+}
+.campaign-result-header-sticky .campaign-result-badge {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.25;
+  gap: 0;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.campaign-result-header-sticky .campaign-result-badge strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+.campaign-result-header-sticky .campaign-result-badge span {
+  display: none;
 }
 .campaign-result-header-actions {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   white-space: nowrap;
 }
 .campaign-result-header-sticky .secondary-button.compact,
@@ -8218,11 +8238,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 1px solid rgba(255, 255, 255, 0.9) !important;
   color: #075e54 !important;
   font-weight: 700;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  line-height: 1.2;
 }
 .campaign-result-header-sticky .whatsapp-button.compact {
   background: #fff !important;
   color: #075e54 !important;
   border: 1px solid #fff !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  line-height: 1.2;
 }
 .campaign-report-close-btn {
   font-weight: 700;
@@ -8234,9 +8260,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: var(--panel);
 }
 .campaign-recipient-table-scroll {
-  /* header (~40px) + 10 body rows (~38px) */
-  max-height: 420px;
-  overflow: auto;
+  /* header (~36px) + 10 body rows (~36px) */
+  max-height: 396px;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .campaign-report-table {
   margin: 0;
@@ -8248,7 +8276,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 10px 12px;
+  padding: 8px 12px;
   text-align: start;
   font-size: 12px;
   font-weight: 700;
@@ -8258,6 +8286,13 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: linear-gradient(135deg, #25d366, #128c7e) !important;
   border-bottom: 1px solid color-mix(in srgb, #128c7e 70%, #075e54);
   border-inline-end: 1px solid rgba(255, 255, 255, 0.18);
+}
+.campaign-recipient-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3;
+  background: linear-gradient(135deg, #25d366, #128c7e) !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, #128c7e 70%, #075e54);
 }
 .campaign-report-table thead th:last-child {
   border-inline-end: none;
@@ -9039,12 +9074,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-details-row td { background: var(--panel-soft); padding: 0 !important; }
 .campaign-details-panel {
-  padding: 12px 14px 16px;
+  padding: 10px 12px 14px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   align-content: start;
 }
-.campaign-recipient-group h4 { margin: 0 0 8px; font-size: 14px; color: var(--primary-darker); }
+.campaign-recipient-group {
+  min-width: 0;
+}
+.campaign-recipient-group h4 { margin: 0 0 6px; font-size: 13px; color: var(--primary-darker); }
 .campaign-recipient-group table { width: 100%; font-size: 13px; }
 .campaign-result-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .campaign-result-badge { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; font-size: 13px; }
