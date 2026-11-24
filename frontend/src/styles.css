@@ -8118,10 +8118,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
   white-space: nowrap;
   color: #fff !important;
-  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
-  border-inline-end: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-darker) 80%, #000);
+  /* Match .whatsapp-button / «الحملات النشطة» green */
+  background: linear-gradient(135deg, #25d366, #128c7e) !important;
+  border-bottom: 1px solid color-mix(in srgb, #128c7e 70%, #075e54);
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 1px 0 color-mix(in srgb, #128c7e 55%, transparent);
 }
 .campaigns-erp-table thead th:last-child {
   border-inline-end: none;
@@ -8188,9 +8189,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   margin: 0 0 12px;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
-  background: color-mix(in srgb, var(--primary-soft) 88%, #fff);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary) 18%, transparent);
+  border: 0;
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: #fff;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-dark) 55%, transparent);
 }
 .campaign-result-header-main {
   display: flex;
@@ -8201,7 +8203,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .campaign-result-header-main .section-title-sm {
   margin: 0;
-  color: var(--primary-darker);
+  color: #fff;
 }
 .campaign-result-header-actions {
   display: flex;
@@ -8210,10 +8212,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 6px;
   white-space: nowrap;
 }
+.campaign-result-header-sticky .secondary-button.compact,
+.campaign-result-header-sticky .campaign-report-close-btn {
+  background: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  color: #075e54 !important;
+  font-weight: 700;
+}
+.campaign-result-header-sticky .whatsapp-button.compact {
+  background: #fff !important;
+  color: #075e54 !important;
+  border: 1px solid #fff !important;
+}
 .campaign-report-close-btn {
   font-weight: 700;
-  border-color: color-mix(in srgb, var(--primary-dark) 35%, var(--line)) !important;
-  color: var(--primary-darker) !important;
 }
 .campaign-report-table-wrap {
   overflow: auto;
@@ -8241,10 +8253,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
-  color: var(--primary-darker) !important;
-  background: color-mix(in srgb, var(--primary-soft) 92%, #fff) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
-  border-inline-end: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  /* Match .whatsapp-button / «الحملات النشطة» green */
+  color: #fff !important;
+  background: linear-gradient(135deg, #25d366, #128c7e) !important;
+  border-bottom: 1px solid color-mix(in srgb, #128c7e 70%, #075e54);
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.18);
 }
 .campaign-report-table thead th:last-child {
   border-inline-end: none;
