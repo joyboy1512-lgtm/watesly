@@ -8118,10 +8118,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
   white-space: nowrap;
   color: #fff !important;
-  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
-  border-inline-end: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--primary-darker) 80%, #000);
+  /* Match .whatsapp-button / «الحملات النشطة» green */
+  background: linear-gradient(135deg, #25d366, #128c7e) !important;
+  border-bottom: 1px solid color-mix(in srgb, #128c7e 70%, #075e54);
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 1px 0 color-mix(in srgb, #128c7e 55%, transparent);
 }
 .campaigns-erp-table thead th:last-child {
   border-inline-end: none;
