@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Campaign report tabs
+
+| Item | Value |
+|------|-------|
+| Commit | `867cbb7` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-DZ9NTFna.js`, `index-AoHcMUYa.css` |
+| Snapshot record | `deploy/production-snapshot-20261125-campaign-report-tabs.json` |
+
 ### Production snapshot (2026-11-24) — Campaign report compact + sticky recipients
 
 | Item | Value |

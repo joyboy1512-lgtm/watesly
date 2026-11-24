@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-25",
+  "commit": "867cbb7",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DZ9NTFna.js",
+    "css": "index-AoHcMUYa.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Campaign report tabs: ملخص / تم الإرسال / فشل / لم يُرسل",
+    "Single scroll region for active tab content",
+    "Retry panel lives under فشل tab"
+  ],
+  "notes": "Deployed via SSH. PR #192."
+}

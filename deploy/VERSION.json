@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-11-24",
+  "updated_at": "2026-11-25",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,14 +8,14 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "5296619",
-    "git_commit_message": "Compact campaign report bar and pin recipient table header",
+    "git_commit": "867cbb7",
+    "git_commit_message": "Simplify campaign report with tabs and a single scroll",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.5",
     "live_assets": {
-      "js": "index-2LIz2zZC.js",
-      "css": "index-D02f1nPH.css"
+      "js": "index-DZ9NTFna.js",
+      "css": "index-AoHcMUYa.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "5296619",
-  "notes": "Shorter تقرير الحملة bar; sticky تم الإرسال لهم header"
+  "commit": "867cbb7",
+  "notes": "Campaign report tabs: ملخص / تم الإرسال / فشل / لم يُرسل with one scroll"
 }
