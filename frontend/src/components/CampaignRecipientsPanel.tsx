@@ -93,8 +93,8 @@ function RecipientTable({ title, rows }: { title: string; rows: CampaignRecipien
   return (
     <div className="campaign-recipient-group">
       <h4>{title} ({rows.length})</h4>
-      <div className="admin-table-wrap campaign-report-table-wrap">
-        <table className="admin-erp-table campaign-report-table">
+      <div className="admin-table-wrap campaign-report-table-wrap campaign-recipient-table-scroll">
+        <table className="admin-erp-table campaign-report-table campaign-recipient-table">
           <thead>
             <tr>
               <th>الاسم</th>
@@ -107,8 +107,10 @@ function RecipientTable({ title, rows }: { title: string; rows: CampaignRecipien
             {rows.map((item) => (
               <tr key={`${item.contact_id}-${item.status}`}>
                 <td>{item.display_name || "—"}</td>
-                <td dir="ltr">{item.phone}</td>
-                <td>{RECIPIENT_STATUS_LABELS[item.status] ?? item.status}</td>
+                <td className="campaign-report-cell-center" dir="ltr">{item.phone}</td>
+                <td className="campaign-report-cell-center">
+                  {RECIPIENT_STATUS_LABELS[item.status] ?? item.status}
+                </td>
                 <td>{item.error_message || "—"}</td>
               </tr>
             ))}
@@ -136,6 +138,7 @@ export function CampaignRecipientsPanel({
   showArchived,
   onArchive,
   onUnarchive,
+  onClose,
   actionBusy
 }: {
   campaignId: string;
@@ -145,6 +148,7 @@ export function CampaignRecipientsPanel({
   showArchived?: boolean;
   onArchive?: () => void;
   onUnarchive?: () => void;
+  onClose?: () => void;
   actionBusy?: boolean;
 }) {
   const client = useQueryClient();
@@ -243,12 +247,53 @@ export function CampaignRecipientsPanel({
 
   return (
     <div className="campaign-details-panel">
-      {status && (
-        <div className="campaign-result-header">
+      <div className="campaign-result-header campaign-result-header-sticky">
+        <div className="campaign-result-header-main">
           <h3 className="section-title-sm">تقرير الحملة</h3>
-          <CampaignResultBadge status={status} report={report} />
+          {status && <CampaignResultBadge status={status} report={report} />}
         </div>
-      )}
+        <div className="campaign-result-header-actions">
+          <button
+            type="button"
+            className="whatsapp-button compact"
+            onClick={() => void downloadCampaignRecipients(campaignId, "xlsx")}
+          >
+            Excel
+          </button>
+          <button
+            type="button"
+            className="secondary-button compact"
+            onClick={() => void downloadCampaignRecipients(campaignId, "csv")}
+          >
+            CSV
+          </button>
+          {canArchive && onArchive && !showArchived && (
+            <button
+              type="button"
+              className="secondary-button compact"
+              disabled={actionBusy}
+              onClick={onArchive}
+            >
+              أرشفة
+            </button>
+          )}
+          {canUnarchive && onUnarchive && showArchived && (
+            <button
+              type="button"
+              className="secondary-button compact"
+              disabled={actionBusy}
+              onClick={onUnarchive}
+            >
+              استعادة
+            </button>
+          )}
+          {onClose && (
+            <button type="button" className="secondary-button compact campaign-report-close-btn" onClick={onClose}>
+              إغلاق
+            </button>
+          )}
+        </div>
+      </div>
       {report && (
         <div className="admin-table-wrap campaign-report-table-wrap">
           <table className="admin-erp-table campaign-report-table campaign-report-summary-table">
@@ -275,34 +320,6 @@ export function CampaignRecipientsPanel({
           </table>
         </div>
       )}
-      <div className="inline-actions">
-        <button type="button" className="whatsapp-button compact" onClick={() => void downloadCampaignRecipients(campaignId, "xlsx")}>
-          تصدير Excel
-        </button>
-        <button type="button" className="secondary-button compact" onClick={() => void downloadCampaignRecipients(campaignId, "csv")}>
-          CSV
-        </button>
-        {canArchive && onArchive && !showArchived && (
-          <button
-            type="button"
-            className="secondary-button compact"
-            disabled={actionBusy}
-            onClick={onArchive}
-          >
-            أرشفة الحملة
-          </button>
-        )}
-        {canUnarchive && onUnarchive && showArchived && (
-          <button
-            type="button"
-            className="secondary-button compact"
-            disabled={actionBusy}
-            onClick={onUnarchive}
-          >
-            استعادة من الأرشيف
-          </button>
-        )}
-      </div>
       {canRetry && (
         <div className="campaign-retry-panel">
           <strong>إعادة إرسال الفاشلة حسب السبب</strong>
@@ -454,9 +471,16 @@ export function CampaignReportRow({
   const canUnarchive = Boolean(item.archived_at);
   const canDeleteDraft = item.status === "draft";
 
+  const rowClassName = [
+    isActive ? "campaign-row-active" : "",
+    expanded ? "campaign-row-sticky" : ""
+  ]
+    .filter(Boolean)
+    .join(" ") || undefined;
+
   return (
     <Fragment>
-      <tr className={isActive ? "campaign-row-active" : undefined}>
+      <tr className={rowClassName}>
         <td>
           <div className="admin-cell-main">
             <strong>{item.name}</strong>
@@ -490,7 +514,7 @@ export function CampaignReportRow({
         <td>
           <div className="admin-actions campaign-row-actions">
             <button type="button" className="secondary-button compact" onClick={onToggle}>
-              {expanded ? "إخفاء" : "تقرير"}
+              {expanded ? "إغلاق" : "تقرير"}
             </button>
             <button
               type="button"
@@ -584,6 +608,7 @@ export function CampaignReportRow({
               showArchived={actions?.showArchived}
               onArchive={canArchive && actions?.onArchive ? () => actions.onArchive?.(item.id) : undefined}
               onUnarchive={canUnarchive && actions?.onUnarchive ? () => actions.onUnarchive?.(item.id) : undefined}
+              onClose={expanded ? onToggle : undefined}
               actionBusy={busy}
             />
           </td>
