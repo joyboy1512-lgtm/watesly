@@ -161,27 +161,10 @@ async def supervisor_summary(db: AsyncSession, *, account_id: UUID) -> dict:
     async def count(query) -> int:
         return int((await db.scalar(query)) or 0)
 
-    latest_message_id = (
-        select(Message.id)
-        .where(Message.conversation_id == Conversation.id)
-        .order_by(Message.created_at.desc())
-        .limit(1)
-        .correlate(Conversation)
-        .scalar_subquery()
-    )
-    waiting = await count(
-        select(func.count(Conversation.id))
-        .select_from(Conversation)
-        .join(Message, Message.id == latest_message_id)
-        .where(
-            Conversation.account_id == account_id,
-            Conversation.deleted_at.is_(None),
-            Conversation.archived_at.is_(None),
-            Conversation.status.in_([ConversationStatus.OPEN, ConversationStatus.PENDING]),
-            Message.direction == MessageDirection.INBOUND,
-            (Conversation.snoozed_until.is_(None)) | (Conversation.snoozed_until <= now),
-        )
-    )
+    from app.services.conversation_attention import count_waiting_reply, latest_message_id_subquery
+
+    latest_message_id = latest_message_id_subquery()
+    waiting = await count_waiting_reply(db, account_id=account_id)
     snoozed = await count(
         select(func.count(Conversation.id)).where(
             Conversation.account_id == account_id,
