@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-25",
+  "commit": "a61c9f8",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-BK3lSufC.js",
+    "css": "index-CAnYRp72.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Inbox waiting summary + open oldest waiting conversation",
+    "Waiting ordered by longest inbound needs-reply",
+    "Day-scale waiting durations with exact-time tooltip",
+    "Daily composer tools; secondary under More",
+    "Mobile back preserves filters, list scroll, and draft text"
+  ],
+  "notes": "Deployed via SSH. PR #194."
+}

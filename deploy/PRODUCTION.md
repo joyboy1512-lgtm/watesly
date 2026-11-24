@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Inbox waiting workbench
+
+| Item | Value |
+|------|-------|
+| Commit | `a61c9f8` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-BK3lSufC.js`, `index-CAnYRp72.css` |
+| Snapshot record | `deploy/production-snapshot-20261125-inbox-waiting-workbench.json` |
+
 ### Production snapshot (2026-11-25) — Dashboard attention board
 
 | Item | Value |
