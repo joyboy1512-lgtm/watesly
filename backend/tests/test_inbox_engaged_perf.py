@@ -40,7 +40,9 @@ def test_inbox_page_defaults_to_engaged_with_paged_limit() -> None:
     page = read("../frontend/src/pages/InboxPage.tsx")
     helpers = read("../frontend/src/lib/inboxHelpers.ts")
     assert "INBOX_CONVERSATIONS_PAGE_SIZE = 100" in helpers
-    assert 'useState<InboxFilter>("engaged")' in page
+    # Default remains «engaged»; URL may override via lazy useState initializer.
+    assert 'useState<InboxFilter>(' in page
+    assert ': "engaged"' in page or '? (urlFilter as InboxFilter) : "engaged"' in page
     assert "engaged_only: engagedOnly" in page
     assert "limit: listLimit" in page
     assert 'filter !== "all"' in page
