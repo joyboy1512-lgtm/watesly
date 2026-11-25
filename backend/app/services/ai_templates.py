@@ -20,8 +20,8 @@ Return ONLY valid JSON (no markdown) with this shape:
   "name": "snake_case_english_name",
   "language": "ar",
   "category": "marketing" | "utility",
-  "header_type": "TEXT" | "IMAGE" | "NONE",
-  "header_text": "optional short header up to 60 chars",
+  "header_type": "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT" | "NONE",
+  "header_text": "optional short header up to 60 chars (only when header_type is TEXT)",
   "body_text": "WhatsApp body. Use {{1}} {{2}} for variables when needed.",
   "body_samples": ["sample for {{1}}", "sample for {{2}}"],
   "footer_text": "optional footer up to 60 chars",
@@ -33,7 +33,9 @@ Rules:
 - name must be lowercase snake_case, Meta-safe (letters, numbers, underscore).
 - Body max ~1024 chars. Keep Kuwaiti/Arabic friendly tone when language is ar.
 - Prefer 0-2 variables. Provide body_samples matching variable count.
+- Always include at least one useful button when the topic is marketing/sales (URL or QUICK_REPLY).
 - Max 3 buttons. Marketing templates may include opt-out style quick replies.
+- Fill footer_text when helpful (brand or opt-out hint).
 - Do not invent illegal claims. Keep compliant for Meta review.
 """
 
@@ -63,7 +65,7 @@ def normalize_template_draft(data: dict[str, Any]) -> dict[str, Any]:
     if category not in {"marketing", "utility", "authentication"}:
         category = "marketing"
     header_type = str(data.get("header_type") or "NONE").strip().upper()
-    if header_type not in {"TEXT", "IMAGE", "NONE", ""}:
+    if header_type not in {"TEXT", "IMAGE", "VIDEO", "DOCUMENT", "NONE", ""}:
         header_type = "NONE"
     if header_type == "":
         header_type = "NONE"
@@ -145,15 +147,18 @@ async def generate_template_draft(
         raw = await chat_completion(
             user_prompt=user_prompt,
             system_prompt=TEMPLATE_SYSTEM_PROMPT,
-            temperature=0.5,
-            max_tokens=1200,
+            temperature=0.45,
+            max_tokens=1800,
             **llm,
         )
     except LLMError as exc:
         raise ValueError(f"LLM_FAILED:{exc}") from exc
     if not raw:
         raise ValueError("EMPTY_AI_RESPONSE")
-    return normalize_template_draft(_extract_json_object(raw))
+    try:
+        return normalize_template_draft(_extract_json_object(raw))
+    except ValueError as exc:
+        raise ValueError(f"INVALID_AI_DRAFT:{exc}") from exc
 
 
 async def refine_template_draft(
@@ -177,15 +182,18 @@ async def refine_template_draft(
         raw = await chat_completion(
             user_prompt=user_prompt,
             system_prompt=TEMPLATE_SYSTEM_PROMPT,
-            temperature=0.4,
-            max_tokens=1200,
+            temperature=0.35,
+            max_tokens=1800,
             **llm,
         )
     except LLMError as exc:
         raise ValueError(f"LLM_FAILED:{exc}") from exc
     if not raw:
         raise ValueError("EMPTY_AI_RESPONSE")
-    return normalize_template_draft(_extract_json_object(raw))
+    try:
+        return normalize_template_draft(_extract_json_object(raw))
+    except ValueError as exc:
+        raise ValueError(f"INVALID_AI_DRAFT:{exc}") from exc
 
 
 async def generate_template_header_image(

@@ -18,6 +18,8 @@ import {
 } from "../lib/knowledgeHelpers";
 import {
   buildStoredComponents,
+  contentTypeToHeaderFormat,
+  extractBodyVariableCount,
   HEADER_MEDIA_ACCEPT,
   type TemplateButton,
   type TemplateHeaderFormat
@@ -91,6 +93,7 @@ type AiTemplateDraft = {
   buttons: TemplateButton[];
   image_prompt: string;
   notes: string;
+  header_media?: UploadedFile | null;
 };
 
 type SavedDraft = {
@@ -102,6 +105,37 @@ type SavedDraft = {
   internal_check?: { ok?: boolean; issues?: string[]; stage?: string };
   meta_status?: string | null;
 };
+
+function emptyTemplateDraft(partial?: Partial<AiTemplateDraft>): AiTemplateDraft {
+  return {
+    name: "draft_template",
+    language: "ar",
+    category: "marketing",
+    header_type: "NONE",
+    header_text: "",
+    body_text: "",
+    body_samples: [],
+    footer_text: "",
+    buttons: [],
+    image_prompt: "",
+    notes: "",
+    header_media: null,
+    ...partial
+  };
+}
+
+function apiErrorDetail(err: unknown): string {
+  if (!err || typeof err !== "object" || !("response" in err)) return "";
+  return String((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "");
+}
+
+function headerFormatFromDraft(headerType: string | undefined): TemplateHeaderFormat | null {
+  const value = (headerType || "").toUpperCase();
+  if (value === "IMAGE" || value === "VIDEO" || value === "DOCUMENT" || value === "TEXT") {
+    return value;
+  }
+  return null;
+}
 
 type ReplyChoice = "staff" | "suggest" | "auto";
 
@@ -272,6 +306,7 @@ export default function AiAgentPage() {
   const [templateTopic, setTemplateTopic] = useState("");
   const [templateDraft, setTemplateDraft] = useState<AiTemplateDraft | null>(null);
   const [templateHeaderFile, setTemplateHeaderFile] = useState<UploadedFile | null>(null);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [templateBusy, setTemplateBusy] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
   const [templateAlts, setTemplateAlts] = useState<AiTemplateDraft[]>([]);
@@ -510,6 +545,41 @@ export default function AiAgentPage() {
     }
   }
 
+  function openSavedDraft(item: SavedDraft) {
+    const draft = emptyTemplateDraft({
+      ...item.draft,
+      buttons: Array.isArray(item.draft?.buttons) ? item.draft.buttons : [],
+      body_samples: Array.isArray(item.draft?.body_samples) ? item.draft.body_samples : []
+    });
+    const media = draft.header_media || null;
+    setActiveDraftId(item.id);
+    setTemplateDraft(draft);
+    setTemplateTopic(item.topic || draft.name || "");
+    setTemplateHeaderFile(media);
+    setTemplateAlts([]);
+    setNewDraftOpen(true);
+  }
+
+  function updateDraftButton(index: number, patch: Partial<TemplateButton>) {
+    setTemplateDraft((current) => {
+      if (!current) return current;
+      const buttons = [...(current.buttons || [])];
+      buttons[index] = { ...buttons[index], ...patch };
+      return { ...current, buttons };
+    });
+  }
+
+  function syncBodySamples(bodyText: string, existing?: string[]) {
+    const count = extractBodyVariableCount(bodyText);
+    const next = (existing || []).slice(0, count);
+    while (next.length < count) next.push(`مثال${next.length + 1}`);
+    return next;
+  }
+
+  function withDraftMedia(draft: AiTemplateDraft, media: UploadedFile | null): AiTemplateDraft {
+    return { ...draft, header_media: media };
+  }
+
   async function generateTemplate(angle?: string) {
     if (!templateTopic.trim()) {
       toastStore.getState().show("اكتب موضوع القالب.", "error");
@@ -523,15 +593,44 @@ export default function AiAgentPage() {
     try {
       const result = await api.post<AiTemplateDraft>("/templates/ai/generate", {
         topic: angle ? `${templateTopic.trim()} — زاوية: ${angle}` : templateTopic.trim(),
-        language: "ar",
-        category: "marketing",
+        language: templateDraft?.language || "ar",
+        category: templateDraft?.category || "marketing",
         brand_hint: selectedWa?.verified_name || selectedWa?.channel_name || null
       });
-      setTemplateDraft(result.data);
-      setTemplateHeaderFile(null);
+      const next = emptyTemplateDraft({
+        ...result.data,
+        body_samples: syncBodySamples(result.data.body_text, result.data.body_samples),
+        header_media: templateHeaderFile
+      });
+      if (templateHeaderFile && (next.header_type === "NONE" || next.header_type === "TEXT")) {
+        next.header_type =
+          contentTypeToHeaderFormat(templateHeaderFile.content_type) || next.header_type;
+      }
+      setTemplateDraft(next);
       setNewDraftOpen(true);
-    } catch {
-      toastStore.getState().show("تعذر توليد القالب. تأكد من المزود الخارجي.", "error");
+      if (channelId) {
+        await api.post("/knowledge/ai/template-drafts", {
+          channel_id: channelId,
+          whatsapp_account_id: selectedWa?.id,
+          topic: templateTopic.trim() || next.name,
+          draft: withDraftMedia(next, templateHeaderFile),
+          status: "draft"
+        });
+        await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
+      }
+      toastStore.getState().show(
+        `تم توليد المسودة بالكامل (${(next.buttons || []).length} أزرار). راجع المعاينة وعدّل ثم احفظ.`,
+        "success"
+      );
+    } catch (err) {
+      const detail = apiErrorDetail(err);
+      if (detail.includes("LLM_NOT_CONFIGURED")) {
+        toastStore.getState().show("فعّل المزود الخارجي ومفتاح API أولاً.", "error");
+      } else if (detail.includes("LLM_FAILED") || detail.includes("INVALID_AI")) {
+        toastStore.getState().show("المزود أرجع نتيجة غير صالحة. أعد التوليد أو غيّر النموذج.", "error");
+      } else {
+        toastStore.getState().show("تعذر توليد القالب. تأكد من المزود الخارجي.", "error");
+      }
     } finally {
       setTemplateBusy(false);
     }
@@ -551,29 +650,29 @@ export default function AiAgentPage() {
       const result = await api.post<UploadedFile & { prompt?: string }>("/templates/ai/image", {
         prompt
       });
-      setTemplateHeaderFile({
+      const uploaded: UploadedFile = {
         id: result.data.id,
         filename: result.data.filename,
         content_type: result.data.content_type,
         size_bytes: result.data.size_bytes,
         object_key: result.data.object_key,
         public_url: result.data.public_url
-      });
+      };
+      setTemplateHeaderFile(uploaded);
       setTemplateDraft((current) =>
         current
           ? {
               ...current,
               header_type: "IMAGE",
-              image_prompt: prompt
+              header_text: "",
+              image_prompt: prompt,
+              header_media: uploaded
             }
           : current
       );
-      toastStore.getState().show("تم توليد صورة الرأس وحفظها.", "success");
+      toastStore.getState().show("تم توليد صورة الرأس وحفظها في المسودة.", "success");
     } catch (err) {
-      const detail =
-        err && typeof err === "object" && "response" in err
-          ? String((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "")
-          : "";
+      const detail = apiErrorDetail(err);
       if (detail.includes("LLM_NOT_CONFIGURED")) {
         toastStore.getState().show("فعّل المزود الخارجي ومفتاح API أولاً لتوليد الصور.", "error");
       } else if (detail.startsWith("IMAGE_FAILED:")) {
@@ -591,32 +690,30 @@ export default function AiAgentPage() {
     setHeaderUploadBusy(true);
     try {
       const uploaded = await uploadFile(file);
-      const isVideo = (uploaded.content_type || file.type || "").startsWith("video/");
+      const format =
+        contentTypeToHeaderFormat(uploaded.content_type || file.type) ||
+        contentTypeToHeaderFormat(file.type) ||
+        "IMAGE";
       setTemplateHeaderFile(uploaded);
       setTemplateDraft((current) =>
-        current
-          ? {
-              ...current,
-              header_type: isVideo ? "VIDEO" : "IMAGE"
-            }
-          : {
-              name: "draft_template",
-              language: "ar",
-              category: "marketing",
-              header_type: isVideo ? "VIDEO" : "IMAGE",
-              header_text: "",
-              body_text: "",
-              body_samples: [],
-              footer_text: "",
-              buttons: [],
-              image_prompt: "",
-              notes: ""
-            }
+        emptyTemplateDraft({
+          ...(current || {}),
+          header_type: format,
+          header_text: "",
+          header_media: uploaded
+        })
       );
       setNewDraftOpen(true);
-      toastStore.getState().show("تم رفع الوسائط واعتمادها للمعاينة.", "success");
+      toastStore.getState().show(
+        format === "DOCUMENT"
+          ? "تم رفع ملف PDF واعتماده للمعاينة."
+          : format === "VIDEO"
+            ? "تم رفع الفيديو واعتماده للمعاينة."
+            : "تم رفع الصورة واعتمادها للمعاينة.",
+        "success"
+      );
     } catch {
-      toastStore.getState().show("تعذر رفع الملف.", "error");
+      toastStore.getState().show("تعذر رفع الملف. استخدم صورة أو فيديو أو PDF.", "error");
     } finally {
       setHeaderUploadBusy(false);
     }
@@ -635,27 +732,37 @@ export default function AiAgentPage() {
       for (const angle of angles) {
         const result = await api.post<AiTemplateDraft>("/templates/ai/generate", {
           topic: `${templateTopic.trim()} — زاوية: ${angle}`,
-          language: "ar",
-          category: "marketing",
+          language: templateDraft?.language || "ar",
+          category: templateDraft?.category || "marketing",
           brand_hint: selectedWa?.verified_name || null
         });
-        drafts.push(result.data);
+        const next = emptyTemplateDraft({
+          ...result.data,
+          body_samples: syncBodySamples(result.data.body_text, result.data.body_samples),
+          header_media: templateHeaderFile
+        });
+        drafts.push(next);
         await api.post("/knowledge/ai/template-drafts", {
           channel_id: channelId,
           whatsapp_account_id: selectedWa?.id,
           topic: templateTopic.trim(),
           angle,
-          draft: result.data,
+          draft: withDraftMedia(next, templateHeaderFile),
           status: "draft"
         });
       }
       setTemplateAlts(drafts);
       setTemplateDraft(drafts[0] ?? null);
+      setActiveDraftId(null);
       setNewDraftOpen(true);
       await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
-      toastStore.getState().show("تم توليد 3 بدائل وحفظها كمسودات للقناة.", "success");
-    } catch {
-      toastStore.getState().show("تعذر توليد البدائل.", "error");
+      toastStore.getState().show("تم توليد 3 بدائل كاملة وحفظها كمسودات.", "success");
+    } catch (err) {
+      const detail = apiErrorDetail(err);
+      toastStore.getState().show(
+        detail.includes("LLM") ? "فشل التوليد من المزود. راجع الإعدادات أو أعد المحاولة." : "تعذر توليد البدائل.",
+        "error"
+      );
     } finally {
       setTemplateBusy(false);
     }
@@ -663,16 +770,18 @@ export default function AiAgentPage() {
 
   async function saveCurrentDraft(status = "draft") {
     if (!templateDraft || !channelId) return;
+    const payloadDraft = withDraftMedia(templateDraft, templateHeaderFile);
     try {
       await api.post("/knowledge/ai/template-drafts", {
         channel_id: channelId,
         whatsapp_account_id: selectedWa?.id,
         topic: templateTopic.trim() || templateDraft.name,
-        draft: templateDraft,
+        draft: payloadDraft,
         status
       });
+      setTemplateDraft(payloadDraft);
       await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
-      toastStore.getState().show(status === "rejected" ? "تم رفض المسودة." : "تم حفظ المسودة.", "success");
+      toastStore.getState().show(status === "rejected" ? "تم رفض المسودة." : "تم حفظ المسودة مع كل التفاصيل والوسائط.", "success");
     } catch {
       toastStore.getState().show("تعذر حفظ المسودة.", "error");
     }
@@ -681,20 +790,23 @@ export default function AiAgentPage() {
   async function approveDraftToMeta(draftOverride?: AiTemplateDraft) {
     const draft = draftOverride ?? templateDraft;
     if (!draft || !selectedWa) return;
+    const media = draftOverride?.header_media || templateHeaderFile;
     if (draftOverride) {
       setTemplateDraft(draftOverride);
       setTemplateTopic(draftOverride.name || templateTopic);
+      setTemplateHeaderFile(media || null);
       setNewDraftOpen(true);
     }
-    const headerType =
-      draft.header_type === "IMAGE"
-        ? ("IMAGE" as TemplateHeaderFormat)
-        : draft.header_type === "VIDEO"
-          ? ("VIDEO" as TemplateHeaderFormat)
-          : draft.header_type === "TEXT"
-            ? ("TEXT" as TemplateHeaderFormat)
-            : null;
-    const components = buildStoredComponents(draft.body_text, templateHeaderFile, headerType, {
+    const headerType = headerFormatFromDraft(draft.header_type);
+    if ((headerType === "IMAGE" || headerType === "VIDEO" || headerType === "DOCUMENT") && !media) {
+      toastStore.getState().show("ارفع وسائط الرأس (صورة / فيديو / PDF) قبل الترحيل إلى ميتا.", "error");
+      return;
+    }
+    if (!draft.body_text?.trim()) {
+      toastStore.getState().show("اكتب نص القالب قبل الترحيل.", "error");
+      return;
+    }
+    const components = buildStoredComponents(draft.body_text, media, headerType, {
       category: draft.category,
       includeMarketingOptOut: draft.category === "marketing",
       headerText: draft.header_text,
@@ -716,7 +828,7 @@ export default function AiAgentPage() {
         channel_id: channelId,
         whatsapp_account_id: selectedWa.id,
         topic: templateTopic.trim() || draft.name,
-        draft,
+        draft: withDraftMedia(draft, media),
         status: "submitted",
         meta_status: created.data.status === "pending" ? "PENDING" : created.data.status,
         template_id: created.data.id
@@ -724,34 +836,33 @@ export default function AiAgentPage() {
       await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
       toastStore.getState().show(
         created.data.status === "pending"
-          ? "تم إنشاء القالب وترحيله إلى ميتا مع الوسائط المعتمدة."
+          ? "تم إنشاء القالب وترحيله إلى ميتا مع الوسائط والأزرار."
           : "تم حفظ القالب في لوحة القوالب.",
         "success"
       );
-    } catch {
-      toastStore.getState().show("تعذر إنشاء القالب أو الترحيل إلى ميتا.", "error");
+    } catch (err) {
+      const detail = apiErrorDetail(err);
+      toastStore.getState().show(
+        detail ? `تعذر الترحيل: ${detail.slice(0, 120)}` : "تعذر إنشاء القالب أو الترحيل إلى ميتا.",
+        "error"
+      );
     }
   }
 
   const previewComponents = useMemo(() => {
     if (!templateDraft) return [];
-    const headerType =
-      templateDraft.header_type === "IMAGE"
-        ? ("IMAGE" as TemplateHeaderFormat)
-        : templateDraft.header_type === "VIDEO"
-          ? ("VIDEO" as TemplateHeaderFormat)
-          : templateDraft.header_type === "TEXT"
-            ? ("TEXT" as TemplateHeaderFormat)
-            : null;
+    const headerType = headerFormatFromDraft(templateDraft.header_type);
     return buildStoredComponents(templateDraft.body_text, templateHeaderFile, headerType, {
       category: templateDraft.category,
-      includeMarketingOptOut: templateDraft.category === "marketing",
+      includeMarketingOptOut: false,
       headerText: templateDraft.header_text,
       footerText: templateDraft.footer_text,
       customButtons: templateDraft.buttons ?? [],
       bodySamples: templateDraft.body_samples ?? []
     });
   }, [templateDraft, templateHeaderFile]);
+
+  const templateVarCount = templateDraft ? extractBodyVariableCount(templateDraft.body_text) : 0;
 
   const accountAiOn = settings?.account_agent_enabled !== false;
   const agentOn = settings?.agent_enabled !== false && accountAiOn;
@@ -1210,10 +1321,10 @@ export default function AiAgentPage() {
               <button
                 type="button"
                 className="whatsapp-button"
-                disabled={!llmReady}
                 onClick={() => {
                   setNewDraftOpen(true);
-                  setTemplateDraft(null);
+                  setActiveDraftId(null);
+                  setTemplateDraft(emptyTemplateDraft());
                   setTemplateHeaderFile(null);
                   setTemplateTopic("");
                   setTemplateAlts([]);
@@ -1226,28 +1337,40 @@ export default function AiAgentPage() {
 
           <p className={`ai-templates-note ${llmReady ? "is-ready" : "is-blocked"}`}>
             {llmReady
-              ? "توليد القوالب والصور متاح لأن الذكاء الاصطناعي الخارجي مفعّل."
+              ? "التوليد متاح. اكتب الموضوع ثم ولّد المسودة — تظهر النص والأزرار والتذييل والوسائط كاملة مع معاينة واتساب."
               : llmConfigured
-                ? "شرط توليد القالب: فعّل الذكاء الاصطناعي الخارجي أعلاه. المحرك الداخلي لا يولّد قوالب."
-                : "شرط توليد القالب: أضف مزوداً خارجياً ومفتاح API من إعدادات الذكاء الاصطناعي أولاً."}
+                ? "شرط توليد القالب: فعّل الذكاء الاصطناعي الخارجي أعلاه. يمكنك مع ذلك كتابة المسودة يدوياً ورفع الوسائط."
+                : "شرط التوليد بالذكاء: أضف مزوداً خارجياً من الإعدادات. الكتابة اليدوية ورفع الوسائط متاحان دائماً."}
           </p>
 
           <div className="ai-template-list">
             {(draftsQuery.data ?? []).map((item) => {
               const status = draftStatusMeta(item);
+              const btnCount = Array.isArray(item.draft?.buttons) ? item.draft.buttons.length : 0;
+              const hasMedia = Boolean(item.draft?.header_media?.public_url);
               return (
-                <article key={item.id} className="ai-template-row">
-                  <strong>{item.topic || item.draft?.name || "مسودة"}</strong>
+                <article
+                  key={item.id}
+                  className={`ai-template-row ${activeDraftId === item.id ? "is-active" : ""}`}
+                >
+                  <div className="ai-template-row-main">
+                    <strong>{item.topic || item.draft?.name || "مسودة"}</strong>
+                    <p className="hint-text">
+                      {(item.draft?.body_text || "").slice(0, 110) || "بدون نص بعد"}
+                      {(item.draft?.body_text || "").length > 110 ? "…" : ""}
+                    </p>
+                    <p className="hint-text">
+                      رأس: {item.draft?.header_type || "NONE"}
+                      {hasMedia ? " · وسائط محفوظة" : ""}
+                      {btnCount ? ` · ${btnCount} أزرار` : " · بلا أزرار"}
+                      {item.angle ? ` · زاوية: ${item.angle}` : ""}
+                    </p>
+                  </div>
                   <span className={`ai-status-badge ${status.className}`}>{status.label}</span>
                   <button
                     type="button"
                     className="secondary-button compact"
-                    onClick={() => {
-                      setTemplateDraft(item.draft);
-                      setTemplateTopic(item.topic || item.draft?.name || "");
-                      setTemplateHeaderFile(null);
-                      setNewDraftOpen(true);
-                    }}
+                    onClick={() => openSavedDraft(item)}
                   >
                     فتح
                   </button>
@@ -1256,8 +1379,14 @@ export default function AiAgentPage() {
                       type="button"
                       className="whatsapp-button compact"
                       onClick={() => {
-                        setTemplateTopic(item.topic || item.draft?.name || "");
-                        void approveDraftToMeta(item.draft);
+                        openSavedDraft(item);
+                        void approveDraftToMeta(
+                          emptyTemplateDraft({
+                            ...item.draft,
+                            buttons: item.draft?.buttons || [],
+                            body_samples: item.draft?.body_samples || []
+                          })
+                        );
                       }}
                     >
                       اعتماد
@@ -1273,23 +1402,30 @@ export default function AiAgentPage() {
 
           {newDraftOpen && (
             <div className="ai-template-editor">
-              <label className="field-label">
-                <span>موضوع القالب</span>
-                <textarea rows={2} value={templateTopic} onChange={(e) => setTemplateTopic(e.target.value)} />
-              </label>
-              <label className="field-label">
-                <span>رفع صورة أو فيديو للرأس (للتعديل والاعتماد)</span>
-                <input
-                  type="file"
-                  accept={HEADER_MEDIA_ACCEPT}
-                  disabled={headerUploadBusy}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    e.target.value = "";
-                    void uploadHeaderMedia(file);
+              <div className="ai-panel-head" style={{ marginBottom: 12 }}>
+                <h3 style={{ margin: 0 }}>{activeDraftId ? "تعديل المسودة" : "مسودة جديدة"}</h3>
+                <button
+                  type="button"
+                  className="secondary-button compact"
+                  onClick={() => {
+                    setNewDraftOpen(false);
+                    setActiveDraftId(null);
                   }}
+                >
+                  إغلاق المحرر
+                </button>
+              </div>
+
+              <label className="field-label">
+                <span>موضوع القالب (للتوليد)</span>
+                <textarea
+                  rows={2}
+                  value={templateTopic}
+                  onChange={(e) => setTemplateTopic(e.target.value)}
+                  placeholder="مثال: عرض شحن مجاني على مجموعة الصابون هذا الأسبوع"
                 />
               </label>
+
               <div className="catalog-card-actions">
                 <button
                   type="button"
@@ -1297,7 +1433,7 @@ export default function AiAgentPage() {
                   disabled={templateBusy || !llmReady}
                   onClick={() => void generateTemplate()}
                 >
-                  توليد مسودة
+                  {templateBusy ? "جاري التوليد…" : "توليد مسودة"}
                 </button>
                 <button
                   type="button"
@@ -1326,83 +1462,345 @@ export default function AiAgentPage() {
               </div>
 
               {templateDraft && (
-                <div className="agent-section-grid" style={{ marginTop: 12 }}>
+                <div className="agent-section-grid ai-template-editor-grid" style={{ marginTop: 14 }}>
                   <div className="agent-section-card accent-create stack-form">
+                    <div className="templates-fields-row">
+                      <label className="field-label">
+                        <span>الاسم (Meta)</span>
+                        <input
+                          value={templateDraft.name}
+                          onChange={(e) =>
+                            setTemplateDraft((c) => (c ? { ...c, name: e.target.value } : c))
+                          }
+                          dir="ltr"
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>اللغة</span>
+                        <select
+                          value={templateDraft.language || "ar"}
+                          onChange={(e) =>
+                            setTemplateDraft((c) => (c ? { ...c, language: e.target.value } : c))
+                          }
+                        >
+                          <option value="ar">العربية</option>
+                          <option value="en">English</option>
+                        </select>
+                      </label>
+                      <label className="field-label">
+                        <span>الفئة</span>
+                        <select
+                          value={templateDraft.category || "marketing"}
+                          onChange={(e) =>
+                            setTemplateDraft((c) => (c ? { ...c, category: e.target.value } : c))
+                          }
+                        >
+                          <option value="marketing">تسويق</option>
+                          <option value="utility">خدمات</option>
+                          <option value="authentication">تحقق</option>
+                        </select>
+                      </label>
+                    </div>
+
                     <label className="field-label">
-                      <span>الاسم</span>
-                      <input
-                        value={templateDraft.name}
-                        onChange={(e) => setTemplateDraft((c) => (c ? { ...c, name: e.target.value } : c))}
-                        dir="ltr"
-                      />
-                    </label>
-                    <label className="field-label">
-                      <span>صيغة الرأس</span>
+                      <span>صيغة رأس القالب</span>
                       <select
                         value={templateDraft.header_type || "NONE"}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const value = e.target.value;
                           setTemplateDraft((c) =>
-                            c ? { ...c, header_type: e.target.value } : c
-                          )
-                        }
+                            c
+                              ? {
+                                  ...c,
+                                  header_type: value,
+                                  header_text: value === "TEXT" ? c.header_text : ""
+                                }
+                              : c
+                          );
+                          if (value === "TEXT" || value === "NONE") {
+                            setTemplateHeaderFile(null);
+                          }
+                        }}
                       >
-                        <option value="NONE">بدون</option>
+                        <option value="NONE">بدون رأس</option>
                         <option value="TEXT">نص</option>
                         <option value="IMAGE">صورة</option>
                         <option value="VIDEO">فيديو</option>
+                        <option value="DOCUMENT">PDF / مستند</option>
                       </select>
                     </label>
+
+                    {templateDraft.header_type === "TEXT" && (
+                      <label className="field-label">
+                        <span>نص الرأس</span>
+                        <input
+                          value={templateDraft.header_text}
+                          maxLength={60}
+                          onChange={(e) =>
+                            setTemplateDraft((c) =>
+                              c ? { ...c, header_text: e.target.value.slice(0, 60) } : c
+                            )
+                          }
+                          placeholder="عنوان قصير يظهر أعلى الرسالة"
+                        />
+                      </label>
+                    )}
+
+                    {(templateDraft.header_type === "IMAGE" ||
+                      templateDraft.header_type === "VIDEO" ||
+                      templateDraft.header_type === "DOCUMENT") && (
+                      <label className="field-label">
+                        <span>
+                          رفع وسائط الرأس (
+                          {templateDraft.header_type === "DOCUMENT"
+                            ? "PDF"
+                            : templateDraft.header_type === "VIDEO"
+                              ? "فيديو"
+                              : "صورة"}
+                          )
+                        </span>
+                        <input
+                          type="file"
+                          accept={HEADER_MEDIA_ACCEPT}
+                          disabled={headerUploadBusy}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            e.target.value = "";
+                            void uploadHeaderMedia(file);
+                          }}
+                        />
+                        {headerUploadBusy && <p className="hint-text">جاري الرفع…</p>}
+                        {templateHeaderFile && (
+                          <p className="hint-text">
+                            ✓ معتمدة: {templateHeaderFile.filename}
+                            {templateHeaderFile.public_url ? " · جاهزة للمعاينة والترحيل" : ""}
+                          </p>
+                        )}
+                        <p className="hint-text">
+                          ارفع ملف صورة أو فيديو أو PDF حسب صيغة الرأس — يظهر فوراً في المعاينة.
+                        </p>
+                      </label>
+                    )}
+
+                    {templateDraft.header_type === "IMAGE" && (
+                      <>
+                        <label className="field-label">
+                          <span>وصف صورة الرأس (للتوليد بالذكاء)</span>
+                          <textarea
+                            rows={2}
+                            value={templateDraft.image_prompt}
+                            onChange={(e) =>
+                              setTemplateDraft((c) =>
+                                c ? { ...c, image_prompt: e.target.value } : c
+                              )
+                            }
+                          />
+                        </label>
+                        <div className="catalog-card-actions">
+                          <button
+                            type="button"
+                            className="whatsapp-button"
+                            disabled={imageBusy || templateBusy || !llmReady}
+                            onClick={() => void generateHeaderImage()}
+                          >
+                            {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
+                          </button>
+                          {templateHeaderFile && (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => {
+                                setTemplateHeaderFile(null);
+                                setTemplateDraft((c) =>
+                                  c ? { ...c, header_media: null } : c
+                                );
+                              }}
+                            >
+                              إزالة الوسائط
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+
                     <label className="field-label">
-                      <span>النص</span>
+                      <span>نص القالب</span>
                       <textarea
-                        rows={5}
+                        rows={6}
                         value={templateDraft.body_text}
-                        onChange={(e) =>
-                          setTemplateDraft((c) => (c ? { ...c, body_text: e.target.value } : c))
-                        }
+                        onChange={(e) => {
+                          const body = e.target.value;
+                          setTemplateDraft((c) =>
+                            c
+                              ? {
+                                  ...c,
+                                  body_text: body,
+                                  body_samples: syncBodySamples(body, c.body_samples)
+                                }
+                              : c
+                          );
+                        }}
+                        placeholder="مرحباً {{1}}! استفد من عرضنا لهذا الأسبوع…"
                       />
                     </label>
+                    <p className="hint-text">استخدم {"{{1}}"} و {"{{2}}"} للمتغيرات كما في ميتا.</p>
+
+                    {templateVarCount > 0 && (
+                      <div className="templates-samples-grid">
+                        {Array.from({ length: templateVarCount }, (_, index) => (
+                          <label key={`sample-${index}`} className="field-label">
+                            <span>عينة {"{{"}{index + 1}{"}}"}</span>
+                            <input
+                              value={templateDraft.body_samples[index] ?? ""}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setTemplateDraft((c) => {
+                                  if (!c) return c;
+                                  const samples = [...(c.body_samples || [])];
+                                  samples[index] = value;
+                                  return { ...c, body_samples: samples };
+                                });
+                              }}
+                              placeholder={`مثال${index + 1}`}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
                     <label className="field-label">
-                      <span>وصف صورة الرأس (للتوليد بالذكاء)</span>
-                      <textarea
-                        rows={3}
-                        value={templateDraft.image_prompt}
+                      <span>التذييل</span>
+                      <input
+                        value={templateDraft.footer_text}
+                        maxLength={60}
                         onChange={(e) =>
-                          setTemplateDraft((c) => (c ? { ...c, image_prompt: e.target.value } : c))
+                          setTemplateDraft((c) =>
+                            c ? { ...c, footer_text: e.target.value.slice(0, 60) } : c
+                          )
                         }
+                        placeholder="أرسل إيقاف لإلغاء الاشتراك"
                       />
                     </label>
-                    <div className="catalog-card-actions">
-                      <button
-                        type="button"
-                        className="whatsapp-button"
-                        disabled={imageBusy || templateBusy || !llmReady}
-                        onClick={() => void generateHeaderImage()}
-                      >
-                        {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
-                      </button>
-                      {templateHeaderFile && (
+
+                    <div className="templates-buttons-builder">
+                      <div className="templates-buttons-builder-head">
+                        <strong>أزرار القالب (حتى 3)</strong>
                         <button
                           type="button"
-                          className="secondary-button"
-                          onClick={() => setTemplateHeaderFile(null)}
+                          className="secondary-button compact"
+                          disabled={(templateDraft.buttons || []).length >= 3}
+                          onClick={() =>
+                            setTemplateDraft((c) =>
+                              c
+                                ? {
+                                    ...c,
+                                    buttons: [...(c.buttons || []), { type: "QUICK_REPLY", text: "" }]
+                                  }
+                                : c
+                            )
+                          }
                         >
-                          إزالة الوسائط
+                          إضافة زر
                         </button>
+                      </div>
+                      {(templateDraft.buttons || []).length === 0 && (
+                        <p className="hint-text">لا أزرار بعد — أضف زراً أو ولّد مسودة لتظهر المزايا كاملة.</p>
                       )}
+                      {(templateDraft.buttons || []).map((button, index) => (
+                        <div key={`ai-btn-${index}`} className="templates-button-row">
+                          <label className="field-label">
+                            <span>النوع</span>
+                            <select
+                              value={String(button.type || "QUICK_REPLY")}
+                              onChange={(e) =>
+                                updateDraftButton(index, {
+                                  type: e.target.value as TemplateButton["type"],
+                                  url: e.target.value === "URL" ? button.url : undefined,
+                                  phone_number:
+                                    e.target.value === "PHONE_NUMBER" ? button.phone_number : undefined
+                                })
+                              }
+                            >
+                              <option value="QUICK_REPLY">رد سريع</option>
+                              <option value="URL">رابط موقع</option>
+                              <option value="PHONE_NUMBER">اتصال هاتفي</option>
+                            </select>
+                          </label>
+                          <label className="field-label">
+                            <span>النص</span>
+                            <input
+                              value={button.text ?? ""}
+                              maxLength={25}
+                              onChange={(e) =>
+                                updateDraftButton(index, { text: e.target.value.slice(0, 25) })
+                              }
+                              placeholder="نص الزر"
+                            />
+                          </label>
+                          {String(button.type) === "URL" && (
+                            <label className="field-label">
+                              <span>الرابط</span>
+                              <input
+                                value={button.url ?? ""}
+                                onChange={(e) => updateDraftButton(index, { url: e.target.value })}
+                                placeholder="https://example.com"
+                                dir="ltr"
+                              />
+                            </label>
+                          )}
+                          {String(button.type) === "PHONE_NUMBER" && (
+                            <label className="field-label">
+                              <span>الهاتف</span>
+                              <input
+                                value={button.phone_number ?? ""}
+                                onChange={(e) =>
+                                  updateDraftButton(index, { phone_number: e.target.value })
+                                }
+                                placeholder="+965XXXXXXXX"
+                                dir="ltr"
+                              />
+                            </label>
+                          )}
+                          <button
+                            type="button"
+                            className="secondary-button compact"
+                            onClick={() =>
+                              setTemplateDraft((c) =>
+                                c
+                                  ? {
+                                      ...c,
+                                      buttons: (c.buttons || []).filter((_, idx) => idx !== index)
+                                    }
+                                  : c
+                              )
+                            }
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                    {templateHeaderFile && (
-                      <p className="hint-text">
-                        ✓ معتمدة للترحيل: {templateHeaderFile.filename}
-                      </p>
-                    )}
+
+                    <label className="field-label">
+                      <span>ملاحظات للمراجع</span>
+                      <textarea
+                        rows={2}
+                        value={templateDraft.notes}
+                        onChange={(e) =>
+                          setTemplateDraft((c) => (c ? { ...c, notes: e.target.value } : c))
+                        }
+                      />
+                    </label>
                   </div>
+
                   <div className="agent-section-card accent-import">
                     <h3 style={{ marginTop: 0, marginBottom: 10 }}>معاينة واتساب</h3>
                     <WhatsAppTemplatePreview
                       businessName={selectedWa?.verified_name || "نشاطك"}
+                      templateName={templateDraft.name}
                       bodyText={templateDraft.body_text}
                       components={previewComponents}
+                      variableSamples={templateDraft.body_samples}
                       mediaOverride={
                         templateHeaderFile
                           ? {
@@ -1412,25 +1810,43 @@ export default function AiAgentPage() {
                           : undefined
                       }
                     />
+                    <p className="hint-text" style={{ marginTop: 10 }}>
+                      المعاينة تعرض الرأس والنص والتذييل والأزرار والوسائط كما ستظهر تقريباً في واتساب.
+                    </p>
                   </div>
                 </div>
               )}
 
               {templateAlts.length > 0 && (
-                <div className="knowledge-matched-list" style={{ marginTop: 12 }}>
-                  {templateAlts.map((item) => (
-                    <article key={item.name} className="inbox-kb-card">
-                      <strong>{item.name}</strong>
-                      <p className="hint-text">{item.body_text.slice(0, 120)}…</p>
-                      <button
-                        type="button"
-                        className="secondary-button compact"
-                        onClick={() => setTemplateDraft(item)}
-                      >
-                        استخدام
-                      </button>
-                    </article>
-                  ))}
+                <div className="ai-template-alts" style={{ marginTop: 16 }}>
+                  <h3>البدائل المولَّدة</h3>
+                  <div className="knowledge-matched-list">
+                    {templateAlts.map((item) => (
+                      <article key={item.name} className="inbox-kb-card">
+                        <strong>{item.name}</strong>
+                        <p className="hint-text">{item.body_text}</p>
+                        <p className="hint-text">
+                          أزرار: {(item.buttons || []).map((b) => b.text).filter(Boolean).join(" · ") || "—"}
+                        </p>
+                        {item.footer_text && <p className="hint-text">تذييل: {item.footer_text}</p>}
+                        <button
+                          type="button"
+                          className="secondary-button compact"
+                          onClick={() => {
+                            setTemplateDraft(
+                              emptyTemplateDraft({
+                                ...item,
+                                header_media: templateHeaderFile
+                              })
+                            );
+                            setActiveDraftId(null);
+                          }}
+                        >
+                          فتح كامل للتعديل
+                        </button>
+                      </article>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
