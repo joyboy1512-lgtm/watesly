@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Catalog WhatsApp visibility
+
+| Item | Value |
+|------|-------|
+| Commit | `ab707d9` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-v7VRMN0i.js`, `index-COVkhPa6.css` |
+| Snapshot record | `deploy/production-snapshot-20261125-catalog-visibility.json` |
+
 ### Production snapshot (2026-11-25) — Inbox waiting workbench
 
 | Item | Value |
