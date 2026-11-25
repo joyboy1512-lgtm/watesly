@@ -212,14 +212,23 @@ export default function QuickRepliesPage() {
         </div>
       </header>
 
-      <section className="admin-stats-row admin-stats-row-brand quick-replies-stats">
-        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الردود</span><strong>{analytics.data?.summary?.total ?? "…"}</strong></article>
-        <article className="admin-stat-card admin-stat-card-brand"><span>بدون استخدام</span><strong>{analytics.data?.summary?.unused ?? "…"}</strong></article>
-        <article className="admin-stat-card admin-stat-card-brand"><span>إجمالي الاستخدام</span><strong>{analytics.data?.summary?.total_usage ?? "…"}</strong></article>
+      <section className="brand-stat-row admin-stats-row admin-stats-row-brand quick-replies-stats">
+        <article className="brand-stat-card brand-stat-card--sm admin-stat-card admin-stat-card-brand">
+          <span className="brand-stat-label">إجمالي الردود</span>
+          <strong className="brand-stat-value">{analytics.data?.summary?.total ?? "…"}</strong>
+        </article>
+        <article className="brand-stat-card brand-stat-card--sm admin-stat-card admin-stat-card-brand">
+          <span className="brand-stat-label">بدون استخدام</span>
+          <strong className="brand-stat-value">{analytics.data?.summary?.unused ?? "…"}</strong>
+        </article>
+        <article className="brand-stat-card brand-stat-card--sm admin-stat-card admin-stat-card-brand">
+          <span className="brand-stat-label">إجمالي الاستخدام</span>
+          <strong className="brand-stat-value">{analytics.data?.summary?.total_usage ?? "…"}</strong>
+        </article>
         {(analytics.data?.by_category ?? []).slice(0, 3).map((item) => (
-          <article key={item.category} className="admin-stat-card admin-stat-card-brand">
-            <span>{categoryLabel(item.category)}</span>
-            <strong>{item.count}</strong>
+          <article key={item.category} className="brand-stat-card brand-stat-card--sm admin-stat-card admin-stat-card-brand">
+            <span className="brand-stat-label">{categoryLabel(item.category)}</span>
+            <strong className="brand-stat-value">{item.count}</strong>
           </article>
         ))}
       </section>

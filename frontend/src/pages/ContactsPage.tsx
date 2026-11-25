@@ -466,22 +466,22 @@ export default function ContactsPage() {
         </header>
 
         {stats.data && (
-          <section className="admin-stats-row admin-stats-row-brand contacts-stats-brand">
-            <article className="admin-stat-card admin-stat-card-brand">
-              <span>إجمالي العملاء</span>
-              <strong>{stats.data.total.toLocaleString("ar")}</strong>
+          <section className="brand-stat-row admin-stats-row admin-stats-row-brand contacts-stats-brand">
+            <article className="brand-stat-card admin-stat-card admin-stat-card-brand">
+              <span className="brand-stat-label">إجمالي العملاء</span>
+              <strong className="brand-stat-value">{stats.data.total.toLocaleString("ar")}</strong>
             </article>
-            <article className="admin-stat-card admin-stat-card-brand">
-              <span>جدد هذا الأسبوع</span>
-              <strong>{stats.data.new_this_week.toLocaleString("ar")}</strong>
+            <article className="brand-stat-card admin-stat-card admin-stat-card-brand">
+              <span className="brand-stat-label">جدد هذا الأسبوع</span>
+              <strong className="brand-stat-value">{stats.data.new_this_week.toLocaleString("ar")}</strong>
             </article>
-            <article className="admin-stat-card admin-stat-card-brand">
-              <span>بدون اسم</span>
-              <strong>{stats.data.without_name.toLocaleString("ar")}</strong>
+            <article className="brand-stat-card admin-stat-card admin-stat-card-brand">
+              <span className="brand-stat-label">بدون اسم</span>
+              <strong className="brand-stat-value">{stats.data.without_name.toLocaleString("ar")}</strong>
             </article>
-            <article className="admin-stat-card admin-stat-card-brand">
-              <span>غير نشط (30 يوم)</span>
-              <strong>{stats.data.inactive_30d.toLocaleString("ar")}</strong>
+            <article className="brand-stat-card admin-stat-card admin-stat-card-brand">
+              <span className="brand-stat-label">غير نشط (30 يوم)</span>
+              <strong className="brand-stat-value">{stats.data.inactive_30d.toLocaleString("ar")}</strong>
             </article>
           </section>
         )}
