@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Knowledge brand status cards
+
+| Item | Value |
+|------|-------|
+| Commit | `a9078d7` |
+| Alembic | `0069_knowledge_article_channel` |
+| Live assets | `index-CGFkUqwW.js`, `index-B9VN_sIi.css` |
+
 ### Production snapshot (2026-11-25) — Brand-stat-card site-wide
 
 | Item | Value |

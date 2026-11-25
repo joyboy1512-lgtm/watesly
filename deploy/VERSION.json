@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "55aa8b1",
-    "git_commit_message": "Brand-stat-card identity site-wide",
+    "git_commit": "a9078d7",
+    "git_commit_message": "Knowledge status brand cards + centered brand-stat text",
     "alembic_head": "0069_knowledge_article_channel",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.11",
+    "frontend_version": "0.32.12",
     "live_assets": {
-      "js": "index-6uSfR5tH.js",
-      "css": "index-CShtYg2E.css"
+      "js": "index-CGFkUqwW.js",
+      "css": "index-B9VN_sIi.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.11",
+    "frontend": "0.32.12",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "55aa8b1",
-  "notes": "Shared brand-stat-card (green centered) for catalog/contacts/analytics/library (PR #201)"
+  "commit": "a9078d7",
+  "notes": "Knowledge status strip as brand-stat cards + centered brand/admin-stat text (PR #202)"
 }
