@@ -41,6 +41,8 @@ export type AgentSettings = {
   auto_reply_outside_hours?: boolean;
   business_hours_json?: BusinessHoursConfig | Record<string, unknown>;
   outside_hours_message?: string | null;
+  welcome_message_enabled?: boolean;
+  welcome_message?: string | null;
   within_business_hours?: boolean;
   account_agent_enabled?: boolean;
   channel_id?: string | null;

@@ -739,6 +739,45 @@ async def process_inbound_side_effects(
                         mac_trigger_source=MacTriggerSource.AI_OUTBOUND,
                     )
                     conversation.first_response_at = datetime.now(UTC)
+                    auto_sent = True
+                except ValueError:
+                    pass
+
+            welcome_on = bool(agent_settings.get("welcome_message_enabled", False))
+            if (
+                not auto_sent
+                and agent_live
+                and welcome_on
+                and can_send
+                and not conversation.first_response_at
+            ):
+                welcome_text = str(agent_settings.get("welcome_message") or "").strip()
+                if not welcome_text:
+                    welcome_text = (
+                        "شكراً لتواصلك معنا. يسعدنا خدمتك — كيف يمكننا مساعدتك اليوم؟"
+                    )
+                try:
+                    await send_text_message(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        whatsapp_account_id=whatsapp_account.id,
+                        payload=SendTextMessageRequest(to=sender, text=welcome_text),
+                        record_mac=True,
+                        mac_trigger_source=MacTriggerSource.AI_OUTBOUND,
+                    )
+                    conversation.first_response_at = datetime.now(UTC)
+                    await log_ai_activity(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        channel_id=whatsapp_account.channel_id,
+                        conversation_id=conversation.id,
+                        source="live",
+                        outcome="welcome",
+                        reason_code="welcome_first_message",
+                        reason_text="رسالة ترحيب لأول رسالة واردة",
+                        query_text=text_body,
+                        suggestion=welcome_text,
+                    )
                 except ValueError:
                     pass
         except Exception:
