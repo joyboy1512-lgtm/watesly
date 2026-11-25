@@ -1199,302 +1199,363 @@ export default function AiAgentPage() {
         <section className="ai-panel">
           <div className="ai-panel-head">
             <h2>إعدادات الربط بالمزود</h2>
+            <button
+              type="button"
+              className="ai-emergency-btn"
+              onClick={() => void toggleAccountKill()}
+              title="إيقاف كل مزودات الذكاء الاصطناعي في جميع القنوات"
+            >
+              {settings.account_agent_enabled === false
+                ? "طوارئ: إعادة تشغيل كل المزودات"
+                : "طوارئ: إغلاق كل مزودات الذكاء"}
+            </button>
           </div>
 
-          <div className="ai-provider-table" role="table" aria-label="مزودات الذكاء">
-            <div className="ai-provider-head" role="row">
-              <span role="columnheader">المزود</span>
-              <span role="columnheader">الحالة</span>
-              <span role="columnheader">زمن الاشتراك</span>
-              <span role="columnheader">المبلغ</span>
-              <span role="columnheader">الرصيد / المساحة</span>
-              <span role="columnheader">إعدادات</span>
-              <span role="columnheader">إجراء</span>
-              <span role="columnheader">إلغاء</span>
-            </div>
+          <div className="ai-settings-split">
+            <div className="ai-settings-split-main">
+              <h3>المزودات المضافة</h3>
+              <div className="ai-provider-table" role="table" aria-label="مزودات الذكاء">
+                <div className="ai-provider-head" role="row">
+                  <span role="columnheader">المزود</span>
+                  <span role="columnheader">الحالة</span>
+                  <span role="columnheader">زمن الاشتراك</span>
+                  <span role="columnheader">المبلغ</span>
+                  <span role="columnheader">الرصيد / المساحة</span>
+                  <span role="columnheader">إعدادات</span>
+                  <span role="columnheader">إجراء</span>
+                  <span role="columnheader">إلغاء</span>
+                </div>
 
-            <div className="ai-provider-row" role="row">
-              <span role="cell">
-                <strong>المحرك الداخلي</strong>
-                <small>معرفة + كتالوج</small>
-              </span>
-              <span role="cell">{localOn ? "يعمل" : "متوقف"}</span>
-              <span role="cell">{formatSubDate(subscription?.starts_at)} → {formatSubDate(subscription?.ends_at)}</span>
-              <span role="cell">
-                {subscription?.plan_name
-                  ? `${subscription.plan_name}${subscription.billing_cycle ? ` · ${subscription.billing_cycle}` : ""}`
-                  : "ضمن الباقة"}
-              </span>
-              <span role="cell">
-                {subscription?.mac_remaining != null
-                  ? `${subscription.mac_remaining} متبقي من ${subscription.included_mac ?? "—"} محادثة`
-                  : "—"}
-              </span>
-              <span role="cell">
-                <button
-                  type="button"
-                  className={`ai-settings-chip ${providerPanel === "local" ? "is-open" : ""}`}
-                  onClick={() => setProviderPanel((v) => (v === "local" ? null : "local"))}
-                >
-                  إعدادات
-                </button>
-              </span>
-              <span role="cell">
-                <button
-                  type="button"
-                  className={`ai-action-card ${localOn ? "is-on" : "is-off"}`}
-                  disabled={settings.account_agent_enabled === false || !settings.agent_enabled}
-                  onClick={() =>
-                    void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
-                  }
-                >
-                  <strong>{localOn ? "إيقاف" : "تشغيل"}</strong>
-                  <span>هذه القناة</span>
-                </button>
-              </span>
-              <span role="cell">
-                <button
-                  type="button"
-                  className="ai-remove-chip"
-                  disabled={!localOn && settings.local_engine_enabled === false}
-                  onClick={() => void saveSettings({ local_engine_enabled: false })}
-                >
-                  إلغاء المزود
-                </button>
-              </span>
-            </div>
-
-            {providerPanel === "local" && (
-              <div className="ai-provider-drawer" role="row">
-                <div className="ai-provider-drawer-inner" role="cell">
-                  <div className="ai-panel-head" style={{ margin: "0 0 12px", paddingBottom: 10 }}>
-                    <h2>إعدادات المحرك الداخلي</h2>
-                    <button type="button" className="secondary-button" onClick={() => setProviderPanel(null)}>
-                      إغلاق
+                <div className="ai-provider-row" role="row">
+                  <span role="cell">
+                    <strong>المحرك الداخلي</strong>
+                    <small>معرفة + كتالوج</small>
+                  </span>
+                  <span role="cell">{localOn ? "يعمل" : "متوقف"}</span>
+                  <span role="cell">
+                    {formatSubDate(subscription?.starts_at)} → {formatSubDate(subscription?.ends_at)}
+                  </span>
+                  <span role="cell">
+                    {subscription?.plan_name
+                      ? `${subscription.plan_name}${subscription.billing_cycle ? ` · ${subscription.billing_cycle}` : ""}`
+                      : "ضمن الباقة"}
+                  </span>
+                  <span role="cell">
+                    {subscription?.mac_remaining != null
+                      ? `${subscription.mac_remaining} متبقي من ${subscription.included_mac ?? "—"} محادثة`
+                      : "—"}
+                  </span>
+                  <span role="cell">
+                    <button
+                      type="button"
+                      className={`ai-provider-btn is-settings ${providerPanel === "local" ? "is-open" : ""}`}
+                      onClick={() => setProviderPanel((v) => (v === "local" ? null : "local"))}
+                    >
+                      إعدادات
                     </button>
-                  </div>
-                  <div className="ai-advanced-stack">
-                    <div className="catalog-card-actions">
-                      <button type="button" className="secondary-button" onClick={() => void toggleAccountKill()}>
-                        {settings.account_agent_enabled === false
-                          ? "تشغيل الذكاء لجميع القنوات"
-                          : "إيقاف الذكاء لجميع القنوات"}
-                      </button>
-                    </div>
-                    <div className="knowledge-fields-row">
-                      <label className="field-label">
-                        <span>المحرك الداخلي</span>
+                  </span>
+                  <span role="cell">
+                    <button
+                      type="button"
+                      className={`ai-provider-btn ${localOn ? "is-on" : "is-off"}`}
+                      disabled={settings.account_agent_enabled === false || !settings.agent_enabled}
+                      onClick={() =>
+                        void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
+                      }
+                    >
+                      <strong>{localOn ? "إيقاف" : "تشغيل"}</strong>
+                      <span>هذه القناة</span>
+                    </button>
+                  </span>
+                  <span role="cell">
+                    <button
+                      type="button"
+                      className="ai-provider-btn is-remove"
+                      disabled={!localOn && settings.local_engine_enabled === false}
+                      onClick={() => void saveSettings({ local_engine_enabled: false })}
+                    >
+                      إلغاء المزود
+                    </button>
+                  </span>
+                </div>
+
+                {providerPanel === "local" && (
+                  <div className="ai-provider-drawer" role="row">
+                    <div className="ai-provider-drawer-inner" role="cell">
+                      <div className="ai-panel-head" style={{ margin: "0 0 12px", paddingBottom: 10 }}>
+                        <h2>إعدادات المحرك الداخلي</h2>
                         <button
                           type="button"
-                          className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
-                          disabled={!agentOn}
-                          onClick={() =>
-                            void saveSettings({
-                              local_engine_enabled: settings.local_engine_enabled === false
-                            })
-                          }
+                          className="secondary-button"
+                          onClick={() => setProviderPanel(null)}
                         >
-                          {localOn ? "يعمل" : "متوقف"}
+                          إغلاق
                         </button>
-                      </label>
-                      <label className="field-label">
-                        <span>وضع المحرك</span>
-                        <select
-                          value={settings.default_mode}
-                          disabled={!agentOn || !localOn}
-                          onChange={(e) =>
-                            void saveSettings({
-                              default_mode: e.target.value as AgentSettings["default_mode"]
-                            })
-                          }
-                        >
-                          {Object.entries(MODE_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="field-label">
-                        <span>النبرة</span>
-                        <select
-                          value={settings.tone}
-                          onChange={(e) =>
-                            void saveSettings({ tone: e.target.value as AgentSettings["tone"] })
-                          }
-                        >
-                          <option value="friendly">ودّية</option>
-                          <option value="formal">رسمية</option>
-                          <option value="concise">مختصرة</option>
-                        </select>
-                      </label>
-                      <label className="field-label">
-                        <span>حد جولات التوضيح</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={10}
-                          defaultValue={settings.clarify_max_rounds ?? 2}
-                          onBlur={(e) =>
-                            void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })
-                          }
-                        />
-                      </label>
+                      </div>
+                      <div className="ai-advanced-stack">
+                        <div className="knowledge-fields-row">
+                          <label className="field-label">
+                            <span>المحرك الداخلي</span>
+                            <button
+                              type="button"
+                              className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
+                              disabled={!agentOn}
+                              onClick={() =>
+                                void saveSettings({
+                                  local_engine_enabled: settings.local_engine_enabled === false
+                                })
+                              }
+                            >
+                              {localOn ? "يعمل" : "متوقف"}
+                            </button>
+                          </label>
+                          <label className="field-label">
+                            <span>وضع المحرك</span>
+                            <select
+                              value={settings.default_mode}
+                              disabled={!agentOn || !localOn}
+                              onChange={(e) =>
+                                void saveSettings({
+                                  default_mode: e.target.value as AgentSettings["default_mode"]
+                                })
+                              }
+                            >
+                              {Object.entries(MODE_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field-label">
+                            <span>النبرة</span>
+                            <select
+                              value={settings.tone}
+                              onChange={(e) =>
+                                void saveSettings({ tone: e.target.value as AgentSettings["tone"] })
+                              }
+                            >
+                              <option value="friendly">ودّية</option>
+                              <option value="formal">رسمية</option>
+                              <option value="concise">مختصرة</option>
+                            </select>
+                          </label>
+                          <label className="field-label">
+                            <span>حد جولات التوضيح</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={10}
+                              defaultValue={settings.clarify_max_rounds ?? 2}
+                              onBlur={(e) =>
+                                void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <label className="field-label">
+                          <span>كلمات التصعيد</span>
+                          <textarea
+                            rows={3}
+                            defaultValue={(settings.escalation_keywords ?? []).join("\n")}
+                            placeholder={"شكوى\nمحامي\nاسترجاع فلوسي\nمدير"}
+                            onBlur={(e) => {
+                              const keywords = e.target.value
+                                .split(/[\n,،]+/)
+                                .map((item) => item.trim())
+                                .filter(Boolean);
+                              void saveSettings({ escalation_keywords: keywords });
+                            }}
+                          />
+                        </label>
+                      </div>
                     </div>
-                    <label className="field-label">
-                      <span>كلمات التصعيد</span>
-                      <textarea
-                        rows={3}
-                        defaultValue={(settings.escalation_keywords ?? []).join("\n")}
-                        placeholder={"شكوى\nمحامي\nاسترجاع فلوسي\nمدير"}
-                        onBlur={(e) => {
-                          const keywords = e.target.value
-                            .split(/[\n,،]+/)
-                            .map((item) => item.trim())
-                            .filter(Boolean);
-                          void saveSettings({ escalation_keywords: keywords });
-                        }}
-                      />
-                    </label>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            <div className="ai-provider-row" role="row">
-              <span role="cell">
-                <strong>المزود الخارجي</strong>
-                <small>{settings.llm_model || "gpt-4o-mini"}</small>
-              </span>
-              <span role="cell">{llmStatusLabel(settings)}</span>
-              <span role="cell">{subscription?.cycle_month || "—"}</span>
-              <span role="cell">
-                {subscription?.over_mac_price_per_100 != null
-                  ? `${subscription.over_mac_price_per_100} / 100 محادثة إضافية`
-                  : "حسب مزود API"}
-              </span>
-              <span role="cell">
-                {settings.llm_key_configured ? "مفتاح مربوط" : "بدون مفتاح"}
-                {subscription?.estimated_over_mac_charge
-                  ? ` · تقدير زيادة ${subscription.estimated_over_mac_charge}`
-                  : ""}
-              </span>
-              <span role="cell">
-                <button
-                  type="button"
-                  className={`ai-settings-chip ${providerPanel === "external" ? "is-open" : ""}`}
-                  onClick={() => setProviderPanel((v) => (v === "external" ? null : "external"))}
-                >
-                  إعدادات
-                </button>
-              </span>
-              <span role="cell">
-                <button
-                  type="button"
-                  className={`ai-action-card ${llmOn ? "is-on" : "is-off"}`}
-                  disabled={!settings.llm_available || !agentOn}
-                  onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
-                >
-                  <strong>{llmOn ? "إيقاف" : "تشغيل"}</strong>
-                  <span>هذه القناة</span>
-                </button>
-              </span>
-              <span role="cell">
-                <button
-                  type="button"
-                  className="ai-remove-chip"
-                  disabled={!settings.llm_key_configured && !settings.llm_enabled}
-                  onClick={() =>
-                    void saveSettings({
-                      llm_enabled: false,
-                      clear_llm_api_key: true,
-                      llm_api_base_url: null,
-                      llm_model: null,
-                      llm_image_model: null
-                    })
-                  }
-                >
-                  إلغاء المزود
-                </button>
-              </span>
-            </div>
-
-            {providerPanel === "external" && (
-              <div className="ai-provider-drawer" role="row">
-                <div className="ai-provider-drawer-inner" role="cell">
-                  <div className="ai-panel-head" style={{ margin: "0 0 12px", paddingBottom: 10 }}>
-                    <h2>تفاصيل ربط المزود الخارجي</h2>
-                    <button type="button" className="secondary-button" onClick={() => setProviderPanel(null)}>
-                      إغلاق
-                    </button>
-                  </div>
-                  <div className="knowledge-fields-row">
-                    <label className="field-label">
-                      <span>مفتاح API</span>
-                      <input
-                        type="password"
-                        value={llmApiKeyDraft}
-                        onChange={(e) => setLlmApiKeyDraft(e.target.value)}
-                        dir="ltr"
-                      />
-                    </label>
-                    <label className="field-label">
-                      <span>Base URL</span>
-                      <input
-                        defaultValue={settings.llm_api_base_url ?? ""}
-                        onBlur={(e) =>
-                          void saveSettings({ llm_api_base_url: e.target.value.trim() || null })
-                        }
-                        dir="ltr"
-                      />
-                    </label>
-                    <label className="field-label">
-                      <span>نموذج الرد</span>
-                      <input
-                        defaultValue={settings.llm_model ?? ""}
-                        onBlur={(e) => void saveSettings({ llm_model: e.target.value.trim() || null })}
-                        dir="ltr"
-                      />
-                    </label>
-                    <label className="field-label">
-                      <span>نموذج الصور</span>
-                      <input
-                        defaultValue={settings.llm_image_model ?? ""}
-                        placeholder="gpt-image-1 ثم dall-e-3 تلقائياً"
-                        onBlur={(e) =>
-                          void saveSettings({ llm_image_model: e.target.value.trim() || null })
-                        }
-                        dir="ltr"
-                      />
-                    </label>
-                  </div>
-                  <div className="catalog-card-actions" style={{ marginTop: 12 }}>
+                <div className="ai-provider-row" role="row">
+                  <span role="cell">
+                    <strong>المزود الخارجي</strong>
+                    <small>{settings.llm_model || "gpt-4o-mini"}</small>
+                  </span>
+                  <span role="cell">{llmStatusLabel(settings)}</span>
+                  <span role="cell">{subscription?.cycle_month || "—"}</span>
+                  <span role="cell">
+                    {subscription?.over_mac_price_per_100 != null
+                      ? `${subscription.over_mac_price_per_100} / 100 محادثة إضافية`
+                      : "حسب مزود API"}
+                  </span>
+                  <span role="cell">
+                    {settings.llm_key_configured ? "مفتاح مربوط" : "بدون مفتاح"}
+                    {subscription?.estimated_over_mac_charge
+                      ? ` · تقدير زيادة ${subscription.estimated_over_mac_charge}`
+                      : ""}
+                  </span>
+                  <span role="cell">
                     <button
                       type="button"
-                      className="whatsapp-button"
-                      onClick={() => void saveLlmApiKey()}
-                      disabled={!llmApiKeyDraft.trim()}
+                      className={`ai-provider-btn is-settings ${providerPanel === "external" ? "is-open" : ""}`}
+                      onClick={() => setProviderPanel((v) => (v === "external" ? null : "external"))}
                     >
-                      حفظ المفتاح
+                      إعدادات
                     </button>
+                  </span>
+                  <span role="cell">
                     <button
                       type="button"
-                      className={`agent-state-toggle ${llmOn ? "is-on" : "is-off"}`}
+                      className={`ai-provider-btn ${llmOn ? "is-on" : "is-off"}`}
                       disabled={!settings.llm_available || !agentOn}
                       onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
                     >
-                      {llmOn ? "يعمل" : settings.llm_available ? "متوقف" : "غير جاهز"}
+                      <strong>{llmOn ? "إيقاف" : "تشغيل"}</strong>
+                      <span>هذه القناة</span>
                     </button>
-                  </div>
+                  </span>
+                  <span role="cell">
+                    <button
+                      type="button"
+                      className="ai-provider-btn is-remove"
+                      disabled={!settings.llm_key_configured && !settings.llm_enabled}
+                      onClick={() =>
+                        void saveSettings({
+                          llm_enabled: false,
+                          clear_llm_api_key: true,
+                          llm_api_base_url: null,
+                          llm_model: null,
+                          llm_image_model: null
+                        })
+                      }
+                    >
+                      إلغاء المزود
+                    </button>
+                  </span>
                 </div>
-              </div>
-            )}
-          </div>
 
-          <p className="ai-settings-hint">
-            إعدادات المحرك الداخلي وتفاصيل ربط المزود الخارجي تُفتح من عمود «إعدادات». عمود الإجراء يشغّل أو
-            يوقف المزود على القناة الحالية، و«إلغاء المزود» يعطّل الربط ويمسح بيانات المزود الخارجي عند الحاجة.
-          </p>
+                {providerPanel === "external" && (
+                  <div className="ai-provider-drawer" role="row">
+                    <div className="ai-provider-drawer-inner" role="cell">
+                      <div className="ai-panel-head" style={{ margin: "0 0 12px", paddingBottom: 10 }}>
+                        <h2>تفاصيل ربط المزود الخارجي</h2>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => setProviderPanel(null)}
+                        >
+                          إغلاق
+                        </button>
+                      </div>
+                      <div className="knowledge-fields-row">
+                        <label className="field-label">
+                          <span>مفتاح API</span>
+                          <input
+                            type="password"
+                            value={llmApiKeyDraft}
+                            onChange={(e) => setLlmApiKeyDraft(e.target.value)}
+                            dir="ltr"
+                          />
+                        </label>
+                        <label className="field-label">
+                          <span>Base URL</span>
+                          <input
+                            defaultValue={settings.llm_api_base_url ?? ""}
+                            onBlur={(e) =>
+                              void saveSettings({ llm_api_base_url: e.target.value.trim() || null })
+                            }
+                            dir="ltr"
+                          />
+                        </label>
+                        <label className="field-label">
+                          <span>نموذج الرد</span>
+                          <input
+                            defaultValue={settings.llm_model ?? ""}
+                            onBlur={(e) => void saveSettings({ llm_model: e.target.value.trim() || null })}
+                            dir="ltr"
+                          />
+                        </label>
+                        <label className="field-label">
+                          <span>نموذج الصور</span>
+                          <input
+                            defaultValue={settings.llm_image_model ?? ""}
+                            placeholder="gpt-image-1 ثم dall-e-3 تلقائياً"
+                            onBlur={(e) =>
+                              void saveSettings({ llm_image_model: e.target.value.trim() || null })
+                            }
+                            dir="ltr"
+                          />
+                        </label>
+                      </div>
+                      <div className="catalog-card-actions" style={{ marginTop: 12 }}>
+                        <button
+                          type="button"
+                          className="whatsapp-button"
+                          onClick={() => void saveLlmApiKey()}
+                          disabled={!llmApiKeyDraft.trim()}
+                        >
+                          حفظ المفتاح
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <aside className="ai-add-provider-card">
+              <h3>إضافة مزود جديد</h3>
+              <p>اربط مزوداً خارجياً متوافقاً مع OpenAI. بعد الحفظ يظهر في جدول المزودات المضافة.</p>
+              <label className="field-label">
+                <span>مفتاح API</span>
+                <input
+                  type="password"
+                  value={llmApiKeyDraft}
+                  onChange={(e) => setLlmApiKeyDraft(e.target.value)}
+                  placeholder="sk-..."
+                  dir="ltr"
+                />
+              </label>
+              <label className="field-label">
+                <span>Base URL</span>
+                <input
+                  defaultValue={settings.llm_api_base_url ?? ""}
+                  placeholder="https://api.openai.com/v1"
+                  onBlur={(e) => void saveSettings({ llm_api_base_url: e.target.value.trim() || null })}
+                  dir="ltr"
+                />
+              </label>
+              <label className="field-label">
+                <span>نموذج الرد</span>
+                <input
+                  defaultValue={settings.llm_model ?? ""}
+                  placeholder="gpt-4o-mini"
+                  onBlur={(e) => void saveSettings({ llm_model: e.target.value.trim() || null })}
+                  dir="ltr"
+                />
+              </label>
+              <label className="field-label">
+                <span>نموذج الصور</span>
+                <input
+                  defaultValue={settings.llm_image_model ?? ""}
+                  placeholder="gpt-image-1"
+                  onBlur={(e) => void saveSettings({ llm_image_model: e.target.value.trim() || null })}
+                  dir="ltr"
+                />
+              </label>
+              <button
+                type="button"
+                className="whatsapp-button"
+                disabled={!llmApiKeyDraft.trim()}
+                onClick={async () => {
+                  const ok = await saveSettings({
+                    llm_api_key: llmApiKeyDraft.trim(),
+                    llm_enabled: true
+                  });
+                  if (ok) setLlmApiKeyDraft("");
+                }}
+              >
+                حفظ وربط المزود
+              </button>
+            </aside>
+          </div>
         </section>
       )}
 
