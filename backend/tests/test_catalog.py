@@ -58,7 +58,14 @@ def test_catalog_api_routes_exist() -> None:
     assert "bulk_purge_catalog_products" in catalog
     assert "build_meta_catalog_product_payload" in read("app/services/catalog_commerce.py")
     assert "meta_sync_enabled" in routes
-    assert "catalogMetaStatusLabel" in read("../frontend/src/lib/catalogHelpers.ts")
+    helpers = read("../frontend/src/lib/catalogHelpers.ts")
+    assert "catalogMetaStatusLabel" in helpers
+    assert "catalogWhatsAppVisibility" in helpers
+    assert "summarizeCatalogVisibility" in helpers
+    assert "approved" in helpers and "no_review" in helpers
+    assert "catalog-visibility-board" in frontend
+    assert "catalogWhatsAppVisibility" in frontend
+    assert "مؤكد الظهور" in helpers
     assert "InboxProductPicker" in read("../frontend/src/pages/InboxPage.tsx")
     assert "ai.catalog_suggestion" in read("../frontend/src/pages/InboxPage.tsx")
 
