@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Catalog visibility channel-scoped proof
+
+| Item | Value |
+|------|-------|
+| Commit | `9aa9201` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-CksUWsrD.js`, `index-CM0sUaIe.css` |
+| Snapshot record | `deploy/production-snapshot-20261125-catalog-visibility-proof.json` |
+
 ### Production snapshot (2026-11-25) — Catalog WhatsApp visibility
 
 | Item | Value |

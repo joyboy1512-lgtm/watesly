@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-25",
+  "commit": "9aa9201",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-CksUWsrD.js",
+    "css": "index-CM0sUaIe.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Confirmed WhatsApp visibility requires channel/catalog/product proof",
+    "Meta approved/no_review alone shows معتمد لدى Meta · الظهور غير متحقق",
+    "Sync failure/pause no longer claim published copy disappeared",
+    "Catalog page reordered: add/orders, branch/number, status cards, tools menu",
+    "Six-column desktop table + detail panel + mobile cards",
+    "معاينة رد واتساب renamed; counters over full filtered set"
+  ],
+  "notes": "Deployed via SSH. PR #196. No persisted per-product visibility proof source in current Meta integration — confirmed count is 0 without fixture proofs."
+}

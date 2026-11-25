@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "ab707d9",
-    "git_commit_message": "Catalog WhatsApp visibility board live",
+    "git_commit": "9aa9201",
+    "git_commit_message": "Catalog visibility channel-scoped proof",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.5",
+    "frontend_version": "0.32.6",
     "live_assets": {
-      "js": "index-v7VRMN0i.js",
-      "css": "index-COVkhPa6.css"
+      "js": "index-CksUWsrD.js",
+      "css": "index-CM0sUaIe.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.5",
+    "frontend": "0.32.6",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "ab707d9",
-  "notes": "Catalog WhatsApp visibility board by branch/channel; Meta ID alone is not confirmed (PR #195)"
+  "commit": "9aa9201",
+  "notes": "Catalog visibility: confirmed requires channel-scoped proof; Meta approval alone is unverified (PR #196)"
 }
