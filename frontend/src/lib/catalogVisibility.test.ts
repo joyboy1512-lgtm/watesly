@@ -206,6 +206,9 @@ describe("catalogWhatsAppVisibility proof semantics", () => {
     expect(summary.requiresChannelSelection).toBe(true);
     expect(summary.counts.confirmed).toBe(0);
     expect(summary.counts.meta_approved).toBe(1);
+    const confirmedCard = summary.cards.find((card) => card.status === "confirmed");
+    expect(confirmedCard?.displayCount).toBeNull();
+    expect(confirmedCard?.needsChannelSelection).toBe(true);
     expect(
       catalogWhatsAppVisibility(
         product({ external_id: "1", meta_review_status: "approved" }),

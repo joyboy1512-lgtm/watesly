@@ -65,6 +65,7 @@ export default function App() {
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/privacy" element={<LegalPage kind="privacy" />} />
       <Route path="/terms" element={<LegalPage kind="terms" />} />
+      <Route path="/dev/catalog-ui-preview" element={<CatalogPage demoMode />} />
       <Route
         element={
           <ProtectedRoute>

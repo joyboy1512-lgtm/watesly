@@ -200,8 +200,52 @@ export function sortCatalogProducts(items: CatalogProduct[]) {
 
 export function catalogPriceLabel(item: Pick<CatalogProduct, "price_type" | "price" | "currency">) {
   if (item.price_type === "quote" || !item.price) return "عرض سعر";
-  if (item.price_type === "from") return `من ${item.price} ${item.currency}`;
-  return `${item.price} ${item.currency}`;
+  const amount = Number(item.price);
+  const currency = (item.currency || "KWD").trim() || "KWD";
+  let formatted = item.price;
+  if (Number.isFinite(amount)) {
+    try {
+      formatted = new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 3
+      }).format(amount);
+    } catch {
+      formatted = `${amount} ${currency}`;
+    }
+  } else {
+    formatted = `${item.price} ${currency}`;
+  }
+  if (item.price_type === "from") return `من ${formatted}`;
+  return formatted;
+}
+
+export type CatalogSortKey = "name" | "price" | "updated";
+
+export function sortCatalogProductsBy(
+  items: CatalogProduct[],
+  sortKey: CatalogSortKey = "name"
+) {
+  return [...items].sort((left, right) => {
+    if (sortKey === "price") {
+      const leftPrice = left.price_type === "quote" || !left.price ? Number.POSITIVE_INFINITY : Number(left.price);
+      const rightPrice = right.price_type === "quote" || !right.price ? Number.POSITIVE_INFINITY : Number(right.price);
+      const leftValue = Number.isFinite(leftPrice) ? leftPrice : Number.POSITIVE_INFINITY;
+      const rightValue = Number.isFinite(rightPrice) ? rightPrice : Number.POSITIVE_INFINITY;
+      if (leftValue !== rightValue) return leftValue - rightValue;
+      return left.name.localeCompare(right.name, "ar");
+    }
+    if (sortKey === "updated") {
+      const leftAt = left.meta_synced_at || "";
+      const rightAt = right.meta_synced_at || "";
+      const byDate = rightAt.localeCompare(leftAt);
+      if (byDate !== 0) return byDate;
+      return left.name.localeCompare(right.name, "ar");
+    }
+    const byName = left.name.localeCompare(right.name, "ar");
+    if (byName !== 0) return byName;
+    return (left.sort_order ?? 0) - (right.sort_order ?? 0);
+  });
 }
 
 export function catalogTypeLabel(productType: string) {
@@ -374,6 +418,29 @@ const VISIBILITY_LABELS: Record<CatalogVisibilityStatus, string> = {
   broken: "متعطل",
   unknown: "مجهول الحالة"
 };
+
+/** Short labels for dense table/cards; full labels stay in details/tooltips. */
+export const VISIBILITY_SHORT_LABELS: Record<CatalogVisibilityStatus, string> = {
+  local: "محلي",
+  linked: "مربوط بـ Meta",
+  meta_approved: "معتمد",
+  confirmed: "مؤكد",
+  broken: "متعطل",
+  unknown: "مجهول"
+};
+
+export const VISIBILITY_CARD_ICONS: Record<CatalogVisibilityStatus, string> = {
+  confirmed: "C",
+  meta_approved: "A",
+  linked: "L",
+  local: "O",
+  broken: "!",
+  unknown: "?"
+};
+
+export function catalogVisibilityShortLabel(status: CatalogVisibilityStatus) {
+  return VISIBILITY_SHORT_LABELS[status];
+}
 
 export function emptyCatalogVisibilityScope(
   overrides: Partial<CatalogVisibilityScope> = {}
@@ -723,32 +790,40 @@ export function summarizeCatalogVisibility(
     requiresChannelSelection: !channelSelected,
     cards: (
       [
-        ["confirmed", "مؤكد الظهور"],
-        ["meta_approved", "معتمد · غير متحقق"],
-        ["linked", "مربوط بـ Meta ID"],
-        ["local", "محلي"],
-        ["broken", "متعطل"],
-        ["unknown", "مجهول الحالة"]
+        ["confirmed", VISIBILITY_SHORT_LABELS.confirmed],
+        ["meta_approved", VISIBILITY_SHORT_LABELS.meta_approved],
+        ["linked", VISIBILITY_SHORT_LABELS.linked],
+        ["local", VISIBILITY_SHORT_LABELS.local],
+        ["broken", VISIBILITY_SHORT_LABELS.broken],
+        ["unknown", VISIBILITY_SHORT_LABELS.unknown]
       ] as Array<[CatalogVisibilityStatus, string]>
-    ).map(([status, label]) => ({
-      status,
-      label,
-      count: counts[status],
-      hint:
-        status === "confirmed"
-          ? channelSelected
-            ? "دليل ظهور على الرقم/الكتالوج"
-            : "يتطلب اختيار رقم واتساب"
-          : status === "meta_approved"
-            ? "اعتماد Meta بلا تحقق ظهور"
-            : status === "linked"
-              ? "Meta ID لا يكفي وحده"
-              : status === "local"
-                ? "لم يُربط بعد"
-                : status === "broken"
-                  ? "مؤرشف أو مرفوض"
-                  : "تعطل مزامنة أو نقص دليل"
-    }))
+    ).map(([status, label]) => {
+      const needsChannel = status === "confirmed" && !channelSelected;
+      return {
+        status,
+        label,
+        fullLabel: VISIBILITY_LABELS[status],
+        count: counts[status],
+        /** null → show em dash until a WhatsApp number is selected. */
+        displayCount: needsChannel ? null : counts[status],
+        needsChannelSelection: needsChannel,
+        icon: VISIBILITY_CARD_ICONS[status],
+        hint:
+          status === "confirmed"
+            ? channelSelected
+              ? "دليل ظهور على الرقم/الكتالوج"
+              : "يتطلب اختيار رقم واتساب لتأكيد الظهور"
+            : status === "meta_approved"
+              ? "اعتماد Meta بلا تحقق ظهور"
+              : status === "linked"
+                ? "Meta ID لا يكفي وحده"
+                : status === "local"
+                  ? "لم يُربط بعد"
+                  : status === "broken"
+                    ? "مؤرشف أو مرفوض"
+                    : "تعطل مزامنة أو نقص دليل"
+      };
+    })
   };
 }
 
