@@ -353,14 +353,16 @@ export default function KnowledgePage() {
         "/knowledge/generate-from-conversation",
         { conversation_id: generateConversationId.trim(), title: generateTitle.trim() || null }
       );
-      setCreateForm({
+      setCreateForm((current) => ({
+        ...current,
         title: draft.data.title,
         body: draft.data.body,
         category: draft.data.category,
         keywords: draft.data.keywords,
         sortOrder: "0",
-        language: "ar"
-      });
+        language: "ar",
+        channelId: current.channelId || filterChannelId || waList[0]?.channel_id || ""
+      }));
       toastStore.getState().show("تم توليد مسودة FAQ — راجعها واحفظ.", "success");
     } catch {
       toastStore.getState().show("تعذر التوليد من المحادثة.", "error");
