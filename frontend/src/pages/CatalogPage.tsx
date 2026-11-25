@@ -12,19 +12,24 @@ import {
   catalogMetaStatusLabel,
   catalogPriceLabel,
   catalogTypeLabel,
+  catalogWhatsAppVisibility,
   downloadCatalogExport,
   emptyProductForm,
   filterCatalogByType,
+  filterCatalogByVisibility,
   formatCatalogVariantLabel,
   productFormFromCatalog,
   simpleProductFormReady,
   sortCatalogProducts,
+  summarizeCatalogVisibility,
   type CatalogListTab,
   type CatalogProduct,
   type CatalogReplyPreview,
   type CatalogTypeFilter,
+  type CatalogVisibilityStatus,
   type ProductFormState
 } from "../lib/catalogHelpers";
+import { formatAppDateTime } from "../lib/language";
 import { uploadFile } from "../lib/uploads";
 import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 import { toastStore } from "../stores/toast";
@@ -42,6 +47,7 @@ export default function CatalogPage() {
   const [filterOrganizationId, setFilterOrganizationId] = useState("");
   const [filterChannelId, setFilterChannelId] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<CatalogVisibilityStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -97,7 +103,7 @@ export default function CatalogPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, debouncedSearch, pageSize]);
+  }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, visibilityFilter, debouncedSearch, pageSize]);
 
   const orgMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -117,10 +123,11 @@ export default function CatalogPage() {
   );
 
   const products = useQuery({
-    queryKey: ["catalog", listTab, filterOrganizationId, filterChannelId, filterCategory, debouncedSearch] as const,
+    queryKey: ["catalog", filterOrganizationId, filterChannelId, filterCategory, debouncedSearch] as const,
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (listTab === "inactive") params.set("include_inactive", "true");
+      // Always load archived too so visibility counters (broken) stay accurate without sync.
+      params.set("include_inactive", "true");
       if (filterOrganizationId) params.set("organization_id", filterOrganizationId);
       if (filterChannelId) params.set("channel_id", filterChannelId);
       if (filterCategory) params.set("category", filterCategory);
@@ -137,11 +144,22 @@ export default function CatalogPage() {
     }
   });
 
-  const visibleProducts = useMemo(() => {
+  const scopedProducts = useMemo(() => {
     const rows = products.data ?? [];
-    const byTab = listTab === "inactive" ? rows.filter((item) => !item.is_active) : rows.filter((item) => item.is_active);
-    return sortCatalogProducts(filterCatalogByType(byTab, typeFilter));
-  }, [products.data, listTab, typeFilter]);
+    return sortCatalogProducts(filterCatalogByType(rows, typeFilter));
+  }, [products.data, typeFilter]);
+
+  const visibilitySummary = useMemo(() => summarizeCatalogVisibility(scopedProducts), [scopedProducts]);
+
+  const visibleProducts = useMemo(() => {
+    // Clicking a visibility counter opens matching products across active/archived.
+    if (visibilityFilter !== "all") {
+      return filterCatalogByVisibility(scopedProducts, visibilityFilter);
+    }
+    return listTab === "inactive"
+      ? scopedProducts.filter((item) => !item.is_active)
+      : scopedProducts.filter((item) => item.is_active);
+  }, [scopedProducts, listTab, visibilityFilter]);
 
   const total = visibleProducts.length;
   const effectivePageSize = pageSize === 0 ? total || 1 : pageSize;
@@ -456,9 +474,11 @@ export default function CatalogPage() {
       <section className="contacts-erp-shell">
         <header className="contacts-erp-header">
           <div className="contacts-erp-title-block">
-            <span className="contacts-erp-eyebrow">كتalog الشركة</span>
+            <span className="contacts-erp-eyebrow">كتالوج الشركة</span>
             <h1>المنتجات والخدمات</h1>
-            <p className="hint-text">إدارة المنتجات والخدمات — الذكاء الاصطناعي يرد على عملاء WhatsApp من هذه القائمة.</p>
+            <p className="hint-text">
+              ما المنتجات التي يستطيع العميل رؤيتها على قناة واتساب المحددة؟ — فرّق بين المحلي والمربوط والمؤكد والمتعطل ومجهول الحالة دون مزامنة تلقائية.
+            </p>
           </div>
         </header>
 
@@ -642,6 +662,46 @@ export default function CatalogPage() {
           </div>
         </div>
 
+        <section className="catalog-visibility-board" aria-label="ملخص ظهور واتساب حسب الفرع والقناة">
+          <div className="catalog-visibility-board-head">
+            <div>
+              <h2>ظهور واتساب</h2>
+              <p>
+                حسب الفرع والقناة المحددين أعلاه. وجود Meta ID وحده لا يؤكد الظهور — التأكيد يأتي فقط من حالة مراجعة Meta المعتمدة.
+              </p>
+            </div>
+            <small>
+              {visibilitySummary.total.toLocaleString("ar")} منتج في النطاق
+              {filterOrganizationId || filterChannelId ? " المصفّى" : ""}
+            </small>
+          </div>
+          <div className="catalog-visibility-grid">
+            {visibilitySummary.cards.map((card) => (
+              <button
+                key={card.status}
+                type="button"
+                className={`catalog-visibility-card visibility-${card.status}${visibilityFilter === card.status ? " active" : ""}`}
+                onClick={() => setVisibilityFilter((current) => (current === card.status ? "all" : card.status))}
+              >
+                <span className="catalog-visibility-label">{card.label}</span>
+                <strong className="catalog-visibility-count">{card.count.toLocaleString("ar")}</strong>
+                <small className="catalog-visibility-hint">{card.hint}</small>
+              </button>
+            ))}
+          </div>
+          {visibilityFilter !== "all" && (
+            <div className="catalog-visibility-filter-bar">
+              <span>
+                عرض: {visibilitySummary.cards.find((card) => card.status === visibilityFilter)?.label} (
+                {visibleProducts.length.toLocaleString("ar")})
+              </span>
+              <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={() => setVisibilityFilter("all")}>
+                إظهار الكل
+              </button>
+            </div>
+          )}
+        </section>
+
         <div className="contacts-erp-table-wrap">
           {products.isLoading && (
             <div className="contacts-erp-loading">
@@ -694,13 +754,20 @@ export default function CatalogPage() {
                   <th>الفرع</th>
                   <th>الترتيب</th>
                   <th>الاستخدام</th>
+                  <th>ظهور واتساب</th>
+                  <th>سبب الحالة</th>
+                  <th>آخر تحقق</th>
+                  <th>الخطوة التالية</th>
                   <th>Meta</th>
                   <th>الحالة</th>
                   <th>إجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((item, index) => (
+                {pageRows.map((item, index) => {
+                  const visibility = catalogWhatsAppVisibility(item);
+                  const metaStatus = catalogMetaStatusLabel(item);
+                  return (
                   <tr key={item.id} className={item.is_active ? "" : "catalog-row-inactive"}>
                     <td className="contacts-col-check">
                       <input
@@ -733,19 +800,28 @@ export default function CatalogPage() {
                     <td>{item.sort_order ?? 0}</td>
                     <td>{item.usage_count > 0 ? item.usage_count : "—"}</td>
                     <td>
-                      {(() => {
-                        const metaStatus = catalogMetaStatusLabel(item);
-                        return (
-                          <div className="catalog-meta-status-cell">
-                            <span
-                              className={`catalog-meta-status-pill ${metaStatus.className}`}
-                              title={metaStatus.detail ?? undefined}
-                            >
-                              {metaStatus.label}
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      <span className={`catalog-visibility-pill ${visibility.className}`} title={visibility.reason}>
+                        {visibility.label}
+                      </span>
+                    </td>
+                    <td>
+                      <small className="catalog-visibility-reason">{visibility.reason}</small>
+                    </td>
+                    <td>
+                      {visibility.lastCheckedAt ? formatAppDateTime(visibility.lastCheckedAt) : "—"}
+                    </td>
+                    <td>
+                      <small className="catalog-visibility-next">{visibility.nextStep}</small>
+                    </td>
+                    <td>
+                      <div className="catalog-meta-status-cell">
+                        <span
+                          className={`catalog-meta-status-pill ${metaStatus.className}`}
+                          title={metaStatus.detail ?? undefined}
+                        >
+                          {metaStatus.label}
+                        </span>
+                      </div>
                     </td>
                     <td>
                       <span className={`catalog-status-pill ${item.is_active ? "active" : "archived"}`}>
@@ -803,7 +879,8 @@ export default function CatalogPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -813,7 +890,7 @@ export default function CatalogPage() {
       {showPreview && (
         <section className="card catalog-preview-card">
           <h2 className="section-title">معاينة رد WhatsApp</h2>
-          <p className="hint-text">اكتب استفساراً وشاهد كيف سيظهر الرد للعميل من الكatalog.</p>
+          <p className="hint-text">اكتب استفساراً وشاهد كيف سيظهر الرد للعميل من الكتالوج.</p>
           <div className="catalog-preview-form">
             <label className="field-label">
               <span>استفسار العميل</span>
