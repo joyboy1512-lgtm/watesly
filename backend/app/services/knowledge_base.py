@@ -109,33 +109,63 @@ async def update_agent_settings(db: AsyncSession, account_id: UUID, **fields) ->
     return item
 
 
+def _apply_knowledge_channel_filter(query, *, channel_id: UUID | None, strict: bool):
+    """Isolate articles per WhatsApp channel.
+
+    strict=True (inbound AI): only articles assigned to this channel.
+    strict=False (admin list): channel filter includes unassigned when requested via include_unassigned.
+    """
+    if channel_id is None:
+        return query
+    if strict:
+        return query.where(KnowledgeArticle.channel_id == channel_id)
+    return query.where(
+        or_(
+            KnowledgeArticle.channel_id == channel_id,
+            KnowledgeArticle.channel_id.is_(None),
+        )
+    )
+
+
 async def list_knowledge_articles(
     db: AsyncSession,
     account_id: UUID,
     *,
     active_only: bool = True,
     category: str | None = None,
+    channel_id: UUID | None = None,
+    strict_channel: bool = False,
+    unassigned_only: bool = False,
 ) -> list[KnowledgeArticle]:
     query = select(KnowledgeArticle).where(KnowledgeArticle.account_id == account_id)
     if active_only:
         query = query.where(KnowledgeArticle.is_active.is_(True))
     if category:
         query = query.where(KnowledgeArticle.category == category)
+    if unassigned_only:
+        query = query.where(KnowledgeArticle.channel_id.is_(None))
+    else:
+        query = _apply_knowledge_channel_filter(
+            query, channel_id=channel_id, strict=strict_channel
+        )
     query = query.order_by(KnowledgeArticle.sort_order.asc(), KnowledgeArticle.title.asc())
     return list((await db.execute(query)).scalars().all())
 
 
-async def list_knowledge_categories(db: AsyncSession, account_id: UUID) -> list[str]:
+async def list_knowledge_categories(
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    channel_id: UUID | None = None,
+    strict_channel: bool = False,
+) -> list[str]:
+    query = select(KnowledgeArticle.category).where(
+        KnowledgeArticle.account_id == account_id,
+        KnowledgeArticle.is_active.is_(True),
+    )
+    query = _apply_knowledge_channel_filter(query, channel_id=channel_id, strict=strict_channel)
     rows = (
-        await db.execute(
-            select(KnowledgeArticle.category)
-            .where(
-                KnowledgeArticle.account_id == account_id,
-                KnowledgeArticle.is_active.is_(True),
-            )
-            .distinct()
-            .order_by(KnowledgeArticle.category.asc())
-        )
+        await db.execute(query.distinct().order_by(KnowledgeArticle.category.asc()))
     ).all()
     return [row[0] for row in rows if row[0]]
 
@@ -146,13 +176,25 @@ async def search_knowledge_ranked(
     query_text: str,
     *,
     limit: int = 5,
+    channel_id: UUID | None = None,
+    strict_channel: bool = True,
 ):
-    """Rank active knowledge articles with the internal AI scorer."""
+    """Rank active knowledge articles with the internal AI scorer (channel-scoped)."""
     if not query_text.strip():
-        articles = await list_knowledge_articles(db, account_id)
+        articles = await list_knowledge_articles(
+            db,
+            account_id,
+            channel_id=channel_id,
+            strict_channel=strict_channel,
+        )
         return rank_articles(articles, query_text, limit=limit, min_score=0.0)[:limit]
 
-    all_active = await list_knowledge_articles(db, account_id)
+    all_active = await list_knowledge_articles(
+        db,
+        account_id,
+        channel_id=channel_id,
+        strict_channel=strict_channel,
+    )
     # Prefer a widened SQL prefilter when the account has many articles, then re-rank.
     if len(all_active) > 80:
         raw_terms = {query_text.strip()}
@@ -163,23 +205,20 @@ async def search_knowledge_ranked(
             if len(term) < 2:
                 continue
             pattern = f"%{term}%"
-            rows = list(
-                (
-                    await db.execute(
-                        select(KnowledgeArticle).where(
-                            KnowledgeArticle.account_id == account_id,
-                            KnowledgeArticle.is_active.is_(True),
-                            or_(
-                                KnowledgeArticle.title.ilike(pattern),
-                                KnowledgeArticle.body.ilike(pattern),
-                                KnowledgeArticle.keywords.ilike(pattern),
-                            ),
-                        )
-                    )
-                )
-                .scalars()
-                .all()
+            filters = [
+                KnowledgeArticle.account_id == account_id,
+                KnowledgeArticle.is_active.is_(True),
+                or_(
+                    KnowledgeArticle.title.ilike(pattern),
+                    KnowledgeArticle.body.ilike(pattern),
+                    KnowledgeArticle.keywords.ilike(pattern),
+                ),
+            ]
+            stmt = select(KnowledgeArticle).where(*filters)
+            stmt = _apply_knowledge_channel_filter(
+                stmt, channel_id=channel_id, strict=strict_channel
             )
+            rows = list((await db.execute(stmt)).scalars().all())
             for row in rows:
                 narrowed[str(row.id)] = row
         pool = list(narrowed.values()) or list(candidates.values())
@@ -194,8 +233,17 @@ async def search_knowledge_articles(
     query_text: str,
     *,
     limit: int = 5,
+    channel_id: UUID | None = None,
+    strict_channel: bool = True,
 ) -> list[KnowledgeArticle]:
-    ranked = await search_knowledge_ranked(db, account_id, query_text, limit=limit)
+    ranked = await search_knowledge_ranked(
+        db,
+        account_id,
+        query_text,
+        limit=limit,
+        channel_id=channel_id,
+        strict_channel=strict_channel,
+    )
     return [item.article for item in ranked]
 
 
@@ -349,13 +397,25 @@ async def suggest_smart_reply(
     mode: str | None = None,
     contact_context: dict | None = None,
     use_llm: bool | None = None,
+    channel_id: UUID | None = None,
+    dialogue_state: dict | None = None,
+    membership=None,
 ) -> dict:
     settings = await get_agent_settings(db, account_id)
     normalized_mode = (mode or settings.default_mode or "kb_first").lower()
-    should_llm = settings.llm_enabled if use_llm is None else use_llm
+    # Default: keep external model off unless explicitly enabled on the account.
+    should_llm = settings.llm_enabled if use_llm is None else bool(use_llm and settings.llm_enabled)
 
     async def _kb_reply():
-        ranked = await search_knowledge_ranked(db, account_id, query, limit=5)
+        # Strict channel isolation: Travel Zone never reads another number's KB.
+        ranked = await search_knowledge_ranked(
+            db,
+            account_id,
+            query,
+            limit=5,
+            channel_id=channel_id,
+            strict_channel=True,
+        )
         if not ranked:
             return None
         return build_knowledge_reply(
@@ -366,15 +426,43 @@ async def suggest_smart_reply(
             scored=ranked,
         )
 
+    async def _catalog_reply():
+        return await suggest_catalog_reply(
+            db,
+            account_id=account_id,
+            query=query,
+            contact_name=contact_name,
+            channel_id=channel_id,
+            dialogue_state=dialogue_state,
+            membership=membership,
+            include_unassigned=False,
+        )
+
     if normalized_mode == "combined":
         kb_result = await _kb_reply()
-        products = await search_catalog_products(db, account_id, query)
-        catalog_result = build_catalog_reply(products, contact_name=contact_name, query=query) if products else None
+        products = await search_catalog_products(
+            db,
+            account_id,
+            query,
+            channel_id=channel_id,
+            membership=membership,
+            include_unassigned=False,
+        )
+        catalog_result = (
+            build_catalog_reply(
+                products,
+                contact_name=contact_name,
+                query=query,
+                dialogue_state=dialogue_state,
+            )
+            if products
+            else None
+        )
         if kb_result or catalog_result:
             result = build_combined_reply(
                 kb_result=kb_result, catalog_result=catalog_result, contact_name=contact_name
             )
-            if should_llm and settings.llm_enabled:
+            if should_llm:
                 result = await _maybe_enhance_with_llm(
                     db, account_id, result, query=query, contact_name=contact_name
                 )
@@ -383,32 +471,32 @@ async def suggest_smart_reply(
     if normalized_mode in {"kb_first", "knowledge_first", "kb"}:
         result = await _kb_reply()
         if result:
-            if should_llm and settings.llm_enabled:
+            if should_llm:
                 result = await _maybe_enhance_with_llm(
                     db, account_id, result, query=query, contact_name=contact_name
                 )
             return result
-        result = await suggest_catalog_reply(db, account_id=account_id, query=query, contact_name=contact_name)
-        if should_llm and settings.llm_enabled:
+        result = await _catalog_reply()
+        if should_llm:
             result = await _maybe_enhance_with_llm(db, account_id, result, query=query, contact_name=contact_name)
         return result
 
     if normalized_mode == "catalog_first":
-        result = await suggest_catalog_reply(db, account_id=account_id, query=query, contact_name=contact_name)
-        if result.get("matched_products"):
-            if should_llm and settings.llm_enabled:
+        result = await _catalog_reply()
+        if result.get("matched_products") or result.get("needs_clarification"):
+            if should_llm:
                 result = await _maybe_enhance_with_llm(
                     db, account_id, result, query=query, contact_name=contact_name
                 )
             return result
         kb_result = await _kb_reply()
         if kb_result:
-            if should_llm and settings.llm_enabled:
+            if should_llm:
                 kb_result = await _maybe_enhance_with_llm(
                     db, account_id, kb_result, query=query, contact_name=contact_name
                 )
             return kb_result
-        if should_llm and settings.llm_enabled:
+        if should_llm:
             result = await _maybe_enhance_with_llm(db, account_id, result, query=query, contact_name=contact_name)
         return result
 
@@ -417,13 +505,25 @@ async def suggest_smart_reply(
 
     result = await _kb_reply()
     if not result:
-        products = await search_catalog_products(db, account_id, query)
+        products = await search_catalog_products(
+            db,
+            account_id,
+            query,
+            channel_id=channel_id,
+            membership=membership,
+            include_unassigned=False,
+        )
         result = (
-            build_catalog_reply(products, contact_name=contact_name, query=query)
+            build_catalog_reply(
+                products,
+                contact_name=contact_name,
+                query=query,
+                dialogue_state=dialogue_state,
+            )
             if products
             else suggest_reply(last_messages=[query] if query else [], contact_name=contact_name)
         )
-    if should_llm and settings.llm_enabled:
+    if should_llm:
         result = await _maybe_enhance_with_llm(db, account_id, result, query=query, contact_name=contact_name)
     return result
 
@@ -432,13 +532,16 @@ async def export_knowledge_csv(db: AsyncSession, account_id: UUID) -> str:
     articles = await list_knowledge_articles(db, account_id, active_only=False)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["title", "body", "category", "keywords", "language", "sort_order", "is_active"])
+    writer.writerow(
+        ["title", "body", "category", "keywords", "channel_id", "language", "sort_order", "is_active"]
+    )
     for item in articles:
         writer.writerow([
             item.title,
             item.body,
             item.category,
             item.keywords or "",
+            str(item.channel_id) if item.channel_id else "",
             item.language,
             item.sort_order,
             "true" if item.is_active else "false",
@@ -455,8 +558,17 @@ async def import_knowledge_csv(db: AsyncSession, account_id: UUID, content: str)
         if not title or not body:
             skipped += 1
             continue
+        channel_raw = (row.get("channel_id") or "").strip()
+        channel_uuid = None
+        if channel_raw:
+            try:
+                channel_uuid = UUID(channel_raw)
+            except ValueError:
+                skipped += 1
+                continue
         item = KnowledgeArticle(
             account_id=account_id,
+            channel_id=channel_uuid,
             title=title,
             body=body,
             category=(row.get("category") or "general").strip()[:80],

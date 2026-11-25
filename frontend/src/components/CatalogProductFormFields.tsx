@@ -247,12 +247,15 @@ export default function CatalogProductFormFields({
       </div>
 
       <label className="field-label">
-        <span>كلمات البحث</span>
+        <span>أسماء بديلة (عربي / إنجليزي / تهجئات)</span>
         <input
           value={form.keywords}
           onChange={(e) => setForm((current) => ({ ...current, keywords: e.target.value }))}
-          placeholder="مكيف، صيانة، تركيب…"
+          placeholder="مثال: Misk، مسك، كوفي، كوفيه…"
         />
+        <span className="hint-text">
+          تهجئات واسماء خاصة بهذا المنتج على القناة — وليست مقالة معرفة منفصلة لكل تهجئة.
+        </span>
       </label>
 
       <div className="catalog-specs-block">

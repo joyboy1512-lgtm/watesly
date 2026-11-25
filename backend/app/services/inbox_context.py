@@ -55,7 +55,14 @@ async def get_conversation_context(
         )
     ).scalar_one_or_none()
     query_text = (last_inbound.text_body if last_inbound else None) or ""
-    articles = await search_knowledge_articles(db, account_id, query_text, limit=3)
+    articles = await search_knowledge_articles(
+        db,
+        account_id,
+        query_text,
+        limit=3,
+        channel_id=conversation.channel_id,
+        strict_channel=True,
+    )
     knowledge = [
         {
             "id": str(article.id),

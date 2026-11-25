@@ -549,14 +549,30 @@ async def process_inbound_side_effects(
             from app.services.whatsapp import send_text_message
 
             if agent_live and agent_settings.auto_kb_on_inbound:
+                from app.services.catalog_dialogue import load_catalog_dialogue, save_catalog_dialogue
+
+                dialogue_state = await load_catalog_dialogue(
+                    account_id=whatsapp_account.account_id,
+                    conversation_id=conversation.id,
+                )
                 ai_result = await suggest_smart_reply(
                     db,
                     account_id=whatsapp_account.account_id,
                     query=text_body,
                     contact_name=contact.display_name or "",
                     mode=agent_settings.default_mode,
-                    use_llm=agent_settings.llm_enabled,
+                    # Keep the local matcher authoritative; external model only when enabled.
+                    use_llm=bool(agent_settings.llm_enabled),
+                    channel_id=whatsapp_account.channel_id,
+                    dialogue_state=dialogue_state,
                 )
+                next_dialogue = ai_result.get("dialogue")
+                if isinstance(next_dialogue, dict) and next_dialogue:
+                    await save_catalog_dialogue(
+                        account_id=whatsapp_account.account_id,
+                        conversation_id=conversation.id,
+                        state=next_dialogue,
+                    )
                 ai_event_type = "ai.kb_suggestion"
                 source = str(ai_result.get("source") or "")
                 if source.startswith("catalog"):
@@ -573,6 +589,8 @@ async def process_inbound_side_effects(
                         "matched_articles": ai_result.get("matched_articles", []),
                         "confidence": ai_result.get("confidence"),
                         "source": ai_result.get("source"),
+                        "needs_clarification": ai_result.get("needs_clarification"),
+                        "engine": ai_result.get("engine"),
                         "mode": agent_settings.default_mode,
                     },
                 )

@@ -36,15 +36,25 @@ async def _apply_catalog_channel_filter(
     db: AsyncSession,
     account_id: UUID,
     channel_id: UUID | None,
+    include_unassigned: bool = False,
 ):
     if channel_id is None:
         return query
-    channel = await _resolve_channel_for_catalog(
+    await _resolve_channel_for_catalog(
         db,
         account_id=account_id,
         channel_id=channel_id,
         organization_id=None,
     )
+    if include_unassigned:
+        # Conversation sales scope: this WhatsApp number + shared (unassigned) items.
+        # Products assigned to another number must not price or appear.
+        return query.where(
+            or_(
+                CatalogProduct.channel_id == channel_id,
+                CatalogProduct.channel_id.is_(None),
+            )
+        )
     return query.where(CatalogProduct.channel_id == channel_id)
 
 
@@ -57,6 +67,7 @@ async def list_catalog_products(
     organization_id: UUID | None = None,
     channel_id: UUID | None = None,
     category: str | None = None,
+    include_unassigned: bool = False,
 ) -> list[CatalogProduct]:
     from app.services.membership_access import catalog_scope_clauses
 
@@ -81,6 +92,7 @@ async def list_catalog_products(
         db=db,
         account_id=account_id,
         channel_id=channel_id,
+        include_unassigned=include_unassigned,
     )
     query = query.order_by(CatalogProduct.sort_order.asc(), CatalogProduct.name.asc())
     return list((await db.execute(query)).scalars().all())
@@ -462,6 +474,7 @@ async def search_catalog_products(
     channel_id: UUID | None = None,
     category: str | None = None,
     membership=None,
+    include_unassigned: bool = False,
 ) -> list[CatalogProduct]:
     """Search catalog with bilingual ranking (Arabic↔English site-wide lexicon)."""
     pool = await list_catalog_products(
@@ -472,6 +485,7 @@ async def search_catalog_products(
         organization_id=organization_id,
         channel_id=channel_id,
         category=category,
+        include_unassigned=include_unassigned,
     )
     if not query.strip():
         return pool[:limit]
@@ -501,7 +515,11 @@ async def search_catalog_products(
                 filters.append(CatalogProduct.category == category)
             stmt = select(CatalogProduct).where(*filters)
             stmt = await _apply_catalog_channel_filter(
-                stmt, db=db, account_id=account_id, channel_id=channel_id
+                stmt,
+                db=db,
+                account_id=account_id,
+                channel_id=channel_id,
+                include_unassigned=include_unassigned,
             )
             for row in (await db.execute(stmt)).scalars().all():
                 narrowed[str(row.id)] = row
@@ -567,8 +585,16 @@ def format_specs(specs: dict) -> str:
     return " · ".join(parts[:6])
 
 
-def build_catalog_reply(products: list[CatalogProduct], *, contact_name: str = "", query: str = "") -> dict:
+def build_catalog_reply(
+    products: list[CatalogProduct],
+    *,
+    contact_name: str = "",
+    query: str = "",
+    dialogue_state: dict | None = None,
+) -> dict:
     """Build a catalog reply; asks clarifying questions when multiple types match."""
+    from app.services.catalog_intelligence import apply_dialogue_then_rank
+
     if not products:
         name = contact_name or "عميلنا"
         return {
@@ -579,21 +605,37 @@ def build_catalog_reply(products: list[CatalogProduct], *, contact_name: str = "
             "matched_products": [],
             "confidence": 0.35,
             "source": "catalog",
-            "needs_clarification": False,
-            "engine": "catalog_bilingual_v1",
+            "needs_clarification": True,
+            "engine": "catalog_bilingual_v2",
         }
 
-    scored = rank_catalog_products(products, query or products[0].name, limit=max(8, len(products)), min_score=0.0)
-    # Keep only products that were passed in (preserve caller filter) while using scores
+    scored, resolved = apply_dialogue_then_rank(
+        products,
+        query or products[0].name,
+        dialogue_state=dialogue_state,
+        limit=max(8, len(products)),
+    )
     allowed = {str(p.id) for p in products}
     scored = [item for item in scored if str(item.product.id) in allowed] or scored
-    return build_precise_catalog_reply(
+    merged_state = dict(dialogue_state or {})
+    if resolved:
+        merged_state.update(resolved)
+    reply = build_precise_catalog_reply(
         scored,
         contact_name=contact_name,
         query=query,
         format_price=format_price,
         format_specs=format_specs,
+        dialogue_state=merged_state,
     )
+    # Carry quantity from follow-up resolution into matched product
+    qty = (resolved or {}).get("quantity") or (merged_state or {}).get("quantity")
+    if qty and reply.get("matched_products"):
+        for item in reply["matched_products"]:
+            item["quantity"] = qty
+        if reply.get("dialogue") is not None:
+            reply["dialogue"]["quantity"] = qty
+    return reply
 
 
 async def import_catalog_from_rows(
@@ -681,16 +723,48 @@ async def suggest_catalog_reply(
     account_id: UUID,
     query: str,
     contact_name: str = "",
+    channel_id: UUID | None = None,
+    dialogue_state: dict | None = None,
+    membership=None,
+    include_unassigned: bool = False,
 ) -> dict:
-    products = await search_catalog_products(db, account_id, query, limit=10)
+    products = await search_catalog_products(
+        db,
+        account_id,
+        query,
+        limit=10,
+        channel_id=channel_id,
+        membership=membership,
+        include_unassigned=include_unassigned,
+    )
     if products and query.strip():
-        return build_catalog_reply(products, contact_name=contact_name, query=query)
+        return build_catalog_reply(
+            products,
+            contact_name=contact_name,
+            query=query,
+            dialogue_state=dialogue_state,
+        )
     lower = query.lower()
-    all_products = await list_catalog_products(db, account_id)
+    all_products = await list_catalog_products(
+        db,
+        account_id,
+        channel_id=channel_id,
+        membership=membership,
+        include_unassigned=include_unassigned,
+    )
     if all_products and any(w in lower for w in ("منتج", "خدم", "product", "service", "قائمة", "menu")):
-        # Menu request: clarify among top categories/products rather than dumping randomly
-        return build_catalog_reply(all_products[:8], contact_name=contact_name, query=query or "قائمة منتجات")
-    return build_catalog_reply(products, contact_name=contact_name, query=query)
+        return build_catalog_reply(
+            all_products[:8],
+            contact_name=contact_name,
+            query=query or "قائمة منتجات",
+            dialogue_state=dialogue_state,
+        )
+    return build_catalog_reply(
+        products,
+        contact_name=contact_name,
+        query=query,
+        dialogue_state=dialogue_state,
+    )
 
 
 async def preview_catalog_reply(

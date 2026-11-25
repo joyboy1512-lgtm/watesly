@@ -6,6 +6,7 @@ export type KnowledgeArticle = {
   body: string;
   category: string;
   keywords: string | null;
+  channel_id?: string | null;
   is_active: boolean;
   sort_order: number;
   usage_count: number;
