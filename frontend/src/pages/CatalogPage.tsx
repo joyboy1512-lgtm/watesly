@@ -460,6 +460,53 @@ export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
     }
   }
 
+  async function bulkSetMetaSync(enabled: boolean) {
+    if (!selectedCount || isDemo) return;
+    const label = enabled ? "تفعيل" : "إيقاف";
+    if (!window.confirm(`${label} مزامنة Meta لـ ${selectedCount} منتج؟`)) return;
+    setBulkProcessing(true);
+    try {
+      const result = await api.post<{ succeeded: number; failed: number }>("/catalog/bulk-meta-sync-enabled", {
+        product_ids: [...selectedIds],
+        enabled
+      });
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      clearSelection();
+      toastStore.getState().show(
+        enabled
+          ? `تم تفعيل مزامنة Meta لـ ${result.data.succeeded} منتج.`
+          : `تم إيقاف مزامنة Meta لـ ${result.data.succeeded} منتج.`,
+        result.data.failed ? "error" : "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذر تحديث مزامنة Meta للمحدّد.", "error");
+    } finally {
+      setBulkProcessing(false);
+    }
+  }
+
+  async function bulkSyncMeta() {
+    if (!selectedCount || isDemo) return;
+    if (!window.confirm(`مزامنة ${selectedCount} منتج مع Meta الآن؟`)) return;
+    setBulkProcessing(true);
+    try {
+      const result = await api.post<{ succeeded: number; failed: number; skipped: number }>("/catalog/bulk-sync-meta", {
+        product_ids: [...selectedIds]
+      });
+      await client.invalidateQueries({ queryKey: ["catalog"] });
+      clearSelection();
+      const { succeeded, failed, skipped } = result.data;
+      toastStore.getState().show(
+        `مزامنة Meta: نجح ${succeeded}${skipped ? `، تُخطّي ${skipped}` : ""}${failed ? `، فشل ${failed}` : ""}.`,
+        failed && !succeeded ? "error" : "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذر مزامنة المنتجات المحدّدة مع Meta.", "error");
+    } finally {
+      setBulkProcessing(false);
+    }
+  }
+
   async function uploadProductImage(file: File) {
     if (!file.type.startsWith("image/")) {
       toastStore.getState().show("اختر صورة فقط.", "error");
@@ -662,7 +709,9 @@ export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
         )}
 
         <header className="catalog-topbar">
-          <h1 className="catalog-topbar-title">المنتجات والخدمات</h1>
+          <div className="catalog-title-card">
+            <h1 className="catalog-topbar-title">المنتجات والخدمات</h1>
+          </div>
           <div className="catalog-topbar-actions">
             <Link to="/catalog/new" className="contacts-erp-btn contacts-erp-btn-primary">
               + إضافة منتج
@@ -836,6 +885,30 @@ export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
             {selectedCount > 0 && (
               <div className="catalog-bulk-bar">
                 <span className="contacts-selection-badge">{selectedCount} محدّد</span>
+                <button
+                  type="button"
+                  className="contacts-erp-btn"
+                  disabled={bulkProcessing || isDemo}
+                  onClick={() => void bulkSyncMeta()}
+                >
+                  {bulkProcessing ? "جاري…" : "مزامنة Meta"}
+                </button>
+                <button
+                  type="button"
+                  className="contacts-erp-btn"
+                  disabled={bulkProcessing || isDemo}
+                  onClick={() => void bulkSetMetaSync(true)}
+                >
+                  تفعيل Meta
+                </button>
+                <button
+                  type="button"
+                  className="contacts-erp-btn"
+                  disabled={bulkProcessing || isDemo}
+                  onClick={() => void bulkSetMetaSync(false)}
+                >
+                  إيقاف Meta
+                </button>
                 {listTab === "active" || visibilityFilter !== "all" ? (
                   <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing || isDemo} onClick={() => void bulkArchive()}>
                     أرشفة
@@ -991,7 +1064,7 @@ export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
                   })}
                 </div>
 
-                <table className="contacts-erp-table catalog-erp-table catalog-desktop-table">
+                <table className="contacts-erp-table contacts-erp-table-filter-headers catalog-erp-table catalog-desktop-table">
                   <thead>
                     <tr>
                       <th className="contacts-col-check">

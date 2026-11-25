@@ -391,6 +391,66 @@ async def bulk_purge_catalog_products(
     return {"succeeded": succeeded, "failed": failed}
 
 
+async def bulk_set_catalog_meta_sync_enabled(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product_ids: list[UUID],
+    enabled: bool,
+    membership=None,
+) -> dict[str, int]:
+    succeeded = 0
+    failed = 0
+    for product_id in product_ids:
+        try:
+            await update_catalog_product(
+                db,
+                account_id=account_id,
+                product_id=product_id,
+                membership=membership,
+                meta_sync_enabled=enabled,
+            )
+            succeeded += 1
+        except ValueError:
+            failed += 1
+    return {"succeeded": succeeded, "failed": failed, "enabled": int(enabled)}
+
+
+async def bulk_sync_catalog_products_to_meta(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    product_ids: list[UUID],
+    membership=None,
+) -> dict[str, int]:
+    from app.services.meta_catalog_sync import sync_catalog_product_to_meta
+
+    succeeded = 0
+    failed = 0
+    skipped = 0
+    for product_id in product_ids:
+        try:
+            result = await sync_catalog_product_to_meta(
+                db,
+                account_id=account_id,
+                product_id=product_id,
+                membership=membership,
+            )
+            if int(result.get("synced") or 0) > 0:
+                succeeded += 1
+            else:
+                failed += 1
+        except ValueError as exc:
+            code = str(exc)
+            if code in {"META_SYNC_DISABLED", "PRODUCT_NOT_ACTIVE"}:
+                skipped += 1
+            else:
+                failed += 1
+        except Exception:
+            failed += 1
+    return {"succeeded": succeeded, "failed": failed, "skipped": skipped}
+
+
 async def search_catalog_products(
     db: AsyncSession,
     account_id: UUID,
