@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-25",
+  "commit": "cd6d80b",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-5DXpXf1B.js",
+    "css": "index-tpDFDDkW.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Compact catalog header with add / orders / more menu",
+    "Glanceable WhatsApp status cards with short labels and broken alert",
+    "RTL table: product, status, price, branch, last update, row menu",
+    "Search/sort above table; pagination below; mobile cards at 390px",
+    "Demo fixture preview at /dev/catalog-ui-preview"
+  ],
+  "notes": "Deployed via SSH. PR #197."
+}

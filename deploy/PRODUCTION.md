@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Catalog UI redesign
+
+| Item | Value |
+|------|-------|
+| Commit | `cd6d80b` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-5DXpXf1B.js`, `index-tpDFDDkW.css` |
+| Snapshot record | `deploy/production-snapshot-20261125-catalog-ui-redesign.json` |
+
 ### Production snapshot (2026-11-25) — Catalog visibility channel-scoped proof
 
 | Item | Value |
