@@ -183,6 +183,18 @@ export default function KnowledgePage() {
   }, [categories.data]);
 
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const LIST_PAGE_SIZE = 20;
+  const [visibleLimit, setVisibleLimit] = useState(LIST_PAGE_SIZE);
+
+  useEffect(() => {
+    setVisibleLimit(LIST_PAGE_SIZE);
+  }, [listTab, filterCategory, filterChannelId, debouncedSearch]);
+
+  const displayedArticles = useMemo(
+    () => sortedArticles.slice(0, visibleLimit),
+    [sortedArticles, visibleLimit]
+  );
+  const hasMoreArticles = sortedArticles.length > visibleLimit;
 
   async function createArticle(event: FormEvent) {
     event.preventDefault();
@@ -537,7 +549,7 @@ export default function KnowledgePage() {
 
         <div className="admin-table-wrap">
           <table className="admin-erp-table knowledge-erp-table">
-            <thead>
+            <thead className="knowledge-erp-thead-brand">
               <tr>
                 <th>الترتيب</th>
                 <th>العنوان</th>
@@ -556,7 +568,7 @@ export default function KnowledgePage() {
               {!articles.isLoading && sortedArticles.length === 0 && (
                 <tr><td colSpan={8} className="admin-table-empty">لا توجد قواعد مطابقة — أضف أسئلة شائعة.</td></tr>
               )}
-              {!articles.isLoading && sortedArticles.map((item) => {
+              {!articles.isLoading && displayedArticles.map((item) => {
                 const isPreviewOpen = previewId === item.id;
                 return (
                   <Fragment key={item.id}>
@@ -621,7 +633,7 @@ export default function KnowledgePage() {
                     </tr>
                     {isPreviewOpen && (
                       <tr className="knowledge-preview-row">
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <div className="knowledge-preview-panel">
                             <div className="knowledge-preview-meta">
                               <span className="knowledge-category-badge">{CATEGORY_LABELS[item.category] ?? item.category}</span>
@@ -639,6 +651,17 @@ export default function KnowledgePage() {
             </tbody>
           </table>
         </div>
+        {!articles.isLoading && hasMoreArticles && (
+          <div className="knowledge-table-more">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setVisibleLimit((current) => current + LIST_PAGE_SIZE)}
+            >
+              إظهار المزيد ({Math.min(LIST_PAGE_SIZE, sortedArticles.length - visibleLimit)} من {sortedArticles.length - visibleLimit})
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="card knowledge-preview-card">
