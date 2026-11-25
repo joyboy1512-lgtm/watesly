@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "d7ce0fc",
-    "git_commit_message": "Widen channel chip and green provider header",
+    "git_commit": "598df05",
+    "git_commit_message": "Provider settings/remove columns and wider AI layout",
     "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.6",
+    "frontend_version": "0.33.7",
     "live_assets": {
-      "js": "index-CMXT8aVG.js",
-      "css": "index-C-3a4u0j.css"
+      "js": "index-Be6RYb4C.js",
+      "css": "index-B0GVRR4x.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.6",
+    "frontend": "0.33.7",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "d7ce0fc",
-  "notes": "Wider channel chip + green providers header + action label order live"
+  "commit": "598df05",
+  "notes": "Provider table إعدادات/إلغاء drawers; advanced removed from ops modes"
 }
