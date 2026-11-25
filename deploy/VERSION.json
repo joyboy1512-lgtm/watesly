@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "1ab2837",
-    "git_commit_message": "Dashboard attention green centered cards",
+    "git_commit": "55aa8b1",
+    "git_commit_message": "Brand-stat-card identity site-wide",
     "alembic_head": "0069_knowledge_article_channel",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.10",
+    "frontend_version": "0.32.11",
     "live_assets": {
-      "js": "index-CJSzN7xO.js",
-      "css": "index-BxK_NqGA.css"
+      "js": "index-6uSfR5tH.js",
+      "css": "index-CShtYg2E.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.10",
+    "frontend": "0.32.11",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "1ab2837",
-  "notes": "Dashboard attention cards green brand + centered text (PR #200)"
+  "commit": "55aa8b1",
+  "notes": "Shared brand-stat-card (green centered) for catalog/contacts/analytics/library (PR #201)"
 }

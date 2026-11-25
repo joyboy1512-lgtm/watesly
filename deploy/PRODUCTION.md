@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Brand-stat-card site-wide
+
+| Item | Value |
+|------|-------|
+| Commit | `55aa8b1` |
+| Alembic | `0069_knowledge_article_channel` |
+| Live assets | `index-6uSfR5tH.js`, `index-CShtYg2E.css` |
+
 ### Production snapshot (2026-11-25) — Dashboard attention green cards
 
 | Item | Value |
