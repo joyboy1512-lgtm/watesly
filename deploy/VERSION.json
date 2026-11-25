@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "6462018",
-    "git_commit_message": "Match AI ops page to four-screen mock",
+    "git_commit": "2a7707d",
+    "git_commit_message": "Strengthen AI ops card borders and selection",
     "alembic_head": "0073_ai_image_model",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.2",
+    "frontend_version": "0.33.3",
     "live_assets": {
-      "js": "index-BSyzerll.js",
-      "css": "index-kI1k52Qy.css"
+      "js": "index-Du8SLgjR.js",
+      "css": "index-BB-FyZUL.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.2",
+    "frontend": "0.33.3",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "6462018",
-  "notes": "AI ops UI mock match live (PR #214)"
+  "commit": "2a7707d",
+  "notes": "AI ops card borders + selection states live"
 }
