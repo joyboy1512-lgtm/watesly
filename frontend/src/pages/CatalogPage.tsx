@@ -882,50 +882,51 @@ export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
             {selectedOrgName && !showBranchColumn && (
               <span className="catalog-branch-chip">{selectedOrgName}</span>
             )}
-            {selectedCount > 0 && (
-              <div className="catalog-bulk-bar">
-                <span className="contacts-selection-badge">{selectedCount} محدّد</span>
-                <button
-                  type="button"
-                  className="contacts-erp-btn"
-                  disabled={bulkProcessing || isDemo}
-                  onClick={() => void bulkSyncMeta()}
-                >
-                  {bulkProcessing ? "جاري…" : "مزامنة Meta"}
-                </button>
-                <button
-                  type="button"
-                  className="contacts-erp-btn"
-                  disabled={bulkProcessing || isDemo}
-                  onClick={() => void bulkSetMetaSync(true)}
-                >
-                  تفعيل Meta
-                </button>
-                <button
-                  type="button"
-                  className="contacts-erp-btn"
-                  disabled={bulkProcessing || isDemo}
-                  onClick={() => void bulkSetMetaSync(false)}
-                >
-                  إيقاف Meta
-                </button>
-                {listTab === "active" || visibilityFilter !== "all" ? (
-                  <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing || isDemo} onClick={() => void bulkArchive()}>
-                    أرشفة
-                  </button>
-                ) : (
-                  <button type="button" className="contacts-erp-btn" disabled={bulkProcessing || isDemo} onClick={() => void bulkRestore()}>
-                    استرجاع
-                  </button>
-                )}
-                <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing || isDemo} onClick={() => void bulkPurge()}>
-                  حذف نهائي
-                </button>
-                <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={clearSelection}>إلغاء</button>
-              </div>
-            )}
           </div>
         </div>
+
+        {selectedCount > 0 && (
+          <div className="catalog-bulk-bar catalog-bulk-bar-sticky" role="toolbar" aria-label="إجراءات جماعية">
+            <span className="contacts-selection-badge">{selectedCount} محدّد</span>
+            <button
+              type="button"
+              className="contacts-erp-btn contacts-erp-btn-primary"
+              disabled={bulkProcessing || isDemo}
+              onClick={() => void bulkSyncMeta()}
+            >
+              {bulkProcessing ? "جاري…" : "مزامنة Meta"}
+            </button>
+            <button
+              type="button"
+              className="contacts-erp-btn"
+              disabled={bulkProcessing || isDemo}
+              onClick={() => void bulkSetMetaSync(true)}
+            >
+              تفعيل Meta
+            </button>
+            <button
+              type="button"
+              className="contacts-erp-btn"
+              disabled={bulkProcessing || isDemo}
+              onClick={() => void bulkSetMetaSync(false)}
+            >
+              إيقاف Meta
+            </button>
+            {listTab === "active" || visibilityFilter !== "all" ? (
+              <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing || isDemo} onClick={() => void bulkArchive()}>
+                أرشفة
+              </button>
+            ) : (
+              <button type="button" className="contacts-erp-btn" disabled={bulkProcessing || isDemo} onClick={() => void bulkRestore()}>
+                استرجاع
+              </button>
+            )}
+            <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing || isDemo} onClick={() => void bulkPurge()}>
+              حذف نهائي
+            </button>
+            <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={clearSelection}>إلغاء</button>
+          </div>
+        )}
 
         <div className="catalog-table-toolbar">
           <div className="contacts-erp-search catalog-search-wide">
