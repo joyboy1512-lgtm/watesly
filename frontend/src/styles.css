@@ -13697,14 +13697,34 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 1px solid var(--line);
   background: var(--panel-soft);
 }
-.ai-template-row:hover {
+.ai-template-row:hover,
+.ai-template-row.is-active {
   border-color: color-mix(in srgb, var(--primary-dark) 35%, var(--line));
   background: color-mix(in srgb, var(--primary-soft) 45%, var(--panel));
 }
+.ai-template-row-main {
+  min-width: 0;
+}
+.ai-template-row-main .hint-text {
+  margin: 4px 0 0;
+}
 .ai-template-row strong {
+  display: block;
   font-size: 0.98rem;
   font-weight: 800;
   color: var(--text);
+}
+.ai-template-editor {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ai-template-editor-grid {
+  align-items: start;
+}
+.ai-template-alts h3 {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
 }
 .ai-status-badge {
   display: inline-flex;
