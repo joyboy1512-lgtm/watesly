@@ -37,3 +37,7 @@ class AiAgentSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     auto_reply_outside_hours: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     business_hours_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     outside_hours_message: Mapped[str | None] = mapped_column(Text)
+    welcome_message_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    welcome_message: Mapped[str | None] = mapped_column(Text)
