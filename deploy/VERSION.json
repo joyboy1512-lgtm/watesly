@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "3dda9f2",
-    "git_commit_message": "Brighten and center Knowledge status cards",
+    "git_commit": "9085d46",
+    "git_commit_message": "Knowledge cards match catalog + Excel-style rules table",
     "alembic_head": "0069_knowledge_article_channel",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.13",
+    "frontend_version": "0.32.14",
     "live_assets": {
-      "js": "index-DfBqik3k.js",
-      "css": "index-DbUXS5X7.css"
+      "js": "index-C-KrJrsk.js",
+      "css": "index-De0WwqDq.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.13",
+    "frontend": "0.32.14",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "3dda9f2",
-  "notes": "Knowledge status cards vibrant green + centered strip (PR #203)"
+  "commit": "9085d46",
+  "notes": "Shared brand gradient + Knowledge Excel table with 20-row show-more (PR #204)"
 }
