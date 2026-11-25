@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-25",
+  "commit": "d1b1100",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DYvwuese.js",
+    "css": "index-CxHd-WQ8.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Green title card for المنتجات والخدمات",
+    "Green WhatsApp status cards and green table header",
+    "Aligned table header/body columns",
+    "Bulk Meta sync / enable / pause for selected products"
+  ],
+  "notes": "Deployed via SSH. PR #198."
+}

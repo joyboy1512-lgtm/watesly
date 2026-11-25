@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Catalog green polish + bulk Meta
+
+| Item | Value |
+|------|-------|
+| Commit | `d1b1100` |
+| Alembic | `0068_internal_ai_feedback` |
+| Live assets | `index-DYvwuese.js`, `index-CxHd-WQ8.css` |
+| Snapshot record | `deploy/production-snapshot-20261125-catalog-green-bulk-meta.json` |
+
 ### Production snapshot (2026-11-25) — Catalog UI redesign
 
 | Item | Value |

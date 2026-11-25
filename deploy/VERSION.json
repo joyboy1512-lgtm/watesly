@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "cd6d80b",
-    "git_commit_message": "Catalog UI redesign for daily WhatsApp work",
+    "git_commit": "d1b1100",
+    "git_commit_message": "Catalog green polish and bulk Meta actions",
     "alembic_head": "0068_internal_ai_feedback",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.7",
+    "frontend_version": "0.32.8",
     "live_assets": {
-      "js": "index-5DXpXf1B.js",
-      "css": "index-tpDFDDkW.css"
+      "js": "index-DYvwuese.js",
+      "css": "index-CxHd-WQ8.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.7",
+    "frontend": "0.32.8",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "cd6d80b",
-  "notes": "Catalog UI redesign: glanceable WhatsApp status, RTL table, mobile cards (PR #197)"
+  "commit": "d1b1100",
+  "notes": "Catalog green cards/header + bulk Meta sync/pause (PR #198)"
 }
