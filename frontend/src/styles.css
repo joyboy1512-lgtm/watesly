@@ -12919,27 +12919,31 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .ai-channel-chip {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   flex-wrap: wrap;
   margin-inline-start: auto;
-  padding: 8px 10px 8px 8px;
-  border-radius: 14px;
+  padding: 12px 14px 12px 12px;
+  border-radius: 16px;
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
   box-shadow: 0 6px 16px rgba(7, 94, 84, 0.22);
+  min-width: 320px;
 }
 .ai-channel-label {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: #fff;
-  padding-inline: 6px 2px;
+  padding-inline: 14px 8px;
   letter-spacing: 0;
+  min-width: 4.5rem;
+  text-align: center;
 }
 .ai-channel-card {
   display: block;
   min-width: 220px;
+  flex: 1 1 auto;
 }
 .ai-channel-card select {
-  min-height: 40px;
+  min-height: 42px;
   width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -13165,9 +13169,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .ai-action-card {
   display: grid;
-  gap: 2px;
-  min-width: 92px;
-  padding: 8px 12px;
+  gap: 4px;
+  min-width: 96px;
+  padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: #fff;
@@ -13175,14 +13179,16 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   cursor: pointer;
   font: inherit;
 }
+.ai-action-card strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  order: 0;
+}
 .ai-action-card span {
   font-size: 0.72rem;
   color: var(--muted);
   font-weight: 700;
-}
-.ai-action-card strong {
-  font-size: 0.9rem;
-  font-weight: 800;
+  order: 1;
 }
 .ai-action-card.is-on {
   border-color: color-mix(in srgb, var(--primary-dark) 45%, var(--line));
@@ -13218,11 +13224,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: #8a6a00;
 }
 .ai-provider-head {
-  background: var(--panel-soft);
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
   font-weight: 800;
-  color: var(--primary-darker);
+  color: #fff;
   font-size: 0.86rem;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
 }
 .ai-provider-row + .ai-provider-row {
   border-top: 1px solid var(--line);
