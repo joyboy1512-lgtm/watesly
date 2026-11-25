@@ -21,6 +21,9 @@ class AiAgentSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     tone: Mapped[str] = mapped_column(String(30), nullable=False, default="friendly")
     language: Mapped[str] = mapped_column(String(10), nullable=False, default="ar")
     agent_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    local_engine_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     llm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     auto_kb_on_inbound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     auto_reply_on_inbound: Mapped[bool] = mapped_column(

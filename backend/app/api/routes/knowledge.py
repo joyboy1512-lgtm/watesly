@@ -57,6 +57,7 @@ class AgentSettingsUpdate(BaseModel):
     tone: str | None = Field(default=None, pattern=r"^(friendly|formal|concise)$")
     language: str | None = Field(default=None, max_length=10)
     agent_enabled: bool | None = None
+    local_engine_enabled: bool | None = None
     llm_enabled: bool | None = None
     auto_kb_on_inbound: bool | None = None
     auto_reply_on_inbound: bool | None = None
