@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI ops mode layout
+
+| Item | Value |
+|------|-------|
+| Commit | `6ae202c` |
+| Alembic | `0074_ai_welcome_message` |
+| Live assets | `index-CFjB4rzs.js`, `index-C1hV8JXx.css` |
+
 ### Production snapshot (2026-11-25) — AI ops card borders
 
 | Item | Value |
