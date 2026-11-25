@@ -231,6 +231,11 @@ async def post_knowledge_suggest_reply(
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    channel_raw = payload.get("channel_id")
+    channel_id = UUID(str(channel_raw)) if channel_raw else None
+    dialogue_state = payload.get("dialogue_state")
+    if dialogue_state is not None and not isinstance(dialogue_state, dict):
+        dialogue_state = None
     return await suggest_smart_reply(
         db,
         account_id=context.account_id,
@@ -238,6 +243,9 @@ async def post_knowledge_suggest_reply(
         contact_name=str(payload.get("contact_name") or ""),
         mode=str(payload.get("mode") or "") or None,
         use_llm=payload.get("use_llm"),
+        channel_id=channel_id,
+        dialogue_state=dialogue_state,
+        membership=context.membership,
     )
 
 

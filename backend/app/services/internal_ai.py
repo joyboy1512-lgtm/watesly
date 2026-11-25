@@ -132,6 +132,16 @@ def _canonical_map() -> dict[str, str]:
 _CANONICAL = _canonical_map()
 
 
+def canonical_token(token: str) -> str | None:
+    """Return the lexicon root for a normalized token, if any."""
+    return _CANONICAL.get(normalize_text(token))
+
+
+def lexicon_canonical_map() -> dict[str, str]:
+    """Read-only copy of the site-wide synonym → root map."""
+    return dict(_CANONICAL)
+
+
 def _strip_al_prefix(token: str) -> str:
     if token.startswith("ال") and len(token) > 3:
         return token[2:]

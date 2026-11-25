@@ -102,6 +102,9 @@ class CatalogSuggestRequest(BaseModel):
     query: str = Field(min_length=1)
     contact_name: str = ""
     mode: str = Field(default="catalog_first", pattern=r"^(catalog_first|kb_first|local)$")
+    channel_id: UUID | None = None
+    dialogue_state: dict | None = None
+    use_llm: bool = False
 
 
 class CatalogPreviewRequest(BaseModel):
@@ -805,4 +808,8 @@ async def catalog_suggest(
         query=payload.query,
         contact_name=payload.contact_name,
         mode=payload.mode,
+        channel_id=payload.channel_id,
+        dialogue_state=payload.dialogue_state,
+        use_llm=payload.use_llm,
+        membership=context.membership,
     )

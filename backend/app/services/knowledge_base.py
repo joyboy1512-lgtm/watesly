@@ -349,10 +349,14 @@ async def suggest_smart_reply(
     mode: str | None = None,
     contact_context: dict | None = None,
     use_llm: bool | None = None,
+    channel_id: UUID | None = None,
+    dialogue_state: dict | None = None,
+    membership=None,
 ) -> dict:
     settings = await get_agent_settings(db, account_id)
     normalized_mode = (mode or settings.default_mode or "kb_first").lower()
-    should_llm = settings.llm_enabled if use_llm is None else use_llm
+    # Default: keep external model off unless explicitly enabled on the account.
+    should_llm = settings.llm_enabled if use_llm is None else bool(use_llm and settings.llm_enabled)
 
     async def _kb_reply():
         ranked = await search_knowledge_ranked(db, account_id, query, limit=5)
@@ -366,15 +370,42 @@ async def suggest_smart_reply(
             scored=ranked,
         )
 
+    async def _catalog_reply():
+        return await suggest_catalog_reply(
+            db,
+            account_id=account_id,
+            query=query,
+            contact_name=contact_name,
+            channel_id=channel_id,
+            dialogue_state=dialogue_state,
+            membership=membership,
+        )
+
     if normalized_mode == "combined":
         kb_result = await _kb_reply()
-        products = await search_catalog_products(db, account_id, query)
-        catalog_result = build_catalog_reply(products, contact_name=contact_name, query=query) if products else None
+        products = await search_catalog_products(
+            db,
+            account_id,
+            query,
+            channel_id=channel_id,
+            membership=membership,
+            include_unassigned=bool(channel_id),
+        )
+        catalog_result = (
+            build_catalog_reply(
+                products,
+                contact_name=contact_name,
+                query=query,
+                dialogue_state=dialogue_state,
+            )
+            if products
+            else None
+        )
         if kb_result or catalog_result:
             result = build_combined_reply(
                 kb_result=kb_result, catalog_result=catalog_result, contact_name=contact_name
             )
-            if should_llm and settings.llm_enabled:
+            if should_llm:
                 result = await _maybe_enhance_with_llm(
                     db, account_id, result, query=query, contact_name=contact_name
                 )
@@ -383,32 +414,32 @@ async def suggest_smart_reply(
     if normalized_mode in {"kb_first", "knowledge_first", "kb"}:
         result = await _kb_reply()
         if result:
-            if should_llm and settings.llm_enabled:
+            if should_llm:
                 result = await _maybe_enhance_with_llm(
                     db, account_id, result, query=query, contact_name=contact_name
                 )
             return result
-        result = await suggest_catalog_reply(db, account_id=account_id, query=query, contact_name=contact_name)
-        if should_llm and settings.llm_enabled:
+        result = await _catalog_reply()
+        if should_llm:
             result = await _maybe_enhance_with_llm(db, account_id, result, query=query, contact_name=contact_name)
         return result
 
     if normalized_mode == "catalog_first":
-        result = await suggest_catalog_reply(db, account_id=account_id, query=query, contact_name=contact_name)
-        if result.get("matched_products"):
-            if should_llm and settings.llm_enabled:
+        result = await _catalog_reply()
+        if result.get("matched_products") or result.get("needs_clarification"):
+            if should_llm:
                 result = await _maybe_enhance_with_llm(
                     db, account_id, result, query=query, contact_name=contact_name
                 )
             return result
         kb_result = await _kb_reply()
         if kb_result:
-            if should_llm and settings.llm_enabled:
+            if should_llm:
                 kb_result = await _maybe_enhance_with_llm(
                     db, account_id, kb_result, query=query, contact_name=contact_name
                 )
             return kb_result
-        if should_llm and settings.llm_enabled:
+        if should_llm:
             result = await _maybe_enhance_with_llm(db, account_id, result, query=query, contact_name=contact_name)
         return result
 
@@ -417,13 +448,25 @@ async def suggest_smart_reply(
 
     result = await _kb_reply()
     if not result:
-        products = await search_catalog_products(db, account_id, query)
+        products = await search_catalog_products(
+            db,
+            account_id,
+            query,
+            channel_id=channel_id,
+            membership=membership,
+            include_unassigned=bool(channel_id),
+        )
         result = (
-            build_catalog_reply(products, contact_name=contact_name, query=query)
+            build_catalog_reply(
+                products,
+                contact_name=contact_name,
+                query=query,
+                dialogue_state=dialogue_state,
+            )
             if products
             else suggest_reply(last_messages=[query] if query else [], contact_name=contact_name)
         )
-    if should_llm and settings.llm_enabled:
+    if should_llm:
         result = await _maybe_enhance_with_llm(db, account_id, result, query=query, contact_name=contact_name)
     return result
 
