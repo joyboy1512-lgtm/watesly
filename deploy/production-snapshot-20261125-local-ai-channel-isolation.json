@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-25",
+  "commit": "a0097bf",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-DCrwCtoi.js",
+    "css": "index-CxHd-WQ8.css"
+  },
+  "alembic_head": "0069_knowledge_article_channel",
+  "features": [
+    "Bilingual local product matching (AR↔EN, mixed, typos, clarify memory)",
+    "Per-WhatsApp-channel isolation for catalog + knowledge base",
+    "Knowledge articles channel_id; inbound AI strict channel filter"
+  ],
+  "notes": "PR #199. Existing KB articles must be assigned to a channel for inbound AI."
+}

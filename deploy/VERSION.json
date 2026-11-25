@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "d1b1100",
-    "git_commit_message": "Catalog green polish and bulk Meta actions",
-    "alembic_head": "0068_internal_ai_feedback",
+    "git_commit": "a0097bf",
+    "git_commit_message": "Bilingual match + per-channel local AI isolation",
+    "alembic_head": "0069_knowledge_article_channel",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.8",
+    "frontend_version": "0.32.9",
     "live_assets": {
-      "js": "index-DYvwuese.js",
+      "js": "index-DCrwCtoi.js",
       "css": "index-CxHd-WQ8.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.8",
+    "frontend": "0.32.9",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "d1b1100",
-  "notes": "Catalog green cards/header + bulk Meta sync/pause (PR #198)"
+  "commit": "a0097bf",
+  "notes": "Local AI bilingual matching + KB/catalog channel isolation (PR #199)"
 }
