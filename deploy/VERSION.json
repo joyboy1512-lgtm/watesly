@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "1b1ea22",
-    "git_commit_message": "Dedicated AI page + template generate/submit to Meta",
+    "git_commit": "7cb3266",
+    "git_commit_message": "Knowledge header cards for channels and rule counts",
     "alembic_head": "0071_ai_local_engine_toggle",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.19",
+    "frontend_version": "0.32.20",
     "live_assets": {
-      "js": "index-KWIJtR7F.js",
+      "js": "index-DvLdCXoj.js",
       "css": "index-DCqqqMeP.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.19",
+    "frontend": "0.32.20",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "1b1ea22",
-  "notes": "Dedicated /ai page + AI template Meta submit (PR #209)"
+  "commit": "7cb3266",
+  "notes": "Knowledge header cards: channels/active/archived/total (PR #210)"
 }
