@@ -56,6 +56,13 @@ def test_catalog_api_routes_exist() -> None:
     assert "variant-groups" in routes
     assert "/bulk-purge" in routes
     assert "bulk_purge_catalog_products" in catalog
+    assert "/bulk-sync-meta" in routes
+    assert "/bulk-meta-sync-enabled" in routes
+    assert "bulk_sync_catalog_products_to_meta" in catalog
+    assert "bulk_set_catalog_meta_sync_enabled" in catalog
+    assert "مزامنة Meta" in frontend
+    assert "إيقاف Meta" in frontend
+    assert "catalog-title-card" in frontend
     assert "build_meta_catalog_product_payload" in read("app/services/catalog_commerce.py")
     assert "meta_sync_enabled" in routes
     helpers = read("../frontend/src/lib/catalogHelpers.ts")

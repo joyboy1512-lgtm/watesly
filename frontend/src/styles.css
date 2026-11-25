@@ -5419,10 +5419,24 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   flex-wrap: wrap;
   margin-bottom: 2px;
 }
+.catalog-title-card {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary-soft) 92%, #fff) 0%, #d9fdd3 100%);
+  box-shadow: 0 8px 20px rgba(7, 94, 84, 0.10);
+}
+:root[data-theme="dark"] .catalog-title-card {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary-soft) 80%, var(--panel)), var(--primary-soft));
+}
 .catalog-topbar-title {
   margin: 0;
   font-size: 22px;
   line-height: 1.2;
+  color: var(--primary-darker);
+  font-weight: 800;
 }
 .catalog-topbar-actions {
   display: flex;
@@ -5494,8 +5508,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 10px;
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 28%, var(--panel));
 }
 .catalog-visibility-board-head h2 {
   margin: 0 0 2px;
@@ -5529,31 +5543,34 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   align-items: center;
   padding: 10px;
   border-radius: 12px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 92%, #fff);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  background: linear-gradient(180deg, #ffffff 0%, #f3fbf6 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-soft) 70%, transparent);
   text-align: start;
   color: inherit;
   cursor: pointer;
   min-height: 72px;
 }
 html[data-theme="dark"] .catalog-visibility-card,
+:root[data-theme="dark"] .catalog-visibility-card,
 .theme-dark .catalog-visibility-card {
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel) 0%, color-mix(in srgb, var(--primary-soft) 45%, var(--panel)) 100%);
 }
 .catalog-visibility-card.is-quiet {
-  opacity: 0.72;
+  opacity: 0.85;
 }
 .catalog-visibility-card.has-alert {
-  border-color: color-mix(in srgb, #ef4444 55%, var(--line));
-  background: color-mix(in srgb, #ef4444 8%, var(--panel));
+  border-color: color-mix(in srgb, var(--primary) 40%, #ef4444);
 }
 .catalog-visibility-card:hover,
 .catalog-visibility-card.active {
   border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary-soft) 65%, #fff);
 }
 .catalog-visibility-card.active {
-  outline: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
   outline-offset: 1px;
+  background: color-mix(in srgb, var(--primary-soft) 82%, #fff);
 }
 .catalog-visibility-icon {
   grid-area: icon;
@@ -5564,24 +5581,23 @@ html[data-theme="dark"] .catalog-visibility-card,
   place-items: center;
   font-size: 12px;
   font-weight: 800;
-  background: color-mix(in srgb, var(--primary-soft) 70%, var(--panel));
-  color: var(--primary-darker, var(--primary));
+  background: linear-gradient(145deg, #25d366, #128c7e);
+  color: #fff;
 }
 .catalog-visibility-card.has-alert .catalog-visibility-icon {
-  background: rgba(239, 68, 68, 0.14);
-  color: #b91c1c;
+  background: linear-gradient(145deg, #25d366, #075e54);
 }
 .catalog-visibility-label {
   grid-area: label;
   font-size: 12px;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--primary-darker);
 }
 .catalog-visibility-count {
   grid-area: count;
   font-size: 22px;
   line-height: 1;
-  color: var(--text);
+  color: var(--primary-darker);
 }
 .catalog-visibility-selected,
 .catalog-visibility-action {
@@ -5648,6 +5664,14 @@ html[data-theme="dark"] .catalog-visibility-card,
   gap: 6px;
   align-items: center;
 }
+.catalog-bulk-bar-sticky {
+  display: flex;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 55%, var(--panel));
+}
 .catalog-table-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -5677,18 +5701,44 @@ html[data-theme="dark"] .catalog-visibility-card,
 .catalog-desktop-table {
   width: 100%;
   table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.catalog-desktop-table thead th {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%) !important;
+  color: #fff !important;
+  font-weight: 700;
+  border-bottom: 0 !important;
 }
 .catalog-desktop-table th,
 .catalog-desktop-table td {
   vertical-align: middle;
   padding-block: 10px;
+  text-align: start;
 }
-.catalog-col-product { width: 34%; }
-.catalog-col-status { width: 22%; }
-.catalog-col-price { width: 14%; }
-.catalog-col-branch { width: 12%; }
-.catalog-col-updated { width: 14%; }
-.catalog-col-actions { width: 52px; }
+.catalog-desktop-table th.contacts-col-check,
+.catalog-desktop-table td.contacts-col-check {
+  text-align: center !important;
+}
+.catalog-col-product { width: 34%; text-align: start; }
+.catalog-col-status { width: 22%; text-align: start; }
+.catalog-desktop-table thead th.catalog-col-price,
+.catalog-desktop-table tbody td.catalog-col-price {
+  width: 14%;
+  text-align: start !important;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.catalog-col-branch { width: 12%; text-align: start; }
+.catalog-col-updated { width: 14%; text-align: start; }
+.catalog-col-actions,
+.catalog-desktop-table th.catalog-col-actions,
+.catalog-desktop-table td.catalog-col-actions {
+  width: 52px;
+  text-align: center !important;
+}
 .catalog-product-cell {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
@@ -5738,10 +5788,6 @@ html[data-theme="dark"] .catalog-visibility-card,
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.catalog-col-price {
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .catalog-inline-issue {

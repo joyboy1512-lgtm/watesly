@@ -15,6 +15,8 @@ from app.services.catalog import (
     bulk_archive_catalog_products,
     bulk_purge_catalog_products,
     bulk_restore_catalog_products,
+    bulk_set_catalog_meta_sync_enabled,
+    bulk_sync_catalog_products_to_meta,
     create_catalog_product,
     delete_catalog_product,
     export_catalog_csv,
@@ -226,6 +228,11 @@ class CatalogBulkIdsRequest(BaseModel):
     product_ids: list[UUID] = Field(min_length=1, max_length=200)
 
 
+class CatalogBulkMetaSyncEnabledRequest(BaseModel):
+    product_ids: list[UUID] = Field(min_length=1, max_length=200)
+    enabled: bool
+
+
 @router.get("")
 async def get_catalog(
     include_inactive: bool = Query(False),
@@ -306,6 +313,35 @@ async def post_bulk_purge_catalog(
     db: AsyncSession = Depends(get_db),
 ):
     return await bulk_purge_catalog_products(
+        db,
+        account_id=context.account_id,
+        product_ids=payload.product_ids,
+        membership=context.membership,
+    )
+
+
+@router.post("/bulk-meta-sync-enabled")
+async def post_bulk_catalog_meta_sync_enabled(
+    payload: CatalogBulkMetaSyncEnabledRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await bulk_set_catalog_meta_sync_enabled(
+        db,
+        account_id=context.account_id,
+        product_ids=payload.product_ids,
+        enabled=payload.enabled,
+        membership=context.membership,
+    )
+
+
+@router.post("/bulk-sync-meta")
+async def post_bulk_sync_catalog_meta(
+    payload: CatalogBulkIdsRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CHANNELS_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await bulk_sync_catalog_products_to_meta(
         db,
         account_id=context.account_id,
         product_ids=payload.product_ids,
