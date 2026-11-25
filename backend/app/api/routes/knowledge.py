@@ -341,6 +341,57 @@ async def post_copilot(
     )
 
 
+class KnowledgeBulkRequest(BaseModel):
+    article_ids: list[UUID] = Field(min_length=1)
+
+
+@router.post("/bulk-archive")
+async def post_bulk_archive_knowledge(
+    payload: KnowledgeBulkRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = list(
+        (
+            await db.execute(
+                select(KnowledgeArticle).where(
+                    KnowledgeArticle.account_id == context.account_id,
+                    KnowledgeArticle.id.in_(payload.article_ids),
+                )
+            )
+        ).scalars()
+    )
+    succeeded = 0
+    for item in rows:
+        if item.is_active:
+            item.is_active = False
+            succeeded += 1
+    await db.commit()
+    return {"succeeded": succeeded, "failed": max(0, len(payload.article_ids) - len(rows))}
+
+
+@router.post("/bulk-delete")
+async def post_bulk_delete_knowledge(
+    payload: KnowledgeBulkRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = list(
+        (
+            await db.execute(
+                select(KnowledgeArticle).where(
+                    KnowledgeArticle.account_id == context.account_id,
+                    KnowledgeArticle.id.in_(payload.article_ids),
+                )
+            )
+        ).scalars()
+    )
+    for item in rows:
+        await db.delete(item)
+    await db.commit()
+    return {"succeeded": len(rows), "failed": max(0, len(payload.article_ids) - len(rows))}
+
+
 @router.get("/{article_id}", response_model=KnowledgeArticleResponse)
 async def get_knowledge_article(
     article_id: UUID,
@@ -399,11 +450,15 @@ async def post_article_feedback(
 @router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_knowledge_article(
     article_id: UUID,
+    permanent: bool = Query(False),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
     item = await db.get(KnowledgeArticle, article_id)
     if item is None or item.account_id != context.account_id:
         raise HTTPException(status_code=404, detail="Article not found")
-    item.is_active = False
+    if permanent:
+        await db.delete(item)
+    else:
+        item.is_active = False
     await db.commit()
