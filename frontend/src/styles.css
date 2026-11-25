@@ -3755,7 +3755,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   margin-top: 14px;
   margin-inline: auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  width: min(100%, 920px);
+  width: min(100%, 980px);
 }
 .knowledge-page .page-header.catalog-hero > div {
   width: 100%;
@@ -3934,6 +3934,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .agent-section-card.accent-inbound {
   --section-accent: var(--accent-teal);
   --section-soft: color-mix(in srgb, var(--primary) 16%, var(--panel));
+}
+.agent-section-card.accent-auto-reply {
+  --section-accent: #0f766e;
+  --section-soft: color-mix(in srgb, #0f766e 12%, var(--panel));
 }
 .agent-section-card.accent-external {
   --section-accent: var(--primary-darker);

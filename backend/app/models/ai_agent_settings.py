@@ -23,6 +23,9 @@ class AiAgentSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     agent_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     llm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     auto_kb_on_inbound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    auto_reply_on_inbound: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     llm_system_prompt: Mapped[str | None] = mapped_column(Text)
     llm_api_key_encrypted: Mapped[str | None] = mapped_column(Text)
     llm_api_base_url: Mapped[str | None] = mapped_column(String(512))

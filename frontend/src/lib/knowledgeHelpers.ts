@@ -29,6 +29,7 @@ export type AgentSettings = {
   agent_enabled: boolean;
   llm_enabled: boolean;
   auto_kb_on_inbound: boolean;
+  auto_reply_on_inbound?: boolean;
   llm_system_prompt: string | null;
   llm_available: boolean;
   llm_key_configured?: boolean;

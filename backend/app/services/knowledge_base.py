@@ -59,6 +59,7 @@ def serialize_agent_settings(item: AiAgentSettings) -> dict:
         "agent_enabled": bool(getattr(item, "agent_enabled", True)),
         "llm_enabled": item.llm_enabled,
         "auto_kb_on_inbound": item.auto_kb_on_inbound,
+        "auto_reply_on_inbound": bool(getattr(item, "auto_reply_on_inbound", False)),
         "llm_system_prompt": item.llm_system_prompt,
         "auto_reply_outside_hours": item.auto_reply_outside_hours,
         "business_hours_json": hours if hours else dict(DEFAULT_HOURS),
