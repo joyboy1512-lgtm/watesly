@@ -577,7 +577,14 @@ export default function KnowledgePage() {
                 <strong className="brand-stat-value">
                   {settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "يعمل" : "متوقف"}
                 </strong>
-                <small className="brand-stat-meta">عند رسالة جديدة</small>
+                <small className="brand-stat-meta">للموظف فقط</small>
+              </article>
+              <article className="brand-stat-card brand-stat-card--sm">
+                <span className="brand-stat-label">رد تلقائي</span>
+                <strong className="brand-stat-value">
+                  {settings.agent_enabled !== false && settings.auto_reply_on_inbound ? "يعمل" : "متوقف"}
+                </strong>
+                <small className="brand-stat-meta">إرسال للعميل</small>
               </article>
               <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">خارجي LLM</span>
@@ -585,13 +592,6 @@ export default function KnowledgePage() {
                   {settings.llm_enabled && settings.llm_available ? "يعمل" : "متوقف"}
                 </strong>
                 <small className="brand-stat-meta">صقل الرد فقط</small>
-              </article>
-              <article className="brand-stat-card brand-stat-card--sm">
-                <span className="brand-stat-label">خارج الدوام</span>
-                <strong className="brand-stat-value">
-                  {settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "يعمل" : "متوقف"}
-                </strong>
-                <small className="brand-stat-meta">رد تلقائي خارج الساعات</small>
               </article>
             </div>
           )}
@@ -973,6 +973,7 @@ export default function KnowledgePage() {
         {settings && (() => {
           const agentOn = settings.agent_enabled !== false;
           const inboundOn = agentOn && settings.auto_kb_on_inbound;
+          const autoReplyOn = agentOn && Boolean(settings.auto_reply_on_inbound);
           const outsideOn = agentOn && Boolean(settings.auto_reply_outside_hours);
           const llmOn = Boolean(settings.llm_enabled && settings.llm_available);
           return (
@@ -1080,10 +1081,38 @@ export default function KnowledgePage() {
                   </p>
                 </article>
 
-                <article className="agent-section-card accent-external">
+                <article className="agent-section-card accent-auto-reply">
                   <header className="agent-section-head">
                     <div className="agent-section-title-row">
                       <span className="agent-section-index" aria-hidden>3</span>
+                      <div>
+                        <h3>رد تلقائي للعميل</h3>
+                        <p>
+                          عند رسالة واردة يُرسل الرد الجاهز من المحرك المحلي (والـ LLM إن كان مفعّلاً) مباشرة إلى واتساب.
+                          يعمل داخل وخارج الدوام طالما نافذة الخدمة مفتوحة.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${autoReplyOn ? "is-on" : "is-off"}`}
+                      disabled={!agentOn}
+                      onClick={() =>
+                        void saveAgentSettings({ auto_reply_on_inbound: !settings.auto_reply_on_inbound })
+                      }
+                    >
+                      {autoReplyOn ? "يعمل" : "متوقف"}
+                    </button>
+                  </header>
+                  <p className="agent-section-note">
+                    توقّف الافتراضي: لا يُرسل شيء حتى تشغّل هذا الخيار. يمكن إبقاؤه مع «اقتراح الوارد» معاً.
+                  </p>
+                </article>
+
+                <article className="agent-section-card accent-external">
+                  <header className="agent-section-head">
+                    <div className="agent-section-title-row">
+                      <span className="agent-section-index" aria-hidden>4</span>
                       <div>
                         <h3>الذكاء الخارجي (LLM)</h3>
                         <p>يصقل صياغة الرد بعد تجهيزه من المعرفة/الكتالوج. يحتاج مفتاح API.</p>
@@ -1159,7 +1188,7 @@ export default function KnowledgePage() {
                 <article className="agent-section-card accent-hours">
                   <header className="agent-section-head">
                     <div className="agent-section-title-row">
-                      <span className="agent-section-index" aria-hidden>4</span>
+                      <span className="agent-section-index" aria-hidden>5</span>
                       <div>
                         <h3>خارج الدوام</h3>
                         <p>

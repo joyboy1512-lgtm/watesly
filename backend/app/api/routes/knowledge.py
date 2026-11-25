@@ -59,6 +59,7 @@ class AgentSettingsUpdate(BaseModel):
     agent_enabled: bool | None = None
     llm_enabled: bool | None = None
     auto_kb_on_inbound: bool | None = None
+    auto_reply_on_inbound: bool | None = None
     llm_system_prompt: str | None = None
     auto_reply_outside_hours: bool | None = None
     business_hours_json: dict | None = None

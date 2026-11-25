@@ -548,7 +548,15 @@ async def process_inbound_side_effects(
             from app.services.business_hours import is_within_business_hours
             from app.services.whatsapp import send_text_message
 
-            if agent_live and agent_settings.auto_kb_on_inbound:
+            within_hours = is_within_business_hours(agent_settings.business_hours_json)
+            auto_reply_inbound = bool(getattr(agent_settings, "auto_reply_on_inbound", False))
+            need_ai = agent_live and (
+                agent_settings.auto_kb_on_inbound
+                or auto_reply_inbound
+                or (agent_settings.auto_reply_outside_hours and not within_hours)
+            )
+            ai_result: dict = {}
+            if need_ai:
                 from app.services.catalog_dialogue import load_catalog_dialogue, save_catalog_dialogue
 
                 dialogue_state = await load_catalog_dialogue(
@@ -573,56 +581,88 @@ async def process_inbound_side_effects(
                         conversation_id=conversation.id,
                         state=next_dialogue,
                     )
-                ai_event_type = "ai.kb_suggestion"
-                source = str(ai_result.get("source") or "")
-                if source.startswith("catalog"):
-                    ai_event_type = "ai.catalog_suggestion"
-                elif source.startswith("combined"):
-                    ai_event_type = "ai.combined_suggestion"
-                await publish_event(
-                    whatsapp_account.account_id,
-                    {
-                        "type": ai_event_type,
-                        "conversation_id": str(conversation.id),
-                        "suggestion": ai_result.get("suggestion"),
-                        "matched_products": ai_result.get("matched_products", []),
-                        "matched_articles": ai_result.get("matched_articles", []),
-                        "confidence": ai_result.get("confidence"),
-                        "source": ai_result.get("source"),
-                        "needs_clarification": ai_result.get("needs_clarification"),
-                        "engine": ai_result.get("engine"),
-                        "mode": agent_settings.default_mode,
-                    },
-                )
-            else:
-                ai_result = {}
+                if agent_settings.auto_kb_on_inbound or auto_reply_inbound:
+                    ai_event_type = "ai.kb_suggestion"
+                    source = str(ai_result.get("source") or "")
+                    if source.startswith("catalog"):
+                        ai_event_type = "ai.catalog_suggestion"
+                    elif source.startswith("combined"):
+                        ai_event_type = "ai.combined_suggestion"
+                    await publish_event(
+                        whatsapp_account.account_id,
+                        {
+                            "type": ai_event_type,
+                            "conversation_id": str(conversation.id),
+                            "suggestion": ai_result.get("suggestion"),
+                            "matched_products": ai_result.get("matched_products", []),
+                            "matched_articles": ai_result.get("matched_articles", []),
+                            "confidence": ai_result.get("confidence"),
+                            "source": ai_result.get("source"),
+                            "needs_clarification": ai_result.get("needs_clarification"),
+                            "engine": ai_result.get("engine"),
+                            "mode": agent_settings.default_mode,
+                            "auto_replied": False,
+                        },
+                    )
+
+            auto_sent = False
+            suggestion_text = str(ai_result.get("suggestion") or "").strip()
+            window = compute_service_window(conversation.last_message_at)
+            can_send = bool(window.get("service_window_open")) and power_flags.get(
+                "ai_agent_auto_reply", True
+            )
+
+            if agent_live and auto_reply_inbound and can_send and suggestion_text:
+                try:
+                    await send_text_message(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        whatsapp_account_id=whatsapp_account.id,
+                        payload=SendTextMessageRequest(to=sender, text=suggestion_text),
+                        record_mac=True,
+                        mac_trigger_source=MacTriggerSource.AI_OUTBOUND,
+                    )
+                    if not conversation.first_response_at:
+                        conversation.first_response_at = datetime.now(UTC)
+                    auto_sent = True
+                    await publish_event(
+                        whatsapp_account.account_id,
+                        {
+                            "type": "ai.auto_reply_sent",
+                            "conversation_id": str(conversation.id),
+                            "suggestion": suggestion_text,
+                            "source": ai_result.get("source"),
+                            "mode": agent_settings.default_mode,
+                        },
+                    )
+                except ValueError:
+                    pass
 
             if (
-                agent_live
-                and power_flags.get("ai_agent_auto_reply", True)
+                not auto_sent
+                and agent_live
+                and can_send
                 and agent_settings.auto_reply_outside_hours
-                and not is_within_business_hours(agent_settings.business_hours_json)
+                and not within_hours
                 and not conversation.first_response_at
             ):
                 outside_text = (agent_settings.outside_hours_message or "").strip()
                 if not outside_text:
-                    outside_text = str(ai_result.get("suggestion") or "").strip()
+                    outside_text = suggestion_text
                 if not outside_text:
                     outside_text = "شكراً لتواصلك. نحن خارج ساعات العمل حالياً وسنرد عليك في أقرب وقت."
-                window = compute_service_window(conversation.last_message_at)
-                if window.get("service_window_open"):
-                    try:
-                        await send_text_message(
-                            db,
-                            account_id=whatsapp_account.account_id,
-                            whatsapp_account_id=whatsapp_account.id,
-                            payload=SendTextMessageRequest(to=sender, text=outside_text),
-                            record_mac=True,
-                            mac_trigger_source=MacTriggerSource.AI_OUTBOUND,
-                        )
-                        conversation.first_response_at = datetime.now(UTC)
-                    except ValueError:
-                        pass
+                try:
+                    await send_text_message(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        whatsapp_account_id=whatsapp_account.id,
+                        payload=SendTextMessageRequest(to=sender, text=outside_text),
+                        record_mac=True,
+                        mac_trigger_source=MacTriggerSource.AI_OUTBOUND,
+                    )
+                    conversation.first_response_at = datetime.now(UTC)
+                except ValueError:
+                    pass
         except Exception:
             logger.exception("Inbound AI side effects failed for conversation_id=%s", conversation.id)
 
