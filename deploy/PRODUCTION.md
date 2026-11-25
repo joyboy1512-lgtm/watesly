@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI ops card borders
+
+| Item | Value |
+|------|-------|
+| Commit | `2a7707d` |
+| Alembic | `0073_ai_image_model` |
+| Live assets | `index-Du8SLgjR.js`, `index-BB-FyZUL.css` |
+
 ### Production snapshot (2026-11-25) — AI ops UI mock match
 
 | Item | Value |
