@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI ops lab/templates
+
+| Item | Value |
+|------|-------|
+| Commit | `7acf3b9` |
+| Alembic | `0074_ai_welcome_message` |
+| Frontend | `0.33.10` |
+| Live assets | `index-BOOG9OXQ.js`, `index-Bl5Pa8DP.css` |
+
 ### Production snapshot (2026-11-25) — AI add-provider below table
 
 | Item | Value |
