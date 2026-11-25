@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "461cc88",
-    "git_commit_message": "AI ops staff polish, green channel chip, provider actions",
+    "git_commit": "d7ce0fc",
+    "git_commit_message": "Widen channel chip and green provider header",
     "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.5",
+    "frontend_version": "0.33.6",
     "live_assets": {
-      "js": "index-NhTl2CO9.js",
-      "css": "index-CACBc0Qc.css"
+      "js": "index-CMXT8aVG.js",
+      "css": "index-C-3a4u0j.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.5",
+    "frontend": "0.33.6",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "461cc88",
-  "notes": "Staff-mode cleanup + provider action column + green channel chip live"
+  "commit": "d7ce0fc",
+  "notes": "Wider channel chip + green providers header + action label order live"
 }
