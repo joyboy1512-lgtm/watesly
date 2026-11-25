@@ -20,6 +20,7 @@ import {
   type SmartReplyResult
 } from "../lib/knowledgeHelpers";
 import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
+import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 import { toastStore } from "../stores/toast";
 
 type ListTab = "active" | "inactive";
@@ -29,6 +30,7 @@ type ArticleForm = {
   body: string;
   category: string;
   keywords: string;
+  channelId: string;
   sortOrder: string;
   language: string;
 };
@@ -38,6 +40,7 @@ const emptyForm = (): ArticleForm => ({
   body: "",
   category: "faq",
   keywords: "",
+  channelId: "",
   sortOrder: "0",
   language: "ar"
 });
@@ -48,6 +51,7 @@ function formFromArticle(article: KnowledgeArticle): ArticleForm {
     body: article.body,
     category: article.category,
     keywords: article.keywords ?? "",
+    channelId: article.channel_id ?? "",
     sortOrder: String(article.sort_order ?? 0),
     language: article.language || "ar"
   };
@@ -59,6 +63,7 @@ function buildPayload(form: ArticleForm) {
     body: form.body.trim(),
     category: form.category,
     keywords: form.keywords.trim() || null,
+    channel_id: form.channelId.trim() || null,
     sort_order: Number(form.sortOrder) || 0,
     language: form.language.trim() || "ar"
   };
@@ -68,8 +73,10 @@ export default function KnowledgePage() {
   const client = useQueryClient();
   const [listTab, setListTab] = useState<ListTab>("active");
   const [filterCategory, setFilterCategory] = useState("");
+  const [filterChannelId, setFilterChannelId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [testChannelId, setTestChannelId] = useState("");
 
   const [createForm, setCreateForm] = useState<ArticleForm>(emptyForm);
   const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null);
@@ -97,15 +104,34 @@ export default function KnowledgePage() {
     return () => window.clearTimeout(timer);
   }, [searchQuery]);
 
+  const whatsappAccounts = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
+  });
+  const waList = whatsappAccounts.data ?? [];
+
   const categories = useQuery({
-    queryKey: ["knowledge-categories"],
-    queryFn: async () => (await api.get<string[]>("/knowledge/categories")).data
+    queryKey: ["knowledge-categories", filterChannelId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filterChannelId) params.set("channel_id", filterChannelId);
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      return (await api.get<string[]>(`/knowledge/categories${suffix}`)).data;
+    }
   });
 
   const agentSettings = useQuery({
     queryKey: ["knowledge-agent-settings"],
     queryFn: async () => (await api.get<AgentSettings>("/knowledge/agent-settings")).data
   });
+
+  useEffect(() => {
+    const firstChannel = waList[0]?.channel_id;
+    if (!firstChannel) return;
+    setTestChannelId((current) => current || firstChannel);
+    setFilterChannelId((current) => current || firstChannel);
+    setCreateForm((current) => (current.channelId ? current : { ...current, channelId: firstChannel }));
+  }, [waList]);
 
   useEffect(() => {
     if (agentSettings.data?.default_mode) {
@@ -118,13 +144,14 @@ export default function KnowledgePage() {
     setHoursDraft(normalizeBusinessHours(agentSettings.data.business_hours_json));
   }, [agentSettings.data, hoursDirty]);
 
-  const listQueryKey = ["knowledge", listTab, filterCategory, debouncedSearch] as const;
+  const listQueryKey = ["knowledge", listTab, filterCategory, filterChannelId, debouncedSearch] as const;
   const articles = useQuery({
     queryKey: listQueryKey,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (listTab === "inactive") params.set("include_inactive", "true");
       if (filterCategory) params.set("category", filterCategory);
+      if (filterChannelId) params.set("channel_id", filterChannelId);
 
       if (debouncedSearch) {
         params.set("q", debouncedSearch);
@@ -307,7 +334,8 @@ export default function KnowledgePage() {
         query: testQuery.trim(),
         contact_name: testContactName.trim(),
         mode: testMode,
-        use_llm: false
+        use_llm: false,
+        channel_id: testChannelId || null
       });
       setTestResult(result.data);
     } catch {
@@ -382,6 +410,22 @@ export default function KnowledgePage() {
           />
         </label>
         <label className="field-label">
+          <span>رقم واتساب (القناة)</span>
+          <select
+            value={form.channelId}
+            onChange={(e) => setForm((c) => ({ ...c, channelId: e.target.value }))}
+            required
+          >
+            <option value="">اختر القناة…</option>
+            {waList.map((wa) => (
+              <option key={wa.id} value={wa.channel_id}>
+                {wa.verified_name || wa.channel_name || wa.display_phone_number}
+              </option>
+            ))}
+          </select>
+          <span className="hint-text">كل مقال يخص قناة واحدة — Travel Zone لا يرد من كتالوج/معرفة قناة أخرى.</span>
+        </label>
+        <label className="field-label">
           <span>المحتوى (الجواب)</span>
           <textarea value={form.body} onChange={(e) => setForm((c) => ({ ...c, body: e.target.value }))} rows={8} required />
         </label>
@@ -397,7 +441,7 @@ export default function KnowledgePage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">AI Agent</span>
           <h1>قاعدة المعرفة</h1>
-          <p>قواعد FAQ للرد الذكي في الوارد — مع لوحة تحكم لتشغيل/إيقاف الوكيل ومفتاح API وساعات العمل.</p>
+          <p>معرفة وكتالوج كل رقم واتساب منفصلان — سؤال Travel Zone لا يرد بمنتجات قناة أخرى.</p>
           {settings && (
             <div className="knowledge-status-strip" aria-live="polite">
               <span className={settings.agent_enabled !== false ? "status-pill on" : "status-pill off"}>
@@ -445,6 +489,17 @@ export default function KnowledgePage() {
               مؤرشفة
             </button>
           </div>
+          <label className="field-label knowledge-channel-filter">
+            <span>قناة واتساب</span>
+            <select value={filterChannelId} onChange={(e) => setFilterChannelId(e.target.value)}>
+              <option value="">كل القنوات (عرض إداري)</option>
+              {waList.map((wa) => (
+                <option key={wa.id} value={wa.channel_id}>
+                  {wa.verified_name || wa.channel_name || wa.display_phone_number}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="knowledge-category-tabs catalog-filter-tabs">
             <button type="button" className={filterCategory === "" ? "active" : ""} onClick={() => setFilterCategory("")}>
               كل الفئات
@@ -468,6 +523,7 @@ export default function KnowledgePage() {
               <tr>
                 <th>الترتيب</th>
                 <th>العنوان</th>
+                <th>القناة</th>
                 <th>الفئة</th>
                 <th>الجواب</th>
                 <th>كلمات مفتاحية</th>
@@ -477,10 +533,10 @@ export default function KnowledgePage() {
             </thead>
             <tbody>
               {articles.isLoading && (
-                <tr><td colSpan={7} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={8} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {!articles.isLoading && sortedArticles.length === 0 && (
-                <tr><td colSpan={7} className="admin-table-empty">لا توجد قواعد مطابقة — أضف أسئلة شائعة.</td></tr>
+                <tr><td colSpan={8} className="admin-table-empty">لا توجد قواعد مطابقة — أضف أسئلة شائعة.</td></tr>
               )}
               {!articles.isLoading && sortedArticles.map((item) => {
                 const isPreviewOpen = previewId === item.id;
@@ -495,6 +551,13 @@ export default function KnowledgePage() {
                           <strong className="knowledge-title-ellipsis" title={item.title}>{item.title}</strong>
                           {!item.is_active && <span className="admin-chip admin-chip-muted knowledge-archived-chip">مؤرشف</span>}
                         </div>
+                      </td>
+                      <td className="knowledge-cell-center" data-label="القناة">
+                        <span className="hint-text">
+                          {waList.find((wa) => wa.channel_id === item.channel_id)?.verified_name
+                            || waList.find((wa) => wa.channel_id === item.channel_id)?.display_phone_number
+                            || (item.channel_id ? "قناة محددة" : "غير معيّن")}
+                        </span>
                       </td>
                       <td className="knowledge-cell-center" data-label="الفئة">
                         <span className="knowledge-category-badge">{CATEGORY_LABELS[item.category] ?? item.category}</span>
@@ -562,7 +625,7 @@ export default function KnowledgePage() {
 
       <section className="card knowledge-preview-card">
         <h2 className="section-title">تجربة AI Agent</h2>
-        <p className="hint-text">اكتب سؤالاً وشاهد الرد مع مصدره والمقالات المطابقة.</p>
+        <p className="hint-text">الرد يُختبر على قناة واتساب محددة — لا يخلط معرفة/كتالوج القنوات الأخرى.</p>
         <div className="knowledge-fields-row">
           <label className="field-label">
             <span>سؤال العميل</span>
@@ -571,6 +634,16 @@ export default function KnowledgePage() {
           <label className="field-label">
             <span>اسم العميل (اختياري)</span>
             <input value={testContactName} onChange={(e) => setTestContactName(e.target.value)} placeholder="أحمد" />
+          </label>
+          <label className="field-label">
+            <span>قناة واتساب</span>
+            <select value={testChannelId} onChange={(e) => setTestChannelId(e.target.value)}>
+              {waList.map((wa) => (
+                <option key={wa.id} value={wa.channel_id}>
+                  {wa.verified_name || wa.channel_name || wa.display_phone_number}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="field-label">
             <span>وضع الرد</span>
@@ -1006,7 +1079,7 @@ export default function KnowledgePage() {
               <span>ملف CSV</span>
               <input name="file" type="file" accept=".csv,text/csv" required />
             </label>
-            <p className="agent-section-note">الأعمدة: title · body · category · keywords · sort_order · language</p>
+            <p className="agent-section-note">الأعمدة: title · body · category · keywords · channel_id · sort_order · language</p>
             <button type="submit" className="whatsapp-button">استيراد المقالات</button>
           </form>
 

@@ -8,6 +8,7 @@ class KnowledgeArticleCreate(BaseModel):
     body: str = Field(min_length=1, max_length=8000)
     category: str = Field(default="general", max_length=80)
     keywords: str | None = Field(default=None, max_length=500)
+    channel_id: UUID | None = None
     is_active: bool = True
     sort_order: int = 0
     language: str = Field(default="ar", max_length=10)
@@ -18,6 +19,7 @@ class KnowledgeArticleUpdate(BaseModel):
     body: str | None = Field(default=None, max_length=8000)
     category: str | None = Field(default=None, max_length=80)
     keywords: str | None = Field(default=None, max_length=500)
+    channel_id: UUID | None = None
     is_active: bool | None = None
     sort_order: int | None = None
     language: str | None = Field(default=None, max_length=10)
@@ -29,6 +31,7 @@ class KnowledgeArticleResponse(BaseModel):
     body: str
     category: str
     keywords: str | None
+    channel_id: UUID | None = None
     is_active: bool
     sort_order: int
     usage_count: int = 0

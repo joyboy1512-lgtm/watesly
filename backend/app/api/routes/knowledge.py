@@ -42,6 +42,7 @@ def _article_response(item: KnowledgeArticle) -> KnowledgeArticleResponse:
         body=item.body,
         category=item.category,
         keywords=item.keywords,
+        channel_id=getattr(item, "channel_id", None),
         is_active=item.is_active,
         sort_order=item.sort_order,
         usage_count=item.usage_count or 0,
@@ -85,11 +86,19 @@ class CopilotRequest(BaseModel):
 async def get_knowledge_articles(
     include_inactive: bool = Query(False),
     category: str | None = Query(None),
+    channel_id: UUID | None = Query(None),
+    unassigned_only: bool = Query(False),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     items = await list_knowledge_articles(
-        db, context.account_id, active_only=not include_inactive, category=category
+        db,
+        context.account_id,
+        active_only=not include_inactive,
+        category=category,
+        channel_id=channel_id,
+        strict_channel=bool(channel_id) and not unassigned_only,
+        unassigned_only=unassigned_only,
     )
     return [_article_response(item) for item in items]
 
@@ -98,10 +107,18 @@ async def get_knowledge_articles(
 async def search_knowledge(
     q: str = Query(min_length=1),
     limit: int = Query(20, ge=1, le=100),
+    channel_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    items = await search_knowledge_articles(db, context.account_id, q, limit=limit)
+    items = await search_knowledge_articles(
+        db,
+        context.account_id,
+        q,
+        limit=limit,
+        channel_id=channel_id,
+        strict_channel=True,
+    )
     return [
         {
             "id": str(item.id),
@@ -109,6 +126,7 @@ async def search_knowledge(
             "body": item.body[:300],
             "category": item.category,
             "keywords": item.keywords,
+            "channel_id": str(item.channel_id) if item.channel_id else None,
             "usage_count": item.usage_count,
         }
         for item in items
@@ -117,10 +135,16 @@ async def search_knowledge(
 
 @router.get("/categories")
 async def get_categories(
+    channel_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_knowledge_categories(db, context.account_id)
+    return await list_knowledge_categories(
+        db,
+        context.account_id,
+        channel_id=channel_id,
+        strict_channel=bool(channel_id),
+    )
 
 
 @router.get("/export")

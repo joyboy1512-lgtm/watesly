@@ -13,6 +13,9 @@ class KnowledgeArticle(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     account_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="CASCADE"), index=True
     )
+    channel_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("channels.id", ondelete="SET NULL"), index=True
+    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(80), nullable=False, default="general")

@@ -726,6 +726,7 @@ async def suggest_catalog_reply(
     channel_id: UUID | None = None,
     dialogue_state: dict | None = None,
     membership=None,
+    include_unassigned: bool = False,
 ) -> dict:
     products = await search_catalog_products(
         db,
@@ -734,7 +735,7 @@ async def suggest_catalog_reply(
         limit=10,
         channel_id=channel_id,
         membership=membership,
-        include_unassigned=bool(channel_id),
+        include_unassigned=include_unassigned,
     )
     if products and query.strip():
         return build_catalog_reply(
@@ -749,7 +750,7 @@ async def suggest_catalog_reply(
         account_id,
         channel_id=channel_id,
         membership=membership,
-        include_unassigned=bool(channel_id),
+        include_unassigned=include_unassigned,
     )
     if all_products and any(w in lower for w in ("منتج", "خدم", "product", "service", "قائمة", "menu")):
         return build_catalog_reply(
