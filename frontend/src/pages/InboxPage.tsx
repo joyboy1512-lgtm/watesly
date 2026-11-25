@@ -589,11 +589,6 @@ export default function InboxPage() {
     setMessageSearch("");
   }, [selectedId]);
 
-  const agentSettingsQuery = useQuery({
-    queryKey: ["knowledge-agent-settings"],
-    queryFn: async () => (await api.get<AgentSettings>("/knowledge/agent-settings")).data
-  });
-
   const messagesQuery = useQuery({
     queryKey: ["conversation-messages", selectedId],
     enabled: Boolean(selectedId),
@@ -643,6 +638,24 @@ export default function InboxPage() {
     queryFn: async () => (await api.get("/team/employees")).data
   });
   const selectedConversation = useMemo(() => conversations.find((item) => item.id === selectedId) ?? null, [conversations, selectedId]);
+  const agentSettingsQuery = useQuery({
+    queryKey: ["knowledge-agent-settings", selectedConversation?.channel_id || "account"],
+    queryFn: async () => {
+      const channelId = selectedConversation?.channel_id;
+      const suffix = channelId ? `?channel_id=${encodeURIComponent(channelId)}` : "";
+      return (await api.get<AgentSettings>(`/knowledge/agent-settings${suffix}`)).data;
+    }
+  });
+  const lastInboundForLab = useMemo(() => {
+    return [...(messagesQuery.data ?? [])].reverse().find((m) => m.direction === "inbound" && m.text_body)?.text_body || "";
+  }, [messagesQuery.data]);
+  const aiLabHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (selectedConversation?.channel_id) params.set("channel_id", selectedConversation.channel_id);
+    params.set("lab", "1");
+    if (lastInboundForLab) params.set("q", lastInboundForLab);
+    return `/ai?${params.toString()}`;
+  }, [selectedConversation?.channel_id, lastInboundForLab]);
   const repliesOrganizationId =
     selectedConversation?.organization_id ?? workspaceOrganizationId ?? undefined;
   const quickRepliesQuery = useQuery({
@@ -1106,7 +1119,8 @@ export default function InboxPage() {
       const result = await api.post<SmartReplyResult>("/knowledge/suggest-reply", {
         query: inbound?.text_body || text || "مرحباً",
         contact_name: selectedConversation?.contact_name || "",
-        mode
+        mode,
+        channel_id: selectedConversation?.channel_id || null
       });
       setAiSuggestion(result.data.suggestion);
       setAiSuggestionSource(result.data.source ?? null);
@@ -1670,18 +1684,23 @@ export default function InboxPage() {
               <button type="button" className="secondary-action" onClick={() => void archiveConversation()} disabled={!selectedId} title="إغلاق">✕</button>
             )}
             <button type="button" className="secondary-action" onClick={() => void aiSuggest()} disabled={!selectedId || isArchived} title="اقتراح AI">AI</button>
+            <Link className="secondary-action" to={aiLabHref} title="جرّب على آخر رسالة في مختبر الذكاء">
+              مختبر
+            </Link>
             <button type="button" className="secondary-action" onClick={() => void runCopilot()} disabled={!selectedId || isArchived || copilotLoading} title="Copilot">
               {copilotLoading ? "…" : "Copilot"}
             </button>
             {agentSettingsQuery.data && (
               <Link
-                to="/knowledge"
+                to={`/ai?channel_id=${encodeURIComponent(selectedConversation?.channel_id || "")}`}
                 className={`inbox-ai-status-chip ${agentSettingsQuery.data.agent_enabled === false ? "is-off" : "is-on"}`}
                 title={`الوكيل: ${agentSettingsQuery.data.agent_enabled === false ? "متوقف" : "يعمل"} · ${MODE_LABELS[agentSettingsQuery.data.default_mode] ?? agentSettingsQuery.data.default_mode} · LLM: ${llmStatusLabel(agentSettingsQuery.data)}`}
               >
                 {agentSettingsQuery.data.agent_enabled === false
                   ? "وكيل متوقف"
-                  : MODE_LABELS[agentSettingsQuery.data.default_mode] ?? agentSettingsQuery.data.default_mode}
+                  : agentSettingsQuery.data.reply_mode?.label ||
+                    MODE_LABELS[agentSettingsQuery.data.default_mode] ||
+                    agentSettingsQuery.data.default_mode}
               </Link>
             )}
             <span className={`priority-badge priority-${selectedConversation?.priority ?? "normal"}`}>{priorityLabels[selectedConversation?.priority ?? "normal"]}</span>

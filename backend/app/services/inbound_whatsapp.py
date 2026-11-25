@@ -539,23 +539,33 @@ async def process_inbound_side_effects(
 
     if text_body:
         try:
+            from app.services.ai_ops import get_effective_agent_settings, log_ai_activity
             from app.services.feature_flags import get_feature_flags
-            from app.services.knowledge_base import get_agent_settings, suggest_smart_reply
+            from app.services.knowledge_base import suggest_smart_reply
 
             power_flags = await get_feature_flags(db, account_id=whatsapp_account.account_id)
-            agent_settings = await get_agent_settings(db, whatsapp_account.account_id)
-            agent_live = bool(getattr(agent_settings, "agent_enabled", True))
+            agent_settings = await get_effective_agent_settings(
+                db,
+                account_id=whatsapp_account.account_id,
+                channel_id=whatsapp_account.channel_id,
+            )
+            agent_live = bool(agent_settings.get("agent_enabled", True)) and bool(
+                agent_settings.get("account_agent_enabled", True)
+            )
 
             from app.models.monthly_active_contact import MacTriggerSource
             from app.services.business_hours import is_within_business_hours
             from app.services.whatsapp import send_text_message
 
-            within_hours = is_within_business_hours(agent_settings.business_hours_json)
-            auto_reply_inbound = bool(getattr(agent_settings, "auto_reply_on_inbound", False))
+            within_hours = is_within_business_hours(agent_settings.get("business_hours_json"))
+            auto_reply_inbound = bool(agent_settings.get("auto_reply_on_inbound", False))
+            auto_kb_on_inbound = bool(agent_settings.get("auto_kb_on_inbound", True))
+            auto_reply_outside_hours = bool(agent_settings.get("auto_reply_outside_hours", False))
+            default_mode = str(agent_settings.get("default_mode") or "kb_first")
             need_ai = agent_live and (
-                agent_settings.auto_kb_on_inbound
+                auto_kb_on_inbound
                 or auto_reply_inbound
-                or (agent_settings.auto_reply_outside_hours and not within_hours)
+                or (auto_reply_outside_hours and not within_hours)
             )
             ai_result: dict = {}
             if need_ai:
@@ -565,14 +575,29 @@ async def process_inbound_side_effects(
                     account_id=whatsapp_account.account_id,
                     conversation_id=conversation.id,
                 )
+                staff_owns = conversation.assigned_membership_id is not None
+                if staff_owns and auto_reply_inbound:
+                    # Keep staff suggestions; never auto-send when a human owns the chat.
+                    auto_reply_inbound = False
+                    await log_ai_activity(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        channel_id=whatsapp_account.channel_id,
+                        conversation_id=conversation.id,
+                        source="live",
+                        outcome="skip",
+                        reason_code="staff_assigned",
+                        reason_text="استلم الموظف المحادثة — توقف الإرسال التلقائي",
+                        query_text=text_body,
+                    )
+
                 ai_result = await suggest_smart_reply(
                     db,
                     account_id=whatsapp_account.account_id,
                     query=text_body,
                     contact_name=contact.display_name or "",
-                    mode=agent_settings.default_mode,
-                    # Keep the local matcher authoritative; external model only when enabled.
-                    use_llm=bool(agent_settings.llm_enabled),
+                    mode=default_mode,
+                    use_llm=bool(agent_settings.get("llm_enabled")),
                     channel_id=whatsapp_account.channel_id,
                     dialogue_state=dialogue_state,
                 )
@@ -583,7 +608,7 @@ async def process_inbound_side_effects(
                         conversation_id=conversation.id,
                         state=next_dialogue,
                     )
-                if agent_settings.auto_kb_on_inbound or auto_reply_inbound:
+                if auto_kb_on_inbound or auto_reply_inbound:
                     ai_event_type = "ai.kb_suggestion"
                     source = str(ai_result.get("source") or "")
                     if source.startswith("catalog"):
@@ -602,9 +627,22 @@ async def process_inbound_side_effects(
                             "source": ai_result.get("source"),
                             "needs_clarification": ai_result.get("needs_clarification"),
                             "engine": ai_result.get("engine"),
-                            "mode": agent_settings.default_mode,
+                            "mode": default_mode,
                             "auto_replied": False,
                         },
+                    )
+                    await log_ai_activity(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        channel_id=whatsapp_account.channel_id,
+                        conversation_id=conversation.id,
+                        source="live",
+                        outcome="suggest_staff",
+                        reason_code=str(ai_result.get("source") or "suggest"),
+                        reason_text="اقتراح للموظف داخل الوارد",
+                        query_text=text_body,
+                        suggestion=ai_result.get("suggestion"),
+                        engine=ai_result.get("engine"),
                     )
 
             auto_sent = False
@@ -634,8 +672,21 @@ async def process_inbound_side_effects(
                             "conversation_id": str(conversation.id),
                             "suggestion": suggestion_text,
                             "source": ai_result.get("source"),
-                            "mode": agent_settings.default_mode,
+                            "mode": default_mode,
                         },
+                    )
+                    await log_ai_activity(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        channel_id=whatsapp_account.channel_id,
+                        conversation_id=conversation.id,
+                        source="live",
+                        outcome="auto_customer",
+                        reason_code="auto_reply",
+                        reason_text="المساعد رد على العميل تلقائياً",
+                        query_text=text_body,
+                        suggestion=suggestion_text,
+                        engine=ai_result.get("engine"),
                     )
                 except ValueError:
                     pass
@@ -644,11 +695,11 @@ async def process_inbound_side_effects(
                 not auto_sent
                 and agent_live
                 and can_send
-                and agent_settings.auto_reply_outside_hours
+                and auto_reply_outside_hours
                 and not within_hours
                 and not conversation.first_response_at
             ):
-                outside_text = (agent_settings.outside_hours_message or "").strip()
+                outside_text = str(agent_settings.get("outside_hours_message") or "").strip()
                 if not outside_text:
                     outside_text = suggestion_text
                 if not outside_text:

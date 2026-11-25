@@ -109,6 +109,8 @@ class ParsedProductQuery:
     attributes: set[str] = field(default_factory=set)
     size: SizeSpec | None = None
     quantity: int | None = None
+    # set = replace cart qty ("خلّهم ثلاث"); add = increment ("زيد ثلاث")
+    quantity_mode: str | None = None
     residual_tokens: set[str] = field(default_factory=set)
 
 
@@ -134,6 +136,16 @@ def parse_size_from_text(text: str) -> SizeSpec | None:
     if not unit:
         return None
     return SizeSpec(value=value, unit=unit)
+
+
+def parse_quantity_mode(text: str) -> str | None:
+    """Detect set-vs-add intent for follow-up quantity messages."""
+    normalized = arabic_western_digits(normalize_text(text))
+    if re.search(r"(?<!\w)(زيد|زود|زيدو|زودو|اضف|أضف|add|plus|more)(?!\w)", normalized):
+        return "add"
+    if re.search(r"(?<!\w)(خلهم|خليهم|خلّهم|خليها|خلها|اجعلها|اجعلهم|صير|صيرو|set|make)(?!\w)", normalized):
+        return "set"
+    return None
 
 
 def parse_quantity_from_text(text: str) -> int | None:
@@ -215,6 +227,10 @@ def parse_product_query(query: str) -> ParsedProductQuery:
     digit_norm = arabic_western_digits(raw)
     size = parse_size_from_text(digit_norm)
     quantity = parse_quantity_from_text(digit_norm)
+    quantity_mode = parse_quantity_mode(digit_norm)
+    if quantity is not None and quantity_mode is None:
+        # Default: first mention sets qty; bare "ثلاث" after a product is set
+        quantity_mode = "set"
 
     # Strip size phrase so 400 doesn't become a residual token
     stripped = digit_norm
@@ -283,6 +299,7 @@ def parse_product_query(query: str) -> ParsedProductQuery:
         attributes=attributes,
         size=size,
         quantity=quantity,
+        quantity_mode=quantity_mode,
         residual_tokens=residual,
     )
 

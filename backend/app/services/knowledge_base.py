@@ -446,11 +446,22 @@ async def suggest_smart_reply(
     dialogue_state: dict | None = None,
     membership=None,
 ) -> dict:
-    settings = await get_agent_settings(db, account_id)
-    normalized_mode = (mode or settings.default_mode or "kb_first").lower()
-    local_on = bool(getattr(settings, "local_engine_enabled", True))
-    # Default: keep external model off unless explicitly enabled on the account.
-    should_llm = settings.llm_enabled if use_llm is None else bool(use_llm and settings.llm_enabled)
+    if channel_id is not None:
+        from app.services.ai_ops import get_effective_agent_settings
+
+        effective = await get_effective_agent_settings(
+            db, account_id=account_id, channel_id=channel_id
+        )
+        normalized_mode = (mode or effective.get("default_mode") or "kb_first").lower()
+        local_on = bool(effective.get("local_engine_enabled", True))
+        llm_flag = bool(effective.get("llm_enabled", False))
+    else:
+        settings = await get_agent_settings(db, account_id)
+        normalized_mode = (mode or settings.default_mode or "kb_first").lower()
+        local_on = bool(getattr(settings, "local_engine_enabled", True))
+        llm_flag = bool(settings.llm_enabled)
+    # Default: keep external model off unless explicitly enabled.
+    should_llm = llm_flag if use_llm is None else bool(use_llm and llm_flag)
 
     if not local_on:
         if should_llm:

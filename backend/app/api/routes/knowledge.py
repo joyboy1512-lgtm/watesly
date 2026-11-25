@@ -69,6 +69,8 @@ class AgentSettingsUpdate(BaseModel):
     clear_llm_api_key: bool | None = None
     llm_api_base_url: str | None = None
     llm_model: str | None = None
+    escalation_keywords: list[str] | None = None
+    clarify_max_rounds: int | None = Field(default=None, ge=1, le=10)
 
 
 def _agent_settings_payload(item) -> dict:
@@ -174,23 +176,224 @@ async def import_knowledge(
 
 @router.get("/agent-settings")
 async def get_settings(
+    channel_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.services.ai_ops import get_effective_agent_settings
+
+    if channel_id is not None:
+        return await get_effective_agent_settings(
+            db, account_id=context.account_id, channel_id=channel_id
+        )
     item = await get_agent_settings(db, context.account_id)
-    return _agent_settings_payload(item)
+    payload = _agent_settings_payload(item)
+    from app.services.ai_ops import compute_reply_mode
+
+    payload["account_agent_enabled"] = bool(payload.get("agent_enabled", True))
+    payload["reply_mode"] = compute_reply_mode(payload)
+    return payload
 
 
 @router.patch("/agent-settings")
 async def patch_settings(
     payload: AgentSettingsUpdate,
+    channel_id: UUID | None = Query(None),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_EDIT, write=True)),
     db: AsyncSession = Depends(get_db),
 ):
-    item = await update_agent_settings(
-        db, context.account_id, **payload.model_dump(exclude_unset=True)
+    from app.services.ai_ops import (
+        compute_reply_mode,
+        get_effective_agent_settings,
+        update_account_kill_switch,
+        update_channel_settings,
     )
-    return _agent_settings_payload(item)
+
+    data = payload.model_dump(exclude_unset=True)
+    # Account-level kill switch (and account defaults when no channel)
+    if channel_id is None:
+        if set(data.keys()) == {"agent_enabled"}:
+            item = await update_account_kill_switch(
+                db, account_id=context.account_id, agent_enabled=bool(data["agent_enabled"])
+            )
+            out = _agent_settings_payload(item)
+            out["account_agent_enabled"] = bool(out.get("agent_enabled", True))
+            out["reply_mode"] = compute_reply_mode(out)
+            return out
+        item = await update_agent_settings(db, context.account_id, **data)
+        out = _agent_settings_payload(item)
+        out["account_agent_enabled"] = bool(out.get("agent_enabled", True))
+        out["reply_mode"] = compute_reply_mode(out)
+        return out
+
+    # Channel-scoped overrides — require an explicit channel
+    channel_fields = {
+        key: value
+        for key, value in data.items()
+        if key
+        in {
+            "agent_enabled",
+            "local_engine_enabled",
+            "llm_enabled",
+            "auto_kb_on_inbound",
+            "auto_reply_on_inbound",
+            "default_mode",
+            "tone",
+            "language",
+            "auto_reply_outside_hours",
+            "business_hours_json",
+            "outside_hours_message",
+            "escalation_keywords",
+            "clarify_max_rounds",
+        }
+    }
+    # LLM credentials stay account-level
+    for key in ("llm_api_key", "clear_llm_api_key", "llm_api_base_url", "llm_model", "llm_system_prompt"):
+        if key in data:
+            await update_agent_settings(db, context.account_id, **{key: data[key]})
+    if channel_fields:
+        return await update_channel_settings(
+            db,
+            account_id=context.account_id,
+            channel_id=channel_id,
+            fields=channel_fields,
+        )
+    return await get_effective_agent_settings(
+        db, account_id=context.account_id, channel_id=channel_id
+    )
+
+
+@router.post("/ai/lab-turn")
+async def post_ai_lab_turn(
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ai_ops import run_lab_turn
+
+    channel_id = payload.get("channel_id")
+    query = str(payload.get("query") or "").strip()
+    if not channel_id or not query:
+        raise HTTPException(status_code=400, detail="channel_id and query required")
+    dialogue_state = payload.get("dialogue_state")
+    if dialogue_state is not None and not isinstance(dialogue_state, dict):
+        dialogue_state = None
+    return await run_lab_turn(
+        db,
+        account_id=context.account_id,
+        channel_id=UUID(str(channel_id)),
+        query=query,
+        contact_name=str(payload.get("contact_name") or ""),
+        dialogue_state=dialogue_state,
+        dry_run=bool(payload.get("dry_run", True)),
+    )
+
+
+@router.get("/ai/activity")
+async def get_ai_activity(
+    channel_id: UUID | None = Query(None),
+    source: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ai_ops import list_ai_activity, serialize_activity
+
+    rows = await list_ai_activity(
+        db,
+        account_id=context.account_id,
+        channel_id=channel_id,
+        source=source,
+        limit=limit,
+    )
+    return [serialize_activity(row) for row in rows]
+
+
+@router.get("/ai/metrics")
+async def get_ai_metrics(
+    channel_id: UUID | None = Query(None),
+    days: int = Query(7, ge=1, le=90),
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ai_ops import ai_activity_metrics
+
+    return await ai_activity_metrics(
+        db, account_id=context.account_id, channel_id=channel_id, days=days
+    )
+
+
+@router.get("/ai/template-drafts")
+async def get_ai_template_drafts(
+    channel_id: UUID = Query(...),
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ai_ops import list_template_drafts, serialize_template_draft
+
+    rows = await list_template_drafts(db, account_id=context.account_id, channel_id=channel_id)
+    return [serialize_template_draft(row) for row in rows]
+
+
+@router.post("/ai/template-drafts")
+async def post_ai_template_draft(
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.ai_template_draft import AiTemplateDraft
+    from app.services.ai_ops import internal_template_check, serialize_template_draft
+
+    channel_id = payload.get("channel_id")
+    draft = payload.get("draft") or {}
+    if not channel_id or not isinstance(draft, dict):
+        raise HTTPException(status_code=400, detail="channel_id and draft required")
+    item = AiTemplateDraft(
+        account_id=context.account_id,
+        channel_id=UUID(str(channel_id)),
+        whatsapp_account_id=UUID(str(payload["whatsapp_account_id"])) if payload.get("whatsapp_account_id") else None,
+        status=str(payload.get("status") or "draft"),
+        topic=payload.get("topic"),
+        angle=payload.get("angle"),
+        draft_json=draft,
+        internal_check_json=internal_template_check(draft),
+        notes=payload.get("notes"),
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return serialize_template_draft(item)
+
+
+@router.patch("/ai/template-drafts/{draft_id}")
+async def patch_ai_template_draft(
+    draft_id: UUID,
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.ai_template_draft import AiTemplateDraft
+    from app.services.ai_ops import internal_template_check, serialize_template_draft
+
+    item = await db.get(AiTemplateDraft, draft_id)
+    if item is None or item.account_id != context.account_id:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if "status" in payload:
+        item.status = str(payload["status"])
+    if "draft" in payload and isinstance(payload["draft"], dict):
+        item.draft_json = payload["draft"]
+        item.internal_check_json = internal_template_check(payload["draft"])
+    if "notes" in payload:
+        item.notes = payload.get("notes")
+    if "angle" in payload:
+        item.angle = payload.get("angle")
+    if "meta_status" in payload:
+        item.meta_status = payload.get("meta_status")
+    if "template_id" in payload and payload["template_id"]:
+        item.template_id = UUID(str(payload["template_id"]))
+    await db.commit()
+    await db.refresh(item)
+    return serialize_template_draft(item)
 
 
 @router.post("", response_model=KnowledgeArticleResponse, status_code=status.HTTP_201_CREATED)

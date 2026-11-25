@@ -609,13 +609,16 @@ def build_precise_catalog_reply(
     else:
         head = "إليك أقرب المنتجات المطابقة:"
     suggestion = f"{greeting}{head}\n\n" + "\n\n".join(lines) + "\n\nهل تريد تفاصيل أكثر أو تأكيد الطلب؟"
-    dialogue = {"pending_product": matched[0]} if len(matched) == 1 else {}
+    dialogue: dict[str, Any] = {"pending_product": matched[0]} if len(matched) == 1 else {}
     if qty and dialogue.get("pending_product"):
         dialogue["quantity"] = qty
+        dialogue["quantity_mode"] = parsed.quantity_mode or "set"
+        line = {**matched[0], "quantity": qty}
+        dialogue["cart"] = [line]
     return {
         "suggestion": suggestion,
         "matched_products": matched,
-        "confidence": 0.9 if len(matched) == 1 else 0.8,
+        "confidence": min(0.99, 0.9 if len(matched) == 1 else 0.8),
         "source": "catalog",
         "query": query,
         "needs_clarification": False,
@@ -635,6 +638,7 @@ def _parsed_debug(query: str) -> dict:
             {"value": parsed.size.value, "unit": parsed.size.unit} if parsed.size else None
         ),
         "quantity": parsed.quantity,
+        "quantity_mode": parsed.quantity_mode,
         "tokens": sorted(parsed.tokens)[:24],
     }
 
@@ -696,9 +700,23 @@ def apply_dialogue_then_rank(
             ranked = rank_catalog_products(
                 narrowed, pending.get("name") or query, limit=1, min_score=0.0
             )
+            prior_qty = int(dialogue_state.get("quantity") or pending.get("quantity") or 0)
+            mode = parsed.quantity_mode or "set"
+            next_qty = prior_qty + parsed.quantity if mode == "add" else parsed.quantity
+            cart = list(dialogue_state.get("cart") or [])
+            # Keep a single line per product id
+            cart = [line for line in cart if str(line.get("id")) != pending_id]
+            line = {
+                **pending,
+                "quantity": next_qty,
+                "size_label": pending.get("size_label") or pending.get("variant_size"),
+            }
+            cart.append(line)
             return ranked, {
-                "pending_product": pending,
-                "quantity": parsed.quantity,
+                "pending_product": line,
+                "quantity": next_qty,
+                "quantity_mode": mode,
+                "cart": cart,
                 "resolved_from": "quantity",
             }
 

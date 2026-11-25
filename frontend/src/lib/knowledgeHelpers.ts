@@ -41,10 +41,23 @@ export type AgentSettings = {
   business_hours_json?: BusinessHoursConfig | Record<string, unknown>;
   outside_hours_message?: string | null;
   within_business_hours?: boolean;
+  account_agent_enabled?: boolean;
+  channel_id?: string | null;
+  has_channel_override?: boolean;
+  escalation_keywords?: string[];
+  clarify_max_rounds?: number;
+  reply_mode?: {
+    mode: string;
+    label: string;
+    reason_code?: string;
+    reason_text?: string;
+    blockers?: Array<{ code: string; text: string; action: string }>;
+    engine_ready?: boolean;
+  };
 };
 
 export type AgentSettingsPatch = Partial<
-  Omit<AgentSettings, "llm_available" | "llm_key_configured" | "llm_key_source" | "within_business_hours">
+  Omit<AgentSettings, "llm_available" | "llm_key_configured" | "llm_key_source" | "within_business_hours" | "reply_mode" | "has_channel_override" | "account_agent_enabled">
 > & {
   llm_api_key?: string | null;
   clear_llm_api_key?: boolean;

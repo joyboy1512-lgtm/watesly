@@ -65,6 +65,9 @@ from app.models.catalog_product import CatalogProduct
 from app.models.catalog_order import CatalogOrder
 from app.models.knowledge_article import KnowledgeArticle
 from app.models.ai_agent_settings import AiAgentSettings
+from app.models.ai_agent_channel_settings import AiAgentChannelSettings
+from app.models.ai_activity_event import AiActivityEvent
+from app.models.ai_template_draft import AiTemplateDraft
 from app.models.tracked_link import TrackedLink, LinkClick
 from app.models.conversation_rating import ConversationRating
 
