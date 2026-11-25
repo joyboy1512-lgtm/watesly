@@ -570,6 +570,11 @@ export default function KnowledgePage() {
               )}
               {!articles.isLoading && displayedArticles.map((item) => {
                 const isPreviewOpen = previewId === item.id;
+                const channelWa = waList.find((wa) => wa.channel_id === item.channel_id);
+                const channelLabel =
+                  channelWa?.verified_name
+                  || channelWa?.display_phone_number
+                  || (item.channel_id ? "قناة محددة" : "غير معيّن");
                 return (
                   <Fragment key={item.id}>
                     <tr className={`knowledge-data-row ${item.is_active ? "" : "knowledge-row-inactive"}`}>
@@ -582,11 +587,9 @@ export default function KnowledgePage() {
                           {!item.is_active && <span className="admin-chip admin-chip-muted knowledge-archived-chip">مؤرشف</span>}
                         </div>
                       </td>
-                      <td className="knowledge-cell-center" data-label="القناة">
-                        <span className="hint-text">
-                          {waList.find((wa) => wa.channel_id === item.channel_id)?.verified_name
-                            || waList.find((wa) => wa.channel_id === item.channel_id)?.display_phone_number
-                            || (item.channel_id ? "قناة محددة" : "غير معيّن")}
+                      <td className="knowledge-cell-channel" data-label="القناة">
+                        <span className="knowledge-channel-ellipsis" title={channelLabel}>
+                          {channelLabel}
                         </span>
                       </td>
                       <td className="knowledge-cell-center" data-label="الفئة">
