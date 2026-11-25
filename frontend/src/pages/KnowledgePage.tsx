@@ -90,6 +90,18 @@ export default function KnowledgePage() {
     }
   });
 
+  const knowledgeStats = useQuery({
+    queryKey: ["knowledge", "stats"],
+    queryFn: async () => {
+      const rows = (await api.get<KnowledgeArticle[]>("/knowledge?include_inactive=true")).data;
+      return {
+        active: rows.filter((item) => item.is_active).length,
+        archived: rows.filter((item) => !item.is_active).length,
+        total: rows.length
+      };
+    }
+  });
+
   useEffect(() => {
     const firstChannel = waList[0]?.channel_id;
     if (!firstChannel) return;
@@ -418,9 +430,24 @@ export default function KnowledgePage() {
           </p>
           <div className="brand-stat-row knowledge-status-strip" aria-live="polite">
             <article className="brand-stat-card brand-stat-card--sm">
-              <span className="brand-stat-label">القواعد</span>
-              <strong className="brand-stat-value">{sortedArticles.length}</strong>
-              <small className="brand-stat-meta">{listTab === "active" ? "نشطة" : "مؤرشفة"}</small>
+              <span className="brand-stat-label">القنوات</span>
+              <strong className="brand-stat-value">{waList.length}</strong>
+              <small className="brand-stat-meta">واتساب مربوطة</small>
+            </article>
+            <article className="brand-stat-card brand-stat-card--sm">
+              <span className="brand-stat-label">قواعد نشطة</span>
+              <strong className="brand-stat-value">{knowledgeStats.data?.active ?? "—"}</strong>
+              <small className="brand-stat-meta">جاهزة للرد</small>
+            </article>
+            <article className="brand-stat-card brand-stat-card--sm">
+              <span className="brand-stat-label">قواعد مؤرشفة</span>
+              <strong className="brand-stat-value">{knowledgeStats.data?.archived ?? "—"}</strong>
+              <small className="brand-stat-meta">غير مستخدمة</small>
+            </article>
+            <article className="brand-stat-card brand-stat-card--sm">
+              <span className="brand-stat-label">إجمالي القواعد</span>
+              <strong className="brand-stat-value">{knowledgeStats.data?.total ?? "—"}</strong>
+              <small className="brand-stat-meta">نشطة + مؤرشفة</small>
             </article>
           </div>
         </div>
