@@ -231,6 +231,7 @@ export default function AiAgentPage() {
   const [channelId, setChannelId] = useState(searchParams.get("channel_id") || "");
   const [newDraftOpen, setNewDraftOpen] = useState(false);
   const [activityRange, setActivityRange] = useState<"7" | "all">("all");
+  const [providerPanel, setProviderPanel] = useState<"local" | "external" | null>(null);
 
   const [llmApiKeyDraft, setLlmApiKeyDraft] = useState("");
   const [hoursDraft, setHoursDraft] = useState<BusinessHoursConfig | null>(null);
@@ -935,90 +936,6 @@ export default function AiAgentPage() {
             </div>
           </section>
 
-          {replyChoice !== "staff" && (
-            <section className="ai-panel">
-              <div className="ai-panel-head">
-                <h2>الإعدادات المتقدمة</h2>
-              </div>
-              <div className="ai-advanced-stack">
-                <div className="catalog-card-actions">
-                  <button type="button" className="secondary-button" onClick={() => void toggleAccountKill()}>
-                    {settings.account_agent_enabled === false
-                      ? "تشغيل الذكاء لجميع القنوات"
-                      : "إيقاف الذكاء لجميع القنوات"}
-                  </button>
-                </div>
-                <div className="knowledge-fields-row">
-                  <label className="field-label">
-                    <span>المحرك الداخلي</span>
-                    <button
-                      type="button"
-                      className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
-                      disabled={!agentOn}
-                      onClick={() =>
-                        void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
-                      }
-                    >
-                      {localOn ? "يعمل" : "متوقف"}
-                    </button>
-                  </label>
-                  <label className="field-label">
-                    <span>وضع المحرك</span>
-                    <select
-                      value={settings.default_mode}
-                      disabled={!agentOn || !localOn}
-                      onChange={(e) =>
-                        void saveSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })
-                      }
-                    >
-                      {Object.entries(MODE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-label">
-                    <span>النبرة</span>
-                    <select
-                      value={settings.tone}
-                      onChange={(e) => void saveSettings({ tone: e.target.value as AgentSettings["tone"] })}
-                    >
-                      <option value="friendly">ودّية</option>
-                      <option value="formal">رسمية</option>
-                      <option value="concise">مختصرة</option>
-                    </select>
-                  </label>
-                  <label className="field-label">
-                    <span>حد جولات التوضيح</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      defaultValue={settings.clarify_max_rounds ?? 2}
-                      onBlur={(e) => void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })}
-                    />
-                  </label>
-                </div>
-
-                <label className="field-label">
-                  <span>كلمات التصعيد</span>
-                  <textarea
-                    rows={3}
-                    defaultValue={(settings.escalation_keywords ?? []).join("\n")}
-                    placeholder={"شكوى\nمحامي\nاسترجاع فلوسي\nمدير"}
-                    onBlur={(e) => {
-                      const keywords = e.target.value
-                        .split(/[\n,،]+/)
-                        .map((item) => item.trim())
-                        .filter(Boolean);
-                      void saveSettings({ escalation_keywords: keywords });
-                    }}
-                  />
-                </label>
-              </div>
-            </section>
-          )}
         </>
       )}
 
@@ -1291,8 +1208,11 @@ export default function AiAgentPage() {
               <span role="columnheader">زمن الاشتراك</span>
               <span role="columnheader">المبلغ</span>
               <span role="columnheader">الرصيد / المساحة</span>
+              <span role="columnheader">إعدادات</span>
               <span role="columnheader">إجراء</span>
+              <span role="columnheader">إلغاء</span>
             </div>
+
             <div className="ai-provider-row" role="row">
               <span role="cell">
                 <strong>المحرك الداخلي</strong>
@@ -1313,6 +1233,15 @@ export default function AiAgentPage() {
               <span role="cell">
                 <button
                   type="button"
+                  className={`ai-settings-chip ${providerPanel === "local" ? "is-open" : ""}`}
+                  onClick={() => setProviderPanel((v) => (v === "local" ? null : "local"))}
+                >
+                  إعدادات
+                </button>
+              </span>
+              <span role="cell">
+                <button
+                  type="button"
                   className={`ai-action-card ${localOn ? "is-on" : "is-off"}`}
                   disabled={settings.account_agent_enabled === false || !settings.agent_enabled}
                   onClick={() =>
@@ -1323,7 +1252,115 @@ export default function AiAgentPage() {
                   <span>هذه القناة</span>
                 </button>
               </span>
+              <span role="cell">
+                <button
+                  type="button"
+                  className="ai-remove-chip"
+                  disabled={!localOn && settings.local_engine_enabled === false}
+                  onClick={() => void saveSettings({ local_engine_enabled: false })}
+                >
+                  إلغاء المزود
+                </button>
+              </span>
             </div>
+
+            {providerPanel === "local" && (
+              <div className="ai-provider-drawer" role="row">
+                <div className="ai-provider-drawer-inner" role="cell">
+                  <div className="ai-panel-head" style={{ margin: "0 0 12px", paddingBottom: 10 }}>
+                    <h2>إعدادات المحرك الداخلي</h2>
+                    <button type="button" className="secondary-button" onClick={() => setProviderPanel(null)}>
+                      إغلاق
+                    </button>
+                  </div>
+                  <div className="ai-advanced-stack">
+                    <div className="catalog-card-actions">
+                      <button type="button" className="secondary-button" onClick={() => void toggleAccountKill()}>
+                        {settings.account_agent_enabled === false
+                          ? "تشغيل الذكاء لجميع القنوات"
+                          : "إيقاف الذكاء لجميع القنوات"}
+                      </button>
+                    </div>
+                    <div className="knowledge-fields-row">
+                      <label className="field-label">
+                        <span>المحرك الداخلي</span>
+                        <button
+                          type="button"
+                          className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
+                          disabled={!agentOn}
+                          onClick={() =>
+                            void saveSettings({
+                              local_engine_enabled: settings.local_engine_enabled === false
+                            })
+                          }
+                        >
+                          {localOn ? "يعمل" : "متوقف"}
+                        </button>
+                      </label>
+                      <label className="field-label">
+                        <span>وضع المحرك</span>
+                        <select
+                          value={settings.default_mode}
+                          disabled={!agentOn || !localOn}
+                          onChange={(e) =>
+                            void saveSettings({
+                              default_mode: e.target.value as AgentSettings["default_mode"]
+                            })
+                          }
+                        >
+                          {Object.entries(MODE_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field-label">
+                        <span>النبرة</span>
+                        <select
+                          value={settings.tone}
+                          onChange={(e) =>
+                            void saveSettings({ tone: e.target.value as AgentSettings["tone"] })
+                          }
+                        >
+                          <option value="friendly">ودّية</option>
+                          <option value="formal">رسمية</option>
+                          <option value="concise">مختصرة</option>
+                        </select>
+                      </label>
+                      <label className="field-label">
+                        <span>حد جولات التوضيح</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          defaultValue={settings.clarify_max_rounds ?? 2}
+                          onBlur={(e) =>
+                            void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <label className="field-label">
+                      <span>كلمات التصعيد</span>
+                      <textarea
+                        rows={3}
+                        defaultValue={(settings.escalation_keywords ?? []).join("\n")}
+                        placeholder={"شكوى\nمحامي\nاسترجاع فلوسي\nمدير"}
+                        onBlur={(e) => {
+                          const keywords = e.target.value
+                            .split(/[\n,،]+/)
+                            .map((item) => item.trim())
+                            .filter(Boolean);
+                          void saveSettings({ escalation_keywords: keywords });
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="ai-provider-row" role="row">
               <span role="cell">
                 <strong>المزود الخارجي</strong>
@@ -1345,6 +1382,15 @@ export default function AiAgentPage() {
               <span role="cell">
                 <button
                   type="button"
+                  className={`ai-settings-chip ${providerPanel === "external" ? "is-open" : ""}`}
+                  onClick={() => setProviderPanel((v) => (v === "external" ? null : "external"))}
+                >
+                  إعدادات
+                </button>
+              </span>
+              <span role="cell">
+                <button
+                  type="button"
                   className={`ai-action-card ${llmOn ? "is-on" : "is-off"}`}
                   disabled={!settings.llm_available || !agentOn}
                   onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
@@ -1353,76 +1399,101 @@ export default function AiAgentPage() {
                   <span>هذه القناة</span>
                 </button>
               </span>
+              <span role="cell">
+                <button
+                  type="button"
+                  className="ai-remove-chip"
+                  disabled={!settings.llm_key_configured && !settings.llm_enabled}
+                  onClick={() =>
+                    void saveSettings({
+                      llm_enabled: false,
+                      clear_llm_api_key: true,
+                      llm_api_base_url: null,
+                      llm_model: null,
+                      llm_image_model: null
+                    })
+                  }
+                >
+                  إلغاء المزود
+                </button>
+              </span>
             </div>
-          </div>
 
-          <article className="agent-section-card accent-external" style={{ marginTop: 18 }}>
-            <header className="agent-section-head">
-              <div className="agent-section-title-row">
-                <span className="agent-section-index">E</span>
-                <div>
-                  <h3>ربط المزود الخارجي</h3>
-                  <p>مفتاح API ونماذج الرد والصور (متوافق مع OpenAI).</p>
+            {providerPanel === "external" && (
+              <div className="ai-provider-drawer" role="row">
+                <div className="ai-provider-drawer-inner" role="cell">
+                  <div className="ai-panel-head" style={{ margin: "0 0 12px", paddingBottom: 10 }}>
+                    <h2>تفاصيل ربط المزود الخارجي</h2>
+                    <button type="button" className="secondary-button" onClick={() => setProviderPanel(null)}>
+                      إغلاق
+                    </button>
+                  </div>
+                  <div className="knowledge-fields-row">
+                    <label className="field-label">
+                      <span>مفتاح API</span>
+                      <input
+                        type="password"
+                        value={llmApiKeyDraft}
+                        onChange={(e) => setLlmApiKeyDraft(e.target.value)}
+                        dir="ltr"
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>Base URL</span>
+                      <input
+                        defaultValue={settings.llm_api_base_url ?? ""}
+                        onBlur={(e) =>
+                          void saveSettings({ llm_api_base_url: e.target.value.trim() || null })
+                        }
+                        dir="ltr"
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>نموذج الرد</span>
+                      <input
+                        defaultValue={settings.llm_model ?? ""}
+                        onBlur={(e) => void saveSettings({ llm_model: e.target.value.trim() || null })}
+                        dir="ltr"
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>نموذج الصور</span>
+                      <input
+                        defaultValue={settings.llm_image_model ?? ""}
+                        placeholder="gpt-image-1 ثم dall-e-3 تلقائياً"
+                        onBlur={(e) =>
+                          void saveSettings({ llm_image_model: e.target.value.trim() || null })
+                        }
+                        dir="ltr"
+                      />
+                    </label>
+                  </div>
+                  <div className="catalog-card-actions" style={{ marginTop: 12 }}>
+                    <button
+                      type="button"
+                      className="whatsapp-button"
+                      onClick={() => void saveLlmApiKey()}
+                      disabled={!llmApiKeyDraft.trim()}
+                    >
+                      حفظ المفتاح
+                    </button>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${llmOn ? "is-on" : "is-off"}`}
+                      disabled={!settings.llm_available || !agentOn}
+                      onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
+                    >
+                      {llmOn ? "يعمل" : settings.llm_available ? "متوقف" : "غير جاهز"}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button
-                type="button"
-                className={`agent-state-toggle ${llmOn ? "is-on" : "is-off"}`}
-                disabled={!settings.llm_available || !agentOn}
-                onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
-              >
-                {llmOn ? "يعمل" : settings.llm_available ? "متوقف" : "غير جاهز"}
-              </button>
-            </header>
-            <div className="knowledge-fields-row">
-              <label className="field-label">
-                <span>مفتاح API</span>
-                <input
-                  type="password"
-                  value={llmApiKeyDraft}
-                  onChange={(e) => setLlmApiKeyDraft(e.target.value)}
-                  dir="ltr"
-                />
-              </label>
-              <label className="field-label">
-                <span>Base URL</span>
-                <input
-                  defaultValue={settings.llm_api_base_url ?? ""}
-                  onBlur={(e) => void saveSettings({ llm_api_base_url: e.target.value.trim() || null })}
-                  dir="ltr"
-                />
-              </label>
-              <label className="field-label">
-                <span>نموذج الرد</span>
-                <input
-                  defaultValue={settings.llm_model ?? ""}
-                  onBlur={(e) => void saveSettings({ llm_model: e.target.value.trim() || null })}
-                  dir="ltr"
-                />
-              </label>
-              <label className="field-label">
-                <span>نموذج الصور</span>
-                <input
-                  defaultValue={settings.llm_image_model ?? ""}
-                  placeholder="gpt-image-1 ثم dall-e-3 تلقائياً"
-                  onBlur={(e) => void saveSettings({ llm_image_model: e.target.value.trim() || null })}
-                  dir="ltr"
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              className="whatsapp-button"
-              onClick={() => void saveLlmApiKey()}
-              disabled={!llmApiKeyDraft.trim()}
-            >
-              حفظ المفتاح
-            </button>
-          </article>
+            )}
+          </div>
 
           <p className="ai-settings-hint">
-            عمود الإجراء يشغّل أو يوقف كل مزود على القناة الحالية. تفعيل الذكاء للقناة من بطاقة الحالة في
-            التشغيل، وإيقاف جميع القنوات من الإعدادات المتقدمة عند أوضاع الاقتراح/التلقائي.
+            إعدادات المحرك الداخلي وتفاصيل ربط المزود الخارجي تُفتح من عمود «إعدادات». عمود الإجراء يشغّل أو
+            يوقف المزود على القناة الحالية، و«إلغاء المزود» يعطّل الربط ويمسح بيانات المزود الخارجي عند الحاجة.
           </p>
         </section>
       )}
