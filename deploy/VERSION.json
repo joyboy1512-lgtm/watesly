@@ -8,8 +8,8 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "7cb3266",
-    "git_commit_message": "Knowledge header cards for channels and rule counts",
+    "git_commit": "de0ff74",
+    "git_commit_message": "Sync WhatsApp profile names on inbound messages",
     "alembic_head": "0071_ai_local_engine_toggle",
     "backend_version": "0.28.0",
     "frontend_version": "0.32.20",
@@ -28,6 +28,6 @@
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "7cb3266",
-  "notes": "Knowledge header cards: channels/active/archived/total (PR #210)"
+  "commit": "de0ff74",
+  "notes": "WhatsApp profile.name sync on every inbound (PR #211)"
 }

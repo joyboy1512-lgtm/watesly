@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — WhatsApp name sync
+
+| Item | Value |
+|------|-------|
+| Commit | `de0ff74` |
+| Alembic | `0071_ai_local_engine_toggle` |
+| Live assets | `index-DvLdCXoj.js`, `index-DCqqqMeP.css` |
+
 ### Production snapshot (2026-11-25) — Knowledge header stat cards
 
 | Item | Value |
