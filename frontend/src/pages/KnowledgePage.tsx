@@ -183,11 +183,14 @@ export default function KnowledgePage() {
   }, [categories.data]);
 
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const LIST_PAGE_SIZE = 20;
   const [visibleLimit, setVisibleLimit] = useState(LIST_PAGE_SIZE);
 
   useEffect(() => {
     setVisibleLimit(LIST_PAGE_SIZE);
+    setSelectedIds(new Set());
   }, [listTab, filterCategory, filterChannelId, debouncedSearch]);
 
   const displayedArticles = useMemo(
@@ -195,6 +198,32 @@ export default function KnowledgePage() {
     [sortedArticles, visibleLimit]
   );
   const hasMoreArticles = sortedArticles.length > visibleLimit;
+  const displayedIds = useMemo(() => displayedArticles.map((item) => item.id), [displayedArticles]);
+  const selectedCount = selectedIds.size;
+  const allDisplayedSelected =
+    displayedIds.length > 0 && displayedIds.every((id) => selectedIds.has(id));
+  const someDisplayedSelected = displayedIds.some((id) => selectedIds.has(id));
+
+  function toggleRowSelection(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllDisplayed() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allDisplayedSelected) {
+        for (const id of displayedIds) next.delete(id);
+      } else {
+        for (const id of displayedIds) next.add(id);
+      }
+      return next;
+    });
+  }
 
   async function createArticle(event: FormEvent) {
     event.preventDefault();
@@ -231,6 +260,11 @@ export default function KnowledgePage() {
     if (!window.confirm("أرشفة المقال؟")) return;
     await api.delete(`/knowledge/${id}`);
     await client.invalidateQueries({ queryKey: ["knowledge"] });
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
     toastStore.getState().show("تمت الأرشفة.", "success");
   }
 
@@ -238,6 +272,79 @@ export default function KnowledgePage() {
     await api.patch(`/knowledge/${id}`, { is_active: true });
     await client.invalidateQueries({ queryKey: ["knowledge"] });
     toastStore.getState().show("تم الاسترجاع.", "success");
+  }
+
+  async function deleteArticle(id: string) {
+    if (!window.confirm("حذف القاعدة نهائياً؟ لا يمكن التراجع.")) return;
+    await api.delete(`/knowledge/${id}?permanent=true`);
+    await client.invalidateQueries({ queryKey: ["knowledge"] });
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+    toastStore.getState().show("تم الحذف.", "success");
+  }
+
+  async function bulkArchiveSelected() {
+    if (selectedCount === 0) return;
+    if (!window.confirm(`أرشفة ${selectedCount} قاعدة محددة؟`)) return;
+    setBulkBusy(true);
+    try {
+      const result = await api.post<{ succeeded: number; failed: number }>("/knowledge/bulk-archive", {
+        article_ids: [...selectedIds]
+      });
+      setSelectedIds(new Set());
+      await client.invalidateQueries({ queryKey: ["knowledge"] });
+      toastStore.getState().show(
+        `تمت أرشفة ${result.data.succeeded}${result.data.failed ? ` · فشل ${result.data.failed}` : ""}`,
+        "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذرت الأرشفة الجماعية.", "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkDeleteSelected() {
+    if (selectedCount === 0) return;
+    if (!window.confirm(`حذف ${selectedCount} قاعدة نهائياً؟ لا يمكن التراجع.`)) return;
+    setBulkBusy(true);
+    try {
+      const result = await api.post<{ succeeded: number; failed: number }>("/knowledge/bulk-delete", {
+        article_ids: [...selectedIds]
+      });
+      setSelectedIds(new Set());
+      await client.invalidateQueries({ queryKey: ["knowledge"] });
+      toastStore.getState().show(
+        `تم حذف ${result.data.succeeded}${result.data.failed ? ` · فشل ${result.data.failed}` : ""}`,
+        "success"
+      );
+    } catch {
+      toastStore.getState().show("تعذر الحذف الجماعي.", "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkRestoreSelected() {
+    if (selectedCount === 0) return;
+    setBulkBusy(true);
+    try {
+      let succeeded = 0;
+      for (const id of selectedIds) {
+        await api.patch(`/knowledge/${id}`, { is_active: true });
+        succeeded += 1;
+      }
+      setSelectedIds(new Set());
+      await client.invalidateQueries({ queryKey: ["knowledge"] });
+      toastStore.getState().show(`تم استرجاع ${succeeded}`, "success");
+    } catch {
+      toastStore.getState().show("تعذر الاسترجاع الجماعي.", "error");
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   async function importCsv(event: FormEvent<HTMLFormElement>) {
@@ -510,7 +617,7 @@ export default function KnowledgePage() {
           />
         </div>
 
-        <div className="knowledge-filter-bar">
+        <div className="knowledge-table-controls">
           <div className="catalog-filter-tabs knowledge-status-tabs">
             <button type="button" className={listTab === "active" ? "active" : ""} onClick={() => setListTab("active")}>
               نشطة
@@ -519,10 +626,10 @@ export default function KnowledgePage() {
               مؤرشفة
             </button>
           </div>
-          <label className="field-label knowledge-channel-filter">
+          <label className="knowledge-channel-filter-compact">
             <span>قناة واتساب</span>
             <select value={filterChannelId} onChange={(e) => setFilterChannelId(e.target.value)}>
-              <option value="">كل القنوات (عرض إداري)</option>
+              <option value="">كل القنوات</option>
               {waList.map((wa) => (
                 <option key={wa.id} value={wa.channel_id}>
                   {wa.verified_name || wa.channel_name || wa.display_phone_number}
@@ -530,31 +637,80 @@ export default function KnowledgePage() {
               ))}
             </select>
           </label>
-          <div className="knowledge-category-tabs catalog-filter-tabs">
-            <button type="button" className={filterCategory === "" ? "active" : ""} onClick={() => setFilterCategory("")}>
-              كل الفئات
-            </button>
-            {categoryOptions.map((category) => (
-              <button
-                key={category}
-                type="button"
-                className={filterCategory === category ? "active" : ""}
-                onClick={() => setFilterCategory(category)}
-              >
-                {CATEGORY_LABELS[category] ?? category}
-              </button>
-            ))}
-          </div>
         </div>
+
+        {selectedCount > 0 && (
+          <div className="knowledge-bulk-bar" role="toolbar" aria-label="إجراءات جماعية">
+            <span>محدد: {selectedCount}</span>
+            {listTab === "active" ? (
+              <button type="button" className="secondary-button compact" disabled={bulkBusy} onClick={() => void bulkArchiveSelected()}>
+                أرشفة المحدد
+              </button>
+            ) : (
+              <button type="button" className="secondary-button compact" disabled={bulkBusy} onClick={() => void bulkRestoreSelected()}>
+                استرجاع المحدد
+              </button>
+            )}
+            <button type="button" className="secondary-button compact danger-text" disabled={bulkBusy} onClick={() => void bulkDeleteSelected()}>
+              حذف المحدد
+            </button>
+            <button type="button" className="secondary-button compact" disabled={bulkBusy} onClick={() => setSelectedIds(new Set())}>
+              إلغاء التحديد
+            </button>
+          </div>
+        )}
 
         <div className="admin-table-wrap">
           <table className="admin-erp-table knowledge-erp-table">
             <thead className="knowledge-erp-thead-brand">
               <tr>
+                <th className="knowledge-th-check">
+                  <input
+                    type="checkbox"
+                    checked={allDisplayedSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someDisplayedSelected && !allDisplayedSelected;
+                    }}
+                    onChange={toggleAllDisplayed}
+                    aria-label="تحديد الكل"
+                  />
+                </th>
                 <th>الترتيب</th>
                 <th>العنوان</th>
-                <th>القناة</th>
-                <th>الفئة</th>
+                <th>
+                  <div className="knowledge-th-filter">
+                    <span>القناة</span>
+                    <select
+                      value={filterChannelId}
+                      onChange={(e) => setFilterChannelId(e.target.value)}
+                      aria-label="تصفية القناة"
+                    >
+                      <option value="">الكل</option>
+                      {waList.map((wa) => (
+                        <option key={wa.id} value={wa.channel_id}>
+                          {wa.verified_name || wa.channel_name || wa.display_phone_number}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </th>
+                <th>
+                  <div className="knowledge-th-filter">
+                    <span>الفئة</span>
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      aria-label="تصفية الفئة"
+                    >
+                      <option value="">الكل</option>
+                      {categoryOptions.map((category) => (
+                        <option key={category} value={category}>
+                          {CATEGORY_LABELS[category] ?? category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </th>
                 <th>الجواب</th>
                 <th>كلمات مفتاحية</th>
                 <th>استخدام</th>
@@ -563,10 +719,10 @@ export default function KnowledgePage() {
             </thead>
             <tbody>
               {articles.isLoading && (
-                <tr><td colSpan={8} className="admin-table-empty">جاري التحميل…</td></tr>
+                <tr><td colSpan={9} className="admin-table-empty">جاري التحميل…</td></tr>
               )}
               {!articles.isLoading && sortedArticles.length === 0 && (
-                <tr><td colSpan={8} className="admin-table-empty">لا توجد قواعد مطابقة — أضف أسئلة شائعة.</td></tr>
+                <tr><td colSpan={9} className="admin-table-empty">لا توجد قواعد مطابقة — أضف أسئلة شائعة.</td></tr>
               )}
               {!articles.isLoading && displayedArticles.map((item) => {
                 const isPreviewOpen = previewId === item.id;
@@ -578,6 +734,14 @@ export default function KnowledgePage() {
                 return (
                   <Fragment key={item.id}>
                     <tr className={`knowledge-data-row ${item.is_active ? "" : "knowledge-row-inactive"}`}>
+                      <td className="knowledge-cell-check" data-label="تحديد">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => toggleRowSelection(item.id)}
+                          aria-label={`تحديد ${item.title}`}
+                        />
+                      </td>
                       <td className="knowledge-cell-order" data-label="الترتيب">
                         <span dir="ltr">{item.sort_order}</span>
                       </td>
@@ -623,7 +787,7 @@ export default function KnowledgePage() {
                             تعديل
                           </button>
                           {item.is_active ? (
-                            <button type="button" className="secondary-button compact danger-text" onClick={() => void archiveArticle(item.id)}>
+                            <button type="button" className="secondary-button compact" onClick={() => void archiveArticle(item.id)}>
                               أرشفة
                             </button>
                           ) : (
@@ -631,12 +795,15 @@ export default function KnowledgePage() {
                               استرجاع
                             </button>
                           )}
+                          <button type="button" className="secondary-button compact danger-text" onClick={() => void deleteArticle(item.id)}>
+                            حذف
+                          </button>
                         </div>
                       </td>
                     </tr>
                     {isPreviewOpen && (
                       <tr className="knowledge-preview-row">
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <div className="knowledge-preview-panel">
                             <div className="knowledge-preview-meta">
                               <span className="knowledge-category-badge">{CATEGORY_LABELS[item.category] ?? item.category}</span>
