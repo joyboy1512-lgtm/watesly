@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI ops staff polish
+
+| Item | Value |
+|------|-------|
+| Commit | `461cc88` |
+| Alembic | `0074_ai_welcome_message` |
+| Live assets | `index-NhTl2CO9.js`, `index-CACBc0Qc.css` |
+
 ### Production snapshot (2026-11-25) — AI ops mode layout
 
 | Item | Value |
