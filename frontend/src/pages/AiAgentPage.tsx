@@ -712,7 +712,7 @@ export default function AiAgentPage() {
         <header className="ai-ops-top">
           <div className="ai-ops-title-row">
             <h1>الذكاء الاصطناعي</h1>
-            <div className="ai-channel-inline">
+            <div className="ai-channel-chip" aria-label="اختيار القناة">
               <strong className="ai-channel-label">قناة</strong>
               <label className="ai-channel-card">
                 <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
@@ -913,106 +913,112 @@ export default function AiAgentPage() {
                 </div>
               )}
 
-              <h3 className="ai-subsection-title">مصادر المعرفة</h3>
-              <div className="ai-accordion">
-                <Link className="ai-accordion-row" to="/knowledge">
-                  <span className="ai-accordion-icon is-book" aria-hidden />
-                  <span className="ai-accordion-label">المعرفة</span>
-                  <span className="ai-accordion-meta">{localOn ? "مفعّل" : "متوقف"}</span>
-                  <span className="ai-accordion-chevron" aria-hidden />
-                </Link>
-                <Link className="ai-accordion-row" to="/catalog">
-                  <span className="ai-accordion-icon is-box" aria-hidden />
-                  <span className="ai-accordion-label">الكتالوج</span>
-                  <span className="ai-accordion-meta">{localOn ? "مفعّل" : "متوقف"}</span>
-                  <span className="ai-accordion-chevron" aria-hidden />
-                </Link>
-              </div>
+              {replyChoice !== "staff" && (
+                <>
+                  <h3 className="ai-subsection-title">مصادر المعرفة</h3>
+                  <div className="ai-accordion">
+                    <Link className="ai-accordion-row" to="/knowledge">
+                      <span className="ai-accordion-icon is-book" aria-hidden />
+                      <span className="ai-accordion-label">المعرفة</span>
+                      <span className="ai-accordion-meta">{localOn ? "مفعّل" : "متوقف"}</span>
+                      <span className="ai-accordion-chevron" aria-hidden />
+                    </Link>
+                    <Link className="ai-accordion-row" to="/catalog">
+                      <span className="ai-accordion-icon is-box" aria-hidden />
+                      <span className="ai-accordion-label">الكتالوج</span>
+                      <span className="ai-accordion-meta">{localOn ? "مفعّل" : "متوقف"}</span>
+                      <span className="ai-accordion-chevron" aria-hidden />
+                    </Link>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 
-          <section className="ai-panel">
-            <div className="ai-panel-head">
-              <h2>الإعدادات المتقدمة</h2>
-            </div>
-            <div className="ai-advanced-stack">
-              <div className="catalog-card-actions">
-                <button type="button" className="secondary-button" onClick={() => void toggleAccountKill()}>
-                  {settings.account_agent_enabled === false
-                    ? "تشغيل الذكاء لجميع القنوات"
-                    : "إيقاف الذكاء لجميع القنوات"}
-                </button>
+          {replyChoice !== "staff" && (
+            <section className="ai-panel">
+              <div className="ai-panel-head">
+                <h2>الإعدادات المتقدمة</h2>
               </div>
-              <div className="knowledge-fields-row">
-                <label className="field-label">
-                  <span>المحرك الداخلي</span>
-                  <button
-                    type="button"
-                    className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
-                    disabled={!agentOn}
-                    onClick={() =>
-                      void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
-                    }
-                  >
-                    {localOn ? "يعمل" : "متوقف"}
+              <div className="ai-advanced-stack">
+                <div className="catalog-card-actions">
+                  <button type="button" className="secondary-button" onClick={() => void toggleAccountKill()}>
+                    {settings.account_agent_enabled === false
+                      ? "تشغيل الذكاء لجميع القنوات"
+                      : "إيقاف الذكاء لجميع القنوات"}
                   </button>
-                </label>
+                </div>
+                <div className="knowledge-fields-row">
+                  <label className="field-label">
+                    <span>المحرك الداخلي</span>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
+                      disabled={!agentOn}
+                      onClick={() =>
+                        void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
+                      }
+                    >
+                      {localOn ? "يعمل" : "متوقف"}
+                    </button>
+                  </label>
+                  <label className="field-label">
+                    <span>وضع المحرك</span>
+                    <select
+                      value={settings.default_mode}
+                      disabled={!agentOn || !localOn}
+                      onChange={(e) =>
+                        void saveSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })
+                      }
+                    >
+                      {Object.entries(MODE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    <span>النبرة</span>
+                    <select
+                      value={settings.tone}
+                      onChange={(e) => void saveSettings({ tone: e.target.value as AgentSettings["tone"] })}
+                    >
+                      <option value="friendly">ودّية</option>
+                      <option value="formal">رسمية</option>
+                      <option value="concise">مختصرة</option>
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    <span>حد جولات التوضيح</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      defaultValue={settings.clarify_max_rounds ?? 2}
+                      onBlur={(e) => void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })}
+                    />
+                  </label>
+                </div>
+
                 <label className="field-label">
-                  <span>وضع المحرك</span>
-                  <select
-                    value={settings.default_mode}
-                    disabled={!agentOn || !localOn}
-                    onChange={(e) =>
-                      void saveSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })
-                    }
-                  >
-                    {Object.entries(MODE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-label">
-                  <span>النبرة</span>
-                  <select
-                    value={settings.tone}
-                    onChange={(e) => void saveSettings({ tone: e.target.value as AgentSettings["tone"] })}
-                  >
-                    <option value="friendly">ودّية</option>
-                    <option value="formal">رسمية</option>
-                    <option value="concise">مختصرة</option>
-                  </select>
-                </label>
-                <label className="field-label">
-                  <span>حد جولات التوضيح</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    defaultValue={settings.clarify_max_rounds ?? 2}
-                    onBlur={(e) => void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })}
+                  <span>كلمات التصعيد</span>
+                  <textarea
+                    rows={3}
+                    defaultValue={(settings.escalation_keywords ?? []).join("\n")}
+                    placeholder={"شكوى\nمحامي\nاسترجاع فلوسي\nمدير"}
+                    onBlur={(e) => {
+                      const keywords = e.target.value
+                        .split(/[\n,،]+/)
+                        .map((item) => item.trim())
+                        .filter(Boolean);
+                      void saveSettings({ escalation_keywords: keywords });
+                    }}
                   />
                 </label>
               </div>
-
-              <label className="field-label">
-                <span>كلمات التصعيد</span>
-                <textarea
-                  rows={3}
-                  defaultValue={(settings.escalation_keywords ?? []).join("\n")}
-                  placeholder={"شكوى\nمحامي\nاسترجاع فلوسي\nمدير"}
-                  onBlur={(e) => {
-                    const keywords = e.target.value
-                      .split(/[\n,،]+/)
-                      .map((item) => item.trim())
-                      .filter(Boolean);
-                    void saveSettings({ escalation_keywords: keywords });
-                  }}
-                />
-              </label>
-            </div>
-          </section>
+            </section>
+          )}
         </>
       )}
 
@@ -1112,6 +1118,7 @@ export default function AiAgentPage() {
             <button
               type="button"
               className="whatsapp-button"
+              disabled={!agentOn}
               onClick={() => {
                 setNewDraftOpen(true);
                 setTemplateDraft(null);
@@ -1122,6 +1129,12 @@ export default function AiAgentPage() {
               + مسودة جديدة
             </button>
           </div>
+
+          <p className={`ai-templates-note ${agentOn ? "is-ready" : "is-blocked"}`}>
+            {agentOn
+              ? "القوالب تعمل لأن الذكاء الاصطناعي مفعّل على هذه القناة."
+              : "ملاحظة: توليد القوالب يعمل فقط عند تفعيل الذكاء الاصطناعي لهذه القناة."}
+          </p>
 
           <div className="ai-template-list">
             {(draftsQuery.data ?? []).map((item) => {
@@ -1161,7 +1174,7 @@ export default function AiAgentPage() {
                 <button
                   type="button"
                   className="whatsapp-button"
-                  disabled={templateBusy}
+                  disabled={templateBusy || !agentOn}
                   onClick={() => void generateTemplate()}
                 >
                   توليد مسودة
@@ -1169,7 +1182,7 @@ export default function AiAgentPage() {
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={templateBusy}
+                  disabled={templateBusy || !agentOn}
                   onClick={() => void generateThreeAngles()}
                 >
                   توليد 3 بدائل
@@ -1226,7 +1239,7 @@ export default function AiAgentPage() {
                     <button
                       type="button"
                       className="whatsapp-button"
-                      disabled={imageBusy || templateBusy}
+                      disabled={imageBusy || templateBusy || !agentOn}
                       onClick={() => void generateHeaderImage()}
                     >
                       {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
@@ -1278,6 +1291,7 @@ export default function AiAgentPage() {
               <span role="columnheader">زمن الاشتراك</span>
               <span role="columnheader">المبلغ</span>
               <span role="columnheader">الرصيد / المساحة</span>
+              <span role="columnheader">إجراء</span>
             </div>
             <div className="ai-provider-row" role="row">
               <span role="cell">
@@ -1295,6 +1309,19 @@ export default function AiAgentPage() {
                 {subscription?.mac_remaining != null
                   ? `${subscription.mac_remaining} متبقي من ${subscription.included_mac ?? "—"} محادثة`
                   : "—"}
+              </span>
+              <span role="cell">
+                <button
+                  type="button"
+                  className={`ai-action-card ${localOn ? "is-on" : "is-off"}`}
+                  disabled={settings.account_agent_enabled === false || !settings.agent_enabled}
+                  onClick={() =>
+                    void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
+                  }
+                >
+                  <span>هذه القناة</span>
+                  <strong>{localOn ? "إيقاف" : "تشغيل"}</strong>
+                </button>
               </span>
             </div>
             <div className="ai-provider-row" role="row">
@@ -1314,6 +1341,17 @@ export default function AiAgentPage() {
                 {subscription?.estimated_over_mac_charge
                   ? ` · تقدير زيادة ${subscription.estimated_over_mac_charge}`
                   : ""}
+              </span>
+              <span role="cell">
+                <button
+                  type="button"
+                  className={`ai-action-card ${llmOn ? "is-on" : "is-off"}`}
+                  disabled={!settings.llm_available || !agentOn}
+                  onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
+                >
+                  <span>هذه القناة</span>
+                  <strong>{llmOn ? "إيقاف" : "تشغيل"}</strong>
+                </button>
               </span>
             </div>
           </div>
@@ -1383,8 +1421,8 @@ export default function AiAgentPage() {
           </article>
 
           <p className="ai-settings-hint">
-            زر تفعيل الذكاء للقناة موجود في بطاقة الحالة أعلى تبويب التشغيل. زر إيقاف جميع القنوات في
-            الإعدادات المتقدمة.
+            عمود الإجراء يشغّل أو يوقف كل مزود على القناة الحالية. تفعيل الذكاء للقناة من بطاقة الحالة في
+            التشغيل، وإيقاف جميع القنوات من الإعدادات المتقدمة عند أوضاع الاقتراح/التلقائي.
           </p>
         </section>
       )}
