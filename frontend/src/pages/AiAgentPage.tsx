@@ -133,6 +133,7 @@ export default function AiAgentPage() {
   const [templateDraft, setTemplateDraft] = useState<AiTemplateDraft | null>(null);
   const [templateHeaderFile, setTemplateHeaderFile] = useState<UploadedFile | null>(null);
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
   const [templateAlts, setTemplateAlts] = useState<AiTemplateDraft[]>([]);
 
   const whatsappAccounts = useQuery({
@@ -359,6 +360,51 @@ export default function AiAgentPage() {
       toastStore.getState().show("تعذر توليد القالب. تأكد من المزود الخارجي.", "error");
     } finally {
       setTemplateBusy(false);
+    }
+  }
+
+  async function generateHeaderImage() {
+    if (!templateDraft) return;
+    const prompt =
+      (templateDraft.image_prompt || "").trim() ||
+      `WhatsApp template header image for: ${templateDraft.name}. ${templateDraft.body_text.slice(0, 180)}`;
+    setImageBusy(true);
+    try {
+      const result = await api.post<UploadedFile & { prompt?: string }>("/templates/ai/image", {
+        prompt
+      });
+      setTemplateHeaderFile({
+        id: result.data.id,
+        filename: result.data.filename,
+        content_type: result.data.content_type,
+        size_bytes: result.data.size_bytes,
+        object_key: result.data.object_key,
+        public_url: result.data.public_url
+      });
+      setTemplateDraft((current) =>
+        current
+          ? {
+              ...current,
+              header_type: "IMAGE",
+              image_prompt: prompt
+            }
+          : current
+      );
+      toastStore.getState().show("تم توليد صورة الرأس وحفظها.", "success");
+    } catch (err) {
+      const detail =
+        err && typeof err === "object" && "response" in err
+          ? String((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "")
+          : "";
+      if (detail.includes("LLM_NOT_CONFIGURED")) {
+        toastStore.getState().show("فعّل المزود الخارجي ومفتاح API أولاً لتوليد الصور.", "error");
+      } else if (detail.startsWith("IMAGE_FAILED:")) {
+        toastStore.getState().show("تعذر توليد الصورة من المزود. جرّب نموذجاً آخر أو مفتاحاً يدعم الصور.", "error");
+      } else {
+        toastStore.getState().show("تعذر توليد صورة الرأس.", "error");
+      }
+    } finally {
+      setImageBusy(false);
     }
   }
 
@@ -779,6 +825,17 @@ export default function AiAgentPage() {
                         dir="ltr"
                       />
                     </label>
+                    <label className="field-label">
+                      <span>نموذج الصور</span>
+                      <input
+                        defaultValue={settings.llm_image_model ?? ""}
+                        placeholder="gpt-image-1 ثم dall-e-3 تلقائياً"
+                        onBlur={(e) =>
+                          void saveSettings({ llm_image_model: e.target.value.trim() || null })
+                        }
+                        dir="ltr"
+                      />
+                    </label>
                   </div>
                   <button type="button" className="whatsapp-button" onClick={() => void saveLlmApiKey()} disabled={!llmApiKeyDraft.trim()}>
                     حفظ المفتاح
@@ -813,6 +870,21 @@ export default function AiAgentPage() {
                     max={10}
                     defaultValue={settings.clarify_max_rounds ?? 2}
                     onBlur={(e) => void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })}
+                  />
+                </label>
+                <label className="field-label" style={{ gridColumn: "1 / -1" }}>
+                  <span>كلمات التصعيد (سطر أو فاصلة لكل كلمة)</span>
+                  <textarea
+                    rows={3}
+                    defaultValue={(settings.escalation_keywords ?? []).join("\n")}
+                    placeholder={"شكوى\nمحامي\nاسترجاع فلوسي\nمدير"}
+                    onBlur={(e) => {
+                      const keywords = e.target.value
+                        .split(/[\n,،]+/)
+                        .map((item) => item.trim())
+                        .filter(Boolean);
+                      void saveSettings({ escalation_keywords: keywords });
+                    }}
                   />
                 </label>
                 <p className="hint-text">
@@ -952,6 +1024,30 @@ export default function AiAgentPage() {
                     onChange={(e) => setTemplateDraft((c) => (c ? { ...c, body_text: e.target.value } : c))}
                   />
                 </label>
+                <label className="field-label">
+                  <span>وصف صورة الرأس</span>
+                  <textarea
+                    rows={3}
+                    value={templateDraft.image_prompt}
+                    onChange={(e) =>
+                      setTemplateDraft((c) => (c ? { ...c, image_prompt: e.target.value } : c))
+                    }
+                    placeholder="وصف قصير للصورة التي تريد توليدها لرأس القالب"
+                  />
+                </label>
+                <div className="catalog-card-actions">
+                  <button
+                    type="button"
+                    className="whatsapp-button"
+                    disabled={imageBusy || templateBusy}
+                    onClick={() => void generateHeaderImage()}
+                  >
+                    {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
+                  </button>
+                  {templateHeaderFile && (
+                    <p className="hint-text">✓ {templateHeaderFile.filename}</p>
+                  )}
+                </div>
               </div>
               <div className="agent-section-card accent-import">
                 <WhatsAppTemplatePreview

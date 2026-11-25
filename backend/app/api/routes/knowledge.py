@@ -69,6 +69,7 @@ class AgentSettingsUpdate(BaseModel):
     clear_llm_api_key: bool | None = None
     llm_api_base_url: str | None = None
     llm_model: str | None = None
+    llm_image_model: str | None = None
     escalation_keywords: list[str] | None = None
     clarify_max_rounds: int | None = Field(default=None, ge=1, le=10)
 
@@ -248,7 +249,14 @@ async def patch_settings(
         }
     }
     # LLM credentials stay account-level
-    for key in ("llm_api_key", "clear_llm_api_key", "llm_api_base_url", "llm_model", "llm_system_prompt"):
+    for key in (
+        "llm_api_key",
+        "clear_llm_api_key",
+        "llm_api_base_url",
+        "llm_model",
+        "llm_image_model",
+        "llm_system_prompt",
+    ):
         if key in data:
             await update_agent_settings(db, context.account_id, **{key: data[key]})
     if channel_fields:

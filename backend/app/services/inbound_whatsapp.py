@@ -575,9 +575,9 @@ async def process_inbound_side_effects(
                     account_id=whatsapp_account.account_id,
                     conversation_id=conversation.id,
                 )
+                already_escalated = bool((dialogue_state or {}).get("escalated"))
                 staff_owns = conversation.assigned_membership_id is not None
-                if staff_owns and auto_reply_inbound:
-                    # Keep staff suggestions; never auto-send when a human owns the chat.
+                if already_escalated:
                     auto_reply_inbound = False
                     await log_ai_activity(
                         db,
@@ -586,64 +586,89 @@ async def process_inbound_side_effects(
                         conversation_id=conversation.id,
                         source="live",
                         outcome="skip",
-                        reason_code="staff_assigned",
-                        reason_text="استلم الموظف المحادثة — توقف الإرسال التلقائي",
+                        reason_code="escalated",
+                        reason_text="المحادثة محوّلة لموظف — توقف الرد الآلي",
                         query_text=text_body,
                     )
+                else:
+                    if staff_owns and auto_reply_inbound:
+                        # Keep staff suggestions; never auto-send when a human owns the chat.
+                        auto_reply_inbound = False
+                        await log_ai_activity(
+                            db,
+                            account_id=whatsapp_account.account_id,
+                            channel_id=whatsapp_account.channel_id,
+                            conversation_id=conversation.id,
+                            source="live",
+                            outcome="skip",
+                            reason_code="staff_assigned",
+                            reason_text="استلم الموظف المحادثة — توقف الإرسال التلقائي",
+                            query_text=text_body,
+                        )
 
-                ai_result = await suggest_smart_reply(
-                    db,
-                    account_id=whatsapp_account.account_id,
-                    query=text_body,
-                    contact_name=contact.display_name or "",
-                    mode=default_mode,
-                    use_llm=bool(agent_settings.get("llm_enabled")),
-                    channel_id=whatsapp_account.channel_id,
-                    dialogue_state=dialogue_state,
-                )
-                next_dialogue = ai_result.get("dialogue")
-                if isinstance(next_dialogue, dict) and next_dialogue:
-                    await save_catalog_dialogue(
-                        account_id=whatsapp_account.account_id,
-                        conversation_id=conversation.id,
-                        state=next_dialogue,
-                    )
-                if auto_kb_on_inbound or auto_reply_inbound:
-                    ai_event_type = "ai.kb_suggestion"
-                    source = str(ai_result.get("source") or "")
-                    if source.startswith("catalog"):
-                        ai_event_type = "ai.catalog_suggestion"
-                    elif source.startswith("combined"):
-                        ai_event_type = "ai.combined_suggestion"
-                    await publish_event(
-                        whatsapp_account.account_id,
-                        {
-                            "type": ai_event_type,
-                            "conversation_id": str(conversation.id),
-                            "suggestion": ai_result.get("suggestion"),
-                            "matched_products": ai_result.get("matched_products", []),
-                            "matched_articles": ai_result.get("matched_articles", []),
-                            "confidence": ai_result.get("confidence"),
-                            "source": ai_result.get("source"),
-                            "needs_clarification": ai_result.get("needs_clarification"),
-                            "engine": ai_result.get("engine"),
-                            "mode": default_mode,
-                            "auto_replied": False,
-                        },
-                    )
-                    await log_ai_activity(
+                    ai_result = await suggest_smart_reply(
                         db,
                         account_id=whatsapp_account.account_id,
+                        query=text_body,
+                        contact_name=contact.display_name or "",
+                        mode=default_mode,
+                        use_llm=bool(agent_settings.get("llm_enabled")),
                         channel_id=whatsapp_account.channel_id,
-                        conversation_id=conversation.id,
-                        source="live",
-                        outcome="suggest_staff",
-                        reason_code=str(ai_result.get("source") or "suggest"),
-                        reason_text="اقتراح للموظف داخل الوارد",
-                        query_text=text_body,
-                        suggestion=ai_result.get("suggestion"),
-                        engine=ai_result.get("engine"),
+                        dialogue_state=dialogue_state,
                     )
+                    next_dialogue = ai_result.get("dialogue")
+                    if isinstance(next_dialogue, dict) and next_dialogue:
+                        await save_catalog_dialogue(
+                            account_id=whatsapp_account.account_id,
+                            conversation_id=conversation.id,
+                            state=next_dialogue,
+                        )
+                    escalated_now = bool((next_dialogue or {}).get("escalated")) or str(
+                        ai_result.get("source") or ""
+                    ) == "escalate"
+                    if auto_kb_on_inbound or auto_reply_inbound or escalated_now:
+                        ai_event_type = "ai.kb_suggestion"
+                        source = str(ai_result.get("source") or "")
+                        if source == "escalate":
+                            ai_event_type = "ai.escalated"
+                        elif source.startswith("catalog"):
+                            ai_event_type = "ai.catalog_suggestion"
+                        elif source.startswith("combined"):
+                            ai_event_type = "ai.combined_suggestion"
+                        await publish_event(
+                            whatsapp_account.account_id,
+                            {
+                                "type": ai_event_type,
+                                "conversation_id": str(conversation.id),
+                                "suggestion": ai_result.get("suggestion"),
+                                "matched_products": ai_result.get("matched_products", []),
+                                "matched_articles": ai_result.get("matched_articles", []),
+                                "confidence": ai_result.get("confidence"),
+                                "source": ai_result.get("source"),
+                                "needs_clarification": ai_result.get("needs_clarification"),
+                                "engine": ai_result.get("engine"),
+                                "mode": default_mode,
+                                "auto_replied": False,
+                                "escalated": escalated_now,
+                            },
+                        )
+                        await log_ai_activity(
+                            db,
+                            account_id=whatsapp_account.account_id,
+                            channel_id=whatsapp_account.channel_id,
+                            conversation_id=conversation.id,
+                            source="live",
+                            outcome="escalate" if escalated_now else "suggest_staff",
+                            reason_code=str(ai_result.get("source") or "suggest"),
+                            reason_text=(
+                                str(ai_result.get("reason_text") or "تم تحويل المحادثة لموظف")
+                                if escalated_now
+                                else "اقتراح للموظف داخل الوارد"
+                            ),
+                            query_text=text_body,
+                            suggestion=ai_result.get("suggestion"),
+                            engine=ai_result.get("engine"),
+                        )
 
             auto_sent = False
             suggestion_text = str(ai_result.get("suggestion") or "").strip()

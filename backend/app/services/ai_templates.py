@@ -205,12 +205,13 @@ async def generate_template_header_image(
     account_key = _account_llm_api_key(settings)
     if not llm_available(api_key=account_key):
         raise ValueError("LLM_NOT_CONFIGURED")
+    image_model = (getattr(settings, "llm_image_model", None) or "").strip() or None
     try:
         png_bytes = await generate_image_png(
             prompt=prompt_clean,
             api_key=account_key,
             api_base_url=settings.llm_api_base_url,
-            model=None,
+            model=image_model,
         )
     except LLMError as exc:
         raise ValueError(f"IMAGE_FAILED:{exc}") from exc

@@ -591,6 +591,7 @@ def build_catalog_reply(
     contact_name: str = "",
     query: str = "",
     dialogue_state: dict | None = None,
+    clarify_max_rounds: int = 2,
 ) -> dict:
     """Build a catalog reply; asks clarifying questions when multiple types match."""
     from app.services.catalog_intelligence import apply_dialogue_then_rank
@@ -627,6 +628,7 @@ def build_catalog_reply(
         format_price=format_price,
         format_specs=format_specs,
         dialogue_state=merged_state,
+        clarify_max_rounds=clarify_max_rounds,
     )
     # Carry quantity from follow-up resolution into matched product
     qty = (resolved or {}).get("quantity") or (merged_state or {}).get("quantity")
@@ -727,6 +729,7 @@ async def suggest_catalog_reply(
     dialogue_state: dict | None = None,
     membership=None,
     include_unassigned: bool = False,
+    clarify_max_rounds: int = 2,
 ) -> dict:
     products = await search_catalog_products(
         db,
@@ -743,6 +746,7 @@ async def suggest_catalog_reply(
             contact_name=contact_name,
             query=query,
             dialogue_state=dialogue_state,
+            clarify_max_rounds=clarify_max_rounds,
         )
     lower = query.lower()
     all_products = await list_catalog_products(
@@ -758,12 +762,14 @@ async def suggest_catalog_reply(
             contact_name=contact_name,
             query=query or "قائمة منتجات",
             dialogue_state=dialogue_state,
+            clarify_max_rounds=clarify_max_rounds,
         )
     return build_catalog_reply(
         products,
         contact_name=contact_name,
         query=query,
         dialogue_state=dialogue_state,
+        clarify_max_rounds=clarify_max_rounds,
     )
 
 

@@ -67,6 +67,7 @@ def serialize_agent_settings(item: AiAgentSettings) -> dict:
         "outside_hours_message": item.outside_hours_message,
         "llm_api_base_url": item.llm_api_base_url,
         "llm_model": item.llm_model,
+        "llm_image_model": getattr(item, "llm_image_model", None),
         "llm_available": llm_available(api_key=account_key),
         "llm_key_configured": bool(account_key),
         "llm_key_source": key_source,
@@ -446,6 +447,13 @@ async def suggest_smart_reply(
     dialogue_state: dict | None = None,
     membership=None,
 ) -> dict:
+    from app.services.ai_ops import (
+        build_escalation_reply,
+        matches_escalation_keywords,
+    )
+
+    clarify_max_rounds = 2
+    escalation_keywords: list[str] | None = None
     if channel_id is not None:
         from app.services.ai_ops import get_effective_agent_settings
 
@@ -455,6 +463,9 @@ async def suggest_smart_reply(
         normalized_mode = (mode or effective.get("default_mode") or "kb_first").lower()
         local_on = bool(effective.get("local_engine_enabled", True))
         llm_flag = bool(effective.get("llm_enabled", False))
+        clarify_max_rounds = int(effective.get("clarify_max_rounds") or 2)
+        keywords = effective.get("escalation_keywords")
+        escalation_keywords = keywords if isinstance(keywords, list) else None
     else:
         settings = await get_agent_settings(db, account_id)
         normalized_mode = (mode or settings.default_mode or "kb_first").lower()
@@ -462,6 +473,16 @@ async def suggest_smart_reply(
         llm_flag = bool(settings.llm_enabled)
     # Default: keep external model off unless explicitly enabled.
     should_llm = llm_flag if use_llm is None else bool(use_llm and llm_flag)
+
+    if dialogue_state and dialogue_state.get("escalated"):
+        return build_escalation_reply(
+            contact_name=contact_name,
+            reason=str(dialogue_state.get("escalate_reason") or "سبق التحويل لموظف"),
+        )
+
+    keyword_hit = matches_escalation_keywords(query, escalation_keywords)
+    if keyword_hit:
+        return build_escalation_reply(contact_name=contact_name, reason=keyword_hit)
 
     if not local_on:
         if should_llm:
@@ -508,6 +529,7 @@ async def suggest_smart_reply(
             dialogue_state=dialogue_state,
             membership=membership,
             include_unassigned=False,
+            clarify_max_rounds=clarify_max_rounds,
         )
 
     if normalized_mode == "combined":
@@ -526,6 +548,7 @@ async def suggest_smart_reply(
                 contact_name=contact_name,
                 query=query,
                 dialogue_state=dialogue_state,
+                clarify_max_rounds=clarify_max_rounds,
             )
             if products
             else None
@@ -591,6 +614,7 @@ async def suggest_smart_reply(
                 contact_name=contact_name,
                 query=query,
                 dialogue_state=dialogue_state,
+                clarify_max_rounds=clarify_max_rounds,
             )
             if products
             else suggest_reply(last_messages=[query] if query else [], contact_name=contact_name)

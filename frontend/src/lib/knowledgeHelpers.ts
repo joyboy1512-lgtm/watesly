@@ -37,6 +37,7 @@ export type AgentSettings = {
   llm_key_source?: "account" | "env" | "none";
   llm_api_base_url?: string | null;
   llm_model?: string | null;
+  llm_image_model?: string | null;
   auto_reply_outside_hours?: boolean;
   business_hours_json?: BusinessHoursConfig | Record<string, unknown>;
   outside_hours_message?: string | null;

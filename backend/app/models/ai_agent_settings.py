@@ -33,6 +33,7 @@ class AiAgentSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     llm_api_key_encrypted: Mapped[str | None] = mapped_column(Text)
     llm_api_base_url: Mapped[str | None] = mapped_column(String(512))
     llm_model: Mapped[str | None] = mapped_column(String(120))
+    llm_image_model: Mapped[str | None] = mapped_column(String(120))
     auto_reply_outside_hours: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     business_hours_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     outside_hours_message: Mapped[str | None] = mapped_column(Text)

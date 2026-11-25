@@ -384,7 +384,28 @@ def build_clarifying_catalog_reply(
     contact_name: str = "",
     query: str = "",
     format_price,
+    dialogue_state: dict | None = None,
+    clarify_max_rounds: int = 2,
 ) -> dict:
+    from app.services.ai_ops import build_escalation_reply
+
+    dialogue_state = dialogue_state or {}
+    prior_rounds = int(dialogue_state.get("clarify_rounds") or 0)
+    next_rounds = prior_rounds + 1
+    # After two unanswered clarify rounds (configurable), hand off to a human.
+    if prior_rounds >= max(1, clarify_max_rounds):
+        reply = build_escalation_reply(
+            contact_name=contact_name,
+            reason="تعذّر التوضيح بعد أكثر من محاولة",
+        )
+        reply["dialogue"] = {
+            **(reply.get("dialogue") or {}),
+            "clarify_options": dialogue_state.get("clarify_options") or [],
+            "clarify_rounds": next_rounds,
+            "escalated": True,
+        }
+        return reply
+
     close = [item for item in scored if item.score >= max(0.22, scored[0].score * 0.58)][:6]
     # Prefer keeping type-diverse options when attribute-only
     intent = local_intent(query).get("intent")
@@ -406,9 +427,13 @@ def build_clarifying_catalog_reply(
         matched.append(payload)
 
     body = "\n".join(lines)
+    handoff_hint = ""
+    if next_rounds >= max(1, clarify_max_rounds):
+        handoff_hint = "\nإذا لم يناسبك أي خيار سأحوّلك لموظف مباشرة."
     suggestion = (
         f"{greeting}{intro}\n\n{body}\n\n"
         "اكتب رقم الخيار أو اسم النوع بالضبط — بدون تخمين من طرفي."
+        f"{handoff_hint}"
     )
     return {
         "suggestion": suggestion,
@@ -421,7 +446,11 @@ def build_clarifying_catalog_reply(
         "engine": ENGINE,
         "expanded_terms": sorted(expand_query_terms(query))[:24],
         "parsed": _parsed_debug(query),
-        "dialogue": {"clarify_options": matched},
+        "dialogue": {
+            "clarify_options": matched,
+            "clarify_rounds": next_rounds,
+        },
+        "reason_text": "يحتاج توضيحاً لاختيار الصنف الصحيح.",
     }
 
 
@@ -492,6 +521,7 @@ def build_precise_catalog_reply(
     format_price,
     format_specs,
     dialogue_state: dict | None = None,
+    clarify_max_rounds: int = 2,
 ) -> dict:
     parsed = parse_product_query(query)
     dialogue_state = dialogue_state or {}
@@ -535,6 +565,8 @@ def build_precise_catalog_reply(
                     contact_name=contact_name,
                     query=query,
                     format_price=format_price,
+                    dialogue_state=dialogue_state,
+                    clarify_max_rounds=clarify_max_rounds,
                 )
 
     if not scored:
@@ -546,7 +578,12 @@ def build_precise_catalog_reply(
         # Still show weak options only if scores exist but unclear
         if len(scored) >= 2 and scored[0].score >= 0.22:
             return build_clarifying_catalog_reply(
-                scored, contact_name=contact_name, query=query, format_price=format_price
+                scored,
+                contact_name=contact_name,
+                query=query,
+                format_price=format_price,
+                dialogue_state=dialogue_state,
+                clarify_max_rounds=clarify_max_rounds,
             )
         return build_weak_clarify_reply(contact_name=contact_name, query=query)
 
@@ -568,7 +605,12 @@ def build_precise_catalog_reply(
 
     if should_clarify(scored, query=query):
         return build_clarifying_catalog_reply(
-            scored, contact_name=contact_name, query=query, format_price=format_price
+            scored,
+            contact_name=contact_name,
+            query=query,
+            format_price=format_price,
+            dialogue_state=dialogue_state,
+            clarify_max_rounds=clarify_max_rounds,
         )
 
     products = [item.product for item in scored[:5]]

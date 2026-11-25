@@ -41,6 +41,57 @@ CHANNEL_OVERRIDE_FIELDS = (
     "clarify_max_rounds",
 )
 
+DEFAULT_ESCALATION_KEYWORDS = (
+    "شكوى",
+    "محامي",
+    "محام",
+    "بلوك",
+    "استرجاع فلوسي",
+    "استرجاع فلوس",
+    "مدير",
+    "مشكله كبيره",
+    "مشكلة كبيرة",
+    "complaint",
+    "lawyer",
+    "refund",
+    "manager",
+)
+
+
+def normalize_keyword(value: str) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
+def matches_escalation_keywords(query: str, keywords: list[str] | None = None) -> str | None:
+    text = normalize_keyword(query)
+    if not text:
+        return None
+    pool = [normalize_keyword(item) for item in (keywords or list(DEFAULT_ESCALATION_KEYWORDS)) if item]
+    for keyword in pool:
+        if keyword and keyword in text:
+            return keyword
+    return None
+
+
+def build_escalation_reply(*, contact_name: str = "", reason: str = "") -> dict:
+    name = contact_name.strip() or "عميلنا"
+    detail = f" ({reason})" if reason else ""
+    return {
+        "suggestion": (
+            f"مرحباً {name}. تم تحويل محادثتك لموظف مختص{detail}. "
+            "سيتابع معك في أقرب وقت ولن أكمل الرد الآلي في هذه المحادثة."
+        ),
+        "source": "escalate",
+        "confidence": 1.0,
+        "matched_articles": [],
+        "matched_products": [],
+        "needs_clarification": False,
+        "engine": "escalation",
+        "dialogue": {"escalated": True, "escalate_reason": reason or "keyword"},
+        "reason_text": "تم تحويل المحادثة لموظف بسبب كلمة حساسة أو تعذّر التوضيح.",
+    }
+
+
 REASON_LABELS = {
     "staff_handles": "الموظف يرد على العميل — الذكاء لا يرسل ولا يقترح تلقائياً.",
     "suggest_only": "المساعد يقترح للموظف داخل الوارد دون إرسال للعميل.",
