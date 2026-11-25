@@ -5402,6 +5402,110 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .section-title { margin: 0; font-size: 18px; }
 .section-title-sm { margin: 0 0 12px; font-size: 16px; }
 .catalog-page { display: grid; gap: 18px; }
+.catalog-visibility-board {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 35%, #fff);
+}
+.catalog-visibility-board-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.catalog-visibility-board-head h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.catalog-visibility-board-head p,
+.catalog-visibility-board-head small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.catalog-visibility-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+.catalog-visibility-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-align: start;
+  color: inherit;
+  cursor: pointer;
+  min-height: 88px;
+}
+.catalog-visibility-card:hover,
+.catalog-visibility-card.active {
+  border-color: var(--primary);
+}
+.catalog-visibility-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.catalog-visibility-count {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--primary-darker);
+}
+.catalog-visibility-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.catalog-visibility-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.catalog-visibility-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.catalog-visibility-pill.visibility-confirmed {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
+}
+.catalog-visibility-pill.visibility-linked {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+.catalog-visibility-pill.visibility-local {
+  background: rgba(100, 116, 139, 0.14);
+  color: #475569;
+}
+.catalog-visibility-pill.visibility-broken {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+.catalog-visibility-pill.visibility-unknown {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+.catalog-visibility-reason,
+.catalog-visibility-next {
+  display: block;
+  max-width: 220px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
 .catalog-list-card,
 .catalog-manage-card { display: grid; gap: 16px; }
 .catalog-list-header {

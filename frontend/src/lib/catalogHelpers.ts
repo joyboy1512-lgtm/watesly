@@ -314,6 +314,207 @@ export function catalogMetaStatusLabel(product: CatalogProduct): CatalogMetaStat
   }
 }
 
+/** WhatsApp customer-visibility buckets for a branch/channel catalog view. */
+export type CatalogVisibilityStatus =
+  | "local"
+  | "linked"
+  | "confirmed"
+  | "broken"
+  | "unknown";
+
+export type CatalogVisibilityInfo = {
+  status: CatalogVisibilityStatus;
+  label: string;
+  reason: string;
+  lastCheckedAt: string | null;
+  nextStep: string;
+  className: string;
+};
+
+const VISIBILITY_LABELS: Record<CatalogVisibilityStatus, string> = {
+  local: "محلي",
+  linked: "مربوط بـ Meta ID",
+  confirmed: "مؤكد الظهور",
+  broken: "متعطل",
+  unknown: "مجهول الحالة"
+};
+
+/**
+ * Classify what a customer can infer about WhatsApp visibility from stored fields.
+ * Meta product ID alone never counts as confirmed — only Meta review statuses that
+ * can affirm availability (`approved` / `no_review`) do. Read-only: no sync/mutation.
+ */
+export function catalogWhatsAppVisibility(product: CatalogProduct): CatalogVisibilityInfo {
+  const lastCheckedAt = product.meta_synced_at ?? null;
+  const hasMetaProductId = Boolean(product.external_id?.trim());
+  const hasRetailerId = Boolean(product.meta_retailer_id?.trim());
+  const review = (product.meta_review_status || "").toLowerCase();
+
+  if (!product.is_active) {
+    return {
+      status: "broken",
+      label: VISIBILITY_LABELS.broken,
+      reason: "المنتج مؤرشف محلياً ولن يظهر للعميل على واتساب.",
+      lastCheckedAt,
+      nextStep: "استرجع المنتج من الأرشيف إن أردت إعادة تقييم ظهوره.",
+      className: "visibility-broken"
+    };
+  }
+
+  if (product.meta_sync_enabled === false) {
+    return {
+      status: "broken",
+      label: VISIBILITY_LABELS.broken,
+      reason: hasMetaProductId
+        ? "مزامنة Meta متوقفة — المنتج مخفي عن كتالوج واتساب."
+        : "مزامنة Meta متوقفة — لن يُرسل أو يظهر على القناة.",
+      lastCheckedAt,
+      nextStep: "فعّل مزامنة Meta لهذا المنتج يدوياً عند الحاجة (بدون مزامنة جماعية تلقائية).",
+      className: "visibility-broken"
+    };
+  }
+
+  if (product.meta_sync_status === "failed") {
+    return {
+      status: "broken",
+      label: VISIBILITY_LABELS.broken,
+      reason: product.meta_sync_error?.trim() || "فشلت آخر محاولة مزامنة مع Meta.",
+      lastCheckedAt,
+      nextStep: "راجع رسالة الخطأ ثم أعد المزامنة يدوياً لهذا المنتج فقط.",
+      className: "visibility-broken"
+    };
+  }
+
+  if (review === "rejected") {
+    return {
+      status: "broken",
+      label: VISIBILITY_LABELS.broken,
+      reason: product.meta_review_detail?.trim() || "Meta رفض المنتج — لا يظهر للعميل.",
+      lastCheckedAt,
+      nextStep: "صحّح سبب الرفض في بيانات المنتج ثم أعد الإرسال يدوياً.",
+      className: "visibility-broken"
+    };
+  }
+
+  // Only review statuses that Meta uses to affirm customer-facing availability.
+  if (review === "approved" || review === "no_review") {
+    return {
+      status: "confirmed",
+      label: VISIBILITY_LABELS.confirmed,
+      reason:
+        review === "approved"
+          ? "حالة مراجعة Meta: معتمد — مصدر يؤكد إمكانية الظهور."
+          : "حالة مراجعة Meta: لا تتطلب مراجعة (no_review) — مصدر يؤكد التوفر.",
+      lastCheckedAt,
+      nextStep: "راقِب القناة؛ لا حاجة لمزامنة تلقائية الآن.",
+      className: "visibility-confirmed"
+    };
+  }
+
+  if (hasMetaProductId) {
+    if (review === "pending") {
+      return {
+        status: "linked",
+        label: VISIBILITY_LABELS.linked,
+        reason: "يوجد Meta ID والمنتج قيد المراجعة — المعرف وحده لا يؤكد الظهور للعميل.",
+        lastCheckedAt,
+        nextStep: "انتظر نتيجة المراجعة أو حدّث حالة Meta يدوياً عند الحاجة.",
+        className: "visibility-linked"
+      };
+    }
+    if (review === "outdated") {
+      return {
+        status: "unknown",
+        label: VISIBILITY_LABELS.unknown,
+        reason: "مرتبط بـ Meta لكن حالة المراجعة قديمة — الظهور غير مؤكد.",
+        lastCheckedAt,
+        nextStep: "حدّث حالة Meta يدوياً لهذا المنتج للتحقق دون مزامنة جماعية.",
+        className: "visibility-unknown"
+      };
+    }
+    return {
+      status: "linked",
+      label: VISIBILITY_LABELS.linked,
+      reason: "مرتبط بمعرّف Meta — هذا لا يكفي لتأكيد ظهوره على واتساب.",
+      lastCheckedAt,
+      nextStep: "تحقق من حالة المراجعة في Meta يدوياً قبل اعتباره ظاهراً للعميل.",
+      className: "visibility-linked"
+    };
+  }
+
+  if (product.meta_sync_status === "synced") {
+    return {
+      status: "unknown",
+      label: VISIBILITY_LABELS.unknown,
+      reason: "سُجّلت مزامنة بدون Meta ID مؤكد وحالة مراجعة واضحة.",
+      lastCheckedAt,
+      nextStep: "حدّث حالة Meta يدوياً لمعرفة إن كان المنتج ظاهراً.",
+      className: "visibility-unknown"
+    };
+  }
+
+  return {
+    status: "local",
+    label: VISIBILITY_LABELS.local,
+    reason: hasRetailerId
+      ? "منتج محلي مع Retailer ID جاهز — لم يُربط بعد بمعرّف Meta."
+      : "منتج محلي فقط — غير مربوط بكتالوج واتساب/Meta.",
+    lastCheckedAt,
+    nextStep: hasRetailerId
+      ? "اربط القناة وCommerce ثم زامِن هذا المنتج يدوياً عند الحاجة."
+      : "جهّز Meta IDs أو أنشئ الربط من صفحة واتساب عند الاستعداد.",
+    className: "visibility-local"
+  };
+}
+
+export function summarizeCatalogVisibility(products: CatalogProduct[]) {
+  const counts: Record<CatalogVisibilityStatus, number> = {
+    local: 0,
+    linked: 0,
+    confirmed: 0,
+    broken: 0,
+    unknown: 0
+  };
+  for (const product of products) {
+    counts[catalogWhatsAppVisibility(product).status] += 1;
+  }
+  return {
+    total: products.length,
+    counts,
+    cards: (
+      [
+        ["confirmed", "مؤكد الظهور"],
+        ["linked", "مربوط بـ Meta ID"],
+        ["local", "محلي"],
+        ["broken", "متعطل"],
+        ["unknown", "مجهول الحالة"]
+      ] as Array<[CatalogVisibilityStatus, string]>
+    ).map(([status, label]) => ({
+      status,
+      label,
+      count: counts[status],
+      hint:
+        status === "confirmed"
+          ? "مراجعة Meta تؤكد التوفر"
+          : status === "linked"
+            ? "Meta ID لا يكفي وحده"
+            : status === "local"
+              ? "لم يُربط بعد"
+              : status === "broken"
+                ? "مؤرشف / متوقف / فشل / مرفوض"
+                : "يحتاج تحقق يدوي"
+    }))
+  };
+}
+
+export function filterCatalogByVisibility(
+  products: CatalogProduct[],
+  status: CatalogVisibilityStatus | "all"
+) {
+  if (status === "all") return products;
+  return products.filter((item) => catalogWhatsAppVisibility(item).status === status);
+}
+
 export function formatSpecsPreview(specs: Record<string, string> | null | undefined) {
   const entries = Object.entries(specs ?? {});
   if (!entries.length) return "—";
