@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "7acf3b9",
-    "git_commit_message": "AI ops: staff welcome/hours, lab engines, template AI gate",
+    "git_commit": "b3a8f64",
+    "git_commit_message": "Full AI template editor: drafts, media, buttons, generate polish",
     "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.10",
+    "frontend_version": "0.33.11",
     "live_assets": {
-      "js": "index-BOOG9OXQ.js",
-      "css": "index-Bl5Pa8DP.css"
+      "js": "index-C1mmGXBq.js",
+      "css": "index-BtXtZC71.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.10",
+    "frontend": "0.33.11",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "7acf3b9",
-  "notes": "Staff-mode hides AI toggle; welcome/outside-hours via internal engine; lab local/external WA sim; templates require external LLM + media upload + Meta submit"
+  "commit": "b3a8f64",
+  "notes": "AI templates: full draft editor after open; image/video/PDF upload; buttons/footer/samples; improved generate"
 }
