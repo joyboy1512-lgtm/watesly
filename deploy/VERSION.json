@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "de0ff74",
-    "git_commit_message": "Sync WhatsApp profile names on inbound messages",
-    "alembic_head": "0071_ai_local_engine_toggle",
+    "git_commit": "b3ee763",
+    "git_commit_message": "AI ops console with escalation, clarify limits, image generation",
+    "alembic_head": "0073_ai_image_model",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.20",
+    "frontend_version": "0.33.0",
     "live_assets": {
-      "js": "index-DvLdCXoj.js",
-      "css": "index-DCqqqMeP.css"
+      "js": "index-ClJiMA2D.js",
+      "css": "index-DQNKRCgc.css"
     },
-    "server_backup": "/opt/watesly/backups/20261110-181210"
+    "server_backup": "/opt/watesly/backups/20261125-154139"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.20",
+    "frontend": "0.33.0",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "de0ff74",
-  "notes": "WhatsApp profile.name sync on every inbound (PR #211)"
+  "commit": "b3ee763",
+  "notes": "AI ops console live (PR #212); Olive channel set to suggest-only"
 }

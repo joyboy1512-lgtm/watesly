@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI ops console
+
+| Item | Value |
+|------|-------|
+| Commit | `b3ee763` |
+| Alembic | `0073_ai_image_model` |
+| Live assets | `index-ClJiMA2D.js`, `index-DQNKRCgc.css` |
+
+
 ### Production snapshot (2026-11-25) — WhatsApp name sync
 
 | Item | Value |
