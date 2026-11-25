@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Dedicated AI page + templates
+
+| Item | Value |
+|------|-------|
+| Commit | `1b1ea22` |
+| Alembic | `0071_ai_local_engine_toggle` |
+| Live assets | `index-KWIJtR7F.js`, `index-DCqqqMeP.css` |
+
 ### Production snapshot (2026-11-25) — Local/external AI toggles
 
 | Item | Value |
