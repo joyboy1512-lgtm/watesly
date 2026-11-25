@@ -18,10 +18,11 @@ import {
 } from "../lib/knowledgeHelpers";
 import {
   buildStoredComponents,
+  HEADER_MEDIA_ACCEPT,
   type TemplateButton,
   type TemplateHeaderFormat
 } from "../lib/templateMedia";
-import { type UploadedFile } from "../lib/uploads";
+import { uploadFile, type UploadedFile } from "../lib/uploads";
 import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 import { toastStore } from "../stores/toast";
 
@@ -113,10 +114,24 @@ const TABS: Array<{ id: PageTab; label: string }> = [
 ];
 
 const REPLY_CHOICES: Array<{ id: ReplyChoice; title: string; hint: string }> = [
-  { id: "staff", title: "الموظف يرد", hint: "الذكاء لا يقترح ولا يرسل تلقائياً." },
-  { id: "suggest", title: "اقتراح للموظف", hint: "رد جاهز للمراجعة قبل الإرسال." },
-  { id: "auto", title: "رد تلقائي", hint: "المساعد يرد على العميل مباشرة." }
+  {
+    id: "staff",
+    title: "الموظف يرد",
+    hint: "الترحيب وخارج الدوام يعملان بالمحرك الداخلي عند تفعيلهما."
+  },
+  {
+    id: "suggest",
+    title: "اقتراح للموظف",
+    hint: "الترحيب والدوام على الداخلي؛ بقية المصادر حسب المزود المفعّل."
+  },
+  {
+    id: "auto",
+    title: "رد تلقائي",
+    hint: "الترحيب والدوام على الداخلي؛ بقية الردود حسب المزود وطريقة تشغيله."
+  }
 ];
+
+type LabEngine = "local" | "external";
 
 function phoneLast4(phone?: string | null) {
   const digits = (phone || "").replace(/\D/g, "");
@@ -242,9 +257,11 @@ export default function AiAgentPage() {
   const [labTurns, setLabTurns] = useState<LabTurn[]>([]);
   const [labDialogue, setLabDialogue] = useState<Record<string, unknown> | null>(null);
   const [labBusy, setLabBusy] = useState(false);
+  const [labEngine, setLabEngine] = useState<LabEngine>("local");
   const [labAutostartDone, setLabAutostartDone] = useState(false);
   const [lastUnderstood, setLastUnderstood] = useState<Record<string, unknown> | null>(null);
   const [lastReason, setLastReason] = useState("");
+  const [headerUploadBusy, setHeaderUploadBusy] = useState(false);
 
   const [qualityCasesText, setQualityCasesText] = useState(
     "أبي حبتين rose soap ٩٥ غ\nخلّهم ثلاث\nبكم مع التوصيل للسالمية؟\nأبي كوفي"
@@ -431,7 +448,8 @@ export default function AiAgentPage() {
         query,
         contact_name: labContactName,
         dialogue_state: labDialogue,
-        dry_run: true
+        dry_run: true,
+        use_llm: labEngine === "external"
       });
       const reply = result.data.customer_reply || "—";
       setLabTurns((current) => [
@@ -497,6 +515,10 @@ export default function AiAgentPage() {
       toastStore.getState().show("اكتب موضوع القالب.", "error");
       return;
     }
+    if (!(settings?.llm_enabled && settings?.llm_available)) {
+      toastStore.getState().show("توليد القوالب يتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
+      return;
+    }
     setTemplateBusy(true);
     try {
       const result = await api.post<AiTemplateDraft>("/templates/ai/generate", {
@@ -517,6 +539,10 @@ export default function AiAgentPage() {
 
   async function generateHeaderImage() {
     if (!templateDraft) return;
+    if (!(settings?.llm_enabled && settings?.llm_available)) {
+      toastStore.getState().show("توليد الصور يتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
+      return;
+    }
     const prompt =
       (templateDraft.image_prompt || "").trim() ||
       `WhatsApp template header image for: ${templateDraft.name}. ${templateDraft.body_text.slice(0, 180)}`;
@@ -560,8 +586,48 @@ export default function AiAgentPage() {
     }
   }
 
+  async function uploadHeaderMedia(file: File | null) {
+    if (!file) return;
+    setHeaderUploadBusy(true);
+    try {
+      const uploaded = await uploadFile(file);
+      const isVideo = (uploaded.content_type || file.type || "").startsWith("video/");
+      setTemplateHeaderFile(uploaded);
+      setTemplateDraft((current) =>
+        current
+          ? {
+              ...current,
+              header_type: isVideo ? "VIDEO" : "IMAGE"
+            }
+          : {
+              name: "draft_template",
+              language: "ar",
+              category: "marketing",
+              header_type: isVideo ? "VIDEO" : "IMAGE",
+              header_text: "",
+              body_text: "",
+              body_samples: [],
+              footer_text: "",
+              buttons: [],
+              image_prompt: "",
+              notes: ""
+            }
+      );
+      setNewDraftOpen(true);
+      toastStore.getState().show("تم رفع الوسائط واعتمادها للمعاينة.", "success");
+    } catch {
+      toastStore.getState().show("تعذر رفع الملف.", "error");
+    } finally {
+      setHeaderUploadBusy(false);
+    }
+  }
+
   async function generateThreeAngles() {
     if (!templateTopic.trim()) return;
+    if (!(settings?.llm_enabled && settings?.llm_available)) {
+      toastStore.getState().show("توليد البدائل يتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
+      return;
+    }
     setTemplateBusy(true);
     try {
       const angles = ["عرض سعر", "ندرة / كمية محدودة", "فائدة المنتج"];
@@ -612,39 +678,58 @@ export default function AiAgentPage() {
     }
   }
 
-  async function approveDraftToMeta() {
-    if (!templateDraft || !selectedWa) return;
+  async function approveDraftToMeta(draftOverride?: AiTemplateDraft) {
+    const draft = draftOverride ?? templateDraft;
+    if (!draft || !selectedWa) return;
+    if (draftOverride) {
+      setTemplateDraft(draftOverride);
+      setTemplateTopic(draftOverride.name || templateTopic);
+      setNewDraftOpen(true);
+    }
     const headerType =
-      templateDraft.header_type === "IMAGE"
+      draft.header_type === "IMAGE"
         ? ("IMAGE" as TemplateHeaderFormat)
-        : templateDraft.header_type === "TEXT"
-          ? ("TEXT" as TemplateHeaderFormat)
-          : null;
-    const components = buildStoredComponents(templateDraft.body_text, templateHeaderFile, headerType, {
-      category: templateDraft.category,
-      includeMarketingOptOut: templateDraft.category === "marketing",
-      headerText: templateDraft.header_text,
-      footerText: templateDraft.footer_text,
-      customButtons: templateDraft.buttons ?? [],
-      bodySamples: templateDraft.body_samples ?? []
+        : draft.header_type === "VIDEO"
+          ? ("VIDEO" as TemplateHeaderFormat)
+          : draft.header_type === "TEXT"
+            ? ("TEXT" as TemplateHeaderFormat)
+            : null;
+    const components = buildStoredComponents(draft.body_text, templateHeaderFile, headerType, {
+      category: draft.category,
+      includeMarketingOptOut: draft.category === "marketing",
+      headerText: draft.header_text,
+      footerText: draft.footer_text,
+      customButtons: draft.buttons ?? [],
+      bodySamples: draft.body_samples ?? []
     });
     try {
       const created = await api.post<{ id: string; status: string }>("/templates", {
         whatsapp_account_id: selectedWa.id,
-        name: templateDraft.name,
-        language: templateDraft.language || "ar",
-        category: templateDraft.category || "marketing",
-        body_text: templateDraft.body_text,
+        name: draft.name,
+        language: draft.language || "ar",
+        category: draft.category || "marketing",
+        body_text: draft.body_text,
         components,
         submit_to_meta: true
       });
-      await saveCurrentDraft("submitted");
+      await api.post("/knowledge/ai/template-drafts", {
+        channel_id: channelId,
+        whatsapp_account_id: selectedWa.id,
+        topic: templateTopic.trim() || draft.name,
+        draft,
+        status: "submitted",
+        meta_status: created.data.status === "pending" ? "PENDING" : created.data.status,
+        template_id: created.data.id
+      });
+      await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
       toastStore.getState().show(
-        created.data.status === "pending" ? "تم الترحيل إلى ميتا للمراجعة." : "تم حفظ القالب.",
+        created.data.status === "pending"
+          ? "تم إنشاء القالب وترحيله إلى ميتا مع الوسائط المعتمدة."
+          : "تم حفظ القالب في لوحة القوالب.",
         "success"
       );
     } catch {
-      toastStore.getState().show("تعذر الترحيل إلى ميتا.", "error");
+      toastStore.getState().show("تعذر إنشاء القالب أو الترحيل إلى ميتا.", "error");
     }
   }
 
@@ -653,9 +738,11 @@ export default function AiAgentPage() {
     const headerType =
       templateDraft.header_type === "IMAGE"
         ? ("IMAGE" as TemplateHeaderFormat)
-        : templateDraft.header_type === "TEXT"
-          ? ("TEXT" as TemplateHeaderFormat)
-          : null;
+        : templateDraft.header_type === "VIDEO"
+          ? ("VIDEO" as TemplateHeaderFormat)
+          : templateDraft.header_type === "TEXT"
+            ? ("TEXT" as TemplateHeaderFormat)
+            : null;
     return buildStoredComponents(templateDraft.body_text, templateHeaderFile, headerType, {
       category: templateDraft.category,
       includeMarketingOptOut: templateDraft.category === "marketing",
@@ -666,9 +753,13 @@ export default function AiAgentPage() {
     });
   }, [templateDraft, templateHeaderFile]);
 
-  const agentOn = settings?.agent_enabled !== false && settings?.account_agent_enabled !== false;
+  const accountAiOn = settings?.account_agent_enabled !== false;
+  const agentOn = settings?.agent_enabled !== false && accountAiOn;
   const localOn = agentOn && settings?.local_engine_enabled !== false;
+  const llmConfigured = Boolean(settings?.llm_available);
   const llmOn = agentOn && Boolean(settings?.llm_enabled && settings?.llm_available);
+  const llmReady = Boolean(settings?.llm_enabled && settings?.llm_available);
+  const serviceRepliesOk = accountAiOn;
   const interpretation = extractInterpretation(lastUnderstood, labDialogue);
   const filteredActivity = useMemo(() => {
     const rows = activityQuery.data ?? [];
@@ -758,15 +849,17 @@ export default function AiAgentPage() {
                 </div>
               </div>
               <div className="ai-status-actions">
-                <button
-                  type="button"
-                  className={`agent-state-toggle ${agentOn ? "is-on" : "is-off"}`}
-                  disabled={settings.account_agent_enabled === false}
-                  title="تفعيل أو إيقاف الذكاء لهذه القناة"
-                  onClick={() => void saveSettings({ agent_enabled: !settings.agent_enabled })}
-                >
-                  {agentOn ? "الذكاء يعمل" : "الذكاء متوقف"}
-                </button>
+                {replyChoice !== "staff" && (
+                  <button
+                    type="button"
+                    className={`agent-state-toggle ${agentOn ? "is-on" : "is-off"}`}
+                    disabled={!accountAiOn}
+                    title="تفعيل أو إيقاف الذكاء لهذه القناة"
+                    onClick={() => void saveSettings({ agent_enabled: !settings.agent_enabled })}
+                  >
+                    {agentOn ? "الذكاء يعمل" : "الذكاء متوقف"}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="whatsapp-button ai-status-cta"
@@ -795,6 +888,7 @@ export default function AiAgentPage() {
                     <span className="ai-radio-mark" aria-hidden />
                     <span className="ai-mode-radio-copy">
                       <strong>{choice.title}</strong>
+                      <small>{choice.hint}</small>
                     </span>
                   </button>
                 ))}
@@ -803,16 +897,19 @@ export default function AiAgentPage() {
 
             <div className="ai-section">
               <h3>مصادر الرد</h3>
+              <p className="hint-text" style={{ marginTop: 0 }}>
+                الترحيب وخارج الدوام يعملان عبر المحرك الداخلي عند تفعيلهما — حتى في وضع «الموظف يرد».
+              </p>
               <div className="ai-source-toggles">
                 <div className="ai-toggle-row">
                   <div>
                     <strong>رسالة ترحيب لأول رسالة</strong>
-                    <p>شكر للتواصل وإخبار العميل كيف نساعده — تُرسل مرة واحدة فقط.</p>
+                    <p>يُرسل المحرك الداخلي رسالة ترحيب مرة واحدة لأول رسالة واردة.</p>
                   </div>
                   <button
                     type="button"
                     className={`agent-state-toggle ${welcomeOn ? "is-on" : "is-off"}`}
-                    disabled={!agentOn}
+                    disabled={!serviceRepliesOk}
                     onClick={() =>
                       void saveSettings({ welcome_message_enabled: !settings.welcome_message_enabled })
                     }
@@ -836,12 +933,12 @@ export default function AiAgentPage() {
                 <div className="ai-toggle-row">
                   <div>
                     <strong>تفعيل أوقات خارج الدوام</strong>
-                    <p>رد تلقائي أو رسالة خارج ساعات العمل عند التفعيل.</p>
+                    <p>رد داخلي تلقائي خارج ساعات العمل — يستخدم النص أدناه أو اقتراحاً من المعرفة.</p>
                   </div>
                   <button
                     type="button"
                     className={`agent-state-toggle ${outsideHoursOn ? "is-on" : "is-off"}`}
-                    disabled={!agentOn}
+                    disabled={!serviceRepliesOk}
                     onClick={() =>
                       void saveSettings({ auto_reply_outside_hours: !settings.auto_reply_outside_hours })
                     }
@@ -889,7 +986,7 @@ export default function AiAgentPage() {
                             <input
                               type="checkbox"
                               checked={open}
-                              disabled={!agentOn}
+                              disabled={!serviceRepliesOk}
                               onChange={(e) => updateHoursDay(day, { open: e.target.checked })}
                             />
                             <span>{DAY_LABELS[day]}</span>
@@ -897,14 +994,14 @@ export default function AiAgentPage() {
                           <input
                             type="time"
                             value={slot?.[0] ?? "09:00"}
-                            disabled={!open || !agentOn}
+                            disabled={!open || !serviceRepliesOk}
                             onChange={(e) => updateHoursDay(day, { start: e.target.value })}
                           />
                           <span className="hint-text">إلى</span>
                           <input
                             type="time"
                             value={slot?.[1] ?? "18:00"}
-                            disabled={!open || !agentOn}
+                            disabled={!open || !serviceRepliesOk}
                             onChange={(e) => updateHoursDay(day, { end: e.target.value })}
                           />
                         </div>
@@ -917,6 +1014,9 @@ export default function AiAgentPage() {
               {replyChoice !== "staff" && (
                 <>
                   <h3 className="ai-subsection-title">مصادر المعرفة</h3>
+                  <p className="hint-text">
+                    باقي المصادر (معرفة / كتالوج / مزود خارجي) حسب المزود المفعّل وطريقة تشغيل الوضع أعلاه.
+                  </p>
                   <div className="ai-accordion">
                     <Link className="ai-accordion-row" to="/knowledge">
                       <span className="ai-accordion-icon is-book" aria-hidden />
@@ -930,6 +1030,16 @@ export default function AiAgentPage() {
                       <span className="ai-accordion-meta">{localOn ? "مفعّل" : "متوقف"}</span>
                       <span className="ai-accordion-chevron" aria-hidden />
                     </Link>
+                    <button
+                      type="button"
+                      className="ai-accordion-row"
+                      onClick={() => setTab("settings")}
+                    >
+                      <span className="ai-accordion-icon is-book" aria-hidden />
+                      <span className="ai-accordion-label">المزود الخارجي</span>
+                      <span className="ai-accordion-meta">{llmOn ? "مفعّل" : "متوقف"}</span>
+                      <span className="ai-accordion-chevron" aria-hidden />
+                    </button>
                   </div>
                 </>
               )}
@@ -944,15 +1054,66 @@ export default function AiAgentPage() {
           <div className="ai-panel-head">
             <h2>التجربة</h2>
             <button type="button" className="secondary-button" onClick={resetLab}>
-              اختبار داخلي
+              مسح المحادثة
             </button>
           </div>
 
+          <div className="ai-lab-engine-switch" role="radiogroup" aria-label="نوع الاختبار">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={labEngine === "local"}
+              className={labEngine === "local" ? "is-active" : ""}
+              onClick={() => {
+                setLabEngine("local");
+                resetLab();
+              }}
+            >
+              اختبار داخلي
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={labEngine === "external"}
+              className={labEngine === "external" ? "is-active" : ""}
+              disabled={!llmConfigured}
+              title={
+                llmConfigured
+                  ? "تشغيل المختبر عبر المزود الخارجي"
+                  : "فعّل المزود الخارجي من الإعدادات أولاً"
+              }
+              onClick={() => {
+                setLabEngine("external");
+                resetLab();
+              }}
+            >
+              اختبار خارجي
+            </button>
+          </div>
+          <p className="hint-text" style={{ marginTop: 0 }}>
+            {labEngine === "local"
+              ? "المحاكاة تستخدم المحرك الداخلي (معرفة + كتالوج)."
+              : llmReady
+                ? "المحاكاة تستخدم المزود الخارجي المفعّل."
+                : "المزود الخارجي متوفر لكن غير مفعّل — فعّله من الإعدادات أو جرّب الداخلي."}
+          </p>
+
           <div className="ai-lab-layout">
-            <div className="ai-lab-chat-pane">
+            <div className="ai-lab-chat-pane ai-lab-wa-sim">
+              <header className="ai-lab-wa-header">
+                <span className="ai-lab-wa-avatar" aria-hidden>
+                  {(selectedWa?.verified_name || selectedWa?.channel_name || "و").slice(0, 1)}
+                </span>
+                <div>
+                  <strong>{selectedWa?.verified_name || selectedWa?.channel_name || "قناة واتساب"}</strong>
+                  <small>
+                    {labEngine === "local" ? "محاكاة · داخلي" : "محاكاة · خارجي"} · {labContactName}
+                  </small>
+                </div>
+              </header>
               <div className="ai-lab-thread">
                 {labTurns.length === 0 && (
-                  <p className="hint-text">مثال: أبي حبتين rose soap — ثم خلّهم ثلاث</p>
+                  <p className="hint-text ai-lab-empty">مثال: أبي حبتين rose soap — ثم خلّهم ثلاث</p>
                 )}
                 {labTurns.map((turn, index) => (
                   <article key={`${turn.role}-${index}`} className={`ai-lab-bubble is-${turn.role}`}>
@@ -998,6 +1159,10 @@ export default function AiAgentPage() {
                   <dt>الوزن</dt>
                   <dd>{interpretation.weight ?? "—"}</dd>
                 </div>
+                <div>
+                  <dt>المحرك</dt>
+                  <dd>{interpretation.engine || (labEngine === "local" ? "local" : "llm")}</dd>
+                </div>
               </dl>
               {lastReason && <p className="ai-interpret-note">{lastReason}</p>}
             </aside>
@@ -1032,25 +1197,39 @@ export default function AiAgentPage() {
         <section className="ai-panel">
           <div className="ai-panel-head">
             <h2>القوالب</h2>
-            <button
-              type="button"
-              className="whatsapp-button"
-              disabled={!agentOn}
-              onClick={() => {
-                setNewDraftOpen(true);
-                setTemplateDraft(null);
-                setTemplateHeaderFile(null);
-                setTemplateTopic("");
-              }}
-            >
-              + مسودة جديدة
-            </button>
+            <div className="ai-templates-head-actions">
+              <button
+                type="button"
+                className={`agent-state-toggle ${llmReady ? "is-on" : "is-off"}`}
+                disabled={!llmConfigured || !accountAiOn}
+                title="تفعيل أو إيقاف الذكاء الاصطناعي الخارجي لتوليد القوالب"
+                onClick={() => void saveSettings({ llm_enabled: !settings?.llm_enabled })}
+              >
+                {llmReady ? "الذكاء الخارجي يعمل" : "الذكاء الخارجي متوقف"}
+              </button>
+              <button
+                type="button"
+                className="whatsapp-button"
+                disabled={!llmReady}
+                onClick={() => {
+                  setNewDraftOpen(true);
+                  setTemplateDraft(null);
+                  setTemplateHeaderFile(null);
+                  setTemplateTopic("");
+                  setTemplateAlts([]);
+                }}
+              >
+                + مسودة جديدة
+              </button>
+            </div>
           </div>
 
-          <p className={`ai-templates-note ${agentOn ? "is-ready" : "is-blocked"}`}>
-            {agentOn
-              ? "القوالب تعمل لأن الذكاء الاصطناعي مفعّل على هذه القناة."
-              : "ملاحظة: توليد القوالب يعمل فقط عند تفعيل الذكاء الاصطناعي لهذه القناة."}
+          <p className={`ai-templates-note ${llmReady ? "is-ready" : "is-blocked"}`}>
+            {llmReady
+              ? "توليد القوالب والصور متاح لأن الذكاء الاصطناعي الخارجي مفعّل."
+              : llmConfigured
+                ? "شرط توليد القالب: فعّل الذكاء الاصطناعي الخارجي أعلاه. المحرك الداخلي لا يولّد قوالب."
+                : "شرط توليد القالب: أضف مزوداً خارجياً ومفتاح API من إعدادات الذكاء الاصطناعي أولاً."}
           </p>
 
           <div className="ai-template-list">
@@ -1062,8 +1241,7 @@ export default function AiAgentPage() {
                   <span className={`ai-status-badge ${status.className}`}>{status.label}</span>
                   <button
                     type="button"
-                    className="ai-icon-button"
-                    aria-label="فتح المسودة"
+                    className="secondary-button compact"
                     onClick={() => {
                       setTemplateDraft(item.draft);
                       setTemplateTopic(item.topic || item.draft?.name || "");
@@ -1071,8 +1249,20 @@ export default function AiAgentPage() {
                       setNewDraftOpen(true);
                     }}
                   >
-                    ⋯
+                    فتح
                   </button>
+                  {item.status === "draft" && (
+                    <button
+                      type="button"
+                      className="whatsapp-button compact"
+                      onClick={() => {
+                        setTemplateTopic(item.topic || item.draft?.name || "");
+                        void approveDraftToMeta(item.draft);
+                      }}
+                    >
+                      اعتماد
+                    </button>
+                  )}
                 </article>
               );
             })}
@@ -1087,11 +1277,24 @@ export default function AiAgentPage() {
                 <span>موضوع القالب</span>
                 <textarea rows={2} value={templateTopic} onChange={(e) => setTemplateTopic(e.target.value)} />
               </label>
+              <label className="field-label">
+                <span>رفع صورة أو فيديو للرأس (للتعديل والاعتماد)</span>
+                <input
+                  type="file"
+                  accept={HEADER_MEDIA_ACCEPT}
+                  disabled={headerUploadBusy}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    e.target.value = "";
+                    void uploadHeaderMedia(file);
+                  }}
+                />
+              </label>
               <div className="catalog-card-actions">
                 <button
                   type="button"
                   className="whatsapp-button"
-                  disabled={templateBusy || !agentOn}
+                  disabled={templateBusy || !llmReady}
                   onClick={() => void generateTemplate()}
                 >
                   توليد مسودة
@@ -1099,7 +1302,7 @@ export default function AiAgentPage() {
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={templateBusy || !agentOn}
+                  disabled={templateBusy || !llmReady}
                   onClick={() => void generateThreeAngles()}
                 >
                   توليد 3 بدائل
@@ -1115,10 +1318,10 @@ export default function AiAgentPage() {
                 <button
                   type="button"
                   className="whatsapp-button"
-                  disabled={!templateDraft}
+                  disabled={!templateDraft || !selectedWa}
                   onClick={() => void approveDraftToMeta()}
                 >
-                  اعتماد وترحيل ميتا
+                  إنشاء قالب وترحيل ميتا
                 </button>
               </div>
 
@@ -1134,6 +1337,22 @@ export default function AiAgentPage() {
                       />
                     </label>
                     <label className="field-label">
+                      <span>صيغة الرأس</span>
+                      <select
+                        value={templateDraft.header_type || "NONE"}
+                        onChange={(e) =>
+                          setTemplateDraft((c) =>
+                            c ? { ...c, header_type: e.target.value } : c
+                          )
+                        }
+                      >
+                        <option value="NONE">بدون</option>
+                        <option value="TEXT">نص</option>
+                        <option value="IMAGE">صورة</option>
+                        <option value="VIDEO">فيديو</option>
+                      </select>
+                    </label>
+                    <label className="field-label">
                       <span>النص</span>
                       <textarea
                         rows={5}
@@ -1144,7 +1363,7 @@ export default function AiAgentPage() {
                       />
                     </label>
                     <label className="field-label">
-                      <span>وصف صورة الرأس</span>
+                      <span>وصف صورة الرأس (للتوليد بالذكاء)</span>
                       <textarea
                         rows={3}
                         value={templateDraft.image_prompt}
@@ -1153,21 +1372,45 @@ export default function AiAgentPage() {
                         }
                       />
                     </label>
-                    <button
-                      type="button"
-                      className="whatsapp-button"
-                      disabled={imageBusy || templateBusy || !agentOn}
-                      onClick={() => void generateHeaderImage()}
-                    >
-                      {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
-                    </button>
-                    {templateHeaderFile && <p className="hint-text">✓ {templateHeaderFile.filename}</p>}
+                    <div className="catalog-card-actions">
+                      <button
+                        type="button"
+                        className="whatsapp-button"
+                        disabled={imageBusy || templateBusy || !llmReady}
+                        onClick={() => void generateHeaderImage()}
+                      >
+                        {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
+                      </button>
+                      {templateHeaderFile && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => setTemplateHeaderFile(null)}
+                        >
+                          إزالة الوسائط
+                        </button>
+                      )}
+                    </div>
+                    {templateHeaderFile && (
+                      <p className="hint-text">
+                        ✓ معتمدة للترحيل: {templateHeaderFile.filename}
+                      </p>
+                    )}
                   </div>
                   <div className="agent-section-card accent-import">
+                    <h3 style={{ marginTop: 0, marginBottom: 10 }}>معاينة واتساب</h3>
                     <WhatsAppTemplatePreview
                       businessName={selectedWa?.verified_name || "نشاطك"}
                       bodyText={templateDraft.body_text}
                       components={previewComponents}
+                      mediaOverride={
+                        templateHeaderFile
+                          ? {
+                              mediaUrl: templateHeaderFile.public_url,
+                              filename: templateHeaderFile.filename
+                            }
+                          : undefined
+                      }
                     />
                   </div>
                 </div>

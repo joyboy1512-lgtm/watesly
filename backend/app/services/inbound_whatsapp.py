@@ -716,17 +716,32 @@ async def process_inbound_side_effects(
                 except ValueError:
                     pass
 
+            # Welcome / outside-hours can run from their own toggles while account AI is on,
+            # even when the channel is in staff-handles mode (no suggest/auto).
+            account_on = bool(agent_settings.get("account_agent_enabled", True))
+            service_replies_ok = account_on and can_send and not conversation.first_response_at
+
             if (
                 not auto_sent
-                and agent_live
-                and can_send
+                and service_replies_ok
                 and auto_reply_outside_hours
                 and not within_hours
-                and not conversation.first_response_at
             ):
                 outside_text = str(agent_settings.get("outside_hours_message") or "").strip()
                 if not outside_text:
-                    outside_text = suggestion_text
+                    try:
+                        local_outside = await suggest_smart_reply(
+                            db,
+                            account_id=whatsapp_account.account_id,
+                            query=text_body,
+                            contact_name=contact.display_name or "",
+                            mode=default_mode,
+                            use_llm=False,
+                            channel_id=whatsapp_account.channel_id,
+                        )
+                        outside_text = str(local_outside.get("suggestion") or "").strip()
+                    except Exception:
+                        outside_text = ""
                 if not outside_text:
                     outside_text = "شكراً لتواصلك. نحن خارج ساعات العمل حالياً وسنرد عليك في أقرب وقت."
                 try:
@@ -740,16 +755,27 @@ async def process_inbound_side_effects(
                     )
                     conversation.first_response_at = datetime.now(UTC)
                     auto_sent = True
+                    await log_ai_activity(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        channel_id=whatsapp_account.channel_id,
+                        conversation_id=conversation.id,
+                        source="live",
+                        outcome="outside_hours",
+                        reason_code="outside_hours_internal",
+                        reason_text="رد خارج الدوام عبر المحرك الداخلي",
+                        query_text=text_body,
+                        suggestion=outside_text,
+                        engine="local",
+                    )
                 except ValueError:
                     pass
 
             welcome_on = bool(agent_settings.get("welcome_message_enabled", False))
             if (
                 not auto_sent
-                and agent_live
+                and service_replies_ok
                 and welcome_on
-                and can_send
-                and not conversation.first_response_at
             ):
                 welcome_text = str(agent_settings.get("welcome_message") or "").strip()
                 if not welcome_text:

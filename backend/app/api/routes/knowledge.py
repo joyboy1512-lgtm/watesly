@@ -290,6 +290,12 @@ async def post_ai_lab_turn(
     dialogue_state = payload.get("dialogue_state")
     if dialogue_state is not None and not isinstance(dialogue_state, dict):
         dialogue_state = None
+    use_llm_raw = payload.get("use_llm")
+    use_llm: bool | None
+    if use_llm_raw is None:
+        use_llm = None
+    else:
+        use_llm = bool(use_llm_raw)
     return await run_lab_turn(
         db,
         account_id=context.account_id,
@@ -298,6 +304,7 @@ async def post_ai_lab_turn(
         contact_name=str(payload.get("contact_name") or ""),
         dialogue_state=dialogue_state,
         dry_run=bool(payload.get("dry_run", True)),
+        use_llm=use_llm,
     )
 
 
@@ -370,6 +377,8 @@ async def post_ai_template_draft(
         draft_json=draft,
         internal_check_json=internal_template_check(draft),
         notes=payload.get("notes"),
+        meta_status=payload.get("meta_status"),
+        template_id=UUID(str(payload["template_id"])) if payload.get("template_id") else None,
     )
     db.add(item)
     await db.commit()

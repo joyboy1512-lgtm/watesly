@@ -399,15 +399,17 @@ async def run_lab_turn(
     contact_name: str = "",
     dialogue_state: dict | None = None,
     dry_run: bool = True,
+    use_llm: bool | None = None,
 ) -> dict[str, Any]:
     settings = await get_effective_agent_settings(db, account_id=account_id, channel_id=channel_id)
+    llm_flag = bool(settings.get("llm_enabled")) if use_llm is None else bool(use_llm)
     result = await suggest_smart_reply(
         db,
         account_id=account_id,
         query=query,
         contact_name=contact_name,
         mode=settings.get("default_mode") or "kb_first",
-        use_llm=bool(settings.get("llm_enabled")),
+        use_llm=llm_flag,
         channel_id=channel_id,
         dialogue_state=dialogue_state,
     )
