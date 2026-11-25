@@ -40,6 +40,7 @@ export default function AppLayout() {
     ["/inbox", t("nav.inbox"), "inbox"],
     ["/catalog", t("nav.catalog"), "template"],
     ["/knowledge", t("nav.knowledge"), "template"],
+    ["/ai", t("nav.ai"), "template"],
     ["/contacts", t("nav.contacts"), "inbox"],
     ["/quick-replies", t("nav.quickReplies"), "template"],
     ["/composer-library", t("nav.composerLibrary"), "template"],

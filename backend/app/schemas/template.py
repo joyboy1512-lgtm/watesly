@@ -38,3 +38,43 @@ class TemplateResponse(BaseModel):
     body_text: str | None
     components: list | None
     meta_status_detail: str | None = None
+
+
+class AiTemplateGenerateRequest(BaseModel):
+    topic: str = Field(min_length=3, max_length=2000)
+    language: str = Field(default="ar", min_length=2, max_length=20)
+    category: str | None = Field(default=None, max_length=30)
+    brand_hint: str | None = Field(default=None, max_length=500)
+
+
+class AiTemplateRefineRequest(BaseModel):
+    draft: dict
+    instruction: str = Field(min_length=2, max_length=2000)
+
+
+class AiTemplateImageRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=1200)
+
+
+class AiTemplateDraftResponse(BaseModel):
+    name: str
+    language: str
+    category: str
+    header_type: str
+    header_text: str
+    body_text: str
+    body_samples: list[str]
+    footer_text: str
+    buttons: list[dict]
+    image_prompt: str
+    notes: str
+
+
+class AiTemplateImageResponse(BaseModel):
+    id: UUID
+    filename: str
+    content_type: str | None
+    size_bytes: int
+    object_key: str
+    public_url: str
+    prompt: str

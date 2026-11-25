@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import InboxPage from "./pages/InboxPage";
 import KnowledgePage from "./pages/KnowledgePage";
+import AiAgentPage from "./pages/AiAgentPage";
 import TeamPage from "./pages/TeamPage";
 import OrganizationsPage from "./pages/OrganizationsPage";
 import ChannelsPage from "./pages/ChannelsPage";
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
+        <Route path="/ai" element={<AiAgentPage />} />
         <Route path="/contacts" element={<ContactsPage />} />
         <Route path="/contacts/new" element={<ContactCreatePage />} />
         <Route path="/contacts/import" element={<ContactImportPage />} />
