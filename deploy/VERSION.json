@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "2a7707d",
-    "git_commit_message": "Strengthen AI ops card borders and selection",
-    "alembic_head": "0073_ai_image_model",
+    "git_commit": "6ae202c",
+    "git_commit_message": "AI ops mode layout, welcome message, settings tab",
+    "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.3",
+    "frontend_version": "0.33.4",
     "live_assets": {
-      "js": "index-Du8SLgjR.js",
-      "css": "index-BB-FyZUL.css"
+      "js": "index-CFjB4rzs.js",
+      "css": "index-C1hV8JXx.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.3",
+    "frontend": "0.33.4",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "2a7707d",
-  "notes": "AI ops card borders + selection states live"
+  "commit": "6ae202c",
+  "notes": "AI ops reply sources + welcome + provider settings tab live"
 }
