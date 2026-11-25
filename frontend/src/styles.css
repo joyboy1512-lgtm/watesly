@@ -12891,7 +12891,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: var(--bg);
 }
 .ai-ops-shell {
-  max-width: 980px;
+  max-width: min(1280px, 100%);
   margin: 0 auto;
   display: grid;
   gap: 18px;
@@ -13162,10 +13162,52 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .ai-provider-head,
 .ai-provider-row {
   display: grid;
-  grid-template-columns: 1.3fr 0.7fr 1fr 1fr 1.1fr auto;
-  gap: 10px;
-  padding: 14px 16px;
+  grid-template-columns: minmax(140px, 1.3fr) minmax(90px, 0.9fr) minmax(120px, 1.1fr) minmax(110px, 1fr) minmax(120px, 1.1fr) auto auto auto;
+  gap: 12px;
+  padding: 14px 18px;
   align-items: center;
+}
+.ai-provider-drawer {
+  display: block;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--primary-soft) 28%, #fff);
+}
+.ai-provider-drawer-inner {
+  display: block;
+  padding: 16px 18px 18px;
+}
+.ai-settings-chip,
+.ai-remove-chip {
+  appearance: none;
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ai-settings-chip {
+  border: 1px solid color-mix(in srgb, var(--primary-dark) 35%, var(--line));
+  background: #fff;
+  color: var(--primary-darker);
+}
+.ai-settings-chip.is-open,
+.ai-settings-chip:hover {
+  background: color-mix(in srgb, var(--primary-soft) 70%, #fff);
+  border-color: var(--primary-dark);
+}
+.ai-remove-chip {
+  border: 1px solid #f0b4b4;
+  background: #fff5f5;
+  color: #b42318;
+}
+.ai-remove-chip:hover:not(:disabled) {
+  background: #ffe8e8;
+}
+.ai-remove-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .ai-action-card {
   display: grid;
