@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-25",
+  "commit": "ab707d9",
+  "branch": "cursor/production-unified-813f",
+  "frontend_assets": {
+    "js": "index-v7VRMN0i.js",
+    "css": "index-COVkhPa6.css"
+  },
+  "alembic_head": "0068_internal_ai_feedback",
+  "features": [
+    "Catalog visibility board: local / linked / confirmed / broken / unknown",
+    "Counters open matching products by branch and channel",
+    "Per-product reason, last check, next step",
+    "Meta ID alone never counts as confirmed visibility",
+    "No auto-sync or product mutation for classification"
+  ],
+  "notes": "Deployed via SSH. PR #195."
+}
