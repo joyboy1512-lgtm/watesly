@@ -27,6 +27,7 @@ export type AgentSettings = {
   tone: "friendly" | "formal" | "concise";
   language: string;
   agent_enabled: boolean;
+  local_engine_enabled?: boolean;
   llm_enabled: boolean;
   auto_kb_on_inbound: boolean;
   auto_reply_on_inbound?: boolean;

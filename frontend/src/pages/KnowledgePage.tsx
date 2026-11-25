@@ -566,11 +566,20 @@ export default function KnowledgePage() {
           {settings && (
             <div className="brand-stat-row knowledge-status-strip" aria-live="polite">
               <article className="brand-stat-card brand-stat-card--sm">
-                <span className="brand-stat-label">الوكيل</span>
+                <span className="brand-stat-label">داخلي</span>
                 <strong className="brand-stat-value">
-                  {settings.agent_enabled !== false ? "يعمل" : "متوقف"}
+                  {settings.agent_enabled !== false && settings.local_engine_enabled !== false ? "يعمل" : "متوقف"}
                 </strong>
-                <small className="brand-stat-meta">المحرك المحلي</small>
+                <small className="brand-stat-meta">معرفة + كتالوج</small>
+              </article>
+              <article className="brand-stat-card brand-stat-card--sm">
+                <span className="brand-stat-label">خارجي LLM</span>
+                <strong className="brand-stat-value">
+                  {settings.agent_enabled !== false && settings.llm_enabled && settings.llm_available
+                    ? "يعمل"
+                    : "متوقف"}
+                </strong>
+                <small className="brand-stat-meta">صقل / رد خارجي</small>
               </article>
               <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">اقتراح الوارد</span>
@@ -585,13 +594,6 @@ export default function KnowledgePage() {
                   {settings.agent_enabled !== false && settings.auto_reply_on_inbound ? "يعمل" : "متوقف"}
                 </strong>
                 <small className="brand-stat-meta">إرسال للعميل</small>
-              </article>
-              <article className="brand-stat-card brand-stat-card--sm">
-                <span className="brand-stat-label">خارجي LLM</span>
-                <strong className="brand-stat-value">
-                  {settings.llm_enabled && settings.llm_available ? "يعمل" : "متوقف"}
-                </strong>
-                <small className="brand-stat-meta">صقل الرد فقط</small>
               </article>
             </div>
           )}
@@ -972,10 +974,11 @@ export default function KnowledgePage() {
         </div>
         {settings && (() => {
           const agentOn = settings.agent_enabled !== false;
+          const localOn = agentOn && settings.local_engine_enabled !== false;
           const inboundOn = agentOn && settings.auto_kb_on_inbound;
           const autoReplyOn = agentOn && Boolean(settings.auto_reply_on_inbound);
           const outsideOn = agentOn && Boolean(settings.auto_reply_outside_hours);
-          const llmOn = Boolean(settings.llm_enabled && settings.llm_available);
+          const llmOn = agentOn && Boolean(settings.llm_enabled && settings.llm_available);
           return (
             <div className="agent-control-panel">
               <div className={`agent-power-bar ${agentOn ? "is-on" : "is-off"}`}>
@@ -1008,16 +1011,28 @@ export default function KnowledgePage() {
                         <p>قاعدة المعرفة + الكتالوج + المطابقة العربية/الإنجليزية بدون مفتاح خارجي.</p>
                       </div>
                     </div>
-                    <span className={`agent-state-badge ${agentOn ? "is-on" : "is-off"}`}>
-                      {agentOn ? "مفعّل" : "متوقف مع الوكيل"}
-                    </span>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
+                      disabled={!agentOn}
+                      onClick={() =>
+                        void saveAgentSettings({
+                          local_engine_enabled: settings.local_engine_enabled === false
+                        })
+                      }
+                    >
+                      {localOn ? "يعمل" : "متوقف"}
+                    </button>
                   </header>
+                  <p className="agent-section-note">
+                    عند الإيقاف يُتخطى المطابقة المحلية؛ إن كان الخارجي يعمل يُستخدم LLM وحده.
+                  </p>
                   <div className="knowledge-fields-row">
                     <label className="field-label">
                       <span>وضع الرد للمحادثات</span>
                       <select
                         value={settings.default_mode}
-                        disabled={!agentOn}
+                        disabled={!agentOn || !localOn}
                         onChange={(e) => void saveAgentSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })}
                       >
                         {Object.entries(MODE_LABELS).map(([value, label]) => (
@@ -1115,7 +1130,9 @@ export default function KnowledgePage() {
                       <span className="agent-section-index" aria-hidden>4</span>
                       <div>
                         <h3>الذكاء الخارجي (LLM)</h3>
-                        <p>يصقل صياغة الرد بعد تجهيزه من المعرفة/الكتالوج. يحتاج مفتاح API.</p>
+                        <p>
+                          يصقل صياغة الرد بعد المحرك الداخلي، أو يرد وحده إن كان الداخلي متوقفاً. يحتاج مفتاح API.
+                        </p>
                       </div>
                     </div>
                     <button
@@ -1128,7 +1145,9 @@ export default function KnowledgePage() {
                       {llmOn ? "يعمل" : settings.llm_available ? "متوقف" : "غير جاهز"}
                     </button>
                   </header>
-                  <p className="hint-text">الحالة: {llmStatusLabel(settings)}</p>
+                  <p className="agent-section-note">
+                    تشغيل/إيقاف مستقل عن الداخلي. الحالة: {llmStatusLabel(settings)}
+                  </p>
                   <div className="knowledge-fields-row">
                     <label className="field-label">
                       <span>مفتاح API</span>

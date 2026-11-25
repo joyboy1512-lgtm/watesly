@@ -57,6 +57,7 @@ def serialize_agent_settings(item: AiAgentSettings) -> dict:
         "tone": item.tone,
         "language": item.language,
         "agent_enabled": bool(getattr(item, "agent_enabled", True)),
+        "local_engine_enabled": bool(getattr(item, "local_engine_enabled", True)),
         "llm_enabled": item.llm_enabled,
         "auto_kb_on_inbound": item.auto_kb_on_inbound,
         "auto_reply_on_inbound": bool(getattr(item, "auto_reply_on_inbound", False)),
@@ -389,6 +390,49 @@ async def _maybe_enhance_with_llm(
     return result
 
 
+async def _llm_only_reply(
+    db: AsyncSession,
+    account_id: UUID,
+    *,
+    query: str,
+    contact_name: str,
+) -> dict:
+    """External model only — no local KB/catalog match."""
+    settings = await get_agent_settings(db, account_id)
+    account_key = _account_llm_api_key(settings)
+    empty = {
+        "suggestion": "",
+        "source": "llm_only",
+        "confidence": 0.0,
+        "matched_articles": [],
+        "matched_products": [],
+        "engine": "external",
+        "query": query,
+    }
+    if not settings.llm_enabled or not llm_available(api_key=account_key):
+        return empty
+    prompt = (
+        f"Customer name: {contact_name or 'Customer'}\n"
+        f"Customer message: {query}\n\n"
+        "Write a short WhatsApp reply. Do not invent prices, stock, or product facts."
+    )
+    try:
+        text = await enhance_reply(
+            user_prompt=prompt,
+            system_prompt=settings.llm_system_prompt,
+            tone=settings.tone,
+            language=settings.language,
+            api_key=account_key,
+            api_base_url=settings.llm_api_base_url,
+            model=settings.llm_model,
+        )
+    except Exception:
+        return empty
+    if not text:
+        return empty
+    return {**empty, "suggestion": text, "confidence": 0.55}
+
+
 async def suggest_smart_reply(
     db: AsyncSession,
     *,
@@ -404,8 +448,24 @@ async def suggest_smart_reply(
 ) -> dict:
     settings = await get_agent_settings(db, account_id)
     normalized_mode = (mode or settings.default_mode or "kb_first").lower()
+    local_on = bool(getattr(settings, "local_engine_enabled", True))
     # Default: keep external model off unless explicitly enabled on the account.
     should_llm = settings.llm_enabled if use_llm is None else bool(use_llm and settings.llm_enabled)
+
+    if not local_on:
+        if should_llm:
+            return await _llm_only_reply(
+                db, account_id, query=query, contact_name=contact_name
+            )
+        return {
+            "suggestion": "",
+            "source": "engines_off",
+            "confidence": 0.0,
+            "matched_articles": [],
+            "matched_products": [],
+            "engine": "none",
+            "query": query,
+        }
 
     async def _kb_reply():
         # Strict channel isolation: Travel Zone never reads another number's KB.
