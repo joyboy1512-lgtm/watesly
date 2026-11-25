@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Knowledge header filters + bulk
+
+| Item | Value |
+|------|-------|
+| Commit | `7df1ea1` |
+| Alembic | `0069_knowledge_article_channel` |
+| Live assets | `index-zCvcEgPX.js`, `index-CrV0a0ou.css` |
+
 ### Production snapshot (2026-11-25) — Knowledge Excel table fit
 
 | Item | Value |

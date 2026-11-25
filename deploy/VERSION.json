@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "7dd9d28",
-    "git_commit_message": "Fit Knowledge Excel table: compact rows, bold borders, column widths",
+    "git_commit": "7df1ea1",
+    "git_commit_message": "Knowledge table: header filters, bulk select, delete",
     "alembic_head": "0069_knowledge_article_channel",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.15",
+    "frontend_version": "0.32.16",
     "live_assets": {
-      "js": "index-ByEVZLFB.js",
-      "css": "index-C0ODjGws.css"
+      "js": "index-zCvcEgPX.js",
+      "css": "index-CrV0a0ou.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.15",
+    "frontend": "0.32.16",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "7dd9d28",
-  "notes": "Knowledge Excel table fit: no overflow, bold black borders, rebalanced columns (PR #205)"
+  "commit": "7df1ea1",
+  "notes": "Knowledge header filters + bulk select/delete (PR #206)"
 }
