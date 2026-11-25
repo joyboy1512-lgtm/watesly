@@ -81,10 +81,12 @@ async def _get_or_create_contact_and_conversation(
         )
         db.add(contact)
         await db.flush()
-    elif display_name and not contact.display_name:
-        contact.display_name = display_name
-    elif contact.external_address != sender:
-        contact.external_address = sender
+    else:
+        # Meta sends WhatsApp profile.name on inbound; keep contact name in sync.
+        if display_name and display_name != (contact.display_name or ""):
+            contact.display_name = display_name
+        if contact.external_address != sender:
+            contact.external_address = sender
 
     conv_result = await db.execute(
         select(Conversation).where(
