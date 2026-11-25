@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "bd45277",
-    "git_commit_message": "WhatsApp AI auto-reply toggle on inbound messages",
-    "alembic_head": "0070_ai_auto_reply_on_inbound",
+    "git_commit": "bf163b4",
+    "git_commit_message": "Independent on/off for local and external AI engines",
+    "alembic_head": "0071_ai_local_engine_toggle",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.17",
+    "frontend_version": "0.32.18",
     "live_assets": {
-      "js": "index-l8IPNdmC.js",
+      "js": "index-CqCcbtZz.js",
       "css": "index-DCqqqMeP.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.17",
+    "frontend": "0.32.18",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "bd45277",
-  "notes": "AI auto_reply_on_inbound toggle (default off) for WhatsApp (PR #207)"
+  "commit": "bf163b4",
+  "notes": "local_engine_enabled + llm_enabled independent toggles (PR #208)"
 }
