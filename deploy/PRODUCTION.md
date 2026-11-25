@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — Dashboard attention green cards
+
+| Item | Value |
+|------|-------|
+| Commit | `1ab2837` |
+| Alembic | `0069_knowledge_article_channel` |
+| Live assets | `index-CJSzN7xO.js`, `index-BxK_NqGA.css` |
+
 ### Production snapshot (2026-11-25) — Local AI bilingual + channel isolation
 
 | Item | Value |
