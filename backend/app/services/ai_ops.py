@@ -37,6 +37,8 @@ CHANNEL_OVERRIDE_FIELDS = (
     "auto_reply_outside_hours",
     "business_hours_json",
     "outside_hours_message",
+    "welcome_message_enabled",
+    "welcome_message",
     "escalation_keywords",
     "clarify_max_rounds",
 )

@@ -65,6 +65,8 @@ def serialize_agent_settings(item: AiAgentSettings) -> dict:
         "auto_reply_outside_hours": item.auto_reply_outside_hours,
         "business_hours_json": hours if hours else dict(DEFAULT_HOURS),
         "outside_hours_message": item.outside_hours_message,
+        "welcome_message_enabled": bool(getattr(item, "welcome_message_enabled", False)),
+        "welcome_message": getattr(item, "welcome_message", None),
         "llm_api_base_url": item.llm_api_base_url,
         "llm_model": item.llm_model,
         "llm_image_model": getattr(item, "llm_image_model", None),

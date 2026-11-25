@@ -32,5 +32,7 @@ class AiAgentChannelSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     auto_reply_outside_hours: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     business_hours_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     outside_hours_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    welcome_message_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    welcome_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     escalation_keywords: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     clarify_max_rounds: Mapped[int | None] = mapped_column(Integer, nullable=True)

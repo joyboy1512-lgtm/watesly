@@ -65,6 +65,8 @@ class AgentSettingsUpdate(BaseModel):
     auto_reply_outside_hours: bool | None = None
     business_hours_json: dict | None = None
     outside_hours_message: str | None = None
+    welcome_message_enabled: bool | None = None
+    welcome_message: str | None = None
     llm_api_key: str | None = None
     clear_llm_api_key: bool | None = None
     llm_api_base_url: str | None = None
@@ -244,6 +246,8 @@ async def patch_settings(
             "auto_reply_outside_hours",
             "business_hours_json",
             "outside_hours_message",
+            "welcome_message_enabled",
+            "welcome_message",
             "escalation_keywords",
             "clarify_max_rounds",
         }
