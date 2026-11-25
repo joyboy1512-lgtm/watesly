@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import CatalogSimpleProductForm from "../components/CatalogSimpleProductForm";
@@ -12,6 +12,7 @@ import {
   catalogMetaStatusLabel,
   catalogPriceLabel,
   catalogTypeLabel,
+  catalogVisibilityShortLabel,
   catalogWhatsAppVisibility,
   downloadCatalogExport,
   emptyCatalogVisibilityScope,
@@ -22,17 +23,24 @@ import {
   formatCatalogVariantLabel,
   productFormFromCatalog,
   simpleProductFormReady,
-  sortCatalogProducts,
+  sortCatalogProductsBy,
   summarizeCatalogVisibility,
   type CatalogListTab,
   type CatalogProduct,
   type CatalogReplyPreview,
+  type CatalogSortKey,
   type CatalogTypeFilter,
   type CatalogVisibilityScope,
   type CatalogVisibilityStatus,
   type ProductFormState
 } from "../lib/catalogHelpers";
-import { formatAppDateTime } from "../lib/language";
+import {
+  buildCatalogUiDemoProducts,
+  buildCatalogUiDemoProofs,
+  CATALOG_UI_DEMO_CHANNELS,
+  CATALOG_UI_DEMO_ORGS
+} from "../lib/catalogUiDemo";
+import { formatAppDate, formatAppDateTime } from "../lib/language";
 import { uploadFile } from "../lib/uploads";
 import { type WhatsAppAccountRow } from "../lib/whatsappHelpers";
 import { toastStore } from "../stores/toast";
@@ -48,18 +56,29 @@ type CommerceReadinessLite = {
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 0] as const;
 const DEFAULT_PAGE_SIZE = 50;
 
-export default function CatalogPage() {
+type CatalogPageProps = {
+  /** Local/demo preview with fixture data; no API mutations. */
+  demoMode?: boolean;
+};
+
+export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
   const client = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const isDemo = demoMode || searchParams.get("demo") === "1";
   const toolsMenuRef = useRef<HTMLDivElement | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement | null>(null);
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const savedListScrollRef = useRef(0);
 
   const [listTab, setListTab] = useState<CatalogListTab>("active");
   const [typeFilter, setTypeFilter] = useState<CatalogTypeFilter>("all");
-  const [filterOrganizationId, setFilterOrganizationId] = useState("");
-  const [filterChannelId, setFilterChannelId] = useState("");
+  const [filterOrganizationId, setFilterOrganizationId] = useState(isDemo ? "" : "");
+  const [filterChannelId, setFilterChannelId] = useState(isDemo ? "ch-a" : "");
   const [filterCategory, setFilterCategory] = useState("");
-  const [visibilityFilter, setVisibilityFilter] = useState<CatalogVisibilityStatus | "all">("all");
+  const [visibilityFilter, setVisibilityFilter] = useState<CatalogVisibilityStatus | "all">(
+    isDemo ? "broken" : "all"
+  );
+  const [sortKey, setSortKey] = useState<CatalogSortKey>("name");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -68,7 +87,9 @@ export default function CatalogPage() {
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [openRowMenuId, setOpenRowMenuId] = useState<string | null>(null);
   const [detailProductId, setDetailProductId] = useState<string | null>(null);
+  const [solutionProductId, setSolutionProductId] = useState<string | null>(null);
 
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
   const [editForm, setEditForm] = useState<ProductFormState>(emptyProductForm);
@@ -78,9 +99,12 @@ export default function CatalogPage() {
   const [previewQuery, setPreviewQuery] = useState("");
   const [previewContactName, setPreviewContactName] = useState("");
 
+  const demoProducts = useMemo(() => (isDemo ? buildCatalogUiDemoProducts() : []), [isDemo]);
+  const demoProofs = useMemo(() => (isDemo ? buildCatalogUiDemoProofs() : {}), [isDemo]);
+
   const previewReply = useQuery({
     queryKey: ["catalog-preview", previewQuery, previewContactName],
-    enabled: previewQuery.trim().length > 0,
+    enabled: !isDemo && previewQuery.trim().length > 0,
     queryFn: async () => (
       await api.post<CatalogReplyPreview>("/catalog/preview-reply", {
         query: previewQuery.trim(),
@@ -91,27 +115,33 @@ export default function CatalogPage() {
 
   const organizations = useQuery({
     queryKey: ["organizations"],
+    enabled: !isDemo,
     queryFn: async () => (await api.get<Organization[]>("/organizations")).data
   });
 
   const categories = useQuery({
     queryKey: ["catalog-categories"],
+    enabled: !isDemo,
     queryFn: async () => (await api.get<string[]>("/catalog/categories")).data
   });
 
   const whatsappAccounts = useQuery({
     queryKey: ["whatsapp-accounts"],
+    enabled: !isDemo,
     queryFn: async () => (await api.get<WhatsAppAccountRow[]>("/whatsapp/accounts")).data
   });
 
+  const orgList = isDemo ? CATALOG_UI_DEMO_ORGS : (organizations.data ?? []);
+  const waList = isDemo ? (CATALOG_UI_DEMO_CHANNELS as WhatsAppAccountRow[]) : (whatsappAccounts.data ?? []);
+
   const selectedWhatsApp = useMemo(
-    () => (whatsappAccounts.data ?? []).find((account) => account.channel_id === filterChannelId) ?? null,
-    [whatsappAccounts.data, filterChannelId]
+    () => waList.find((account) => account.channel_id === filterChannelId) ?? null,
+    [waList, filterChannelId]
   );
 
   const commerceReadiness = useQuery({
     queryKey: ["catalog-commerce-readiness", selectedWhatsApp?.id],
-    enabled: Boolean(selectedWhatsApp?.id),
+    enabled: !isDemo && Boolean(selectedWhatsApp?.id),
     queryFn: async () =>
       (await api.get<CommerceReadinessLite>(`/whatsapp/accounts/${selectedWhatsApp!.id}/commerce/readiness`)).data,
     staleTime: 60_000
@@ -125,13 +155,13 @@ export default function CatalogPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, visibilityFilter, debouncedSearch, pageSize]);
+  }, [listTab, typeFilter, filterOrganizationId, filterChannelId, filterCategory, visibilityFilter, debouncedSearch, pageSize, sortKey]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
-      if (!toolsMenuRef.current?.contains(event.target as Node)) {
-        setShowToolsMenu(false);
-      }
+      const target = event.target as Node;
+      if (!toolsMenuRef.current?.contains(target)) setShowToolsMenu(false);
+      if (!rowMenuRef.current?.contains(target)) setOpenRowMenuId(null);
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
@@ -139,49 +169,46 @@ export default function CatalogPage() {
 
   const orgMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const org of organizations.data ?? []) {
-      map.set(org.id, org.name);
-    }
+    for (const org of orgList) map.set(org.id, org.name);
     return map;
-  }, [organizations.data]);
+  }, [orgList]);
 
   const channelOptions = useMemo(() => {
-    const accounts = whatsappAccounts.data ?? [];
     const scoped = filterOrganizationId
-      ? accounts.filter((account) => account.organization_id === filterOrganizationId)
-      : accounts;
+      ? waList.filter((account) => account.organization_id === filterOrganizationId)
+      : waList;
     return scoped.map((account) => ({
       id: account.channel_id,
       label: account.verified_name || account.display_phone_number || account.channel_name || "WhatsApp",
-      phone: account.display_phone_number,
-      metaCatalogId: account.meta_catalog_id ?? null,
-      accountId: account.id,
-      organizationId: account.organization_id
+      phone: account.display_phone_number
     }));
-  }, [whatsappAccounts.data, filterOrganizationId]);
+  }, [waList, filterOrganizationId]);
 
-  // Load the full filtered catalog (not search-capped at 500) so counters match all rows.
   const products = useQuery({
-    queryKey: ["catalog", filterOrganizationId, filterChannelId, filterCategory] as const,
+    queryKey: ["catalog", filterOrganizationId, filterChannelId] as const,
+    enabled: !isDemo,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("include_inactive", "true");
       if (filterOrganizationId) params.set("organization_id", filterOrganizationId);
       if (filterChannelId) params.set("channel_id", filterChannelId);
-      if (filterCategory) params.set("category", filterCategory);
       const result = await api.get<CatalogProduct[]>(`/catalog?${params.toString()}`);
       return result.data;
     }
   });
 
-  /**
-   * Integration gap: there is currently no persisted per-product membership proof
-   * for a WhatsApp number/catalog. Until such a source exists, proofs stay empty
-   * and «مؤكد الظهور» remains 0 in production data.
-   */
   const visibilityScope: CatalogVisibilityScope = useMemo(() => {
-    if (!filterChannelId || !selectedWhatsApp) {
-      return emptyCatalogVisibilityScope();
+    if (!filterChannelId || !selectedWhatsApp) return emptyCatalogVisibilityScope();
+    if (isDemo) {
+      return emptyCatalogVisibilityScope({
+        channelId: filterChannelId,
+        organizationId: selectedWhatsApp.organization_id,
+        accountId: selectedWhatsApp.id,
+        metaCatalogId: selectedWhatsApp.meta_catalog_id ?? "cat-a",
+        isCatalogVisible: true,
+        catalogLinked: true,
+        proofsByProductId: demoProofs
+      });
     }
     const readiness = commerceReadiness.data;
     return emptyCatalogVisibilityScope({
@@ -193,19 +220,40 @@ export default function CatalogPage() {
       catalogLinked: readiness?.catalog_linked ?? null,
       proofsByProductId: {}
     });
-  }, [filterChannelId, selectedWhatsApp, commerceReadiness.data]);
+  }, [filterChannelId, selectedWhatsApp, commerceReadiness.data, isDemo, demoProofs]);
+
+  const rawProducts = isDemo ? demoProducts : (products.data ?? []);
+
+  const categoryOptions = useMemo(() => {
+    if (!isDemo) return categories.data ?? [];
+    return Array.from(new Set(rawProducts.map((item) => item.category).filter(Boolean) as string[])).sort((a, b) =>
+      a.localeCompare(b, "ar")
+    );
+  }, [isDemo, categories.data, rawProducts]);
 
   const scopedProducts = useMemo(() => {
-    const rows = products.data ?? [];
-    const typed = filterCatalogByType(rows, typeFilter);
-    const searched = filterCatalogBySearch(typed, debouncedSearch);
-    return sortCatalogProducts(searched);
-  }, [products.data, typeFilter, debouncedSearch]);
+    let rows = rawProducts;
+    if (isDemo && filterOrganizationId) {
+      rows = rows.filter((item) => item.organization_id === filterOrganizationId);
+    }
+    if (isDemo && filterChannelId) {
+      rows = rows.filter((item) => !item.channel_id || item.channel_id === filterChannelId);
+    }
+    if (filterCategory) {
+      rows = rows.filter((item) => item.category === filterCategory);
+    }
+    rows = filterCatalogByType(rows, typeFilter);
+    rows = filterCatalogBySearch(rows, debouncedSearch);
+    return sortCatalogProductsBy(rows, sortKey);
+  }, [rawProducts, isDemo, filterOrganizationId, filterChannelId, filterCategory, typeFilter, debouncedSearch, sortKey]);
 
   const visibilitySummary = useMemo(
     () => summarizeCatalogVisibility(scopedProducts, visibilityScope),
     [scopedProducts, visibilityScope]
   );
+
+  const activeCount = useMemo(() => scopedProducts.filter((item) => item.is_active).length, [scopedProducts]);
+  const archivedCount = useMemo(() => scopedProducts.filter((item) => !item.is_active).length, [scopedProducts]);
 
   const visibleProducts = useMemo(() => {
     if (visibilityFilter !== "all") {
@@ -236,13 +284,22 @@ export default function CatalogPage() {
     [scopedProducts, detailProductId]
   );
 
+  const showBranchColumn = !filterOrganizationId && orgList.length > 1;
+  const selectedOrgName = filterOrganizationId ? orgMap.get(filterOrganizationId) : null;
+  const selectedChannelLabel = channelOptions.find((item) => item.id === filterChannelId)?.label;
+  const scopeLabel = [
+    selectedOrgName || "كل الفروع",
+    selectedChannelLabel || "كل القنوات",
+    `${visibilitySummary.total.toLocaleString("ar")} منتجًا`
+  ].join(" · ");
+
   const activeVisibilityCard = visibilitySummary.cards.find((card) => card.status === visibilityFilter);
   const resultsTitle =
     visibilityFilter !== "all" && activeVisibilityCard
-      ? `${activeVisibilityCard.label} · ${total.toLocaleString("ar")} منتج`
+      ? `${activeVisibilityCard.fullLabel} · ${total.toLocaleString("ar")}`
       : listTab === "inactive"
-        ? `المؤرشفة · ${total.toLocaleString("ar")} منتج`
-        : `المنتجات النشطة · ${total.toLocaleString("ar")} منتج`;
+        ? `المؤرشفة · ${total.toLocaleString("ar")}`
+        : `النشطة · ${total.toLocaleString("ar")}`;
 
   function toggleRowSelection(id: string) {
     setSelectedIds((current) => {
@@ -256,11 +313,8 @@ export default function CatalogPage() {
   function togglePageSelection() {
     setSelectedIds((current) => {
       const next = new Set(current);
-      if (allPageSelected) {
-        for (const id of pageIds) next.delete(id);
-      } else {
-        for (const id of pageIds) next.add(id);
-      }
+      if (allPageSelected) for (const id of pageIds) next.delete(id);
+      else for (const id of pageIds) next.add(id);
       return next;
     });
   }
@@ -270,30 +324,38 @@ export default function CatalogPage() {
   }
 
   function openDetail(product: CatalogProduct) {
-    if (listScrollRef.current) {
-      savedListScrollRef.current = listScrollRef.current.scrollTop;
-    }
+    if (listScrollRef.current) savedListScrollRef.current = listScrollRef.current.scrollTop;
     setDetailProductId(product.id);
+    setSolutionProductId(null);
+    setOpenRowMenuId(null);
   }
 
   function closeDetail() {
     setDetailProductId(null);
     window.requestAnimationFrame(() => {
-      if (listScrollRef.current) {
-        listScrollRef.current.scrollTop = savedListScrollRef.current;
-      }
+      if (listScrollRef.current) listScrollRef.current.scrollTop = savedListScrollRef.current;
     });
   }
 
   function openEdit(product: CatalogProduct) {
+    if (isDemo) {
+      toastStore.getState().show("وضع المعاينة — التعديل معطّل.", "success");
+      return;
+    }
     setEditingProduct(product);
     setEditForm(productFormFromCatalog(product));
+    setOpenRowMenuId(null);
+  }
+
+  function focusChannelSelect() {
+    const el = document.getElementById("catalog-channel-filter");
+    if (el instanceof HTMLSelectElement) el.focus();
   }
 
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
-    if (!editingProduct) return;
-    if (!editingProduct.meta_item_group_id?.trim() && !simpleProductFormReady(editForm, organizations.data?.length ?? 1, whatsappAccounts.data?.length ?? 1)) {
+    if (!editingProduct || isDemo) return;
+    if (!editingProduct.meta_item_group_id?.trim() && !simpleProductFormReady(editForm, orgList.length, waList.length)) {
       toastStore.getState().show("أكمل: القناة، الاسم، السعر، والصورة.", "error");
       return;
     }
@@ -310,9 +372,7 @@ export default function CatalogPage() {
       if (metaMessage) {
         toastStore.getState().show(
           metaMessage,
-          response.data.meta_review_status === "rejected" || response.data.meta_sync_status === "failed"
-            ? "error"
-            : "success"
+          response.data.meta_review_status === "rejected" || response.data.meta_sync_status === "failed" ? "error" : "success"
         );
       }
     } catch {
@@ -321,16 +381,15 @@ export default function CatalogPage() {
   }
 
   async function deactivateProduct(id: string) {
+    if (isDemo) return;
     await api.delete(`/catalog/${id}`);
     await client.invalidateQueries({ queryKey: ["catalog"] });
     toastStore.getState().show("تم أرشفة المنتج.", "success");
   }
 
   async function purgeProduct(id: string, name: string) {
-    const confirmed = window.confirm(
-      `حذف «${name}» نهائياً؟\n\nلن يمكن استرجاعه. إن كان مزامناً مع Meta سيُخفى من الكتالوج هناك أيضاً.`
-    );
-    if (!confirmed) return;
+    if (isDemo) return;
+    if (!window.confirm(`حذف «${name}» نهائياً؟\n\nلن يمكن استرجاعه.`)) return;
     try {
       await api.delete(`/catalog/${id}`, { params: { permanent: true } });
       await client.invalidateQueries({ queryKey: ["catalog"] });
@@ -341,13 +400,14 @@ export default function CatalogPage() {
   }
 
   async function restoreProduct(id: string) {
+    if (isDemo) return;
     await api.patch(`/catalog/${id}`, { is_active: true });
     await client.invalidateQueries({ queryKey: ["catalog"] });
     toastStore.getState().show("تم استرجاع المنتج.", "success");
   }
 
   async function bulkArchive() {
-    if (!selectedCount) return;
+    if (!selectedCount || isDemo) return;
     if (!window.confirm(`أرشفة ${selectedCount} منتج؟`)) return;
     setBulkProcessing(true);
     try {
@@ -356,11 +416,7 @@ export default function CatalogPage() {
       });
       await client.invalidateQueries({ queryKey: ["catalog"] });
       clearSelection();
-      const { succeeded, failed } = result.data;
-      toastStore.getState().show(
-        failed === 0 ? `تم أرشفة ${succeeded} منتج.` : `أُرشف ${succeeded}، فشل ${failed}.`,
-        failed && failed === succeeded + failed ? "error" : "success"
-      );
+      toastStore.getState().show(`تم أرشفة ${result.data.succeeded} منتج.`, "success");
     } catch {
       toastStore.getState().show("تعذر أرشفة المنتجات المحدّدة.", "error");
     } finally {
@@ -369,7 +425,7 @@ export default function CatalogPage() {
   }
 
   async function bulkRestore() {
-    if (!selectedCount) return;
+    if (!selectedCount || isDemo) return;
     if (!window.confirm(`استرجاع ${selectedCount} منتج؟`)) return;
     setBulkProcessing(true);
     try {
@@ -378,11 +434,7 @@ export default function CatalogPage() {
       });
       await client.invalidateQueries({ queryKey: ["catalog"] });
       clearSelection();
-      const { succeeded, failed } = result.data;
-      toastStore.getState().show(
-        failed === 0 ? `تم استرجاع ${succeeded} منتج.` : `استُرجع ${succeeded}، فشل ${failed}.`,
-        failed && failed === succeeded + failed ? "error" : "success"
-      );
+      toastStore.getState().show(`تم استرجاع ${result.data.succeeded} منتج.`, "success");
     } catch {
       toastStore.getState().show("تعذر استرجاع المنتجات المحدّدة.", "error");
     } finally {
@@ -391,14 +443,8 @@ export default function CatalogPage() {
   }
 
   async function bulkPurge() {
-    if (!selectedCount) return;
-    if (
-      !window.confirm(
-        `حذف ${selectedCount} منتج نهائياً؟\n\nلن يمكن استرجاعها. إن كانت مزامَنة مع Meta ستُخفى من الكتالوج هناك أيضاً.`
-      )
-    ) {
-      return;
-    }
+    if (!selectedCount || isDemo) return;
+    if (!window.confirm(`حذف ${selectedCount} منتج نهائياً؟`)) return;
     setBulkProcessing(true);
     try {
       const result = await api.post<{ succeeded: number; failed: number }>("/catalog/bulk-purge", {
@@ -406,11 +452,7 @@ export default function CatalogPage() {
       });
       await client.invalidateQueries({ queryKey: ["catalog"] });
       clearSelection();
-      const { succeeded, failed } = result.data;
-      toastStore.getState().show(
-        failed === 0 ? `تم حذف ${succeeded} منتج نهائياً.` : `حُذف ${succeeded}، فشل ${failed}.`,
-        failed && failed === succeeded + failed ? "error" : "success"
-      );
+      toastStore.getState().show(`تم حذف ${result.data.succeeded} منتج نهائياً.`, "success");
     } catch {
       toastStore.getState().show("تعذر الحذف النهائي للمنتجات المحدّدة.", "error");
     } finally {
@@ -436,6 +478,7 @@ export default function CatalogPage() {
   }
 
   async function prepareCommerceIds() {
+    if (isDemo) return;
     setShowToolsMenu(false);
     try {
       const result = await api.post("/catalog/prepare-commerce");
@@ -447,94 +490,57 @@ export default function CatalogPage() {
   }
 
   async function toggleMetaSync(product: CatalogProduct) {
+    if (isDemo) return;
     const next = product.meta_sync_enabled === false;
     try {
       await api.patch(`/catalog/${product.id}`, { meta_sync_enabled: next });
       await client.invalidateQueries({ queryKey: ["catalog"] });
-      toastStore.getState().show(
-        next ? "تم تفعيل مزامنة Meta للمنتج." : "تم إيقاف مزامنة Meta — لن يُرسل عند المزامنة الجماعية.",
-        "success"
-      );
+      toastStore.getState().show(next ? "تم تفعيل مزامنة Meta." : "تم إيقاف مزامنة Meta.", "success");
     } catch {
       toastStore.getState().show("تعذر تحديث إعداد المزامنة.", "error");
     }
   }
 
   async function syncProductToMeta(product: CatalogProduct) {
+    if (isDemo) return;
     if (product.meta_sync_enabled === false) {
       toastStore.getState().show("فعّل مزامنة Meta للمنتج أولاً.", "error");
       return;
     }
     setSyncingProductId(product.id);
     try {
-      const result = await api.post<{
-        synced: number;
-        failed: number;
-        pending?: number;
-        approved?: number;
-        rejected?: number;
-        errors?: string[];
-      }>(`/catalog/${product.id}/sync-meta`);
+      const result = await api.post<{ synced: number; pending?: number; approved?: number; errors?: string[] }>(
+        `/catalog/${product.id}/sync-meta`
+      );
       await client.invalidateQueries({ queryKey: ["catalog"] });
-      const { synced, failed, pending = 0, approved = 0, errors = [] } = result.data;
-      if (synced > 0) {
-        toastStore.getState().show(
-          `تمت مزامنة «${product.name}» — معتمد ${approved}، قيد المراجعة ${pending}.`,
-          "success"
-        );
-      } else if (errors[0]) {
-        toastStore.getState().show(errors[0], "error");
+      if (result.data.synced > 0) {
+        toastStore.getState().show(`تمت مزامنة «${product.name}».`, "success");
       } else {
-        toastStore.getState().show(product.meta_sync_error ?? "تعذر مزامنة المنتج مع Meta.", "error");
+        toastStore.getState().show(result.data.errors?.[0] ?? "تعذر مزامنة المنتج مع Meta.", "error");
       }
-      if (failed > 0 && errors[0] && synced > 0) {
-        toastStore.getState().show(errors[0], "error");
-      }
-    } catch (error: unknown) {
-      const detail =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
-          ? (error as { response: { data: { detail: string } } }).response.data.detail
-          : null;
-      toastStore.getState().show(detail ?? "تعذر مزامنة المنتج.", "error");
+    } catch {
+      toastStore.getState().show("تعذر مزامنة المنتج.", "error");
     } finally {
       setSyncingProductId(null);
     }
   }
 
   async function refreshMetaStatus() {
+    if (isDemo) return;
     setShowToolsMenu(false);
     setRefreshingMetaStatus(true);
     try {
-      const result = await api.post<{
-        refreshed: number;
-        failed: number;
-        total: number;
-        pending: number;
-        approved: number;
-        rejected: number;
-      }>("/catalog/refresh-meta-status");
+      const result = await api.post<{ refreshed: number; failed: number; total: number; pending: number; approved: number; rejected: number }>(
+        "/catalog/refresh-meta-status"
+      );
       await client.invalidateQueries({ queryKey: ["catalog"] });
-      const { refreshed, failed, pending, approved, rejected } = result.data;
       if (result.data.total === 0) {
-        toastStore.getState().show("لا توجد منتجات مزامَنة مع Meta بعد. استخدم «مزامنة المنتجات → Meta» من صفحة ربط WhatsApp.", "error");
+        toastStore.getState().show("لا توجد منتجات مزامَنة مع Meta بعد.", "error");
         return;
       }
-      toastStore.getState().show(
-        `حالة Meta: ${refreshed} محدّث — معتمد ${approved}، قيد المراجعة ${pending}، مرفوض ${rejected}${failed ? `، فشل ${failed}` : ""}.`,
-        failed ? "error" : "success"
-      );
-    } catch (error: unknown) {
-      const detail =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof (error as { response?: { data?: { detail?: string } } }).response?.data?.detail === "string"
-          ? (error as { response: { data: { detail: string } } }).response.data.detail
-          : null;
-      toastStore.getState().show(detail ?? "تعذر تحديث حالة Meta.", "error");
+      toastStore.getState().show(`حالة Meta: ${result.data.refreshed} محدّث.`, result.data.failed ? "error" : "success");
+    } catch {
+      toastStore.getState().show("تعذر تحديث حالة Meta.", "error");
     } finally {
       setRefreshingMetaStatus(false);
     }
@@ -542,6 +548,10 @@ export default function CatalogPage() {
 
   async function exportCatalog() {
     setShowToolsMenu(false);
+    if (isDemo) {
+      toastStore.getState().show("وضع المعاينة — التصدير معطّل.", "success");
+      return;
+    }
     try {
       await downloadCatalogExport({ includeInactive: listTab === "inactive", format: "xlsx" });
       toastStore.getState().show("تم تصدير المنتجات إلى Excel.", "success");
@@ -550,72 +560,112 @@ export default function CatalogPage() {
     }
   }
 
-  function renderProductActions(item: CatalogProduct, compact = false) {
+  function formatUpdateCell(product: CatalogProduct) {
+    const visibility = catalogWhatsAppVisibility(product, visibilityScope);
+    if (!visibility.lastUpdateAt) return { label: "—", short: "—", full: "" };
+    const short = formatAppDate(visibility.lastUpdateAt, { day: "numeric", month: "short" });
+    const full = formatAppDateTime(visibility.lastUpdateAt);
+    return { label: visibility.lastUpdateLabel, short, full };
+  }
+
+  function renderRowMenu(item: CatalogProduct) {
+    const open = openRowMenuId === item.id;
     return (
-      <div className={`catalog-table-actions${compact ? " catalog-table-actions-compact" : ""}`}>
-        <button type="button" className="contacts-erp-btn" onClick={() => openDetail(item)}>
-          تفاصيل
+      <div className="catalog-row-menu" ref={open ? rowMenuRef : undefined}>
+        <button
+          type="button"
+          className="catalog-row-menu-trigger"
+          aria-label={`إجراءات ${item.name}`}
+          aria-expanded={open}
+          onClick={() => setOpenRowMenuId(open ? null : item.id)}
+        >
+          ⋯
         </button>
-        {item.meta_item_group_id?.trim() && (
-          <Link
-            to={`/catalog/group/${encodeURIComponent(item.meta_item_group_id.trim())}/edit`}
-            className="contacts-erp-btn"
-          >
-            المجموعة
-          </Link>
-        )}
-        <button type="button" className="contacts-erp-btn" onClick={() => openEdit(item)}>تعديل</button>
-        {item.is_active && item.meta_sync_enabled !== false && (
-          <button
-            type="button"
-            className="contacts-erp-btn"
-            disabled={syncingProductId === item.id}
-            onClick={() => void syncProductToMeta(item)}
-          >
-            {syncingProductId === item.id ? "جاري…" : "مزامنة"}
-          </button>
-        )}
-        {item.is_active && (
-          <button type="button" className="contacts-erp-btn" onClick={() => void toggleMetaSync(item)}>
-            {item.meta_sync_enabled === false ? "تفعيل Meta" : "إيقاف Meta"}
-          </button>
-        )}
-        {item.is_active ? (
-          <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" onClick={() => void deactivateProduct(item.id)}>
-            أرشفة
-          </button>
-        ) : (
-          <>
-            <button type="button" className="contacts-erp-btn" onClick={() => void restoreProduct(item.id)}>
-              استرجاع
-            </button>
+        {open && (
+          <div className="catalog-row-menu-dropdown" role="menu">
+            <button type="button" className="catalog-tools-item" onClick={() => openEdit(item)}>تعديل</button>
             <button
               type="button"
-              className="contacts-erp-btn contacts-erp-btn-danger"
-              onClick={() => void purgeProduct(item.id, item.name)}
+              className="catalog-tools-item"
+              onClick={() => {
+                setShowPreview(true);
+                setOpenRowMenuId(null);
+              }}
             >
-              حذف نهائي
+              معاينة رد واتساب
             </button>
-          </>
+            {item.is_active && item.meta_sync_enabled !== false && (
+              <button
+                type="button"
+                className="catalog-tools-item"
+                disabled={syncingProductId === item.id || isDemo}
+                onClick={() => void syncProductToMeta(item)}
+              >
+                {syncingProductId === item.id ? "جاري…" : "مزامنة Meta"}
+              </button>
+            )}
+            {item.is_active && (
+              <button type="button" className="catalog-tools-item" disabled={isDemo} onClick={() => void toggleMetaSync(item)}>
+                {item.meta_sync_enabled === false ? "تفعيل Meta" : "إيقاف Meta"}
+              </button>
+            )}
+            {item.meta_item_group_id?.trim() && (
+              <Link
+                to={`/catalog/group/${encodeURIComponent(item.meta_item_group_id.trim())}/edit`}
+                className="catalog-tools-item"
+                onClick={() => setOpenRowMenuId(null)}
+              >
+                تعديل المجموعة
+              </Link>
+            )}
+            <hr className="catalog-menu-sep" />
+            {item.is_active ? (
+              <button
+                type="button"
+                className="catalog-tools-item catalog-tools-danger"
+                disabled={isDemo}
+                onClick={() => void deactivateProduct(item.id)}
+              >
+                أرشفة
+              </button>
+            ) : (
+              <>
+                <button type="button" className="catalog-tools-item" disabled={isDemo} onClick={() => void restoreProduct(item.id)}>
+                  استرجاع
+                </button>
+                <button
+                  type="button"
+                  className="catalog-tools-item catalog-tools-danger"
+                  disabled={isDemo}
+                  onClick={() => void purgeProduct(item.id, item.name)}
+                >
+                  حذف نهائي
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
     );
   }
 
+  const loading = !isDemo && products.isLoading;
+  const errored = !isDemo && products.isError;
+
   return (
-    <main className="page catalog-page contacts-erp-page">
-      <section className="contacts-erp-shell">
-        <header className="contacts-erp-header catalog-page-header">
-          <div className="contacts-erp-title-block">
-            <span className="contacts-erp-eyebrow">كتالوج الشركة</span>
-            <h1>المنتجات والخدمات</h1>
-            <p className="hint-text">
-              ظهور واتساب يُؤكَّد فقط بدليل على كتالوج الرقم المحدد — اعتماد Meta وحده لا يكفي.
-            </p>
+    <main className={`page catalog-page contacts-erp-page${isDemo ? " catalog-demo-mode" : ""}`}>
+      <section className="contacts-erp-shell catalog-shell">
+        {isDemo && (
+          <div className="catalog-demo-banner" role="status">
+            معاينة ببيانات تجريبية — الملخص يشمل المؤرشف ({visibilitySummary.total}) بينما تبويب النشطة يعرض {activeCount}.
           </div>
-          <div className="catalog-header-actions">
+        )}
+
+        <header className="catalog-topbar">
+          <h1 className="catalog-topbar-title">المنتجات والخدمات</h1>
+          <div className="catalog-topbar-actions">
             <Link to="/catalog/new" className="contacts-erp-btn contacts-erp-btn-primary">
-              إضافة منتج
+              + إضافة منتج
             </Link>
             <Link to="/catalog/orders" className="contacts-erp-btn">طلبات الكتالوج</Link>
             <div className="catalog-tools-menu" ref={toolsMenuRef}>
@@ -625,7 +675,7 @@ export default function CatalogPage() {
                 aria-expanded={showToolsMenu}
                 onClick={() => setShowToolsMenu((value) => !value)}
               >
-                أدوات إضافية
+                المزيد
               </button>
               {showToolsMenu && (
                 <div className="catalog-tools-dropdown" role="menu">
@@ -635,30 +685,34 @@ export default function CatalogPage() {
                   <Link to="/catalog/category/new" className="catalog-tools-item" onClick={() => setShowToolsMenu(false)}>
                     إنشاء صنف
                   </Link>
-                  <button type="button" className="catalog-tools-item" onClick={() => void prepareCommerceIds()}>
+                  <button type="button" className="catalog-tools-item" onClick={() => void exportCatalog()}>
+                    تصدير Excel
+                  </button>
+                  <button
+                    type="button"
+                    className="catalog-tools-item"
+                    onClick={() => {
+                      setShowPreview(true);
+                      setShowToolsMenu(false);
+                    }}
+                  >
+                    معاينة رد واتساب
+                  </button>
+                  <hr className="catalog-menu-sep" />
+                  <button type="button" className="catalog-tools-item" disabled={isDemo} onClick={() => void prepareCommerceIds()}>
                     تجهيز Meta IDs
                   </button>
                   <button
                     type="button"
                     className="catalog-tools-item"
-                    disabled={refreshingMetaStatus}
+                    disabled={refreshingMetaStatus || isDemo}
                     onClick={() => void refreshMetaStatus()}
                   >
-                    {refreshingMetaStatus ? "جاري التحديث…" : "تحديث حالة Meta يدوياً"}
-                  </button>
-                  <button type="button" className="catalog-tools-item" onClick={() => void exportCatalog()}>
-                    تصدير Excel
+                    {refreshingMetaStatus ? "جاري التحديث…" : "تحديث حالة Meta"}
                   </button>
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              className="contacts-erp-btn contacts-erp-btn-ghost"
-              onClick={() => setShowPreview((value) => !value)}
-            >
-              {showPreview ? "إخفاء المعاينة" : "معاينة رد واتساب"}
-            </button>
           </div>
         </header>
 
@@ -670,14 +724,15 @@ export default function CatalogPage() {
               setFilterChannelId("");
             }}
             className="contacts-erp-channel-filter"
-            aria-label="تصفية حسب الفرع"
+            aria-label="الفرع"
           >
             <option value="">كل الفروع</option>
-            {(organizations.data ?? []).map((org) => (
+            {orgList.map((org) => (
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
           <select
+            id="catalog-channel-filter"
             value={filterChannelId}
             onChange={(e) => setFilterChannelId(e.target.value)}
             className="contacts-erp-channel-filter"
@@ -690,161 +745,165 @@ export default function CatalogPage() {
               </option>
             ))}
           </select>
-          <div className="catalog-filter-tabs catalog-filter-tabs-inline">
-            <button type="button" className={listTab === "active" ? "active" : ""} onClick={() => setListTab("active")}>
-              نشطة
-            </button>
-            <button type="button" className={listTab === "inactive" ? "active" : ""} onClick={() => setListTab("inactive")}>
-              مؤرشفة
-            </button>
-          </div>
         </div>
 
-        <section className="catalog-visibility-board" aria-label="ملخص ظهور واتساب حسب الفرع والقناة">
+        <section className="catalog-visibility-board" aria-label="حالة الكتالوج على واتساب">
           <div className="catalog-visibility-board-head">
             <div>
-              <h2>ظهور واتساب</h2>
-              <p>
-                {visibilitySummary.requiresChannelSelection
-                  ? "ملخص عام لكل المنتجات المحمّلة. اختر رقم واتساب للاطلاع على حالة الظهور الخاصة به."
-                  : "الأعداد خاصة بالرقم والكتالوج المحددين. منتجات رقم آخر في نفس الفرع لا تدخل في مؤكد الظهور."}
+              <h2>حالة الكتالوج على واتساب</h2>
+              <p className="catalog-scope-meta">
+                <span>{scopeLabel}</span>
+                {archivedCount > 0 && (
+                  <span className="catalog-scope-note">
+                    {" "}· يشمل المؤرشف ({archivedCount.toLocaleString("ar")}) — النشطة {activeCount.toLocaleString("ar")}
+                  </span>
+                )}
               </p>
             </div>
-            <small>
-              {visibilitySummary.total.toLocaleString("ar")} منتج مطابق
-              {debouncedSearch ? " للبحث" : ""}
-            </small>
           </div>
           {visibilityScope.channelId && visibilityScope.isCatalogVisible === false && (
             <p className="catalog-visibility-channel-warning">
-              كتالوج هذا الرقم مخفي في إعدادات واتساب — لا يُعرض أي منتج كـ«مؤكد الظهور» حتى يُفعَّل الظهور على الرقم.
+              كتالوج هذا الرقم مخفي في إعدادات واتساب — لا يُعرض «مؤكد» حتى يُفعَّل الظهور.
             </p>
           )}
           <div className="catalog-visibility-grid">
             {visibilitySummary.cards.map((card) => {
               const selected = visibilityFilter === card.status;
+              const alert = card.status === "broken" && (card.displayCount ?? 0) > 0;
+              const quiet = card.displayCount === 0;
               return (
                 <button
                   key={card.status}
                   type="button"
-                  className={`catalog-visibility-card visibility-${card.status}${selected ? " active" : ""}`}
-                  onClick={() => setVisibilityFilter((current) => (current === card.status ? "all" : card.status))}
+                  title={card.hint}
+                  className={[
+                    "catalog-visibility-card",
+                    `visibility-${card.status}`,
+                    selected ? "active" : "",
+                    alert ? "has-alert" : "",
+                    quiet ? "is-quiet" : ""
+                  ].filter(Boolean).join(" ")}
+                  onClick={() => {
+                    if (card.needsChannelSelection) {
+                      focusChannelSelect();
+                      return;
+                    }
+                    setVisibilityFilter((current) => (current === card.status ? "all" : card.status));
+                  }}
                   aria-pressed={selected}
                 >
+                  <span className="catalog-visibility-icon" aria-hidden="true">{card.icon}</span>
                   <span className="catalog-visibility-label">{card.label}</span>
-                  <strong className="catalog-visibility-count">{card.count.toLocaleString("ar")}</strong>
-                  <small className="catalog-visibility-hint">{card.hint}</small>
-                  {selected && <span className="catalog-visibility-selected">✓ محدد</span>}
+                  <strong className="catalog-visibility-count">
+                    {card.displayCount == null ? "—" : card.displayCount.toLocaleString("ar")}
+                  </strong>
+                  {card.needsChannelSelection ? (
+                    <span className="catalog-visibility-action">اختر رقم واتساب</span>
+                  ) : selected ? (
+                    <span className="catalog-visibility-selected">✓ محدد</span>
+                  ) : null}
                 </button>
               );
             })}
           </div>
         </section>
 
-        <div className="contacts-erp-toolbar catalog-list-toolbar">
-          <div className="contacts-erp-actions catalog-list-toolbar-title">
-            <h2 className="catalog-results-title">{resultsTitle}</h2>
-            {visibilityFilter !== "all" && (
-              <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={() => setVisibilityFilter("all")}>
-                إلغاء فلتر الحالة
+        <div className="catalog-list-head">
+          <div className="catalog-filter-tabs">
+            <button type="button" className={listTab === "active" && visibilityFilter === "all" ? "active" : ""} onClick={() => { setListTab("active"); setVisibilityFilter("all"); }}>
+              نشطة ({activeCount.toLocaleString("ar")})
+            </button>
+            <button type="button" className={listTab === "inactive" && visibilityFilter === "all" ? "active" : ""} onClick={() => { setListTab("inactive"); setVisibilityFilter("all"); }}>
+              مؤرشفة ({archivedCount.toLocaleString("ar")})
+            </button>
+          </div>
+          <div className="catalog-list-head-meta">
+            {visibilityFilter !== "all" && activeVisibilityCard ? (
+              <button
+                type="button"
+                className="catalog-status-chip"
+                onClick={() => setVisibilityFilter("all")}
+                aria-label="إلغاء فلتر الحالة"
+              >
+                الحالة: {activeVisibilityCard.label} · {total.toLocaleString("ar")} ×
               </button>
+            ) : (
+              <h2 className="catalog-results-title">{resultsTitle}</h2>
+            )}
+            {selectedOrgName && !showBranchColumn && (
+              <span className="catalog-branch-chip">{selectedOrgName}</span>
             )}
             {selectedCount > 0 && (
-              <>
+              <div className="catalog-bulk-bar">
                 <span className="contacts-selection-badge">{selectedCount} محدّد</span>
-                {listTab === "active" ? (
-                  <>
-                    <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing} onClick={() => void bulkArchive()}>
-                      {bulkProcessing ? "جاري…" : "أرشفة المحدّد"}
-                    </button>
-                    <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing} onClick={() => void bulkPurge()}>
-                      {bulkProcessing ? "جاري…" : "حذف نهائي للمحدّد"}
-                    </button>
-                  </>
+                {listTab === "active" || visibilityFilter !== "all" ? (
+                  <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing || isDemo} onClick={() => void bulkArchive()}>
+                    أرشفة
+                  </button>
                 ) : (
-                  <>
-                    <button type="button" className="contacts-erp-btn" disabled={bulkProcessing} onClick={() => void bulkRestore()}>
-                      {bulkProcessing ? "جاري…" : "استرجاع المحدّد"}
-                    </button>
-                    <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing} onClick={() => void bulkPurge()}>
-                      {bulkProcessing ? "جاري…" : "حذف نهائي للمحدّد"}
-                    </button>
-                  </>
+                  <button type="button" className="contacts-erp-btn" disabled={bulkProcessing || isDemo} onClick={() => void bulkRestore()}>
+                    استرجاع
+                  </button>
                 )}
-                <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={clearSelection}>
-                  إلغاء التحديد
+                <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" disabled={bulkProcessing || isDemo} onClick={() => void bulkPurge()}>
+                  حذف نهائي
                 </button>
-              </>
+                <button type="button" className="contacts-erp-btn contacts-erp-btn-ghost" onClick={clearSelection}>إلغاء</button>
+              </div>
             )}
           </div>
-          <div className="contacts-erp-meta">
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as CatalogTypeFilter)}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب النوع"
-            >
-              <option value="all">الكل</option>
-              <option value="product">منتجات</option>
-              <option value="service">خدمات</option>
-            </select>
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="contacts-erp-channel-filter"
-              aria-label="تصفية حسب الصنف"
-            >
-              <option value="">كل الأصناف</option>
-              {(categories.data ?? []).map((category) => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-            <div className="contacts-erp-search">
-              <Icon name="search" size={16} />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="بحث بالاسم، SKU، أو كلمات مفتاحية…"
-                aria-label="بحث في المنتجات"
-              />
-            </div>
-            <div className="contacts-erp-pagination">
-              <span>
-                {total === 0
-                  ? "0 منتج"
-                  : pageSize === 0
-                    ? `${total} منتج`
-                    : `${pageStart}-${pageEnd} من ${total} · صفحة ${safePage}/${totalPages}`}
-              </span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="contacts-erp-channel-filter"
-                aria-label="عدد المنتجات في الصفحة"
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size === 0 ? "عرض الكل" : `${size} / صفحة`}
-                  </option>
-                ))}
-              </select>
-              <button type="button" disabled={safePage <= 1 || pageSize === 0} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="السابق">
-                ‹
-              </button>
-              <button type="button" disabled={safePage >= totalPages || pageSize === 0} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="التالي">
-                ›
-              </button>
-            </div>
+        </div>
+
+        <div className="catalog-table-toolbar">
+          <div className="contacts-erp-search catalog-search-wide">
+            <Icon name="search" size={16} />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="بحث بالاسم أو SKU…"
+              aria-label="بحث في المنتجات"
+            />
           </div>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="contacts-erp-channel-filter"
+            aria-label="الصنف"
+          >
+            <option value="">كل الأصناف</option>
+            {categoryOptions.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as CatalogTypeFilter)}
+            className="contacts-erp-channel-filter"
+            aria-label="النوع"
+          >
+            <option value="all">الكل</option>
+            <option value="product">منتجات</option>
+            <option value="service">خدمات</option>
+          </select>
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as CatalogSortKey)}
+            className="contacts-erp-channel-filter"
+            aria-label="الفرز"
+          >
+            <option value="name">فرز: الاسم</option>
+            <option value="price">فرز: السعر</option>
+            <option value="updated">فرز: آخر تحديث</option>
+          </select>
         </div>
 
         {showPreview && (
           <section className="card catalog-preview-card catalog-preview-inline" aria-label="معاينة رد واتساب">
-            <h2 className="section-title">معاينة رد واتساب</h2>
-            <p className="hint-text">هذه معاينة لنص الرد المقترح من الكتالوج — ليست معاينة لكتالوج واتساب نفسه.</p>
+            <div className="catalog-preview-head">
+              <h2 className="section-title">معاينة رد واتساب</h2>
+              <button type="button" className="panel-close" onClick={() => setShowPreview(false)} aria-label="إغلاق المعاينة">×</button>
+            </div>
+            <p className="hint-text">معاينة لنص الرد المقترح من الكتالوج — ليست معاينة لكتالوج واتساب.</p>
             <div className="catalog-preview-form">
               <label className="field-label">
                 <span>استفسار العميل</span>
@@ -856,64 +915,47 @@ export default function CatalogPage() {
               </label>
             </div>
             {previewQuery.trim() && (
-              <div className="catalog-preview-layout">
-                <WhatsAppTextPreview text={previewReply.data?.suggestion ?? "جاري التوليد…"} />
-                {(previewReply.data?.matched_products ?? []).length > 0 && (
-                  <div className="catalog-preview-products">
-                    {(previewReply.data?.matched_products ?? []).map((matched) => (
-                      <article key={matched.id} className="catalog-preview-product-chip">
-                        {matched.image_url ? <img src={matched.image_url} alt={matched.name} /> : <span>📦</span>}
-                        <div>
-                          <strong>{matched.name}</strong>
-                          <small>{matched.price_label}</small>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <WhatsAppTextPreview
+                text={
+                  isDemo
+                    ? `مرحباً${previewContactName ? ` ${previewContactName}` : ""},\nإليك ما وجدناه في الكتالوج حول «${previewQuery}».`
+                    : (previewReply.data?.suggestion ?? "جاري التوليد…")
+                }
+              />
             )}
           </section>
         )}
 
         <div className={`catalog-workspace${detailProduct ? " has-detail" : ""}`}>
           <div className="contacts-erp-table-wrap catalog-list-pane" ref={listScrollRef}>
-            {products.isLoading && (
+            {loading && (
               <div className="contacts-erp-loading">
-                {Array.from({ length: 8 }).map((_, index) => (
+                {Array.from({ length: 6 }).map((_, index) => (
                   <div key={index} className="contacts-erp-skeleton-row" />
                 ))}
               </div>
             )}
-
-            {products.isError && (
+            {errored && (
               <div className="contacts-erp-empty">
                 <strong>تعذر تحميل المنتجات</strong>
                 <button type="button" className="contacts-erp-btn" onClick={() => void products.refetch()}>إعادة المحاولة</button>
               </div>
             )}
-
-            {!products.isLoading && !products.isError && total === 0 && (
+            {!loading && !errored && total === 0 && (
               <div className="contacts-erp-empty">
                 <strong>لا توجد منتجات مطابقة</strong>
-                <p>جرّب تغيير الفلاتر أو أضف منتجاً جديداً.</p>
-                <div className="contacts-erp-actions">
-                  <Link to="/catalog/new" className="contacts-erp-btn contacts-erp-btn-primary">إنشاء منتج</Link>
-                  {visibilityFilter !== "all" && (
-                    <button type="button" className="contacts-erp-btn" onClick={() => setVisibilityFilter("all")}>
-                      إلغاء فلتر الحالة
-                    </button>
-                  )}
-                </div>
+                {visibilityFilter !== "all" && (
+                  <button type="button" className="contacts-erp-btn" onClick={() => setVisibilityFilter("all")}>إلغاء فلتر الحالة</button>
+                )}
               </div>
             )}
 
-            {total > 0 && !products.isLoading && (
+            {total > 0 && !loading && (
               <>
                 <div className="catalog-mobile-cards" aria-label="قائمة المنتجات للهاتف">
                   {pageRows.map((item) => {
                     const visibility = catalogWhatsAppVisibility(item, visibilityScope);
-                    const showIssue = visibility.status === "broken" || visibility.status === "unknown";
+                    const short = catalogVisibilityShortLabel(visibility.status);
                     return (
                       <article key={item.id} className={`catalog-mobile-card${item.is_active ? "" : " is-archived"}`}>
                         <label className="catalog-mobile-check">
@@ -926,34 +968,24 @@ export default function CatalogPage() {
                         </label>
                         <button type="button" className="catalog-mobile-main" onClick={() => openDetail(item)}>
                           {item.image_url ? (
-                            <img src={item.image_url} alt="" className="catalog-table-thumb" loading="lazy" />
+                            <img src={item.image_url} alt="" className="catalog-thumb" loading="lazy" />
                           ) : (
-                            <span className="catalog-table-thumb placeholder">{item.product_type === "service" ? "🛠" : "📦"}</span>
+                            <span className="catalog-thumb placeholder">{item.product_type === "service" ? "س" : "م"}</span>
                           )}
                           <div className="catalog-mobile-copy">
-                            <strong>{item.name}</strong>
-                            <span>{catalogPriceLabel(item)}</span>
-                            <span className={`catalog-visibility-pill ${visibility.className}`}>{visibility.label}</span>
-                            {showIssue && (
-                              <small className="catalog-visibility-reason">{visibility.reason}</small>
-                            )}
-                            {showIssue && (
-                              <small className="catalog-visibility-next">{visibility.nextStep}</small>
+                            <strong className="catalog-product-name">{item.name}</strong>
+                            {item.sku && <small className="catalog-product-sku" dir="ltr">{item.sku}</small>}
+                            <span className={`catalog-visibility-pill ${visibility.className}`}>{short}</span>
+                            <span className="catalog-mobile-price">{catalogPriceLabel(item)}</span>
+                            {visibility.status === "broken" && (
+                              <>
+                                <small className="catalog-visibility-reason">{visibility.reason}</small>
+                                <span className="catalog-solution-link">عرض الحل</span>
+                              </>
                             )}
                           </div>
                         </button>
-                        <div className="catalog-mobile-actions">
-                          <button type="button" className="contacts-erp-btn" onClick={() => openEdit(item)}>تعديل</button>
-                          {item.is_active ? (
-                            <button type="button" className="contacts-erp-btn contacts-erp-btn-danger" onClick={() => void deactivateProduct(item.id)}>
-                              أرشفة
-                            </button>
-                          ) : (
-                            <button type="button" className="contacts-erp-btn" onClick={() => void restoreProduct(item.id)}>
-                              استرجاع
-                            </button>
-                          )}
-                        </div>
+                        {renderRowMenu(item)}
                       </article>
                     );
                   })}
@@ -973,18 +1005,22 @@ export default function CatalogPage() {
                           aria-label="تحديد الصفحة"
                         />
                       </th>
-                      <th>المنتج</th>
-                      <th>السعر</th>
-                      <th>الفرع</th>
-                      <th>حالة واتساب</th>
-                      <th>آخر تحديث</th>
-                      <th>إجراءات</th>
+                      <th className="catalog-col-product">المنتج</th>
+                      <th className="catalog-col-status">حالة واتساب</th>
+                      <th className="catalog-col-price">السعر</th>
+                      {showBranchColumn && <th className="catalog-col-branch">الفرع</th>}
+                      <th className="catalog-col-updated">آخر تحديث</th>
+                      <th className="catalog-col-actions">
+                        <span className="sr-only">إجراءات</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {pageRows.map((item) => {
                       const visibility = catalogWhatsAppVisibility(item, visibilityScope);
-                      const showIssueInline = visibility.status === "broken" || visibility.status === "unknown";
+                      const short = catalogVisibilityShortLabel(visibility.status);
+                      const update = formatUpdateCell(item);
+                      const showSolution = solutionProductId === item.id;
                       return (
                         <tr key={item.id} className={item.is_active ? "" : "catalog-row-inactive"}>
                           <td className="contacts-col-check">
@@ -995,46 +1031,87 @@ export default function CatalogPage() {
                               aria-label={`تحديد ${item.name}`}
                             />
                           </td>
-                          <td>
+                          <td className="catalog-col-product">
                             <button type="button" className="catalog-product-cell" onClick={() => openDetail(item)}>
                               {item.image_url ? (
-                                <img src={item.image_url} alt="" className="catalog-table-thumb" loading="lazy" />
+                                <img src={item.image_url} alt="" className="catalog-thumb" loading="lazy" />
                               ) : (
-                                <span className="catalog-table-thumb placeholder">{item.product_type === "service" ? "🛠" : "📦"}</span>
+                                <span className="catalog-thumb placeholder">{item.product_type === "service" ? "س" : "م"}</span>
                               )}
-                              <span>
-                                <strong>{item.name}</strong>
+                              <span className="catalog-product-text">
+                                <strong className="catalog-product-name" title={item.name}>{item.name}</strong>
+                                {item.sku && <small className="catalog-product-sku" dir="ltr">{item.sku}</small>}
                                 {formatCatalogVariantLabel(item) && (
                                   <small className="catalog-table-variant">{formatCatalogVariantLabel(item)}</small>
                                 )}
                               </span>
                             </button>
                           </td>
-                          <td>{catalogPriceLabel(item)}</td>
-                          <td>{item.organization_id && orgMap.has(item.organization_id) ? orgMap.get(item.organization_id) : "—"}</td>
-                          <td>
+                          <td className="catalog-col-status">
                             <span className={`catalog-visibility-pill ${visibility.className}`} title={visibility.reason}>
-                              {visibility.label}
+                              {short}
                             </span>
-                            {showIssueInline && (
+                            {visibility.status === "broken" && (
                               <div className="catalog-inline-issue">
                                 <small className="catalog-visibility-reason">{visibility.reason}</small>
-                                <small className="catalog-visibility-next">{visibility.nextStep}</small>
+                                <button
+                                  type="button"
+                                  className="catalog-solution-link"
+                                  onClick={() => setSolutionProductId(showSolution ? null : item.id)}
+                                >
+                                  عرض الحل
+                                </button>
+                                {showSolution && (
+                                  <small className="catalog-visibility-next">{visibility.nextStep}</small>
+                                )}
                               </div>
                             )}
                           </td>
-                          <td>
-                            <div className="catalog-last-update">
-                              <span>{visibility.lastUpdateAt ? formatAppDateTime(visibility.lastUpdateAt) : "—"}</span>
-                              <small>{visibility.lastUpdateLabel}</small>
+                          <td className="catalog-col-price" dir="ltr">{catalogPriceLabel(item)}</td>
+                          {showBranchColumn && (
+                            <td className="catalog-col-branch">
+                              {item.organization_id && orgMap.has(item.organization_id) ? orgMap.get(item.organization_id) : "—"}
+                            </td>
+                          )}
+                          <td className="catalog-col-updated">
+                            <div className="catalog-last-update" title={update.full || undefined}>
+                              <span>{update.label}</span>
+                              <small>{update.short}</small>
                             </div>
                           </td>
-                          <td>{renderProductActions(item, true)}</td>
+                          <td className="catalog-col-actions">{renderRowMenu(item)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+
+                <div className="catalog-pagination-bar">
+                  <span>
+                    {total === 0
+                      ? "0 منتج"
+                      : pageSize === 0
+                        ? `${total.toLocaleString("ar")} منتج`
+                        : `${pageStart}-${pageEnd} من ${total.toLocaleString("ar")} · صفحة ${safePage}/${totalPages}`}
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="contacts-erp-channel-filter"
+                    aria-label="عدد المنتجات في الصفحة"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size === 0 ? "عرض الكل" : `${size} / صفحة`}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" disabled={safePage <= 1 || pageSize === 0} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="السابق">‹</button>
+                  <button type="button" disabled={safePage >= totalPages || pageSize === 0} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="التالي">›</button>
+                </div>
               </>
             )}
           </div>
@@ -1050,11 +1127,8 @@ export default function CatalogPage() {
                 const metaStatus = catalogMetaStatusLabel(detailProduct);
                 return (
                   <div className="catalog-detail-body">
-                    {detailProduct.image_url && (
-                      <img src={detailProduct.image_url} alt={detailProduct.name} className="catalog-detail-image" />
-                    )}
                     <dl className="catalog-detail-grid">
-                      <div><dt>السعر</dt><dd>{catalogPriceLabel(detailProduct)}</dd></div>
+                      <div><dt>السعر</dt><dd dir="ltr">{catalogPriceLabel(detailProduct)}</dd></div>
                       <div><dt>النوع</dt><dd>{catalogTypeLabel(detailProduct.product_type)}</dd></div>
                       <div><dt>SKU</dt><dd dir="ltr">{detailProduct.sku || "—"}</dd></div>
                       <div><dt>الصنف</dt><dd>{detailProduct.category || "—"}</dd></div>
@@ -1062,15 +1136,15 @@ export default function CatalogPage() {
                         <dt>الفرع</dt>
                         <dd>{detailProduct.organization_id && orgMap.has(detailProduct.organization_id) ? orgMap.get(detailProduct.organization_id) : "—"}</dd>
                       </div>
-                      <div><dt>الترتيب</dt><dd>{detailProduct.sort_order ?? 0}</dd></div>
-                      <div><dt>الاستخدام</dt><dd>{detailProduct.usage_count > 0 ? detailProduct.usage_count : "—"}</dd></div>
                       <div>
                         <dt>حالة واتساب</dt>
                         <dd>
-                          <span className={`catalog-visibility-pill ${visibility.className}`}>{visibility.label}</span>
+                          <span className={`catalog-visibility-pill ${visibility.className}`}>
+                            {catalogVisibilityShortLabel(visibility.status)}
+                          </span>
                         </dd>
                       </div>
-                      <div><dt>سبب الحالة</dt><dd>{visibility.reason}</dd></div>
+                      <div><dt>السبب</dt><dd>{visibility.reason}</dd></div>
                       <div><dt>الخطوة التالية</dt><dd>{visibility.nextStep}</dd></div>
                       <div><dt>آخر مزامنة</dt><dd>{visibility.lastSyncedAt ? formatAppDateTime(visibility.lastSyncedAt) : "—"}</dd></div>
                       <div>
@@ -1081,19 +1155,13 @@ export default function CatalogPage() {
                         <dt>Meta</dt>
                         <dd>
                           <span className={`catalog-meta-status-pill ${metaStatus.className}`}>{metaStatus.label}</span>
-                          {metaStatus.detail && <small>{metaStatus.detail}</small>}
                         </dd>
                       </div>
-                      <div>
-                        <dt>الحالة</dt>
-                        <dd>{detailProduct.is_active ? "نشط" : "مؤرشف"}</dd>
-                      </div>
-                      <div><dt>Meta ID</dt><dd dir="ltr">{detailProduct.external_id || "—"}</dd></div>
                     </dl>
-                    {detailProduct.description && (
-                      <p className="catalog-detail-description">{detailProduct.description}</p>
-                    )}
-                    {renderProductActions(detailProduct)}
+                    <div className="catalog-detail-actions">
+                      <button type="button" className="contacts-erp-btn contacts-erp-btn-primary" onClick={() => openEdit(detailProduct)}>تعديل</button>
+                      <button type="button" className="contacts-erp-btn" onClick={closeDetail}>رجوع للقائمة</button>
+                    </div>
                   </div>
                 );
               })()}
@@ -1102,7 +1170,7 @@ export default function CatalogPage() {
         </div>
       </section>
 
-      {editingProduct && (
+      {editingProduct && !isDemo && (
         <div className="catalog-edit-overlay" role="dialog" aria-modal="true">
           <button type="button" className="catalog-edit-backdrop" aria-label="إغلاق" onClick={() => setEditingProduct(null)} />
           <form className="catalog-edit-panel stack-form catalog-simple-edit-panel" onSubmit={saveEdit}>
@@ -1125,8 +1193,8 @@ export default function CatalogPage() {
               <CatalogSimpleProductForm
                 form={editForm}
                 setForm={setEditForm}
-                organizations={organizations.data ?? []}
-                whatsappAccounts={whatsappAccounts.data ?? []}
+                organizations={orgList}
+                whatsappAccounts={waList}
                 uploadingImage={uploadingImage}
                 onUploadImage={(file) => void uploadProductImage(file)}
               />

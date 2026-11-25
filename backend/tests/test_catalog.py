@@ -71,8 +71,11 @@ def test_catalog_api_routes_exist() -> None:
     assert "catalog-visibility-board" in frontend
     assert "catalogWhatsAppVisibility" in frontend
     assert "معاينة رد واتساب" in frontend
-    assert "إلغاء فلتر الحالة" in frontend
+    assert "حالة الكتالوج على واتساب" in frontend
+    assert "الحالة:" in frontend
+    assert "catalogVisibilityShortLabel" in helpers
     assert "مؤكد الظهور" in helpers
+    assert "dev/catalog-ui-preview" in read("../frontend/src/App.tsx")
     assert "InboxProductPicker" in read("../frontend/src/pages/InboxPage.tsx")
     assert "ai.catalog_suggestion" in read("../frontend/src/pages/InboxPage.tsx")
 
