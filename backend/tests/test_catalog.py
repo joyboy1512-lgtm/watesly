@@ -62,9 +62,16 @@ def test_catalog_api_routes_exist() -> None:
     assert "catalogMetaStatusLabel" in helpers
     assert "catalogWhatsAppVisibility" in helpers
     assert "summarizeCatalogVisibility" in helpers
+    assert "CatalogVisibilityProof" in helpers
+    assert "isValidCatalogVisibilityProof" in helpers
     assert "approved" in helpers and "no_review" in helpers
+    assert "معتمد لدى Meta · الظهور غير متحقق" in helpers
+    assert "آخر تحقق من الظهور" in helpers
+    assert "آخر مزامنة" in helpers
     assert "catalog-visibility-board" in frontend
     assert "catalogWhatsAppVisibility" in frontend
+    assert "معاينة رد واتساب" in frontend
+    assert "إلغاء فلتر الحالة" in frontend
     assert "مؤكد الظهور" in helpers
     assert "InboxProductPicker" in read("../frontend/src/pages/InboxPage.tsx")
     assert "ai.catalog_suggestion" in read("../frontend/src/pages/InboxPage.tsx")
