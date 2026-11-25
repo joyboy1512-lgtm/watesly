@@ -110,11 +110,6 @@ function channelTitle(wa: WhatsAppAccountRow) {
   return `${wa.verified_name || wa.channel_name || "واتساب"} · ${phoneLast4(wa.display_phone_number)}`;
 }
 
-function channelShortName(wa: WhatsAppAccountRow | null) {
-  if (!wa) return "القناة";
-  return wa.channel_name || wa.verified_name || "واتساب";
-}
-
 function modeClass(mode?: string) {
   if (mode === "auto_customer") return "is-auto";
   if (mode === "suggest_staff") return "is-suggest";
@@ -219,7 +214,6 @@ export default function AiAgentPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(true);
   const [newDraftOpen, setNewDraftOpen] = useState(false);
   const [activityRange, setActivityRange] = useState<"7" | "all">("all");
 
@@ -284,22 +278,6 @@ export default function AiAgentPage() {
         await api.get<ActivityRow[]>(
           `/knowledge/ai/activity?channel_id=${encodeURIComponent(channelId)}&limit=40`
         )
-      ).data
-  });
-
-  const metricsQuery = useQuery({
-    queryKey: ["ai-metrics", channelId],
-    enabled: Boolean(channelId) && tab === "activity",
-    queryFn: async () =>
-      (
-        await api.get<{
-          total: number;
-          suggest_count: number;
-          auto_reply_count: number;
-          escalate_count: number;
-          unresolved_count: number;
-          days: number;
-        }>(`/knowledge/ai/metrics?channel_id=${encodeURIComponent(channelId)}&days=7`)
       ).data
   });
 
@@ -675,84 +653,73 @@ export default function AiAgentPage() {
     });
   }, [activityQuery.data, activityRange]);
 
+  const statusCopy =
+    replyChoice === "suggest"
+      ? {
+          title: "يقترح للموظف",
+          body: "يوفر رداً جاهزاً للموظف ليراجعه قبل الإرسال."
+        }
+      : replyChoice === "auto"
+        ? {
+            title: "يرد تلقائياً",
+            body: "يرسل الرد للعميل مباشرة عبر واتساب عند الرسائل الواردة."
+          }
+        : {
+            title: "الموظف يرد",
+            body: "المساعد لا يقترح ولا يرسل — الموظف يتولى المحادثة."
+          };
+
   return (
-    <main className="page knowledge-page ai-ops-page">
-      <header className="page-header catalog-hero">
-        <div>
-          <span className="eyebrow whatsapp-eyebrow">AI Ops</span>
-          <h1>الذكاء الاصطناعي</h1>
-          <p>تشغيل واختبار المساعد حسب قناة واتساب — بنفس هوية واتسلي.</p>
-        </div>
-      </header>
-
-      <section className="card knowledge-agent-card knowledge-panel-shell ai-channel-sticky">
-        <div className="knowledge-fields-row ai-channel-row">
-          <label className="field-label">
-            <span>قناة واتساب</span>
-            <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
-              {!waList.length && <option value="">لا توجد قنوات</option>}
-              {waList.map((wa) => (
-                <option key={wa.id} value={wa.channel_id}>
-                  {channelTitle(wa)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="catalog-card-actions" style={{ alignItems: "end" }}>
-            <button type="button" className="secondary-button" onClick={() => void toggleAccountKill()}>
-              {settings?.account_agent_enabled === false
-                ? "تشغيل الذكاء لجميع القنوات"
-                : "إيقاف الذكاء لجميع القنوات"}
-            </button>
-            <button
-              type="button"
-              className="whatsapp-button"
-              onClick={() => {
-                setTab("lab");
-                resetLab();
-              }}
-            >
-              جرّب محادثة
-            </button>
+    <main className="page ai-ops-page">
+      <div className="ai-ops-shell">
+        <header className="ai-ops-top">
+          <div className="ai-ops-title-row">
+            <h1>الذكاء الاصطناعي</h1>
+            <label className="ai-channel-select">
+              <span>القناة</span>
+              <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+                {!waList.length && <option value="">لا توجد قنوات</option>}
+                {waList.map((wa) => (
+                  <option key={wa.id} value={wa.channel_id}>
+                    {wa.channel_name || wa.verified_name || channelTitle(wa)}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </div>
-
-        <div className="catalog-filter-tabs knowledge-status-tabs ai-ops-tabs">
-          {TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={tab === item.id ? "active" : ""}
-              onClick={() => setTab(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </section>
+          <nav className="ai-underline-tabs" aria-label="أقسام الذكاء">
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={tab === item.id ? "is-active" : ""}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </header>
 
       {tab === "ops" && settings && (
         <>
-          <section className="card knowledge-agent-card knowledge-panel-shell">
-            <article className={`ai-reply-status ai-ops-hero-status ${modeClass(replyMode?.mode)}`}>
-              <div>
-                <span className="agent-power-eyebrow">
-                  {channelShortName(selectedWa)} · إذا كتب العميل الآن
-                </span>
-                <strong>{replyMode?.label || "الموظف يرد"}</strong>
-                <p>
-                  {replyMode?.reason_text ||
-                    "يوفر رداً جاهزاً للموظف لمراجعته قبل الإرسال."}
-                </p>
-                {(replyMode?.blockers ?? []).map((item) => (
-                  <p key={item.code} className="hint-text">
-                    السبب: {item.text} — {item.action}
-                  </p>
-                ))}
+          <section className="ai-panel">
+            <article className={`ai-status-card ${modeClass(replyMode?.mode)}`}>
+              <div className="ai-status-main">
+                <span className="ai-status-dot" aria-hidden />
+                <div>
+                  <h2>{statusCopy.title}</h2>
+                  <p>{statusCopy.body}</p>
+                  {(replyMode?.blockers ?? []).map((item) => (
+                    <p key={item.code} className="ai-status-note">
+                      {item.text}
+                    </p>
+                  ))}
+                </div>
               </div>
               <button
                 type="button"
-                className="whatsapp-button"
+                className="whatsapp-button ai-status-cta"
                 onClick={() => {
                   setTab("lab");
                   resetLab();
@@ -762,68 +729,59 @@ export default function AiAgentPage() {
               </button>
             </article>
 
-            <div className="ai-ops-block">
-              <h2 className="section-title-sm">وضع الرد</h2>
-              <p className="hint-text">من يرد على العميل في هذه القناة؟</p>
-              <div className="ai-reply-choice-grid" role="radiogroup" aria-label="وضع الرد">
+            <div className="ai-section">
+              <h3>وضع الرد</h3>
+              <div className="ai-mode-radios" role="radiogroup" aria-label="وضع الرد">
                 {REPLY_CHOICES.map((choice) => (
                   <button
                     key={choice.id}
                     type="button"
                     role="radio"
                     aria-checked={replyChoice === choice.id}
-                    className={`ai-reply-choice ${replyChoice === choice.id ? "is-active" : ""}`}
+                    className={`ai-mode-radio ${replyChoice === choice.id ? "is-active" : ""}`}
                     onClick={() => void applyReplyChoice(choice.id)}
                   >
-                    <strong>{choice.title}</strong>
-                    <span>{choice.hint}</span>
+                    <span className="ai-radio-mark" aria-hidden />
+                    <span className="ai-mode-radio-copy">
+                      <strong>{choice.title}</strong>
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="ai-ops-block">
-              <button
-                type="button"
-                className="ai-sources-toggle"
-                onClick={() => setSourcesOpen((value) => !value)}
-              >
-                <span>مصادر المعرفة</span>
-                <span className="hint-text">{sourcesOpen ? "إخفاء" : "إظهار"}</span>
-              </button>
-              {sourcesOpen && (
-                <div className="ai-sources-list">
-                  <Link className="ai-source-row" to="/knowledge">
-                    <span className="ai-source-icon is-knowledge" aria-hidden />
-                    <span>
-                      <strong>المعرفة</strong>
-                      <small>قواعد وأسئلة هذه القناة</small>
-                    </span>
-                    <span className={`ai-source-pill ${localOn ? "is-on" : "is-off"}`}>
-                      {localOn ? "يعمل" : "متوقف"}
-                    </span>
-                  </Link>
-                  <Link className="ai-source-row" to="/catalog">
-                    <span className="ai-source-icon is-catalog" aria-hidden />
-                    <span>
-                      <strong>الكتالوج</strong>
-                      <small>المنتجات والأسعار حسب القناة</small>
-                    </span>
-                    <span className={`ai-source-pill ${localOn ? "is-on" : "is-off"}`}>
-                      {localOn ? "يعمل" : "متوقف"}
-                    </span>
-                  </Link>
-                </div>
-              )}
+            <div className="ai-section">
+              <h3>مصادر المعرفة</h3>
+              <div className="ai-accordion">
+                <Link className="ai-accordion-row" to="/knowledge">
+                  <span className="ai-accordion-icon is-book" aria-hidden />
+                  <span className="ai-accordion-label">المعرفة</span>
+                  <span className="ai-accordion-meta">{localOn ? "مفعّل" : "متوقف"}</span>
+                  <span className="ai-accordion-chevron" aria-hidden />
+                </Link>
+                <Link className="ai-accordion-row" to="/catalog">
+                  <span className="ai-accordion-icon is-box" aria-hidden />
+                  <span className="ai-accordion-label">الكتالوج</span>
+                  <span className="ai-accordion-meta">{localOn ? "مفعّل" : "متوقف"}</span>
+                  <span className="ai-accordion-chevron" aria-hidden />
+                </Link>
+              </div>
             </div>
           </section>
 
-          <section className="card knowledge-preview-card">
-            <button type="button" className="secondary-button" onClick={() => setAdvancedOpen((v) => !v)}>
+          <section className="ai-panel ai-panel-quiet">
+            <button type="button" className="ai-linkish" onClick={() => setAdvancedOpen((v) => !v)}>
               {advancedOpen ? "إخفاء الإعدادات المتقدمة" : "إظهار الإعدادات المتقدمة"}
             </button>
             {advancedOpen && (
               <div className="ai-advanced-stack">
+                <div className="catalog-card-actions">
+                  <button type="button" className="secondary-button" onClick={() => void toggleAccountKill()}>
+                    {settings.account_agent_enabled === false
+                      ? "تشغيل الذكاء لجميع القنوات"
+                      : "إيقاف الذكاء لجميع القنوات"}
+                  </button>
+                </div>
                 <div className="knowledge-fields-row">
                   <label className="field-label">
                     <span>المحرك الداخلي</span>
@@ -1031,35 +989,22 @@ export default function AiAgentPage() {
       )}
 
       {tab === "lab" && (
-        <section className="card knowledge-agent-card knowledge-panel-shell">
-          <div className="ai-lab-toolbar">
-            <div>
-              <h2 className="section-title">التجربة والجودة</h2>
-              <p className="hint-text">
-                محادثة داخلية معزولة — لا واتساب ولا طلب حقيقي. القناة:{" "}
-                {selectedWa ? channelTitle(selectedWa) : "—"}
-              </p>
-            </div>
-            <div className="catalog-card-actions">
-              <button type="button" className="secondary-button" onClick={resetLab}>
-                اختبار داخلي
-              </button>
-            </div>
+        <section className="ai-panel">
+          <div className="ai-panel-head">
+            <h2>التجربة والجودة</h2>
+            <button type="button" className="secondary-button" onClick={resetLab}>
+              اختبار داخلي
+            </button>
           </div>
 
           <div className="ai-lab-layout">
             <div className="ai-lab-chat-pane">
-              <div className="knowledge-fields-row">
-                <label className="field-label">
-                  <span>اسم العميل في التجربة</span>
-                  <input value={labContactName} onChange={(e) => setLabContactName(e.target.value)} />
-                </label>
-              </div>
               <div className="ai-lab-thread">
-                {labTurns.length === 0 && <p className="hint-text">اكتب رسالة العميل للبدء…</p>}
+                {labTurns.length === 0 && (
+                  <p className="hint-text">مثال: أبي حبتين rose soap — ثم خلّهم ثلاث</p>
+                )}
                 {labTurns.map((turn, index) => (
                   <article key={`${turn.role}-${index}`} className={`ai-lab-bubble is-${turn.role}`}>
-                    <strong>{turn.role === "customer" ? "العميل" : "المساعد"}</strong>
                     {turn.role === "assistant" ? (
                       <WhatsAppTextPreview text={turn.text} compact />
                     ) : (
@@ -1078,7 +1023,7 @@ export default function AiAgentPage() {
                 <input
                   value={labInput}
                   onChange={(e) => setLabInput(e.target.value)}
-                  placeholder="أبي حبتين rose soap ٩٥ غ"
+                  placeholder="اكتب رسالة العميل…"
                   disabled={labBusy}
                 />
                 <button type="submit" className="whatsapp-button" disabled={labBusy || !labInput.trim()}>
@@ -1089,7 +1034,6 @@ export default function AiAgentPage() {
 
             <aside className="ai-interpret-card">
               <h3>تفسير الطلب</h3>
-              <p className="hint-text">{lastReason || "سيظهر هنا ما فهمه المساعد من الحوار."}</p>
               <dl className="ai-interpret-grid">
                 <div>
                   <dt>المنتج</dt>
@@ -1100,27 +1044,20 @@ export default function AiAgentPage() {
                   <dd>{interpretation.quantity ?? "—"}</dd>
                 </div>
                 <div>
-                  <dt>الوزن / الحجم</dt>
+                  <dt>الوزن</dt>
                   <dd>{interpretation.weight ?? "—"}</dd>
                 </div>
-                <div>
-                  <dt>الحالة</dt>
-                  <dd>
-                    {interpretation.needsClarification
-                      ? "يحتاج توضيحاً"
-                      : interpretation.source || "—"}
-                  </dd>
-                </div>
               </dl>
-              {labDialogue?.cart != null && (
-                <p className="hint-text">السلة: {JSON.stringify(labDialogue.cart)}</p>
-              )}
-              <p className="hint-text">واتساب مرسل: 0 · طلبات منشأة: 0</p>
+              {lastReason && <p className="ai-interpret-note">{lastReason}</p>}
             </aside>
           </div>
 
           <details className="ai-quality-details">
             <summary>مختبر جودة سريع</summary>
+            <label className="field-label">
+              <span>اسم العميل</span>
+              <input value={labContactName} onChange={(e) => setLabContactName(e.target.value)} />
+            </label>
             <textarea rows={4} value={qualityCasesText} onChange={(e) => setQualityCasesText(e.target.value)} />
             <button
               type="button"
@@ -1141,12 +1078,9 @@ export default function AiAgentPage() {
       )}
 
       {tab === "templates" && (
-        <section className="card knowledge-agent-card knowledge-panel-shell">
-          <div className="ai-lab-toolbar">
-            <div>
-              <h2 className="section-title">القوالب</h2>
-              <p className="hint-text">مسودات قوالب هذه القناة مع حالتها قبل ميتا.</p>
-            </div>
+        <section className="ai-panel">
+          <div className="ai-panel-head">
+            <h2>القوالب</h2>
             <button
               type="button"
               className="whatsapp-button"
@@ -1166,17 +1100,12 @@ export default function AiAgentPage() {
               const status = draftStatusMeta(item);
               return (
                 <article key={item.id} className="ai-template-row">
-                  <div>
-                    <strong>{item.topic || item.draft?.name || "مسودة"}</strong>
-                    <p className="hint-text">
-                      {(item.draft?.body_text || "").slice(0, 90) || "بدون نص بعد"}
-                      {(item.draft?.body_text || "").length > 90 ? "…" : ""}
-                    </p>
-                  </div>
+                  <strong>{item.topic || item.draft?.name || "مسودة"}</strong>
                   <span className={`ai-status-badge ${status.className}`}>{status.label}</span>
                   <button
                     type="button"
-                    className="secondary-button compact"
+                    className="ai-icon-button"
+                    aria-label="فتح المسودة"
                     onClick={() => {
                       setTemplateDraft(item.draft);
                       setTemplateTopic(item.topic || item.draft?.name || "");
@@ -1184,7 +1113,7 @@ export default function AiAgentPage() {
                       setNewDraftOpen(true);
                     }}
                   >
-                    فتح
+                    ⋯
                   </button>
                 </article>
               );
@@ -1309,12 +1238,9 @@ export default function AiAgentPage() {
       )}
 
       {tab === "activity" && (
-        <section className="card knowledge-agent-card knowledge-panel-shell">
-          <div className="ai-lab-toolbar">
-            <div>
-              <h2 className="section-title">سجل النشاط</h2>
-              <p className="hint-text">متى؟ ماذا فعل المساعد؟ ولماذا؟</p>
-            </div>
+        <section className="ai-panel">
+          <div className="ai-panel-head">
+            <h2>سجل النشاط</h2>
           </div>
 
           <div className="ai-activity-filters">
@@ -1330,32 +1256,12 @@ export default function AiAgentPage() {
             </label>
             <label className="field-label">
               <span>القناة</span>
-              <input value={selectedWa ? channelTitle(selectedWa) : "—"} readOnly />
+              <input
+                value={selectedWa ? selectedWa.channel_name || selectedWa.verified_name || channelTitle(selectedWa) : "—"}
+                readOnly
+              />
             </label>
           </div>
-
-          {metricsQuery.data && (
-            <div className="brand-stat-row knowledge-status-strip" style={{ marginBottom: 12 }}>
-              <article className="brand-stat-card brand-stat-card--sm">
-                <span className="brand-stat-label">إجمالي ({metricsQuery.data.days}ي)</span>
-                <strong className="brand-stat-value">{metricsQuery.data.total}</strong>
-              </article>
-              <article className="brand-stat-card brand-stat-card--sm">
-                <span className="brand-stat-label">اقتراحات</span>
-                <strong className="brand-stat-value">{metricsQuery.data.suggest_count}</strong>
-              </article>
-              <article className="brand-stat-card brand-stat-card--sm">
-                <span className="brand-stat-label">ردود تلقائية</span>
-                <strong className="brand-stat-value">{metricsQuery.data.auto_reply_count}</strong>
-              </article>
-              <article className="brand-stat-card brand-stat-card--sm">
-                <span className="brand-stat-label">تحويل/تعذّر</span>
-                <strong className="brand-stat-value">
-                  {metricsQuery.data.escalate_count + metricsQuery.data.unresolved_count}
-                </strong>
-              </article>
-            </div>
-          )}
 
           <div className="ai-activity-table" role="table" aria-label="سجل نشاط الذكاء">
             <div className="ai-activity-head" role="row">
@@ -1367,10 +1273,12 @@ export default function AiAgentPage() {
               const event = activityEventLabel(row.outcome);
               return (
                 <div key={row.id} className="ai-activity-row" role="row">
-                  <span role="cell">{formatActivityTime(row.created_at)}</span>
+                  <span role="cell" className="ai-activity-time">
+                    {formatActivityTime(row.created_at)}
+                  </span>
                   <span role="cell" className={`ai-activity-event ${event.className}`}>
+                    <span className="ai-event-icon" aria-hidden />
                     {event.label}
-                    {row.source === "lab" ? " · اختبار" : ""}
                   </span>
                   <span role="cell" className="ai-activity-reason">
                     {row.reason_text || "—"}
@@ -1386,6 +1294,7 @@ export default function AiAgentPage() {
           </div>
         </section>
       )}
+      </div>
     </main>
   );
 }
