@@ -102,7 +102,6 @@ export default function ComposerLibraryPage() {
 
   const replies = useQuery({
     queryKey: ["quick-replies", "composer-library", statusTab, organizationFilter],
-    enabled: mainTab === "replies",
     queryFn: async () => {
       const params: Record<string, string | boolean> = {};
       if (statusTab === "archived") params.include_inactive = true;
@@ -113,7 +112,6 @@ export default function ComposerLibraryPage() {
 
   const buttons = useQuery({
     queryKey: ["composer-button-templates", "page", statusTab, organizationFilter],
-    enabled: mainTab === "buttons",
     queryFn: async () => {
       const params: Record<string, string | boolean> = {};
       if (statusTab === "archived") params.include_inactive = true;
@@ -124,7 +122,6 @@ export default function ComposerLibraryPage() {
 
   const lists = useQuery({
     queryKey: ["composer-list-templates", "page", statusTab, organizationFilter],
-    enabled: mainTab === "lists",
     queryFn: async () => {
       const params: Record<string, string | boolean> = {};
       if (statusTab === "archived") params.include_inactive = true;
@@ -553,20 +550,25 @@ export default function ComposerLibraryPage() {
         )}
       </section>
 
-      <div className="composer-library-type-tabs" role="tablist" aria-label="نوع المكتبة">
+      <div className="brand-stat-row composer-library-type-tabs" role="tablist" aria-label="نوع المكتبة">
         {(
           [
             ["replies", "ردود", "نصوص جاهزة واختصارات"],
             ["buttons", "أزرار", "رسائل بأزرار رد سريع"],
             ["lists", "قوائم", "قوائم خيارات منظمة"]
           ] as const
-        ).map(([key, label, hint]) => (
+        ).map(([key, label, hint]) => {
+          const rows =
+            key === "replies" ? visibleReplies : key === "buttons" ? visibleButtons : visibleLists;
+          const tabLoading =
+            key === "replies" ? replies.isLoading : key === "buttons" ? buttons.isLoading : lists.isLoading;
+          return (
           <button
             key={key}
             type="button"
             role="tab"
             aria-selected={mainTab === key}
-            className={`composer-library-type-tab${mainTab === key ? " active" : ""}`}
+            className={`brand-stat-card brand-stat-card--sm composer-library-type-tab${mainTab === key ? " active is-active" : ""}`}
             onClick={() => {
               setMainTab(key);
               setStatusTab("active");
@@ -574,18 +576,16 @@ export default function ComposerLibraryPage() {
               clearSelection();
             }}
           >
-            <span className="composer-library-type-icon" aria-hidden>
-              <Icon name="template" size={18} />
-            </span>
-            <span className="composer-library-type-text">
+            <span className="brand-stat-label composer-library-type-text">
               <strong>{label}</strong>
-              <small>{hint}</small>
             </span>
-            {mainTab === key && !isLoading && activeCount > 0 && (
-              <b className="composer-library-type-count">{activeCount}</b>
-            )}
+            <b className="brand-stat-value composer-library-type-count">
+              {tabLoading ? "…" : rows.length}
+            </b>
+            <small className="brand-stat-meta">{hint}</small>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       <div className="composer-library-controls">

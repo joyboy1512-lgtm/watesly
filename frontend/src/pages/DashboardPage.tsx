@@ -284,7 +284,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={card.id}
-                      className={`dashboard-attention-card dashboard-attention-${card.status}${attentionFailed ? " is-error" : ""}`}
+                      className={`brand-stat-card dashboard-attention-card dashboard-attention-${card.status}${attentionFailed ? " is-error" : ""}`}
                       aria-disabled="true"
                     >
                       {content}
@@ -295,7 +295,7 @@ export default function DashboardPage() {
                   <Link
                     key={card.id}
                     to={card.href}
-                    className={`dashboard-attention-card dashboard-attention-${card.status}${card.count ? " has-count" : ""}`}
+                    className={`brand-stat-card dashboard-attention-card dashboard-attention-${card.status}${card.count ? " has-count" : ""}`}
                   >
                     {content}
                   </Link>

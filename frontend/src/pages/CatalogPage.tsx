@@ -826,9 +826,10 @@ export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
                   type="button"
                   title={card.hint}
                   className={[
+                    "brand-stat-card",
                     "catalog-visibility-card",
                     `visibility-${card.status}`,
-                    selected ? "active" : "",
+                    selected ? "active is-active" : "",
                     alert ? "has-alert" : "",
                     quiet ? "is-quiet" : ""
                   ].filter(Boolean).join(" ")}
@@ -841,16 +842,17 @@ export default function CatalogPage({ demoMode = false }: CatalogPageProps) {
                   }}
                   aria-pressed={selected}
                 >
-                  <span className="catalog-visibility-icon" aria-hidden="true">{card.icon}</span>
-                  <span className="catalog-visibility-label">{card.label}</span>
-                  <strong className="catalog-visibility-count">
+                  <span className="brand-stat-label catalog-visibility-label">{card.label}</span>
+                  <strong className="brand-stat-value catalog-visibility-count">
                     {card.displayCount == null ? "—" : card.displayCount.toLocaleString("ar")}
                   </strong>
                   {card.needsChannelSelection ? (
-                    <span className="catalog-visibility-action">اختر رقم واتساب</span>
+                    <span className="brand-stat-meta catalog-visibility-action">اختر رقم واتساب</span>
                   ) : selected ? (
-                    <span className="catalog-visibility-selected">✓ محدد</span>
-                  ) : null}
+                    <span className="brand-stat-meta catalog-visibility-selected">✓ محدد</span>
+                  ) : (
+                    <span className="brand-stat-meta catalog-visibility-action">اضغط للتصفية</span>
+                  )}
                 </button>
               );
             })}

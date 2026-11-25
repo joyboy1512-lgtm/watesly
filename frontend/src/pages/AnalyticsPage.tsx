@@ -67,10 +67,12 @@ function KpiCard({
   href?: string;
 }) {
   const body = (
-    <article className="analytics-kpi">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {change != null && <em className={changeClass(change)}>{formatChange(change)} vs السابق</em>}
+    <article className="brand-stat-card analytics-kpi">
+      <span className="brand-stat-label">{label}</span>
+      <strong className="brand-stat-value">{value}</strong>
+      {change != null && (
+        <em className={`brand-stat-meta ${changeClass(change)}`}>{formatChange(change)} vs السابق</em>
+      )}
     </article>
   );
   return href ? <Link to={href} className="analytics-kpi-link">{body}</Link> : body;
