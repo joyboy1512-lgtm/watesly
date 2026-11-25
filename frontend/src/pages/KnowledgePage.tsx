@@ -446,42 +446,28 @@ export default function KnowledgePage() {
           <p>معرفة وكتالوج كل رقم واتساب منفصلان — سؤال Travel Zone لا يرد بمنتجات قناة أخرى.</p>
           {settings && (
             <div className="brand-stat-row knowledge-status-strip" aria-live="polite">
-              <article
-                className={`brand-stat-card brand-stat-card--sm${settings.agent_enabled === false ? " is-quiet" : ""}`}
-              >
+              <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">الوكيل</span>
                 <strong className="brand-stat-value">
                   {settings.agent_enabled !== false ? "يعمل" : "متوقف"}
                 </strong>
                 <small className="brand-stat-meta">المحرك المحلي</small>
               </article>
-              <article
-                className={`brand-stat-card brand-stat-card--sm${
-                  settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "" : " is-quiet"
-                }`}
-              >
+              <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">اقتراح الوارد</span>
                 <strong className="brand-stat-value">
                   {settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "يعمل" : "متوقف"}
                 </strong>
                 <small className="brand-stat-meta">عند رسالة جديدة</small>
               </article>
-              <article
-                className={`brand-stat-card brand-stat-card--sm${
-                  settings.llm_enabled && settings.llm_available ? "" : " is-quiet"
-                }`}
-              >
+              <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">خارجي LLM</span>
                 <strong className="brand-stat-value">
                   {settings.llm_enabled && settings.llm_available ? "يعمل" : "متوقف"}
                 </strong>
                 <small className="brand-stat-meta">صقل الرد فقط</small>
               </article>
-              <article
-                className={`brand-stat-card brand-stat-card--sm${
-                  settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "" : " is-quiet"
-                }`}
-              >
+              <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">خارج الدوام</span>
                 <strong className="brand-stat-value">
                   {settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "يعمل" : "متوقف"}

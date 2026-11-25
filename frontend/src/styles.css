@@ -3616,18 +3616,22 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .knowledge-status-strip {
   margin-top: 14px;
+  margin-inline: auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   width: min(100%, 920px);
 }
+.knowledge-page .page-header.catalog-hero > div {
+  width: 100%;
+}
 .knowledge-status-strip .brand-stat-card {
   min-height: 88px;
+  background: linear-gradient(135deg, #25d366 0%, var(--primary) 42%, var(--primary-dark) 100%);
+  box-shadow: 0 10px 24px rgba(7, 94, 84, 0.28);
+  filter: none;
+  opacity: 1;
 }
 .knowledge-status-strip .brand-stat-value {
   font-size: 20px;
-}
-.brand-stat-card.is-quiet {
-  opacity: 0.78;
-  filter: saturate(0.75);
 }
 .inbox-ai-status-chip {
   display: inline-flex;
