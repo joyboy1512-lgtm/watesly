@@ -1319,8 +1319,8 @@ export default function AiAgentPage() {
                     void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
                   }
                 >
-                  <span>هذه القناة</span>
                   <strong>{localOn ? "إيقاف" : "تشغيل"}</strong>
+                  <span>هذه القناة</span>
                 </button>
               </span>
             </div>
@@ -1349,8 +1349,8 @@ export default function AiAgentPage() {
                   disabled={!settings.llm_available || !agentOn}
                   onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
                 >
-                  <span>هذه القناة</span>
                   <strong>{llmOn ? "إيقاف" : "تشغيل"}</strong>
+                  <span>هذه القناة</span>
                 </button>
               </span>
             </div>
