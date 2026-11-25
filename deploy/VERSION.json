@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "51361c6",
-    "git_commit_message": "Add-provider below table with roomier rows",
+    "git_commit": "7acf3b9",
+    "git_commit_message": "AI ops: staff welcome/hours, lab engines, template AI gate",
     "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.9",
+    "frontend_version": "0.33.10",
     "live_assets": {
-      "js": "index-qLMqw8-m.js",
-      "css": "index-C5Ys3zym.css"
+      "js": "index-BOOG9OXQ.js",
+      "css": "index-Bl5Pa8DP.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.9",
+    "frontend": "0.33.10",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "51361c6",
-  "notes": "Add-provider stacked below table; roomier provider cells"
+  "commit": "7acf3b9",
+  "notes": "Staff-mode hides AI toggle; welcome/outside-hours via internal engine; lab local/external WA sim; templates require external LLM + media upload + Meta submit"
 }
