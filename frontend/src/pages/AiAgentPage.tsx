@@ -86,6 +86,21 @@ type SavedDraft = {
   meta_status?: string | null;
 };
 
+type ReplyChoice = "staff" | "suggest" | "auto";
+
+const TABS: Array<{ id: PageTab; label: string }> = [
+  { id: "ops", label: "التشغيل" },
+  { id: "lab", label: "التجربة والجودة" },
+  { id: "templates", label: "القوالب" },
+  { id: "activity", label: "سجل النشاط" }
+];
+
+const REPLY_CHOICES: Array<{ id: ReplyChoice; title: string; hint: string }> = [
+  { id: "staff", title: "الموظف يرد", hint: "الذكاء لا يقترح ولا يرسل تلقائياً." },
+  { id: "suggest", title: "اقتراح للموظف", hint: "رد جاهز للمراجعة قبل الإرسال." },
+  { id: "auto", title: "رد تلقائي", hint: "المساعد يرد على العميل مباشرة." }
+];
+
 function phoneLast4(phone?: string | null) {
   const digits = (phone || "").replace(/\D/g, "");
   return digits.slice(-4) || "----";
@@ -95,10 +110,105 @@ function channelTitle(wa: WhatsAppAccountRow) {
   return `${wa.verified_name || wa.channel_name || "واتساب"} · ${phoneLast4(wa.display_phone_number)}`;
 }
 
+function channelShortName(wa: WhatsAppAccountRow | null) {
+  if (!wa) return "القناة";
+  return wa.channel_name || wa.verified_name || "واتساب";
+}
+
 function modeClass(mode?: string) {
   if (mode === "auto_customer") return "is-auto";
   if (mode === "suggest_staff") return "is-suggest";
   return "is-staff";
+}
+
+function selectedReplyChoice(settings?: EffectiveSettings | null): ReplyChoice {
+  if (!settings || settings.account_agent_enabled === false || settings.agent_enabled === false) {
+    return "staff";
+  }
+  if (settings.auto_reply_on_inbound) return "auto";
+  if (settings.auto_kb_on_inbound) return "suggest";
+  return "staff";
+}
+
+function draftStatusMeta(item: SavedDraft) {
+  const status = (item.status || "draft").toLowerCase();
+  if (status === "submitted" || status === "pending" || item.meta_status === "PENDING") {
+    return { label: "قيد المراجعة", className: "is-review" };
+  }
+  if (status === "approved" || item.meta_status === "APPROVED") {
+    return { label: "معتمد", className: "is-approved" };
+  }
+  if (status === "rejected") {
+    return { label: "مرفوض", className: "is-draft" };
+  }
+  return { label: "مسودة", className: "is-draft" };
+}
+
+function activityEventLabel(outcome: string) {
+  const key = (outcome || "").toLowerCase();
+  if (key.includes("clarify")) return { label: "توضيح", className: "is-clarify" };
+  if (key.includes("escalate")) return { label: "تحويل لموظف", className: "is-escalate" };
+  if (key.includes("auto")) return { label: "رد تلقائي", className: "is-auto" };
+  if (key.includes("skip")) return { label: "تخطي", className: "is-skip" };
+  if (key.includes("fail") || key.includes("unresolved")) return { label: "تعذّر", className: "is-fail" };
+  return { label: "اقتراح للموظف", className: "is-suggest" };
+}
+
+function formatActivityTime(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ar-KW", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "numeric",
+    month: "short"
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function extractInterpretation(
+  understood: Record<string, unknown> | null,
+  dialogue: Record<string, unknown> | null
+) {
+  const products = Array.isArray(understood?.matched_products)
+    ? (understood?.matched_products as Array<Record<string, unknown>>)
+    : [];
+  const pending = asRecord(dialogue?.pending_product);
+  const top = products[0] || pending || null;
+  const productName = top ? String(top.name || top.title || "—") : "—";
+  const quantity =
+    dialogue?.quantity ??
+    top?.quantity ??
+    (Array.isArray(dialogue?.cart) && dialogue?.cart[0]
+      ? asRecord(dialogue.cart[0])?.quantity
+      : null);
+  const size =
+    top?.variant_size ||
+    top?.size_label ||
+    asRecord(top?.size)?.label ||
+    asRecord(understood?.parsed)?.size ||
+    null;
+  const weight =
+    typeof size === "string" || typeof size === "number"
+      ? String(size)
+      : size && typeof size === "object"
+        ? `${(size as { value?: unknown }).value ?? ""} ${(size as { unit?: unknown }).unit ?? ""}`.trim()
+        : null;
+
+  return {
+    productName,
+    quantity: quantity == null || quantity === "" ? null : String(quantity),
+    weight: weight || null,
+    needsClarification: Boolean(understood?.needs_clarification),
+    source: understood?.source ? String(understood.source) : null,
+    engine: understood?.engine ? String(understood.engine) : null
+  };
 }
 
 export default function AiAgentPage() {
@@ -109,6 +219,9 @@ export default function AiAgentPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [newDraftOpen, setNewDraftOpen] = useState(false);
+  const [activityRange, setActivityRange] = useState<"7" | "all">("all");
 
   const [llmApiKeyDraft, setLlmApiKeyDraft] = useState("");
   const [hoursDraft, setHoursDraft] = useState<BusinessHoursConfig | null>(null);
@@ -161,6 +274,7 @@ export default function AiAgentPage() {
   });
   const settings = settingsQuery.data;
   const replyMode = settings?.reply_mode;
+  const replyChoice = selectedReplyChoice(settings);
 
   const activityQuery = useQuery({
     queryKey: ["ai-activity", channelId],
@@ -260,6 +374,38 @@ export default function AiAgentPage() {
     if (ok) setLlmApiKeyDraft("");
   }
 
+  async function applyReplyChoice(choice: ReplyChoice) {
+    if (!settings) return;
+    if (settings.account_agent_enabled === false) {
+      toastStore.getState().show("شغّل الذكاء للحساب أولاً من زر الطوارئ.", "error");
+      return;
+    }
+    if (choice === "staff") {
+      await saveSettings({
+        agent_enabled: true,
+        local_engine_enabled: settings.local_engine_enabled !== false,
+        auto_kb_on_inbound: false,
+        auto_reply_on_inbound: false
+      });
+      return;
+    }
+    if (choice === "suggest") {
+      await saveSettings({
+        agent_enabled: true,
+        local_engine_enabled: true,
+        auto_kb_on_inbound: true,
+        auto_reply_on_inbound: false
+      });
+      return;
+    }
+    await saveSettings({
+      agent_enabled: true,
+      local_engine_enabled: true,
+      auto_kb_on_inbound: true,
+      auto_reply_on_inbound: true
+    });
+  }
+
   async function runLabTurn(text?: string) {
     const query = (text ?? labInput).trim();
     if (!query || !channelId) return;
@@ -319,7 +465,6 @@ export default function AiAgentPage() {
     setLabAutostartDone(true);
     setTab("lab");
     void runLabTurn(seed);
-    // runLabTurn closes over latest channel/dialogue; intentional one-shot seed from inbox
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, searchParams, labAutostartDone]);
 
@@ -356,6 +501,7 @@ export default function AiAgentPage() {
       });
       setTemplateDraft(result.data);
       setTemplateHeaderFile(null);
+      setNewDraftOpen(true);
     } catch {
       toastStore.getState().show("تعذر توليد القالب. تأكد من المزود الخارجي.", "error");
     } finally {
@@ -433,6 +579,7 @@ export default function AiAgentPage() {
       }
       setTemplateAlts(drafts);
       setTemplateDraft(drafts[0] ?? null);
+      setNewDraftOpen(true);
       await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
       toastStore.getState().show("تم توليد 3 بدائل وحفظها كمسودات للقناة.", "success");
     } catch {
@@ -516,8 +663,17 @@ export default function AiAgentPage() {
   const agentOn = settings?.agent_enabled !== false && settings?.account_agent_enabled !== false;
   const localOn = agentOn && settings?.local_engine_enabled !== false;
   const llmOn = agentOn && Boolean(settings?.llm_enabled && settings?.llm_available);
-  const suggestOn = agentOn && Boolean(settings?.auto_kb_on_inbound);
-  const autoOn = agentOn && Boolean(settings?.auto_reply_on_inbound);
+  const interpretation = extractInterpretation(lastUnderstood, labDialogue);
+  const filteredActivity = useMemo(() => {
+    const rows = activityQuery.data ?? [];
+    if (activityRange === "all") return rows;
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return rows.filter((row) => {
+      if (!row.created_at) return true;
+      const ts = new Date(row.created_at).getTime();
+      return Number.isNaN(ts) || ts >= cutoff;
+    });
+  }, [activityQuery.data, activityRange]);
 
   return (
     <main className="page knowledge-page ai-ops-page">
@@ -525,7 +681,7 @@ export default function AiAgentPage() {
         <div>
           <span className="eyebrow whatsapp-eyebrow">AI Ops</span>
           <h1>الذكاء الاصطناعي</h1>
-          <p>لوحة تشغيل واختبار حسب قناة واتساب — نفس قواعد الكتالوج والمعرفة الحية.</p>
+          <p>تشغيل واختبار المساعد حسب قناة واتساب — بنفس هوية واتسلي.</p>
         </div>
       </header>
 
@@ -561,32 +717,15 @@ export default function AiAgentPage() {
           </div>
         </div>
 
-        {replyMode && (
-          <article className={`ai-reply-status ${modeClass(replyMode.mode)}`} aria-live="polite">
-            <div>
-              <span className="agent-power-eyebrow">إذا كتب العميل الآن على {selectedWa ? channelTitle(selectedWa) : "هذه القناة"}</span>
-              <strong>{replyMode.label}</strong>
-              <p>{replyMode.reason_text}</p>
-              {(replyMode.blockers ?? []).map((item) => (
-                <p key={item.code} className="hint-text">
-                  السبب: {item.text} — {item.action}
-                </p>
-              ))}
-            </div>
-          </article>
-        )}
-
-        <div className="catalog-filter-tabs knowledge-status-tabs" style={{ marginTop: 12 }}>
-          {(
-            [
-              ["ops", "التشغيل"],
-              ["lab", "التجربة والجودة"],
-              ["templates", "القوالب"],
-              ["activity", "سجل النشاط"]
-            ] as const
-          ).map(([id, label]) => (
-            <button key={id} type="button" className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
-              {label}
+        <div className="catalog-filter-tabs knowledge-status-tabs ai-ops-tabs">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={tab === item.id ? "active" : ""}
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
             </button>
           ))}
         </div>
@@ -595,254 +734,88 @@ export default function AiAgentPage() {
       {tab === "ops" && settings && (
         <>
           <section className="card knowledge-agent-card knowledge-panel-shell">
-            <div className="knowledge-panel-intro">
-              <span className="knowledge-panel-kicker">تشغيل القناة</span>
-              <h2 className="section-title">إعدادات {selectedWa ? channelTitle(selectedWa) : "القناة"}</h2>
-              <p className="hint-text">التغيير هنا يخص هذه القناة فقط ولا يغيّر قنوات أخرى.</p>
+            <article className={`ai-reply-status ai-ops-hero-status ${modeClass(replyMode?.mode)}`}>
+              <div>
+                <span className="agent-power-eyebrow">
+                  {channelShortName(selectedWa)} · إذا كتب العميل الآن
+                </span>
+                <strong>{replyMode?.label || "الموظف يرد"}</strong>
+                <p>
+                  {replyMode?.reason_text ||
+                    "يوفر رداً جاهزاً للموظف لمراجعته قبل الإرسال."}
+                </p>
+                {(replyMode?.blockers ?? []).map((item) => (
+                  <p key={item.code} className="hint-text">
+                    السبب: {item.text} — {item.action}
+                  </p>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="whatsapp-button"
+                onClick={() => {
+                  setTab("lab");
+                  resetLab();
+                }}
+              >
+                جرّب محادثة
+              </button>
+            </article>
+
+            <div className="ai-ops-block">
+              <h2 className="section-title-sm">وضع الرد</h2>
+              <p className="hint-text">من يرد على العميل في هذه القناة؟</p>
+              <div className="ai-reply-choice-grid" role="radiogroup" aria-label="وضع الرد">
+                {REPLY_CHOICES.map((choice) => (
+                  <button
+                    key={choice.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={replyChoice === choice.id}
+                    className={`ai-reply-choice ${replyChoice === choice.id ? "is-active" : ""}`}
+                    onClick={() => void applyReplyChoice(choice.id)}
+                  >
+                    <strong>{choice.title}</strong>
+                    <span>{choice.hint}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="agent-section-grid">
-              <article className="agent-section-card accent-internal">
-                <header className="agent-section-head">
-                  <div className="agent-section-title-row">
-                    <span className="agent-section-index">1</span>
-                    <div>
-                      <h3>ذكاء القناة</h3>
-                      <p>تشغيل/إيقاف الذكاء لهذه القناة فقط.</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`agent-state-toggle ${agentOn ? "is-on" : "is-off"}`}
-                    disabled={settings.account_agent_enabled === false}
-                    onClick={() => void saveSettings({ agent_enabled: !settings.agent_enabled })}
-                  >
-                    {agentOn ? "يعمل" : "متوقف"}
-                  </button>
-                </header>
-              </article>
 
-              <article className="agent-section-card accent-internal">
-                <header className="agent-section-head">
-                  <div className="agent-section-title-row">
-                    <span className="agent-section-index">2</span>
-                    <div>
-                      <h3>المحرك الداخلي</h3>
-                      <p>معرفة + كتالوج هذه القناة فقط.</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
-                    disabled={!agentOn}
-                    onClick={() =>
-                      void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
-                    }
-                  >
-                    {localOn ? "يعمل" : "متوقف"}
-                  </button>
-                </header>
-              </article>
-
-              <article className="agent-section-card accent-inbound">
-                <header className="agent-section-head">
-                  <div className="agent-section-title-row">
-                    <span className="agent-section-index">3</span>
-                    <div>
-                      <h3>اقتراح للموظف</h3>
-                      <p>يظهر في الوارد فقط — لا يُرسل للعميل.</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`agent-state-toggle ${suggestOn ? "is-on" : "is-off"}`}
-                    disabled={!agentOn}
-                    onClick={() => void saveSettings({ auto_kb_on_inbound: !settings.auto_kb_on_inbound })}
-                  >
-                    {suggestOn ? "يعمل" : "متوقف"}
-                  </button>
-                </header>
-              </article>
-
-              <article className="agent-section-card accent-auto-reply">
-                <header className="agent-section-head">
-                  <div className="agent-section-title-row">
-                    <span className="agent-section-index">4</span>
-                    <div>
-                      <h3>رد تلقائي للعميل</h3>
-                      <p>إرسال حي عبر واتساب. الافتراضي متوقف عند الترقية.</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`agent-state-toggle ${autoOn ? "is-on" : "is-off"}`}
-                    disabled={!agentOn}
-                    onClick={() =>
-                      void saveSettings({ auto_reply_on_inbound: !settings.auto_reply_on_inbound })
-                    }
-                  >
-                    {autoOn ? "يعمل" : "متوقف"}
-                  </button>
-                </header>
-                {autoOn && !replyMode?.engine_ready && (
-                  <p className="agent-section-note">فعّل الداخلي أو الخارجي قبل الاعتماد على الرد التلقائي.</p>
-                )}
-              </article>
-
-              <article className="agent-section-card accent-internal">
-                <header className="agent-section-head">
-                  <div className="agent-section-title-row">
-                    <span className="agent-section-index">5</span>
-                    <div>
-                      <h3>وضع الرد</h3>
-                      <p>كيف يختار المحرك بين المعرفة والكتالوج.</p>
-                    </div>
-                  </div>
-                </header>
-                <label className="field-label">
-                  <span>الوضع</span>
-                  <select
-                    value={settings.default_mode}
-                    disabled={!agentOn || !localOn}
-                    onChange={(e) =>
-                      void saveSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })
-                    }
-                  >
-                    {Object.entries(MODE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </article>
-            </div>
-          </section>
-
-          <section className="card knowledge-agent-card knowledge-panel-shell">
-            <button type="button" className="secondary-button" onClick={() => setHoursOpen((v) => !v)}>
-              {hoursOpen ? "إخفاء لائحة الدوام" : "إظهار لائحة الدوام"}
-            </button>
-            {hoursOpen && (
-              <div className="agent-hours-box" style={{ marginTop: 12 }}>
-                <label className="checkbox-row" style={{ marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(settings.auto_reply_outside_hours)}
-                    disabled={!agentOn}
-                    onChange={() =>
-                      void saveSettings({ auto_reply_outside_hours: !settings.auto_reply_outside_hours })
-                    }
-                  />
-                  <span>رد خارج الدوام</span>
-                </label>
-                <div className="agent-hours-table">
-                  {DAY_ORDER.map((day) => {
-                    const slot = hoursDraft?.days[day] ?? null;
-                    const open = slot != null;
-                    return (
-                      <div key={day} className="agent-hours-row">
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={open}
-                            disabled={!agentOn}
-                            onChange={(e) => updateHoursDay(day, { open: e.target.checked })}
-                          />
-                          <span>{DAY_LABELS[day]}</span>
-                        </label>
-                        <input
-                          type="time"
-                          value={slot?.[0] ?? "09:00"}
-                          disabled={!open || !agentOn}
-                          onChange={(e) => updateHoursDay(day, { start: e.target.value })}
-                        />
-                        <span className="hint-text">إلى</span>
-                        <input
-                          type="time"
-                          value={slot?.[1] ?? "18:00"}
-                          disabled={!open || !agentOn}
-                          onChange={(e) => updateHoursDay(day, { end: e.target.value })}
-                        />
-                      </div>
-                    );
-                  })}
+            <div className="ai-ops-block">
+              <button
+                type="button"
+                className="ai-sources-toggle"
+                onClick={() => setSourcesOpen((value) => !value)}
+              >
+                <span>مصادر المعرفة</span>
+                <span className="hint-text">{sourcesOpen ? "إخفاء" : "إظهار"}</span>
+              </button>
+              {sourcesOpen && (
+                <div className="ai-sources-list">
+                  <Link className="ai-source-row" to="/knowledge">
+                    <span className="ai-source-icon is-knowledge" aria-hidden />
+                    <span>
+                      <strong>المعرفة</strong>
+                      <small>قواعد وأسئلة هذه القناة</small>
+                    </span>
+                    <span className={`ai-source-pill ${localOn ? "is-on" : "is-off"}`}>
+                      {localOn ? "يعمل" : "متوقف"}
+                    </span>
+                  </Link>
+                  <Link className="ai-source-row" to="/catalog">
+                    <span className="ai-source-icon is-catalog" aria-hidden />
+                    <span>
+                      <strong>الكتالوج</strong>
+                      <small>المنتجات والأسعار حسب القناة</small>
+                    </span>
+                    <span className={`ai-source-pill ${localOn ? "is-on" : "is-off"}`}>
+                      {localOn ? "يعمل" : "متوقف"}
+                    </span>
+                  </Link>
                 </div>
-                <button type="button" className="whatsapp-button" disabled={!hoursDirty} onClick={() => void saveBusinessHours()}>
-                  حفظ ساعات العمل
-                </button>
-              </div>
-            )}
-          </section>
-
-          <section className="card knowledge-agent-card knowledge-panel-shell">
-            <button type="button" className="secondary-button" onClick={() => setProvidersOpen((v) => !v)}>
-              {providersOpen ? "إخفاء المزودات" : "إظهار المزودات الخارجية"}
-            </button>
-            {providersOpen && (
-              <div style={{ marginTop: 12 }}>
-                <article className="agent-section-card accent-external">
-                  <header className="agent-section-head">
-                    <div className="agent-section-title-row">
-                      <span className="agent-section-index">E</span>
-                      <div>
-                        <h3>المزود الخارجي</h3>
-                        <p>الحالة: {llmStatusLabel(settings)} · النموذج: {settings.llm_model || "gpt-4o-mini"}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className={`agent-state-toggle ${llmOn ? "is-on" : "is-off"}`}
-                      disabled={!settings.llm_available || !agentOn}
-                      onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
-                    >
-                      {llmOn ? "يعمل" : settings.llm_available ? "متوقف" : "غير جاهز"}
-                    </button>
-                  </header>
-                  <p className="hint-text">المحرك المحلي يعمل بدون مفتاح خارجي. نموذج الرد منفصل عن توليد الصور.</p>
-                  <div className="knowledge-fields-row">
-                    <label className="field-label">
-                      <span>مفتاح API</span>
-                      <input
-                        type="password"
-                        value={llmApiKeyDraft}
-                        onChange={(e) => setLlmApiKeyDraft(e.target.value)}
-                        dir="ltr"
-                      />
-                    </label>
-                    <label className="field-label">
-                      <span>Base URL</span>
-                      <input
-                        defaultValue={settings.llm_api_base_url ?? ""}
-                        onBlur={(e) => void saveSettings({ llm_api_base_url: e.target.value.trim() || null })}
-                        dir="ltr"
-                      />
-                    </label>
-                    <label className="field-label">
-                      <span>نموذج الرد</span>
-                      <input
-                        defaultValue={settings.llm_model ?? ""}
-                        onBlur={(e) => void saveSettings({ llm_model: e.target.value.trim() || null })}
-                        dir="ltr"
-                      />
-                    </label>
-                    <label className="field-label">
-                      <span>نموذج الصور</span>
-                      <input
-                        defaultValue={settings.llm_image_model ?? ""}
-                        placeholder="gpt-image-1 ثم dall-e-3 تلقائياً"
-                        onBlur={(e) =>
-                          void saveSettings({ llm_image_model: e.target.value.trim() || null })
-                        }
-                        dir="ltr"
-                      />
-                    </label>
-                  </div>
-                  <button type="button" className="whatsapp-button" onClick={() => void saveLlmApiKey()} disabled={!llmApiKeyDraft.trim()}>
-                    حفظ المفتاح
-                  </button>
-                </article>
-              </div>
-            )}
+              )}
+            </div>
           </section>
 
           <section className="card knowledge-preview-card">
@@ -850,30 +823,62 @@ export default function AiAgentPage() {
               {advancedOpen ? "إخفاء الإعدادات المتقدمة" : "إظهار الإعدادات المتقدمة"}
             </button>
             {advancedOpen && (
-              <div className="knowledge-fields-row" style={{ marginTop: 12 }}>
+              <div className="ai-advanced-stack">
+                <div className="knowledge-fields-row">
+                  <label className="field-label">
+                    <span>المحرك الداخلي</span>
+                    <button
+                      type="button"
+                      className={`agent-state-toggle ${localOn ? "is-on" : "is-off"}`}
+                      disabled={!agentOn}
+                      onClick={() =>
+                        void saveSettings({ local_engine_enabled: settings.local_engine_enabled === false })
+                      }
+                    >
+                      {localOn ? "يعمل" : "متوقف"}
+                    </button>
+                  </label>
+                  <label className="field-label">
+                    <span>وضع المحرك</span>
+                    <select
+                      value={settings.default_mode}
+                      disabled={!agentOn || !localOn}
+                      onChange={(e) =>
+                        void saveSettings({ default_mode: e.target.value as AgentSettings["default_mode"] })
+                      }
+                    >
+                      {Object.entries(MODE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    <span>النبرة</span>
+                    <select
+                      value={settings.tone}
+                      onChange={(e) => void saveSettings({ tone: e.target.value as AgentSettings["tone"] })}
+                    >
+                      <option value="friendly">ودّية</option>
+                      <option value="formal">رسمية</option>
+                      <option value="concise">مختصرة</option>
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    <span>حد جولات التوضيح</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      defaultValue={settings.clarify_max_rounds ?? 2}
+                      onBlur={(e) => void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })}
+                    />
+                  </label>
+                </div>
+
                 <label className="field-label">
-                  <span>النبرة</span>
-                  <select
-                    value={settings.tone}
-                    onChange={(e) => void saveSettings({ tone: e.target.value as AgentSettings["tone"] })}
-                  >
-                    <option value="friendly">ودّية</option>
-                    <option value="formal">رسمية</option>
-                    <option value="concise">مختصرة</option>
-                  </select>
-                </label>
-                <label className="field-label">
-                  <span>حد جولات التوضيح قبل التحويل</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    defaultValue={settings.clarify_max_rounds ?? 2}
-                    onBlur={(e) => void saveSettings({ clarify_max_rounds: Number(e.target.value) || 2 })}
-                  />
-                </label>
-                <label className="field-label" style={{ gridColumn: "1 / -1" }}>
-                  <span>كلمات التصعيد (سطر أو فاصلة لكل كلمة)</span>
+                  <span>كلمات التصعيد</span>
                   <textarea
                     rows={3}
                     defaultValue={(settings.escalation_keywords ?? []).join("\n")}
@@ -887,9 +892,138 @@ export default function AiAgentPage() {
                     }}
                   />
                 </label>
-                <p className="hint-text">
-                  المعرفة والقواعد: <Link to="/knowledge">قاعدة المعرفة</Link>
-                </p>
+
+                <button type="button" className="secondary-button" onClick={() => setHoursOpen((v) => !v)}>
+                  {hoursOpen ? "إخفاء لائحة الدوام" : "إظهار لائحة الدوام"}
+                </button>
+                {hoursOpen && (
+                  <div className="agent-hours-box">
+                    <label className="checkbox-row" style={{ marginBottom: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(settings.auto_reply_outside_hours)}
+                        disabled={!agentOn}
+                        onChange={() =>
+                          void saveSettings({ auto_reply_outside_hours: !settings.auto_reply_outside_hours })
+                        }
+                      />
+                      <span>رد خارج الدوام</span>
+                    </label>
+                    <div className="agent-hours-table">
+                      {DAY_ORDER.map((day) => {
+                        const slot = hoursDraft?.days[day] ?? null;
+                        const open = slot != null;
+                        return (
+                          <div key={day} className="agent-hours-row">
+                            <label className="checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={open}
+                                disabled={!agentOn}
+                                onChange={(e) => updateHoursDay(day, { open: e.target.checked })}
+                              />
+                              <span>{DAY_LABELS[day]}</span>
+                            </label>
+                            <input
+                              type="time"
+                              value={slot?.[0] ?? "09:00"}
+                              disabled={!open || !agentOn}
+                              onChange={(e) => updateHoursDay(day, { start: e.target.value })}
+                            />
+                            <span className="hint-text">إلى</span>
+                            <input
+                              type="time"
+                              value={slot?.[1] ?? "18:00"}
+                              disabled={!open || !agentOn}
+                              onChange={(e) => updateHoursDay(day, { end: e.target.value })}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      className="whatsapp-button"
+                      disabled={!hoursDirty}
+                      onClick={() => void saveBusinessHours()}
+                    >
+                      حفظ ساعات العمل
+                    </button>
+                  </div>
+                )}
+
+                <button type="button" className="secondary-button" onClick={() => setProvidersOpen((v) => !v)}>
+                  {providersOpen ? "إخفاء المزودات" : "إظهار المزودات الخارجية"}
+                </button>
+                {providersOpen && (
+                  <article className="agent-section-card accent-external">
+                    <header className="agent-section-head">
+                      <div className="agent-section-title-row">
+                        <span className="agent-section-index">E</span>
+                        <div>
+                          <h3>المزود الخارجي</h3>
+                          <p>
+                            الحالة: {llmStatusLabel(settings)} · النموذج: {settings.llm_model || "gpt-4o-mini"}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`agent-state-toggle ${llmOn ? "is-on" : "is-off"}`}
+                        disabled={!settings.llm_available || !agentOn}
+                        onClick={() => void saveSettings({ llm_enabled: !settings.llm_enabled })}
+                      >
+                        {llmOn ? "يعمل" : settings.llm_available ? "متوقف" : "غير جاهز"}
+                      </button>
+                    </header>
+                    <div className="knowledge-fields-row">
+                      <label className="field-label">
+                        <span>مفتاح API</span>
+                        <input
+                          type="password"
+                          value={llmApiKeyDraft}
+                          onChange={(e) => setLlmApiKeyDraft(e.target.value)}
+                          dir="ltr"
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>Base URL</span>
+                        <input
+                          defaultValue={settings.llm_api_base_url ?? ""}
+                          onBlur={(e) => void saveSettings({ llm_api_base_url: e.target.value.trim() || null })}
+                          dir="ltr"
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>نموذج الرد</span>
+                        <input
+                          defaultValue={settings.llm_model ?? ""}
+                          onBlur={(e) => void saveSettings({ llm_model: e.target.value.trim() || null })}
+                          dir="ltr"
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>نموذج الصور</span>
+                        <input
+                          defaultValue={settings.llm_image_model ?? ""}
+                          placeholder="gpt-image-1 ثم dall-e-3 تلقائياً"
+                          onBlur={(e) =>
+                            void saveSettings({ llm_image_model: e.target.value.trim() || null })
+                          }
+                          dir="ltr"
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      className="whatsapp-button"
+                      onClick={() => void saveLlmApiKey()}
+                      disabled={!llmApiKeyDraft.trim()}
+                    >
+                      حفظ المفتاح
+                    </button>
+                  </article>
+                )}
               </div>
             )}
           </section>
@@ -898,209 +1032,310 @@ export default function AiAgentPage() {
 
       {tab === "lab" && (
         <section className="card knowledge-agent-card knowledge-panel-shell">
-          <div className="knowledge-panel-intro">
-            <span className="knowledge-panel-kicker">مختبر</span>
-            <h2 className="section-title">محادثة واتساب داخلية (تجربة معزولة)</h2>
-            <p className="hint-text">
-              لا يُرسل واتساب ولا يُنشأ طلب حقيقي. القناة: {selectedWa ? channelTitle(selectedWa) : "—"}
-            </p>
-          </div>
-          <div className="knowledge-fields-row">
-            <label className="field-label">
-              <span>اسم العميل في التجربة</span>
-              <input value={labContactName} onChange={(e) => setLabContactName(e.target.value)} />
-            </label>
-            <div className="catalog-card-actions" style={{ alignItems: "end" }}>
+          <div className="ai-lab-toolbar">
+            <div>
+              <h2 className="section-title">التجربة والجودة</h2>
+              <p className="hint-text">
+                محادثة داخلية معزولة — لا واتساب ولا طلب حقيقي. القناة:{" "}
+                {selectedWa ? channelTitle(selectedWa) : "—"}
+              </p>
+            </div>
+            <div className="catalog-card-actions">
               <button type="button" className="secondary-button" onClick={resetLab}>
-                بدء محادثة جديدة
+                اختبار داخلي
               </button>
             </div>
           </div>
 
-          <div className="ai-lab-thread">
-            {labTurns.length === 0 && <p className="hint-text">اكتب رسالة العميل للبدء…</p>}
-            {labTurns.map((turn, index) => (
-              <article key={`${turn.role}-${index}`} className={`ai-lab-bubble is-${turn.role}`}>
-                <strong>{turn.role === "customer" ? "العميل" : "المساعد"}</strong>
-                {turn.role === "assistant" ? <WhatsAppTextPreview text={turn.text} compact /> : <p>{turn.text}</p>}
-              </article>
-            ))}
-          </div>
+          <div className="ai-lab-layout">
+            <div className="ai-lab-chat-pane">
+              <div className="knowledge-fields-row">
+                <label className="field-label">
+                  <span>اسم العميل في التجربة</span>
+                  <input value={labContactName} onChange={(e) => setLabContactName(e.target.value)} />
+                </label>
+              </div>
+              <div className="ai-lab-thread">
+                {labTurns.length === 0 && <p className="hint-text">اكتب رسالة العميل للبدء…</p>}
+                {labTurns.map((turn, index) => (
+                  <article key={`${turn.role}-${index}`} className={`ai-lab-bubble is-${turn.role}`}>
+                    <strong>{turn.role === "customer" ? "العميل" : "المساعد"}</strong>
+                    {turn.role === "assistant" ? (
+                      <WhatsAppTextPreview text={turn.text} compact />
+                    ) : (
+                      <p>{turn.text}</p>
+                    )}
+                  </article>
+                ))}
+              </div>
+              <form
+                className="ai-lab-composer"
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault();
+                  void runLabTurn();
+                }}
+              >
+                <input
+                  value={labInput}
+                  onChange={(e) => setLabInput(e.target.value)}
+                  placeholder="أبي حبتين rose soap ٩٥ غ"
+                  disabled={labBusy}
+                />
+                <button type="submit" className="whatsapp-button" disabled={labBusy || !labInput.trim()}>
+                  {labBusy ? "…" : "إرسال"}
+                </button>
+              </form>
+            </div>
 
-          <form
-            className="knowledge-fields-row"
-            onSubmit={(e: FormEvent) => {
-              e.preventDefault();
-              void runLabTurn();
-            }}
-          >
-            <label className="field-label" style={{ flex: 1 }}>
-              <span>رسالة العميل</span>
-              <input
-                value={labInput}
-                onChange={(e) => setLabInput(e.target.value)}
-                placeholder="أبي حبتين rose soap ٩٥ غ"
-                disabled={labBusy}
-              />
-            </label>
-            <button type="submit" className="whatsapp-button" disabled={labBusy || !labInput.trim()}>
-              {labBusy ? "…" : "إرسال في المختبر"}
-            </button>
-          </form>
-
-          {(lastReason || lastUnderstood) && (
-            <div className="knowledge-preview-layout" style={{ marginTop: 12 }}>
-              <p className="hint-text">سبب الرد: {lastReason || "—"}</p>
-              {lastUnderstood && (
-                <pre className="hint-text" style={{ whiteSpace: "pre-wrap" }}>
-                  {JSON.stringify(lastUnderstood, null, 2)}
-                </pre>
-              )}
+            <aside className="ai-interpret-card">
+              <h3>تفسير الطلب</h3>
+              <p className="hint-text">{lastReason || "سيظهر هنا ما فهمه المساعد من الحوار."}</p>
+              <dl className="ai-interpret-grid">
+                <div>
+                  <dt>المنتج</dt>
+                  <dd>{interpretation.productName}</dd>
+                </div>
+                <div>
+                  <dt>الكمية</dt>
+                  <dd>{interpretation.quantity ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>الوزن / الحجم</dt>
+                  <dd>{interpretation.weight ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>الحالة</dt>
+                  <dd>
+                    {interpretation.needsClarification
+                      ? "يحتاج توضيحاً"
+                      : interpretation.source || "—"}
+                  </dd>
+                </div>
+              </dl>
               {labDialogue?.cart != null && (
                 <p className="hint-text">السلة: {JSON.stringify(labDialogue.cart)}</p>
               )}
               <p className="hint-text">واتساب مرسل: 0 · طلبات منشأة: 0</p>
-            </div>
-          )}
+            </aside>
+          </div>
 
-          <hr />
-          <h3 className="section-title-sm">مختبر جودة سريع</h3>
-          <textarea rows={4} value={qualityCasesText} onChange={(e) => setQualityCasesText(e.target.value)} />
-          <button type="button" className="secondary-button" onClick={() => void runQualityLab()} disabled={qualityLoading}>
-            {qualityLoading ? "جاري القياس…" : "تشغيل الحالات"}
-          </button>
-          {qualityResult && (
-            <p className="hint-text">
-              الإصابة: {qualityResult.hits}/{qualityResult.total} (
-              {Math.min(100, Math.round(qualityResult.hit_rate * 100))}%)
-            </p>
-          )}
+          <details className="ai-quality-details">
+            <summary>مختبر جودة سريع</summary>
+            <textarea rows={4} value={qualityCasesText} onChange={(e) => setQualityCasesText(e.target.value)} />
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void runQualityLab()}
+              disabled={qualityLoading}
+            >
+              {qualityLoading ? "جاري القياس…" : "تشغيل الحالات"}
+            </button>
+            {qualityResult && (
+              <p className="hint-text">
+                الإصابة: {qualityResult.hits}/{qualityResult.total} (
+                {Math.min(100, Math.round(qualityResult.hit_rate * 100))}%)
+              </p>
+            )}
+          </details>
         </section>
       )}
 
       {tab === "templates" && (
         <section className="card knowledge-agent-card knowledge-panel-shell">
-          <div className="knowledge-panel-intro">
-            <span className="knowledge-panel-kicker">قوالب القناة</span>
-            <h2 className="section-title">مكتبة مسودات + فحص داخلي ثم ميتا</h2>
-          </div>
-          <label className="field-label">
-            <span>موضوع القالب</span>
-            <textarea rows={2} value={templateTopic} onChange={(e) => setTemplateTopic(e.target.value)} />
-          </label>
-          <div className="catalog-card-actions">
-            <button type="button" className="whatsapp-button" disabled={templateBusy} onClick={() => void generateTemplate()}>
-              توليد مسودة
-            </button>
-            <button type="button" className="secondary-button" disabled={templateBusy} onClick={() => void generateThreeAngles()}>
-              توليد 3 بدائل
-            </button>
-            <button type="button" className="secondary-button" disabled={!templateDraft} onClick={() => void saveCurrentDraft("draft")}>
-              حفظ مسودة
-            </button>
-            <button type="button" className="secondary-button" disabled={!templateDraft} onClick={() => void saveCurrentDraft("rejected")}>
-              رفض
-            </button>
-            <button type="button" className="whatsapp-button" disabled={!templateDraft} onClick={() => void approveDraftToMeta()}>
-              اعتماد وترحيل ميتا
+          <div className="ai-lab-toolbar">
+            <div>
+              <h2 className="section-title">القوالب</h2>
+              <p className="hint-text">مسودات قوالب هذه القناة مع حالتها قبل ميتا.</p>
+            </div>
+            <button
+              type="button"
+              className="whatsapp-button"
+              onClick={() => {
+                setNewDraftOpen(true);
+                setTemplateDraft(null);
+                setTemplateHeaderFile(null);
+                setTemplateTopic("");
+              }}
+            >
+              + مسودة جديدة
             </button>
           </div>
-          {templateDraft && (
-            <div className="agent-section-grid" style={{ marginTop: 12 }}>
-              <div className="agent-section-card accent-create stack-form">
-                <label className="field-label">
-                  <span>الاسم</span>
-                  <input
-                    value={templateDraft.name}
-                    onChange={(e) => setTemplateDraft((c) => (c ? { ...c, name: e.target.value } : c))}
-                    dir="ltr"
-                  />
-                </label>
-                <label className="field-label">
-                  <span>النص</span>
-                  <textarea
-                    rows={5}
-                    value={templateDraft.body_text}
-                    onChange={(e) => setTemplateDraft((c) => (c ? { ...c, body_text: e.target.value } : c))}
-                  />
-                </label>
-                <label className="field-label">
-                  <span>وصف صورة الرأس</span>
-                  <textarea
-                    rows={3}
-                    value={templateDraft.image_prompt}
-                    onChange={(e) =>
-                      setTemplateDraft((c) => (c ? { ...c, image_prompt: e.target.value } : c))
-                    }
-                    placeholder="وصف قصير للصورة التي تريد توليدها لرأس القالب"
-                  />
-                </label>
-                <div className="catalog-card-actions">
+
+          <div className="ai-template-list">
+            {(draftsQuery.data ?? []).map((item) => {
+              const status = draftStatusMeta(item);
+              return (
+                <article key={item.id} className="ai-template-row">
+                  <div>
+                    <strong>{item.topic || item.draft?.name || "مسودة"}</strong>
+                    <p className="hint-text">
+                      {(item.draft?.body_text || "").slice(0, 90) || "بدون نص بعد"}
+                      {(item.draft?.body_text || "").length > 90 ? "…" : ""}
+                    </p>
+                  </div>
+                  <span className={`ai-status-badge ${status.className}`}>{status.label}</span>
                   <button
                     type="button"
-                    className="whatsapp-button"
-                    disabled={imageBusy || templateBusy}
-                    onClick={() => void generateHeaderImage()}
+                    className="secondary-button compact"
+                    onClick={() => {
+                      setTemplateDraft(item.draft);
+                      setTemplateTopic(item.topic || item.draft?.name || "");
+                      setTemplateHeaderFile(null);
+                      setNewDraftOpen(true);
+                    }}
                   >
-                    {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
-                  </button>
-                  {templateHeaderFile && (
-                    <p className="hint-text">✓ {templateHeaderFile.filename}</p>
-                  )}
-                </div>
-              </div>
-              <div className="agent-section-card accent-import">
-                <WhatsAppTemplatePreview
-                  businessName={selectedWa?.verified_name || "نشاطك"}
-                  bodyText={templateDraft.body_text}
-                  components={previewComponents}
-                />
-              </div>
-            </div>
-          )}
-          {templateAlts.length > 0 && (
-            <div className="knowledge-matched-list" style={{ marginTop: 12 }}>
-              {templateAlts.map((item) => (
-                <article key={item.name} className="inbox-kb-card">
-                  <strong>{item.name}</strong>
-                  <p className="hint-text">{item.body_text.slice(0, 120)}…</p>
-                  <button type="button" className="secondary-button compact" onClick={() => setTemplateDraft(item)}>
-                    استخدام
+                    فتح
                   </button>
                 </article>
-              ))}
+              );
+            })}
+            {!draftsQuery.data?.length && (
+              <p className="hint-text">لا مسودات بعد لهذه القناة. ابدأ بمسودة جديدة.</p>
+            )}
+          </div>
+
+          {newDraftOpen && (
+            <div className="ai-template-editor">
+              <label className="field-label">
+                <span>موضوع القالب</span>
+                <textarea rows={2} value={templateTopic} onChange={(e) => setTemplateTopic(e.target.value)} />
+              </label>
+              <div className="catalog-card-actions">
+                <button
+                  type="button"
+                  className="whatsapp-button"
+                  disabled={templateBusy}
+                  onClick={() => void generateTemplate()}
+                >
+                  توليد مسودة
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={templateBusy}
+                  onClick={() => void generateThreeAngles()}
+                >
+                  توليد 3 بدائل
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!templateDraft}
+                  onClick={() => void saveCurrentDraft("draft")}
+                >
+                  حفظ مسودة
+                </button>
+                <button
+                  type="button"
+                  className="whatsapp-button"
+                  disabled={!templateDraft}
+                  onClick={() => void approveDraftToMeta()}
+                >
+                  اعتماد وترحيل ميتا
+                </button>
+              </div>
+
+              {templateDraft && (
+                <div className="agent-section-grid" style={{ marginTop: 12 }}>
+                  <div className="agent-section-card accent-create stack-form">
+                    <label className="field-label">
+                      <span>الاسم</span>
+                      <input
+                        value={templateDraft.name}
+                        onChange={(e) => setTemplateDraft((c) => (c ? { ...c, name: e.target.value } : c))}
+                        dir="ltr"
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>النص</span>
+                      <textarea
+                        rows={5}
+                        value={templateDraft.body_text}
+                        onChange={(e) =>
+                          setTemplateDraft((c) => (c ? { ...c, body_text: e.target.value } : c))
+                        }
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>وصف صورة الرأس</span>
+                      <textarea
+                        rows={3}
+                        value={templateDraft.image_prompt}
+                        onChange={(e) =>
+                          setTemplateDraft((c) => (c ? { ...c, image_prompt: e.target.value } : c))
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="whatsapp-button"
+                      disabled={imageBusy || templateBusy}
+                      onClick={() => void generateHeaderImage()}
+                    >
+                      {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
+                    </button>
+                    {templateHeaderFile && <p className="hint-text">✓ {templateHeaderFile.filename}</p>}
+                  </div>
+                  <div className="agent-section-card accent-import">
+                    <WhatsAppTemplatePreview
+                      businessName={selectedWa?.verified_name || "نشاطك"}
+                      bodyText={templateDraft.body_text}
+                      components={previewComponents}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {templateAlts.length > 0 && (
+                <div className="knowledge-matched-list" style={{ marginTop: 12 }}>
+                  {templateAlts.map((item) => (
+                    <article key={item.name} className="inbox-kb-card">
+                      <strong>{item.name}</strong>
+                      <p className="hint-text">{item.body_text.slice(0, 120)}…</p>
+                      <button
+                        type="button"
+                        className="secondary-button compact"
+                        onClick={() => setTemplateDraft(item)}
+                      >
+                        استخدام
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-          <h3 className="section-title-sm">مسودات محفوظة لهذه القناة</h3>
-          <div className="knowledge-matched-list">
-            {(draftsQuery.data ?? []).map((item) => (
-              <article key={item.id} className="inbox-kb-card">
-                <strong>
-                  {item.topic || item.draft?.name} · {item.status}
-                </strong>
-                <p className="hint-text">
-                  فحص داخلي: {item.internal_check?.ok ? "جاهز" : (item.internal_check?.issues || []).join("، ") || "—"}
-                  {" · "}
-                  ميتا: {item.meta_status || "لم يُرسل"}
-                </p>
-                <button type="button" className="secondary-button compact" onClick={() => setTemplateDraft(item.draft)}>
-                  فتح
-                </button>
-              </article>
-            ))}
-            {!draftsQuery.data?.length && <p className="hint-text">لا مسودات بعد.</p>}
-          </div>
         </section>
       )}
 
       {tab === "activity" && (
         <section className="card knowledge-agent-card knowledge-panel-shell">
-          <div className="knowledge-panel-intro">
-            <span className="knowledge-panel-kicker">سجل</span>
-            <h2 className="section-title">قرارات الذكاء لهذه القناة</h2>
+          <div className="ai-lab-toolbar">
+            <div>
+              <h2 className="section-title">سجل النشاط</h2>
+              <p className="hint-text">متى؟ ماذا فعل المساعد؟ ولماذا؟</p>
+            </div>
           </div>
+
+          <div className="ai-activity-filters">
+            <label className="field-label">
+              <span>الوقت</span>
+              <select
+                value={activityRange}
+                onChange={(e) => setActivityRange(e.target.value === "7" ? "7" : "all")}
+              >
+                <option value="all">كل الوقت</option>
+                <option value="7">آخر 7 أيام</option>
+              </select>
+            </label>
+            <label className="field-label">
+              <span>القناة</span>
+              <input value={selectedWa ? channelTitle(selectedWa) : "—"} readOnly />
+            </label>
+          </div>
+
           {metricsQuery.data && (
-            <div className="brand-stat-row knowledge-status-strip">
+            <div className="brand-stat-row knowledge-status-strip" style={{ marginBottom: 12 }}>
               <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">إجمالي ({metricsQuery.data.days}ي)</span>
                 <strong className="brand-stat-value">{metricsQuery.data.total}</strong>
@@ -1108,12 +1343,10 @@ export default function AiAgentPage() {
               <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">اقتراحات</span>
                 <strong className="brand-stat-value">{metricsQuery.data.suggest_count}</strong>
-                <small className="brand-stat-meta">من {metricsQuery.data.total}</small>
               </article>
               <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">ردود تلقائية</span>
                 <strong className="brand-stat-value">{metricsQuery.data.auto_reply_count}</strong>
-                <small className="brand-stat-meta">من {metricsQuery.data.total}</small>
               </article>
               <article className="brand-stat-card brand-stat-card--sm">
                 <span className="brand-stat-label">تحويل/تعذّر</span>
@@ -1123,19 +1356,33 @@ export default function AiAgentPage() {
               </article>
             </div>
           )}
-          <div className="knowledge-matched-list">
-            {(activityQuery.data ?? []).map((row) => (
-              <article key={row.id} className="inbox-kb-card">
-                <strong>
-                  {row.source === "lab" ? "اختبار" : "حي"} · {row.outcome}
-                </strong>
-                <p className="hint-text">{row.reason_text}</p>
-                {row.query_text && <p className="hint-text">س: {row.query_text}</p>}
-                {row.suggestion && <p className="hint-text">ج: {row.suggestion.slice(0, 160)}</p>}
-                <p className="hint-text">{row.created_at}</p>
-              </article>
-            ))}
-            {!activityQuery.data?.length && <p className="hint-text">لا أحداث بعد لهذه القناة.</p>}
+
+          <div className="ai-activity-table" role="table" aria-label="سجل نشاط الذكاء">
+            <div className="ai-activity-head" role="row">
+              <span role="columnheader">الوقت</span>
+              <span role="columnheader">الحدث</span>
+              <span role="columnheader">السبب</span>
+            </div>
+            {filteredActivity.map((row) => {
+              const event = activityEventLabel(row.outcome);
+              return (
+                <div key={row.id} className="ai-activity-row" role="row">
+                  <span role="cell">{formatActivityTime(row.created_at)}</span>
+                  <span role="cell" className={`ai-activity-event ${event.className}`}>
+                    {event.label}
+                    {row.source === "lab" ? " · اختبار" : ""}
+                  </span>
+                  <span role="cell" className="ai-activity-reason">
+                    {row.reason_text || "—"}
+                  </span>
+                </div>
+              );
+            })}
+            {!filteredActivity.length && (
+              <p className="hint-text" style={{ padding: "12px 4px" }}>
+                لا أحداث بعد لهذه القناة.
+              </p>
+            )}
           </div>
         </section>
       )}
