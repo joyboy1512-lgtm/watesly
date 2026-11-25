@@ -13155,13 +13155,13 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .ai-settings-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr);
-  gap: 18px;
-  align-items: start;
+  grid-template-columns: 1fr;
+  gap: 22px;
+  align-items: stretch;
 }
 .ai-settings-split-main h3,
 .ai-add-provider-card h3 {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   font-size: 1rem;
   font-weight: 800;
   color: var(--primary-darker);
@@ -13170,16 +13170,22 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-soft);
-  padding: 16px;
+  padding: 18px 20px;
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
   box-shadow: 0 2px 8px rgba(17, 27, 33, 0.04);
 }
+.ai-add-provider-card h3,
+.ai-add-provider-card > p,
+.ai-add-provider-card > .whatsapp-button {
+  grid-column: 1 / -1;
+}
 .ai-add-provider-card p {
-  margin: -4px 0 4px;
+  margin: -6px 0 2px;
   color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.45;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 .ai-emergency-btn {
   appearance: none;
@@ -13207,14 +13213,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .ai-provider-head,
 .ai-provider-row {
   display: grid;
-  grid-template-columns: 1.35fr 0.85fr 1.05fr 0.95fr 1.1fr 118px 118px 118px;
-  gap: 10px;
-  padding: 14px 16px;
+  grid-template-columns: 1.4fr 0.95fr 1.15fr 1.05fr 1.2fr 128px 128px 128px;
+  gap: 14px;
+  padding: 18px 20px;
   align-items: center;
 }
 .ai-provider-head > span,
 .ai-provider-row > span {
   min-width: 0;
+  padding-inline: 2px;
 }
 .ai-provider-head > span:nth-child(n + 6),
 .ai-provider-row > span:nth-child(n + 6) {
@@ -13235,9 +13242,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .ai-provider-btn {
   appearance: none;
   box-sizing: border-box;
-  width: 108px;
-  min-height: 52px;
-  padding: 8px 8px;
+  width: 116px;
+  min-height: 56px;
+  padding: 10px 8px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: #fff;
@@ -13247,7 +13254,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   cursor: pointer;
   display: grid;
   place-content: center;
-  gap: 2px;
+  gap: 3px;
   text-align: center;
   line-height: 1.2;
 }
@@ -13314,8 +13321,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
   font-weight: 800;
   color: #fff;
-  font-size: 0.84rem;
+  font-size: 0.88rem;
   border-bottom: 1px solid color-mix(in srgb, var(--primary-darker) 70%, #000);
+}
+.ai-provider-row {
+  min-height: 76px;
 }
 .ai-provider-head > span:nth-child(n + 6) {
   justify-content: center;
@@ -13770,7 +13780,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .ai-provider-btn {
     width: 100%;
   }
-  .ai-settings-split {
+  .ai-add-provider-card {
     grid-template-columns: 1fr;
   }
   .ai-toggle-row,
