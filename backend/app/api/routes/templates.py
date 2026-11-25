@@ -8,7 +8,21 @@ from app.api.dependencies.auth import AuthContext, require_permissions
 from app.db.session import get_db
 from app.core.permissions import Permission
 from app.models.whatsapp_template import WhatsAppTemplate
-from app.schemas.template import TemplateCreateRequest, TemplateResponse, TemplateUpdateRequest
+from app.schemas.template import (
+    AiTemplateDraftResponse,
+    AiTemplateGenerateRequest,
+    AiTemplateImageRequest,
+    AiTemplateImageResponse,
+    AiTemplateRefineRequest,
+    TemplateCreateRequest,
+    TemplateResponse,
+    TemplateUpdateRequest,
+)
+from app.services.ai_templates import (
+    generate_template_draft,
+    generate_template_header_image,
+    refine_template_draft,
+)
 from app.services.templates import (
     create_template,
     delete_template,
@@ -21,12 +35,76 @@ from app.services.templates import (
 router = APIRouter()
 
 
+def _ai_http_error(exc: ValueError) -> HTTPException:
+    code = str(exc)
+    if code == "LLM_NOT_CONFIGURED":
+        return HTTPException(status_code=400, detail="LLM_NOT_CONFIGURED")
+    if code.startswith("LLM_FAILED:") or code.startswith("IMAGE_FAILED:"):
+        return HTTPException(status_code=502, detail=code)
+    if code in {"EMPTY_TOPIC", "EMPTY_INSTRUCTION", "EMPTY_IMAGE_PROMPT", "EMPTY_TEMPLATE_BODY", "EMPTY_AI_RESPONSE", "INVALID_AI_JSON"}:
+        return HTTPException(status_code=400, detail=code)
+    return HTTPException(status_code=400, detail=code)
+
+
 @router.get("", response_model=list[TemplateResponse])
 async def get_templates(
     context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     return await list_templates(db, context.account_id, membership=context.membership)
+
+
+@router.post("/ai/generate", response_model=AiTemplateDraftResponse)
+async def ai_generate_template(
+    payload: AiTemplateGenerateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await generate_template_draft(
+            db,
+            account_id=context.account_id,
+            topic=payload.topic,
+            language=payload.language,
+            category=payload.category,
+            brand_hint=payload.brand_hint,
+        )
+    except ValueError as exc:
+        raise _ai_http_error(exc) from exc
+
+
+@router.post("/ai/refine", response_model=AiTemplateDraftResponse)
+async def ai_refine_template(
+    payload: AiTemplateRefineRequest,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await refine_template_draft(
+            db,
+            account_id=context.account_id,
+            draft=payload.draft,
+            instruction=payload.instruction,
+        )
+    except ValueError as exc:
+        raise _ai_http_error(exc) from exc
+
+
+@router.post("/ai/image", response_model=AiTemplateImageResponse)
+async def ai_template_image(
+    payload: AiTemplateImageRequest,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await generate_template_header_image(
+            db,
+            account_id=context.account_id,
+            prompt=payload.prompt,
+            user_id=context.user.id,
+        )
+    except ValueError as exc:
+        raise _ai_http_error(exc) from exc
 
 
 @router.post("", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)

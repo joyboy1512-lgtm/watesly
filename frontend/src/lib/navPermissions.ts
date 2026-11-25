@@ -18,6 +18,7 @@ export const APP_NAV_PAGES: AppNavPage[] = [
   { path: "/inbox", label: "صندوق الوارد", permission: "conversations.view", matchPrefix: true },
   { path: "/catalog", label: "المتجر", permission: "contacts.view", matchPrefix: true },
   { path: "/knowledge", label: "قاعدة المعرفة", permission: "contacts.view" },
+  { path: "/ai", label: "الذكاء الاصطناعي", permission: "contacts.view" },
   { path: "/contacts", label: "العملاء", permission: "contacts.view", matchPrefix: true },
   { path: "/quick-replies", label: "الردود السريعة", permission: "messages.send" },
   { path: "/composer-library", label: "مكتبة الرسائل", permission: "messages.send" },
