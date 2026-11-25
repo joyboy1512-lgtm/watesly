@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "c28c98e",
-    "git_commit_message": "Align provider table, add panel, emergency kill",
+    "git_commit": "51361c6",
+    "git_commit_message": "Add-provider below table with roomier rows",
     "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.8",
+    "frontend_version": "0.33.9",
     "live_assets": {
-      "js": "index-CGWTYibq.js",
-      "css": "index-B5z9Qy9M.css"
+      "js": "index-qLMqw8-m.js",
+      "css": "index-C5Ys3zym.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.8",
+    "frontend": "0.33.9",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "c28c98e",
-  "notes": "Aligned provider columns, unified action buttons, add-provider panel, emergency kill"
+  "commit": "51361c6",
+  "notes": "Add-provider stacked below table; roomier provider cells"
 }

@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI add-provider below table
+
+| Item | Value |
+|------|-------|
+| Commit | `51361c6` |
+| Alembic | `0074_ai_welcome_message` |
+| Live assets | `index-qLMqw8-m.js`, `index-C5Ys3zym.css` |
+
 ### Production snapshot (2026-11-25) — AI provider align + add panel
 
 | Item | Value |
