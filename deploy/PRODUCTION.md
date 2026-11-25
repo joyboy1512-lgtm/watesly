@@ -16,6 +16,14 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI auto-reply on inbound
+
+| Item | Value |
+|------|-------|
+| Commit | `bd45277` |
+| Alembic | `0070_ai_auto_reply_on_inbound` |
+| Live assets | `index-l8IPNdmC.js`, `index-DCqqqMeP.css` |
+
 ### Production snapshot (2026-11-25) — Knowledge header filters + bulk
 
 | Item | Value |
