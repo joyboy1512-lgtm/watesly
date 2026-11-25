@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "b3ee763",
-    "git_commit_message": "AI ops console with escalation, clarify limits, image generation",
+    "git_commit": "9a8f4df",
+    "git_commit_message": "Redesign AI ops page into four clear screens",
     "alembic_head": "0073_ai_image_model",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.0",
+    "frontend_version": "0.33.1",
     "live_assets": {
-      "js": "index-ClJiMA2D.js",
-      "css": "index-DQNKRCgc.css"
+      "js": "index-542NpBtc.js",
+      "css": "index-BJrBHu3A.css"
     },
-    "server_backup": "/opt/watesly/backups/20261125-154139"
+    "server_backup": "/opt/watesly/backups/20261125-161022"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.0",
+    "frontend": "0.33.1",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "b3ee763",
-  "notes": "AI ops console live (PR #212); Olive channel set to suggest-only"
+  "commit": "9a8f4df",
+  "notes": "AI ops UI redesign live (PR #213)"
 }

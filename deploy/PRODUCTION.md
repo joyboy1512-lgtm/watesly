@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-25) — AI ops UI redesign
+
+| Item | Value |
+|------|-------|
+| Commit | `9a8f4df` |
+| Alembic | `0073_ai_image_model` |
+| Live assets | `index-542NpBtc.js`, `index-BJrBHu3A.css` |
+
+
 ### Production snapshot (2026-11-25) — AI ops console
 
 | Item | Value |
