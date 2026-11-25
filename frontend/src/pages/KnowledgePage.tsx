@@ -445,19 +445,49 @@ export default function KnowledgePage() {
           <h1>قاعدة المعرفة</h1>
           <p>معرفة وكتالوج كل رقم واتساب منفصلان — سؤال Travel Zone لا يرد بمنتجات قناة أخرى.</p>
           {settings && (
-            <div className="knowledge-status-strip" aria-live="polite">
-              <span className={settings.agent_enabled !== false ? "status-pill on" : "status-pill off"}>
-                الوكيل: {settings.agent_enabled !== false ? "يعمل الآن" : "متوقف"}
-              </span>
-              <span className={settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "status-pill on" : "status-pill off"}>
-                اقتراح الوارد: {settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "يعمل" : "متوقف"}
-              </span>
-              <span className={settings.llm_enabled && settings.llm_available ? "status-pill on" : "status-pill off"}>
-                خارجي LLM: {settings.llm_enabled && settings.llm_available ? "يعمل" : "متوقف"}
-              </span>
-              <span className={settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "status-pill on" : "status-pill off"}>
-                خارج الدوام: {settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "يعمل" : "متوقف"}
-              </span>
+            <div className="brand-stat-row knowledge-status-strip" aria-live="polite">
+              <article
+                className={`brand-stat-card brand-stat-card--sm${settings.agent_enabled === false ? " is-quiet" : ""}`}
+              >
+                <span className="brand-stat-label">الوكيل</span>
+                <strong className="brand-stat-value">
+                  {settings.agent_enabled !== false ? "يعمل" : "متوقف"}
+                </strong>
+                <small className="brand-stat-meta">المحرك المحلي</small>
+              </article>
+              <article
+                className={`brand-stat-card brand-stat-card--sm${
+                  settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "" : " is-quiet"
+                }`}
+              >
+                <span className="brand-stat-label">اقتراح الوارد</span>
+                <strong className="brand-stat-value">
+                  {settings.agent_enabled !== false && settings.auto_kb_on_inbound ? "يعمل" : "متوقف"}
+                </strong>
+                <small className="brand-stat-meta">عند رسالة جديدة</small>
+              </article>
+              <article
+                className={`brand-stat-card brand-stat-card--sm${
+                  settings.llm_enabled && settings.llm_available ? "" : " is-quiet"
+                }`}
+              >
+                <span className="brand-stat-label">خارجي LLM</span>
+                <strong className="brand-stat-value">
+                  {settings.llm_enabled && settings.llm_available ? "يعمل" : "متوقف"}
+                </strong>
+                <small className="brand-stat-meta">صقل الرد فقط</small>
+              </article>
+              <article
+                className={`brand-stat-card brand-stat-card--sm${
+                  settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "" : " is-quiet"
+                }`}
+              >
+                <span className="brand-stat-label">خارج الدوام</span>
+                <strong className="brand-stat-value">
+                  {settings.agent_enabled !== false && settings.auto_reply_outside_hours ? "يعمل" : "متوقف"}
+                </strong>
+                <small className="brand-stat-meta">رد تلقائي خارج الساعات</small>
+              </article>
             </div>
           )}
         </div>

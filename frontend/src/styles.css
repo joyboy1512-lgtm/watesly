@@ -607,11 +607,31 @@ button { cursor: pointer; }
   text-decoration: none;
   color: #fff;
   min-height: 96px;
-  text-align: center;
-  justify-items: center;
-  align-content: center;
-  cursor: pointer;
+  text-align: center !important;
+  justify-items: center !important;
+  align-content: center !important;
+  place-content: center;
+  place-items: center;
+  cursor: default;
   transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+a.brand-stat-card,
+button.brand-stat-card,
+button.catalog-visibility-card,
+button.composer-library-type-tab,
+a.dashboard-attention-card {
+  cursor: pointer;
+}
+.brand-stat-card > *,
+.dashboard-attention-card > *,
+.admin-stat-card-brand > *,
+.catalog-visibility-card > *,
+.analytics-kpi > *,
+.composer-library-type-tab > * {
+  width: 100%;
+  max-width: 100%;
+  text-align: center !important;
+  justify-self: center;
 }
 a.brand-stat-card:hover,
 a.dashboard-attention-card:hover,
@@ -3595,12 +3615,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 12px;
 }
 .knowledge-status-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  margin-top: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(100%, 920px);
 }
-.knowledge-status-strip .status-pill,
+.knowledge-status-strip .brand-stat-card {
+  min-height: 88px;
+}
+.knowledge-status-strip .brand-stat-value {
+  font-size: 20px;
+}
+.brand-stat-card.is-quiet {
+  opacity: 0.78;
+  filter: saturate(0.75);
+}
 .inbox-ai-status-chip {
   display: inline-flex;
   align-items: center;
@@ -3615,17 +3643,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   text-decoration: none;
   white-space: nowrap;
 }
-.knowledge-status-strip .status-pill.on,
 .inbox-ai-status-chip.is-on {
   border-color: color-mix(in srgb, var(--primary-dark) 35%, var(--line));
   background: color-mix(in srgb, var(--primary-soft) 80%, transparent);
   color: var(--primary-darker);
 }
-.knowledge-status-strip .status-pill.off,
 .inbox-ai-status-chip.is-off {
   border-color: color-mix(in srgb, #b45309 30%, var(--line));
   background: color-mix(in srgb, #b45309 10%, transparent);
   color: #9a3412;
+}
+@media (max-width: 720px) {
+  .knowledge-status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .knowledge-panel-shell {
   display: grid;
@@ -10718,25 +10749,31 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 52%, var(--primary-darker) 100%);
   box-shadow: 0 8px 22px rgba(7, 94, 84, 0.22);
   color: #fff;
-  text-align: center;
-  justify-items: center;
-  align-content: center;
+  text-align: center !important;
+  justify-items: center !important;
+  align-content: center !important;
+  place-content: center;
+  place-items: center;
   min-height: 96px;
+}
+.admin-stat-card.admin-stat-card-brand > span,
+.admin-stat-card.admin-stat-card-brand > strong,
+.admin-stat-card.admin-stat-card-brand > small {
+  width: 100%;
+  text-align: center !important;
+  justify-self: center;
 }
 .admin-stat-card.admin-stat-card-brand > span {
   color: rgba(255, 255, 255, 0.9);
   font-weight: 700;
-  text-align: center;
 }
 .admin-stat-card.admin-stat-card-brand > strong {
   color: #fff;
   font-size: 28px;
   font-weight: 800;
-  text-align: center;
 }
 .admin-stat-card.admin-stat-card-brand > small {
   color: rgba(255, 255, 255, 0.82);
-  text-align: center;
 }
 .admin-stats-row,
 .admin-stats-row-brand {
@@ -11367,6 +11404,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .contacts-stats-brand {
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
+}
+.contacts-stats-brand .brand-stat-card,
+.contacts-stats-brand .admin-stat-card-brand {
+  text-align: center !important;
+  justify-items: center !important;
+  place-items: center;
 }
 .crm-erp-shell .admin-stats-row-brand {
   margin-bottom: 0;
@@ -12179,7 +12222,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: grid;
   gap: 0.15rem;
   justify-items: center;
+  align-content: center;
+  place-items: center;
+  text-align: center;
+  width: 100%;
   min-width: 0;
+}
+.composer-library-type-tab .composer-library-type-count,
+.composer-library-type-tab .composer-library-type-text strong,
+.composer-library-type-tab .composer-library-type-text small {
+  text-align: center !important;
+  width: 100%;
 }
 .composer-library-controls {
   display: flex;
