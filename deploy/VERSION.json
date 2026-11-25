@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "9085d46",
-    "git_commit_message": "Knowledge cards match catalog + Excel-style rules table",
+    "git_commit": "7dd9d28",
+    "git_commit_message": "Fit Knowledge Excel table: compact rows, bold borders, column widths",
     "alembic_head": "0069_knowledge_article_channel",
     "backend_version": "0.28.0",
-    "frontend_version": "0.32.14",
+    "frontend_version": "0.32.15",
     "live_assets": {
-      "js": "index-C-KrJrsk.js",
-      "css": "index-De0WwqDq.css"
+      "js": "index-ByEVZLFB.js",
+      "css": "index-C0ODjGws.css"
     },
     "server_backup": "/opt/watesly/backups/20261110-181210"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.32.14",
+    "frontend": "0.32.15",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "9085d46",
-  "notes": "Shared brand gradient + Knowledge Excel table with 20-row show-more (PR #204)"
+  "commit": "7dd9d28",
+  "notes": "Knowledge Excel table fit: no overflow, bold black borders, rebalanced columns (PR #205)"
 }
