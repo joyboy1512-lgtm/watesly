@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "9a8f4df",
-    "git_commit_message": "Redesign AI ops page into four clear screens",
+    "git_commit": "6462018",
+    "git_commit_message": "Match AI ops page to four-screen mock",
     "alembic_head": "0073_ai_image_model",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.1",
+    "frontend_version": "0.33.2",
     "live_assets": {
-      "js": "index-542NpBtc.js",
-      "css": "index-BJrBHu3A.css"
+      "js": "index-BSyzerll.js",
+      "css": "index-kI1k52Qy.css"
     },
-    "server_backup": "/opt/watesly/backups/20261125-161022"
+    "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.1",
+    "frontend": "0.33.2",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "9a8f4df",
-  "notes": "AI ops UI redesign live (PR #213)"
+  "commit": "6462018",
+  "notes": "AI ops UI mock match live (PR #214)"
 }
