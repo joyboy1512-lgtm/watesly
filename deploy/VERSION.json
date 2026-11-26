@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-11-25",
+  "updated_at": "2026-11-26",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "b3a8f64",
-    "git_commit_message": "Full AI template editor: drafts, media, buttons, generate polish",
+    "git_commit": "f67abed",
+    "git_commit_message": "Template idea chat: converse then approve draft",
     "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.11",
+    "frontend_version": "0.33.12",
     "live_assets": {
-      "js": "index-C1mmGXBq.js",
-      "css": "index-BtXtZC71.css"
+      "js": "index-CSZlyg0t.js",
+      "css": "index-DN9B3IZc.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.11",
+    "frontend": "0.33.12",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "b3a8f64",
-  "notes": "AI templates: full draft editor after open; image/video/PDF upload; buttons/footer/samples; improved generate"
+  "commit": "f67abed",
+  "notes": "AI templates idea chat like ChatGPT; approve idea creates full draft in editor"
 }
