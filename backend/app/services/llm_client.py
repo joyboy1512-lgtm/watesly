@@ -260,3 +260,93 @@ async def generate_image_png(
 
     logger.warning("image generation failed candidates=%s errors=%s", models, errors[:8])
     raise LLMError("; ".join(errors[:4]) or "IMAGE_GENERATION_FAILED")
+
+
+async def edit_image_png(
+    *,
+    prompt: str,
+    image_bytes: bytes,
+    api_key: str | None = None,
+    api_base_url: str | None = None,
+    model: str | None = None,
+    size: str = "1024x1024",
+) -> bytes:
+    """Edit an existing image via /images/edits when supported; else regenerate from prompt."""
+    config = resolve_llm_config(api_key=api_key, api_base_url=api_base_url, model=model)
+    if config is None:
+        raise LLMError("LLM_NOT_CONFIGURED")
+
+    resolved_key, base_url, _chat_model = config
+    preferred = (model or "").strip()
+    edit_models = [item for item in (preferred, "dall-e-2", "gpt-image-1") if item]
+    headers = {"Authorization": f"Bearer {resolved_key}"}
+    clean_prompt = prompt[:3200]
+    errors: list[str] = []
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        for image_model in edit_models:
+            files = {
+                "image": ("source.png", image_bytes, "image/png"),
+            }
+            data = {
+                "model": image_model,
+                "prompt": clean_prompt,
+                "n": "1",
+                "size": size,
+                "response_format": "b64_json",
+            }
+            try:
+                response = await client.post(
+                    f"{base_url}/images/edits",
+                    headers=headers,
+                    data=data,
+                    files=files,
+                )
+            except httpx.HTTPError as exc:
+                errors.append(f"edit:{image_model}:{type(exc).__name__}")
+                continue
+            if response.is_error:
+                # Retry without response_format for newer image models.
+                data.pop("response_format", None)
+                try:
+                    response = await client.post(
+                        f"{base_url}/images/edits",
+                        headers=headers,
+                        data=data,
+                        files=files,
+                    )
+                except httpx.HTTPError as exc:
+                    errors.append(f"edit:{image_model}:{type(exc).__name__}")
+                    continue
+            if response.is_error:
+                errors.append(f"edit:{image_model}:{response.status_code}:{response.text[:160]}")
+                continue
+            payload = response.json()
+            raw = _image_bytes_from_response(payload)
+            if raw:
+                return raw
+            url = (payload.get("data") or [{}])[0].get("url")
+            if url:
+                try:
+                    return await _download_image(url)
+                except LLMError as exc:
+                    errors.append(f"edit:{image_model}:download:{exc}")
+                    continue
+
+    # Fallback: text-to-image guided by the edit instruction.
+    guided = (
+        "Create a WhatsApp template header image. Apply these edits to the concept: "
+        f"{clean_prompt}"
+    )
+    try:
+        return await generate_image_png(
+            prompt=guided,
+            api_key=api_key,
+            api_base_url=api_base_url,
+            model=model,
+            size=size,
+        )
+    except LLMError as exc:
+        errors.append(f"fallback:{exc}")
+        logger.warning("image edit failed errors=%s", errors[:6])
+        raise LLMError("; ".join(errors[:4]) or "IMAGE_EDIT_FAILED") from exc

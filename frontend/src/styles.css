@@ -13802,6 +13802,26 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   padding: 10px 14px;
   background: #fff;
 }
+.ai-idea-ref-image {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.ai-idea-ref-image img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.ai-idea-upload {
+  margin: 0 12px 8px;
+}
 .ai-status-badge {
   display: inline-flex;
   align-items: center;

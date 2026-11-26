@@ -55,6 +55,8 @@ class AiTemplateIdeaMessage(BaseModel):
 class AiTemplateIdeaChatRequest(BaseModel):
     messages: list[AiTemplateIdeaMessage] = Field(min_length=1, max_length=40)
     brand_hint: str | None = Field(default=None, max_length=500)
+    has_reference_image: bool = False
+    current_image_prompt: str | None = Field(default=None, max_length=1200)
 
 
 class AiTemplateIdeaChatResponse(BaseModel):
@@ -63,6 +65,8 @@ class AiTemplateIdeaChatResponse(BaseModel):
     ready_for_draft: bool = False
     suggested_category: str = "marketing"
     suggested_header: str = "NONE"
+    image_prompt: str | None = None
+    ready_for_image: bool = False
 
 
 class AiTemplateRefineRequest(BaseModel):
@@ -72,6 +76,8 @@ class AiTemplateRefineRequest(BaseModel):
 
 class AiTemplateImageRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=1200)
+    source_file_id: UUID | None = None
+    edit_mode: bool = False
 
 
 class AiTemplateDraftResponse(BaseModel):

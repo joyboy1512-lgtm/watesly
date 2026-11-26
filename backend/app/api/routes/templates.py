@@ -96,6 +96,8 @@ async def ai_template_idea_chat(
             account_id=context.account_id,
             messages=[item.model_dump() for item in payload.messages],
             brand_hint=payload.brand_hint,
+            has_reference_image=bool(payload.has_reference_image),
+            current_image_prompt=payload.current_image_prompt,
         )
     except ValueError as exc:
         raise _ai_http_error(exc) from exc
@@ -130,6 +132,8 @@ async def ai_template_image(
             account_id=context.account_id,
             prompt=payload.prompt,
             user_id=context.user.id,
+            source_file_id=payload.source_file_id,
+            edit_mode=bool(payload.edit_mode),
         )
     except ValueError as exc:
         raise _ai_http_error(exc) from exc
