@@ -70,6 +70,7 @@ class AutomationResponse(BaseModel):
     trigger_type: AutomationTriggerType
     trigger_config: dict
     graph: dict
+    published_graph: dict | None = None
     version: int
     created_at: datetime
     updated_at: datetime

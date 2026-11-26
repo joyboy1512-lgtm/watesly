@@ -59,5 +59,6 @@ class Automation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     trigger_config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     graph: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    published_graph: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

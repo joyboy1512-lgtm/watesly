@@ -323,12 +323,15 @@ const resources = {
         tabAudit: "سجل التدقيق"
       },
       analytics: {
+        tabLive: "المتابعة الحية",
         tabDashboard: "لوحة تنفيذية",
         tabTeam: "الفريق",
         tabCustomers: "العملاء والحملات",
         tabRevenue: "الإيرادات",
         tabInsights: "رؤى ذكية",
-        tabGrowth: "CTWA / نمو"
+        tabGrowth: "CTWA / نمو",
+        slaHint: "مهلة الخدمة: الوقت الأقصى للرد الأول قبل اعتبار المحادثة متجاوزة.",
+        csatHint: "رضا العملاء: متوسط تقييمات CSAT خلال الفترة المحددة."
       },
       inbox: {
         selectConversation: "اختر محادثة",
@@ -663,7 +666,7 @@ const resources = {
         tabAudit: "Audit Log"
       },
       analytics: {
-        tabLive: "Live Dashboard",
+        tabLive: "Live follow-up",
         tabTeam: "Team",
         tabCustomers: "Customers & Campaigns",
         tabRevenue: "Revenue",

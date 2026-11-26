@@ -91,8 +91,31 @@ async def queue_automation_runs(
     automations = [item for item in result.scalars().all() if _matches_trigger_config(item, trigger_payload)]
     run_ids: list[UUID] = []
 
+    event_key = (
+        str(trigger_payload.get("whatsapp_message_id") or trigger_payload.get("message_id") or "").strip()
+        or None
+    )
+
     for automation in automations:
-        node_count = len(automation.graph.get("nodes", []))
+        if event_key:
+            recent = list(
+                (
+                    await db.execute(
+                        select(AutomationRun)
+                        .where(AutomationRun.automation_id == automation.id)
+                        .order_by(AutomationRun.created_at.desc())
+                        .limit(50)
+                    )
+                ).scalars().all()
+            )
+            if any(
+                str((run.trigger_payload or {}).get("whatsapp_message_id") or "") == event_key
+                or str((run.trigger_payload or {}).get("message_id") or "") == event_key
+                for run in recent
+            ):
+                continue
+        live_graph = automation.published_graph or automation.graph or {}
+        node_count = len(live_graph.get("nodes", []))
         run = AutomationRun(
             automation_id=automation.id,
             account_id=account_id,
@@ -101,7 +124,7 @@ async def queue_automation_runs(
             context={},
             started_at=None,
             max_steps=min(max(node_count * 3, 25), 500),
-            deadline_at=datetime.now(UTC) + run_deadline_for_graph(automation.graph),
+            deadline_at=datetime.now(UTC) + run_deadline_for_graph(live_graph),
         )
         db.add(run)
         await db.flush()

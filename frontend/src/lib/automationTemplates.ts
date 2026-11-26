@@ -16,7 +16,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: "welcome",
     name: "ترحيب تلقائي",
-    description: "رسالة ترحib عند بدء محادثة جديدة.",
+    description: "رسالة ترحيب عند بدء محادثة جديدة.",
     trigger_type: "conversation_created",
     trigger_config: {},
     graph: {
@@ -27,7 +27,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
           type: "send_text",
           position: { x: 300, y: 140 },
           data: {
-            label: "رسالة ترحib",
+            label: "رسالة ترحيب",
             text: "مرحباً بك! شكراً لتواصلك معنا. كيف يمكننا مساعدتك؟"
           }
         }
@@ -92,7 +92,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   },
   {
     id: "catalog-reply",
-    name: "رد بالمنتجات من الكatalog",
+    name: "رد بالمنتجات من الكتالوج",
     description: "يرسل قائمة منتجات/أسعار تلقائياً عند سؤال العميل.",
     trigger_type: "message_received",
     trigger_config: { keywords: ["سعر", "منتج", "قائمة", "price", "menu"] },
@@ -103,7 +103,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
           id: "catalog-1",
           type: "send_catalog",
           position: { x: 300, y: 140 },
-          data: { label: "رد الكatalog", auto_send: true }
+          data: { label: "رد الكتالوج", auto_send: true }
         }
       ],
       edges: [{ id: "edge-1", source: "trigger-1", target: "catalog-1", label: "next" }]

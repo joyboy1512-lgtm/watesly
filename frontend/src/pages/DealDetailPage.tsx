@@ -39,7 +39,7 @@ export default function DealDetailPage() {
   function openEdit() {
     if (!deal.data) return;
     setEditTitle(deal.data.title);
-    setEditAmount(deal.data.amount);
+    setEditAmount(deal.data.amount ?? "");
     setEditProbability(String(deal.data.probability ?? 0));
     setEditOpen(true);
   }

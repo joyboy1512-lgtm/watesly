@@ -65,26 +65,46 @@ type AutomationStats = {
   last_run_at: string | null;
 };
 
-const nodePalette = [
-  ["condition", "شرط", "IF"],
-  ["business_hours", "ساعات العمل", "BH"],
-  ["send_text", "إرسال رسالة", "TXT"],
-  ["send_quick_reply", "رد سريع", "QR"],
-  ["send_media", "إرسال وسائط", "MED"],
-  ["send_template", "إرسال قالب", "TPL"],
-  ["send_catalog", "رد من الكatalog", "CAT"],
-  ["ai_reply", "رد ذكي", "AI"],
-  ["create_deal", "إنشاء صفقة CRM", "CRM"],
-  ["add_tag", "إضافة وسم", "TAG"],
-  ["assign_team", "تحويل لفريق", "TEAM"],
-  ["set_status", "تغيير الحالة", "STS"],
-  ["set_lifecycle", "مرحلة العميل", "CRM"],
-  ["collect_input", "سؤال / Form", "FORM"],
-  ["delay", "انتظار", "WAIT"],
-  ["webhook", "Webhook", "HTTP"],
-  ["http_request", "HTTP Request", "API"],
-  ["stop", "إيقاف", "STOP"]
-] as const;
+const NODE_GROUPS: { label: string; nodes: ReadonlyArray<readonly [string, string, string]> }[] = [
+  {
+    label: "شروط",
+    nodes: [
+      ["condition", "شرط", "IF"],
+      ["business_hours", "ساعات العمل", "BH"]
+    ]
+  },
+  {
+    label: "رسائل",
+    nodes: [
+      ["send_text", "إرسال رسالة", "TXT"],
+      ["send_quick_reply", "رد سريع", "QR"],
+      ["send_media", "إرسال وسائط", "MED"],
+      ["send_template", "إرسال قالب", "TPL"],
+      ["send_catalog", "رد من الكتالوج", "CAT"],
+      ["ai_reply", "رد ذكي", "AI"]
+    ]
+  },
+  {
+    label: "إجراءات العملاء والفريق",
+    nodes: [
+      ["create_deal", "إنشاء صفقة CRM", "CRM"],
+      ["add_tag", "إضافة وسم", "TAG"],
+      ["assign_team", "تحويل لفريق", "TEAM"],
+      ["set_status", "تغيير الحالة", "STS"],
+      ["set_lifecycle", "مرحلة العميل", "LIFE"],
+      ["collect_input", "سؤال / نموذج", "FORM"],
+      ["delay", "انتظار", "WAIT"],
+      ["stop", "إيقاف", "STOP"]
+    ]
+  },
+  {
+    label: "تكاملات",
+    nodes: [
+      ["webhook", "Webhook", "HTTP"],
+      ["http_request", "طلب HTTP", "API"]
+    ]
+  }
+];
 
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -143,8 +163,19 @@ export default function AutomationsPage() {
   const [nodes, setNodes] = useState<AutomationNode[]>([]);
   const [edges, setEdges] = useState<AutomationEdge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [testMessage, setTestMessage] = useState("أريد معرفة السعر");
+  const [testMessage, setTestMessage] = useState("عميل يسأل عن سعر صابون الورد");
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [simulateResult, setSimulateResult] = useState<{
+    steps?: Array<{ node_id: string; node_type: string; label: string; output: Record<string, unknown> }>;
+    proposed_reply?: string | null;
+    would_create_deal?: boolean;
+    would_assign_team?: boolean;
+    conflict_note?: string | null;
+    validation_ok?: boolean;
+    validation_error?: string | null;
+  } | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const organizations = useQuery({
     queryKey: ["organizations"],
@@ -381,14 +412,27 @@ export default function AutomationsPage() {
   }
 
   async function publish() {
+    setPublishError(null);
     try {
+      if (!organizationId) {
+        setPublishError("اختر الفرع قبل النشر.");
+        return;
+      }
+      if (!accounts.data?.length) {
+        setPublishError("لا توجد قناة واتساب مربوطة — اربط قناة قبل النشر.");
+        return;
+      }
       const automationId = selectedId ?? (await save());
       if (!automationId) return;
       await api.post(`/automations/${automationId}/publish`);
       await client.invalidateQueries({ queryKey: ["automations"] });
-      toastStore.getState().show("تم نشر الأتمتة — ستعمل على الأحداث الجديدة.", "success");
-    } catch {
-      toastStore.getState().show("تعذر النشر. تحقق من ربط العُقد ووجود محفّز واحد.", "error");
+      toastStore.getState().show("تم نشر الأتمتة — تُحفظ نسخة منشورة منفصلة عن مسودة التعديل.", "success");
+    } catch (error: unknown) {
+      const detail =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "تحقق من ربط العُقد ووجود محفّز واحد ومسارات كاملة.";
+      setPublishError(String(detail));
+      toastStore.getState().show("تعذر النشر.", "error");
     }
   }
 
@@ -397,6 +441,41 @@ export default function AutomationsPage() {
     await api.post(`/automations/${selectedId}/pause`);
     await client.invalidateQueries({ queryKey: ["automations"] });
     toastStore.getState().show("تم إيقاف الأتمتة مؤقتاً.", "success");
+  }
+
+  async function simulateDraft() {
+    if (!selectedId || !organizationId) {
+      setPublishError("احفظ الأتمتة واختر الفرع قبل التجربة.");
+      return;
+    }
+    const account = accounts.data?.[0];
+    setSimulating(true);
+    setPublishError(null);
+    try {
+      const response = await api.post(`/automations/${selectedId}/simulate`, {
+        trigger_payload: {
+          organization_id: organizationId,
+          channel_id: organizationId,
+          conversation_id: "00000000-0000-0000-0000-000000000001",
+          contact_id: "00000000-0000-0000-0000-000000000002",
+          whatsapp_account_id: account?.id ?? organizationId,
+          from: "96550000000",
+          text: testMessage
+        }
+      });
+      setSimulateResult(response.data);
+      if (!response.data.validation_ok && response.data.validation_error) {
+        setPublishError(`المسار غير مكتمل للتجربة/النشر: ${response.data.validation_error}`);
+      }
+    } catch (error: unknown) {
+      const detail =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "تعذر تشغيل المحاكاة.";
+      setPublishError(String(detail));
+      toastStore.getState().show("تعذر تشغيل التجربة.", "error");
+    } finally {
+      setSimulating(false);
+    }
   }
 
   async function testRun() {
@@ -430,13 +509,13 @@ export default function AutomationsPage() {
             <span className="eyebrow">{t("eyebrow.automation")}</span>
             <h2>{t("pages.automations")}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={() => newAutomation()}>+</button>
+          <button type="button" className="secondary-action compact" onClick={() => newAutomation()}>أتمتة جديدة</button>
         </div>
 
         <div className="automation-templates-block">
           <h3>قوالب جاهزة</h3>
           <p className="hint-text automation-no-code-hint">
-            No-code: اختر قالباً → عدّل النص → أضف «سؤال / Form» أو «رد ذكي» → انشر.
+            اختر قالباً → عدّل النص → أضف «سؤال / نموذج» أو «رد ذكي» → جرّب المسودة ثم انشر.
           </p>
           {AUTOMATION_TEMPLATES.map((item) => (
             <button key={item.id} type="button" className="automation-template-btn" onClick={() => newAutomation(item.id)}>
@@ -472,6 +551,15 @@ export default function AutomationsPage() {
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}
             </select>
+            <div className="automation-meta-pills">
+              <span className="admin-chip">واتساب: {accounts.data?.[0]?.verified_name || accounts.data?.[0]?.display_phone_number || "غير مربوطة"}</span>
+              <span className="admin-chip">
+                الحالة: {STATUS_LABELS[selectedAutomation?.status ?? "draft"] ?? "مسودة"}
+              </span>
+              <span className="admin-chip">
+                آخر تعديل: {selectedAutomation?.updated_at ? new Date(selectedAutomation.updated_at).toLocaleString("ar") : "—"}
+              </span>
+            </div>
             <select
               value={triggerType}
               onChange={(event) => {
@@ -486,10 +574,14 @@ export default function AutomationsPage() {
           </div>
           <div className="automation-toolbar-actions">
             <button type="button" className="secondary-action compact" onClick={() => void save()}>حفظ</button>
-            <button type="button" className="secondary-action compact" onClick={() => void testRun()} disabled={!selectedId}>تجربة</button>
+            <button type="button" className="secondary-action compact" onClick={() => void simulateDraft()} disabled={!selectedId || simulating}>
+              {simulating ? "جاري التجربة…" : "تجربة المسودة"}
+            </button>
+            <button type="button" className="secondary-action compact" onClick={() => void testRun()} disabled={!selectedId}>تشغيل تجريبي</button>
             <button type="button" className="secondary-action compact" onClick={() => void pauseAutomation()} disabled={!selectedId}>إيقاف</button>
-            <button type="button" className="primary-action compact green" onClick={() => void publish()}>نشر</button>
+            <button type="button" className="primary-action compact green" onClick={() => void publish()} disabled={!organizationId}>نشر</button>
           </div>
+          {publishError && <p className="hint-text" role="alert">{publishError}</p>}
         </header>
 
         <div className="automation-trigger-config card">
@@ -516,16 +608,39 @@ export default function AutomationsPage() {
             <span>رسالة التجربة</span>
             <input value={testMessage} onChange={(event) => setTestMessage(event.target.value)} />
           </label>
+          {simulateResult && (
+            <div className="automation-sim-result">
+              <h3 className="section-title-sm">معاينة المسار (بدون إرسال واتساب أو إنشاء صفقات)</h3>
+              <ol>
+                {(simulateResult.steps ?? []).map((step) => (
+                  <li key={step.node_id}>
+                    <strong>{step.label}</strong> · {step.node_type}
+                    {step.output?.preview ? ` — «${String(step.output.preview)}»` : ""}
+                    {step.output?.result != null ? ` — شرط: ${String(step.output.result)}` : ""}
+                  </li>
+                ))}
+              </ol>
+              {simulateResult.proposed_reply && <p>الرد المقترح: {simulateResult.proposed_reply}</p>}
+              {simulateResult.would_create_deal && <p>كان سيُنشئ صفقة CRM.</p>}
+              {simulateResult.would_assign_team && <p>كان سيحوّل المحادثة لفريق.</p>}
+              {simulateResult.conflict_note && <p className="hint-text">{simulateResult.conflict_note}</p>}
+            </div>
+          )}
         </div>
 
         <div className="automation-workspace">
           <aside className="node-palette">
             <h3>العُقد</h3>
-            {nodePalette.map(([type, label, badge]) => (
-              <button key={type} type="button" onClick={() => addNode(type, label)}>
-                <span>{badge}</span>
-                <strong>{label}</strong>
-              </button>
+            {NODE_GROUPS.map((group) => (
+              <div key={group.label} className="automation-node-group">
+                <strong>{group.label}</strong>
+                {group.nodes.map(([type, label, badge]) => (
+                  <button key={type} type="button" onClick={() => addNode(type, label)}>
+                    <span>{badge}</span>
+                    <strong>{label}</strong>
+                  </button>
+                ))}
+              </div>
             ))}
             {(selectedNode?.type === "condition" || selectedNode?.type === "business_hours") && (
               <div className="condition-branch-actions">
@@ -813,7 +928,7 @@ export default function AutomationsPage() {
                       />
                       <span>إرسال الرد تلقائياً على WhatsApp</span>
                     </label>
-                    <p className="hint-text">يستخدم نص رسالة العميل للبحث في الكatalog.</p>
+                    <p className="hint-text">يستخدم نص رسالة العميل للبحث في الكتالوج.</p>
                   </>
                 )}
 
@@ -826,7 +941,7 @@ export default function AutomationsPage() {
                         onChange={(event) => updateSelectedNode({ mode: event.target.value })}
                       >
                         <option value="kb_first">قاعدة المعرفة أولاً</option>
-                        <option value="catalog_first">كتalog أولاً</option>
+                        <option value="catalog_first">الكتالوج أولاً</option>
                         <option value="combined">مدمج (KB + منتجات)</option>
                         <option value="local">رد محلي فقط</option>
                       </select>

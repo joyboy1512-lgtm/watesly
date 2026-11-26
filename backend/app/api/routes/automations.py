@@ -25,6 +25,7 @@ from app.services.automations import (
     pause_automation,
     request_run_cancellation,
     publish_automation,
+    simulate_automation,
     update_automation,
 )
 from app.workers.automation_tasks import execute_automation_run
@@ -146,6 +147,25 @@ async def pause(
     except ValueError as exc:
         raise _automation_error(exc) from exc
     return AutomationPublishResponse(id=item.id, status=item.status, version=item.version)
+
+
+@router.post("/{automation_id}/simulate")
+async def simulate_automation_endpoint(
+    automation_id: UUID,
+    payload: AutomationTestRequest,
+    context: AuthContext = Depends(require_permissions(Permission.AUTOMATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await simulate_automation(
+            db,
+            account_id=context.account_id,
+            automation_id=automation_id,
+            trigger_payload=payload.trigger_payload,
+            membership=context.membership,
+        )
+    except ValueError as exc:
+        raise _automation_error(exc) from exc
 
 
 @router.post("/{automation_id}/test", response_model=AutomationRunResponse)

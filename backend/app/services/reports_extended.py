@@ -245,12 +245,13 @@ async def campaign_roi_report(db: AsyncSession, *, account_id: UUID, days: int =
             )
         ).scalars().all()
     )
+    attributed_sources = ("inbound", "whatsapp", "campaign", "conversation")
     deals_from_inbound = int(
         (await db.scalar(
             select(func.count(Deal.id)).where(
                 Deal.account_id == account_id,
                 Deal.created_at >= since,
-                Deal.source.in_(("inbound", "whatsapp", "campaign")),
+                Deal.source.in_(attributed_sources),
             )
         ))
         or 0
@@ -266,25 +267,64 @@ async def campaign_roi_report(db: AsyncSession, *, account_id: UUID, days: int =
             )
         ).scalars().all()
     )
-    won_value = round(sum(float(d.amount or 0) for d in won_deals), 3)
+    attributed_won = [d for d in won_deals if (d.source or "") in attributed_sources]
+    recorded_amounts = [float(d.amount) for d in attributed_won if d.amount is not None]
+    won_value = round(sum(recorded_amounts), 3)
+    unrecorded_value_count = sum(1 for d in attributed_won if d.amount is None)
+    # Cost / spend is not tracked on campaigns yet — surface that gap explicitly.
+    cost_available = False
+    roi_pct = None
+    roi_blocked_reason = None
+    if not cost_available:
+        roi_blocked_reason = "لا تتوفر تكلفة الحملة أو بيانات الربح في النظام؛ يُعرض فقط قيمة الصفقات المنسوبة."
+    crm_path = (
+        f"/crm?stage=won&updated_since={since.date().isoformat()}"
+        f"&source=inbound,whatsapp,campaign,conversation"
+    )
     return {
         "period_days": days,
+        "attribution_rule": (
+            "تُنسب الصفقة للحملة/القناة عندما يكون مصدرها inbound أو whatsapp أو campaign أو conversation "
+            "وضمن فترة التقرير."
+        ),
         "summary": {
             "campaigns": len(campaigns),
             "deals_created": deals_from_inbound,
-            "deals_won": len(won_deals),
+            "deals_won": len(attributed_won),
+            "deals_won_all": len(won_deals),
+            "won_value": won_value,
+            "attributed_won_value": won_value,
+            "unrecorded_value_count": unrecorded_value_count,
+            "cost_available": cost_available,
+            "roi_pct": roi_pct,
+            "roi_blocked_reason": roi_blocked_reason,
+            "drilldown_crm": crm_path,
+            "won_deal_ids": [str(d.id) for d in attributed_won],
+        },
+        "funnel": {
+            "campaigns": len(campaigns),
+            "deals_created": deals_from_inbound,
+            "deals_won": len(attributed_won),
             "won_value": won_value,
         },
-        "campaigns": [{"id": str(c.id), "name": c.name, "status": c.status.value if hasattr(c.status, "value") else str(c.status)} for c in campaigns[:20]],
+        "campaigns": [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "status": c.status.value if hasattr(c.status, "value") else str(c.status),
+            }
+            for c in campaigns[:20]
+        ],
         "recent_won": [
             {
                 "id": str(d.id),
                 "title": d.title,
-                "amount": str(d.amount or 0),
+                "amount": str(d.amount) if d.amount is not None else None,
+                "amount_recorded": d.amount is not None,
                 "currency": d.currency,
                 "source": d.source,
             }
-            for d in won_deals[:20]
+            for d in attributed_won[:50]
         ],
     }
 

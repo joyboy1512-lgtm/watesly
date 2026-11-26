@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,10 +24,18 @@ from app.services.assignments import (
     delete_team,
     list_assignment_rules,
     list_teams,
+    simulate_assignment,
     update_assignment_rule,
     update_team,
     update_team_members,
 )
+
+
+class AssignmentSimulateRequest(BaseModel):
+    organization_id: UUID
+    channel_id: UUID | None = None
+    team_id: UUID | None = None
+    sample_text: str | None = Field(default=None, max_length=500)
 
 router = APIRouter()
 
@@ -190,3 +199,24 @@ async def remove_rule(
         await delete_assignment_rule(db, account_id=context.account_id, rule_id=rule_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Rule not found") from exc
+
+
+@router.post("/simulate")
+async def post_simulate_assignment(
+    payload: AssignmentSimulateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await simulate_assignment(
+            db,
+            account_id=context.account_id,
+            organization_id=payload.organization_id,
+            channel_id=payload.channel_id,
+            team_id=payload.team_id,
+        )
+        if payload.sample_text:
+            result["sample_text"] = payload.sample_text
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
