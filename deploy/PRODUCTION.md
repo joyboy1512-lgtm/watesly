@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-26) — AI template idea chat
+
+| Item | Value |
+|------|-------|
+| Commit | `f67abed` |
+| Alembic | `0074_ai_welcome_message` |
+| Frontend | `0.33.12` |
+| Live assets | `index-CSZlyg0t.js`, `index-DN9B3IZc.css` |
+
 ### Production snapshot (2026-11-25) — AI template editor full drafts
 
 | Item | Value |
