@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.contact import Contact
@@ -13,14 +13,25 @@ from app.models.organization import Organization
 from app.models.user import User
 
 DEAL_STAGES = ("lead", "qualified", "proposal", "won", "lost")
+LOSS_REASONS = ("price", "no_reply", "unavailable", "competitor", "other", "unspecified")
+OPEN_STAGES = ("lead", "qualified", "proposal")
 
 
-def deal_to_dict(deal: Deal, *, contact_name: str | None = None, contact_phone: str | None = None) -> dict:
+def deal_to_dict(
+    deal: Deal,
+    *,
+    contact_name: str | None = None,
+    contact_phone: str | None = None,
+    assignee_name: str | None = None,
+    conversation_id: UUID | None = None,
+) -> dict:
+    amount_value = deal.amount
     return {
         "id": str(deal.id),
         "title": deal.title,
         "stage": deal.stage,
-        "amount": str(deal.amount),
+        "amount": str(amount_value) if amount_value is not None else None,
+        "amount_recorded": amount_value is not None,
         "currency": deal.currency or "KWD",
         "pipeline": deal.pipeline,
         "contact_id": str(deal.contact_id) if deal.contact_id else None,
@@ -28,13 +39,70 @@ def deal_to_dict(deal: Deal, *, contact_name: str | None = None, contact_phone: 
         "contact_phone": contact_phone,
         "organization_id": str(deal.organization_id) if deal.organization_id else None,
         "assigned_membership_id": str(deal.assigned_membership_id) if deal.assigned_membership_id else None,
+        "assignee_name": assignee_name,
         "description": deal.description,
         "probability": deal.probability or 0,
         "source": deal.source,
         "expected_close_date": deal.expected_close_date.isoformat() if deal.expected_close_date else None,
+        "loss_reason": deal.loss_reason or ("unspecified" if deal.stage == "lost" else None),
+        "loss_reason_detail": deal.loss_reason_detail,
+        "next_step": deal.next_step,
+        "next_step_at": deal.next_step_at.isoformat() if deal.next_step_at else None,
+        "conversation_id": str(conversation_id or deal.conversation_id)
+        if (conversation_id or deal.conversation_id)
+        else None,
         "created_at": deal.created_at.isoformat() if deal.created_at else None,
         "updated_at": deal.updated_at.isoformat() if deal.updated_at else None,
     }
+
+
+def _day_bounds(now: datetime | None = None) -> tuple[datetime, datetime]:
+    current = now or datetime.now(UTC)
+    start = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _apply_quick_filter(stmt, *, quick_filter: str | None, membership_id: UUID | None):
+    if not quick_filter:
+        return stmt
+    now = datetime.now(UTC)
+    start, end = _day_bounds(now)
+    if quick_filter == "my_today":
+        if membership_id is None:
+            return stmt.where(False)
+        due = or_(
+            and_(Deal.next_step_at.is_not(None), Deal.next_step_at >= start, Deal.next_step_at < end),
+            and_(
+                Deal.expected_close_date.is_not(None),
+                Deal.expected_close_date >= start,
+                Deal.expected_close_date < end,
+            ),
+        )
+        return stmt.where(
+            Deal.assigned_membership_id == membership_id,
+            Deal.stage.in_(OPEN_STAGES),
+            due,
+        )
+    if quick_filter == "overdue":
+        return stmt.where(
+            Deal.stage.in_(OPEN_STAGES),
+            or_(
+                and_(Deal.next_step_at.is_not(None), Deal.next_step_at < now),
+                and_(Deal.expected_close_date.is_not(None), Deal.expected_close_date < now),
+            ),
+        )
+    if quick_filter == "unassigned":
+        return stmt.where(Deal.stage.in_(OPEN_STAGES), Deal.assigned_membership_id.is_(None))
+    if quick_filter.startswith("loss:"):
+        reason = quick_filter.split(":", 1)[1] or "unspecified"
+        stmt = stmt.where(Deal.stage == "lost")
+        if reason == "unspecified":
+            return stmt.where(
+                or_(Deal.loss_reason.is_(None), Deal.loss_reason == "", Deal.loss_reason == "unspecified")
+            )
+        return stmt.where(Deal.loss_reason == reason)
+    return stmt
 
 
 async def create_deal(
@@ -45,7 +113,7 @@ async def create_deal(
     title: str,
     contact_id: UUID | None = None,
     stage: str = "lead",
-    amount: Decimal = Decimal("0"),
+    amount: Decimal | None = None,
     pipeline: str = "default",
     currency: str = "KWD",
     description: str | None = None,
@@ -54,6 +122,11 @@ async def create_deal(
     probability: int = 0,
     source: str | None = "manual",
     expected_close_date: datetime | None = None,
+    next_step: str | None = None,
+    next_step_at: datetime | None = None,
+    conversation_id: UUID | None = None,
+    loss_reason: str | None = None,
+    loss_reason_detail: str | None = None,
 ) -> Deal:
     from app.services.membership_access import ensure_membership_organization_access
 
@@ -80,6 +153,11 @@ async def create_deal(
         probability=probability,
         source=source,
         expected_close_date=expected_close_date,
+        next_step=next_step,
+        next_step_at=next_step_at,
+        conversation_id=conversation_id,
+        loss_reason=loss_reason,
+        loss_reason_detail=loss_reason_detail,
     )
     db.add(item)
     await db.commit()
@@ -105,13 +183,19 @@ async def list_deals(
     contact_id: UUID | None = None,
     organization_id: UUID | None = None,
     assigned_membership_id: UUID | None = None,
+    quick_filter: str | None = None,
+    source: str | None = None,
+    ids: list[UUID] | None = None,
+    updated_since: datetime | None = None,
     limit: int = 500,
 ) -> list[dict]:
     from app.services.membership_access import organization_scope_clauses
 
     stmt = (
-        select(Deal, Contact.display_name, Contact.external_address)
+        select(Deal, Contact.display_name, Contact.external_address, User.full_name)
         .outerjoin(Contact, Contact.id == Deal.contact_id)
+        .outerjoin(Membership, Membership.id == Deal.assigned_membership_id)
+        .outerjoin(User, User.id == Membership.user_id)
         .where(Deal.account_id == account_id)
         .order_by(Deal.updated_at.desc())
         .limit(limit)
@@ -134,14 +218,27 @@ async def list_deals(
         stmt = stmt.where(Deal.organization_id == organization_id)
     if assigned_membership_id:
         stmt = stmt.where(Deal.assigned_membership_id == assigned_membership_id)
+    if source:
+        stmt = stmt.where(Deal.source == source)
+    if ids:
+        stmt = stmt.where(Deal.id.in_(ids))
+    if updated_since is not None:
+        stmt = stmt.where(Deal.updated_at >= updated_since)
+    membership_id = getattr(membership, "id", None) if membership is not None else None
+    stmt = _apply_quick_filter(stmt, quick_filter=quick_filter, membership_id=membership_id)
     if q:
         term = f"%{q.strip()}%"
         stmt = stmt.where(or_(Deal.title.ilike(term), Contact.display_name.ilike(term), Contact.external_address.ilike(term)))
 
     rows = (await db.execute(stmt)).all()
     return [
-        deal_to_dict(deal, contact_name=display_name, contact_phone=external_address)
-        for deal, display_name, external_address in rows
+        deal_to_dict(
+            deal,
+            contact_name=display_name,
+            contact_phone=external_address,
+            assignee_name=assignee_name,
+        )
+        for deal, display_name, external_address, assignee_name in rows
     ]
 
 
@@ -156,15 +253,17 @@ async def get_deal(
 
     row = (
         await db.execute(
-            select(Deal, Contact.display_name, Contact.external_address, Organization.name)
+            select(Deal, Contact.display_name, Contact.external_address, Organization.name, User.full_name)
             .outerjoin(Contact, Contact.id == Deal.contact_id)
             .outerjoin(Organization, Organization.id == Deal.organization_id)
+            .outerjoin(Membership, Membership.id == Deal.assigned_membership_id)
+            .outerjoin(User, User.id == Membership.user_id)
             .where(Deal.id == deal_id, Deal.account_id == account_id)
         )
     ).first()
     if row is None:
         raise ValueError("DEAL_NOT_FOUND")
-    deal, display_name, external_phone, org_name = row
+    deal, display_name, external_phone, org_name, assignee_name = row
     if membership is not None and deal.organization_id is not None:
         await ensure_membership_organization_access(
             db,
@@ -174,8 +273,34 @@ async def get_deal(
         )
     elif membership is not None and deal.organization_id is None:
         raise ValueError("ACCESS_FORBIDDEN")
-    data = deal_to_dict(deal, contact_name=display_name, contact_phone=external_phone)
+    conversation_id = deal.conversation_id
+    if conversation_id is None and deal.contact_id is not None:
+        from app.models.conversation import Conversation
+
+        conversation_id = (
+            await db.execute(
+                select(Conversation.id)
+                .where(
+                    Conversation.account_id == account_id,
+                    Conversation.contact_id == deal.contact_id,
+                )
+                .order_by(Conversation.updated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    data = deal_to_dict(
+        deal,
+        contact_name=display_name,
+        contact_phone=external_phone,
+        assignee_name=assignee_name,
+        conversation_id=conversation_id,
+    )
     data["organization_name"] = org_name
+    data["stage_history"] = [
+        item
+        for item in await list_deal_activities(db, deal.id)
+        if item["activity_type"] in {"stage_change", "created", "lost_reason"}
+    ]
     return data
 
 
@@ -233,8 +358,37 @@ async def update_deal(
     return deal
 
 
-async def update_deal_stage(db: AsyncSession, *, account_id: UUID, deal_id: UUID, stage: str) -> Deal:
-    return await update_deal(db, account_id=account_id, deal_id=deal_id, stage=stage)
+async def update_deal_stage(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    deal_id: UUID,
+    stage: str,
+    loss_reason: str | None = None,
+    loss_reason_detail: str | None = None,
+    membership=None,
+) -> Deal:
+    fields: dict = {"stage": stage}
+    if stage == "lost":
+        reason = (loss_reason or "unspecified").strip() or "unspecified"
+        if reason not in LOSS_REASONS:
+            raise ValueError("INVALID_LOSS_REASON")
+        fields["loss_reason"] = reason
+        fields["loss_reason_detail"] = loss_reason_detail
+    elif stage != "lost":
+        fields["loss_reason"] = None
+        fields["loss_reason_detail"] = None
+    deal = await update_deal(db, account_id=account_id, deal_id=deal_id, membership=membership, **fields)
+    if stage == "lost":
+        await add_deal_activity(
+            db,
+            deal_id=deal.id,
+            activity_type="lost_reason",
+            body=f"سبب الخسارة: {deal.loss_reason}"
+            + (f" — {deal.loss_reason_detail}" if deal.loss_reason_detail else ""),
+            user_id=None,
+        )
+    return deal
 
 
 async def delete_deal(
@@ -305,9 +459,16 @@ async def crm_stats(db: AsyncSession, *, account_id: UUID, membership=None) -> d
     deals = list((await db.execute(query)).scalars().all())
     open_deals = [d for d in deals if d.stage not in ("won", "lost")]
     won_recent = [d for d in deals if d.stage == "won" and d.updated_at and d.updated_at >= since]
-    pipeline_value = sum(float(d.amount or 0) for d in open_deals)
-    won_value = sum(float(d.amount or 0) for d in won_recent)
+    pipeline_value = sum(float(d.amount) for d in open_deals if d.amount is not None)
+    won_value = sum(float(d.amount) for d in won_recent if d.amount is not None)
     by_stage = {stage: len([d for d in deals if d.stage == stage]) for stage in DEAL_STAGES}
+    lost = [d for d in deals if d.stage == "lost"]
+    loss_reasons = {reason: 0 for reason in LOSS_REASONS}
+    for deal in lost:
+        key = deal.loss_reason if deal.loss_reason in LOSS_REASONS else "unspecified"
+        if not deal.loss_reason:
+            key = "unspecified"
+        loss_reasons[key] = loss_reasons.get(key, 0) + 1
     return {
         "total": len(deals),
         "open": len(open_deals),
@@ -315,6 +476,8 @@ async def crm_stats(db: AsyncSession, *, account_id: UUID, membership=None) -> d
         "pipeline_value": round(pipeline_value, 3),
         "won_value_month": round(won_value, 3),
         "by_stage": by_stage,
+        "loss_reasons": loss_reasons,
+        "lost_total": len(lost),
     }
 
 
@@ -324,15 +487,86 @@ async def bulk_update_stage(
     account_id: UUID,
     deal_ids: list[UUID],
     stage: str,
+    loss_reason: str | None = None,
+    loss_reason_detail: str | None = None,
 ) -> int:
     updated = 0
     for deal_id in deal_ids:
         try:
-            await update_deal_stage(db, account_id=account_id, deal_id=deal_id, stage=stage)
+            await update_deal_stage(
+                db,
+                account_id=account_id,
+                deal_id=deal_id,
+                stage=stage,
+                loss_reason=loss_reason,
+                loss_reason_detail=loss_reason_detail,
+            )
             updated += 1
         except ValueError:
             continue
     return updated
+
+
+async def follow_up_counts(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    membership=None,
+    organization_id: UUID | None = None,
+) -> dict:
+    """Counts for CRM quick filters under the same org scope as list_deals."""
+    from app.services.membership_access import organization_scope_clauses
+
+    base = select(Deal).where(Deal.account_id == account_id)
+    if membership is not None:
+        for clause in await organization_scope_clauses(
+            db,
+            account_id=account_id,
+            membership=membership,
+            organization_column=Deal.organization_id,
+        ):
+            base = base.where(clause)
+    if organization_id:
+        base = base.where(Deal.organization_id == organization_id)
+    deals = list((await db.execute(base)).scalars().all())
+    now = datetime.now(UTC)
+    start, end = _day_bounds(now)
+    membership_id = getattr(membership, "id", None) if membership is not None else None
+
+    def is_due_today(deal: Deal) -> bool:
+        if deal.next_step_at and start <= deal.next_step_at < end:
+            return True
+        if deal.expected_close_date and start <= deal.expected_close_date < end:
+            return True
+        return False
+
+    def is_overdue(deal: Deal) -> bool:
+        if deal.next_step_at and deal.next_step_at < now:
+            return True
+        if deal.expected_close_date and deal.expected_close_date < now:
+            return True
+        return False
+
+    open_deals = [d for d in deals if d.stage in OPEN_STAGES]
+    my_today = [
+        d
+        for d in open_deals
+        if membership_id and d.assigned_membership_id == membership_id and is_due_today(d)
+    ]
+    overdue = [d for d in open_deals if is_overdue(d)]
+    unassigned = [d for d in open_deals if d.assigned_membership_id is None]
+    lost = [d for d in deals if d.stage == "lost"]
+    loss_reasons = {reason: 0 for reason in LOSS_REASONS}
+    for deal in lost:
+        key = deal.loss_reason if deal.loss_reason in LOSS_REASONS and deal.loss_reason else "unspecified"
+        loss_reasons[key] = loss_reasons.get(key, 0) + 1
+    return {
+        "my_today": len(my_today),
+        "overdue": len(overdue),
+        "unassigned": len(unassigned),
+        "lost_total": len(lost),
+        "loss_reasons": loss_reasons,
+    }
 
 
 async def maybe_auto_create_deal_from_inbound(
@@ -415,6 +649,7 @@ async def create_deal_from_conversation(
         organization_id=contact.organization_id,
         source="conversation",
         description=last_inbound[:500] if last_inbound else None,
+        conversation_id=conversation_id,
     )
 
 
@@ -440,17 +675,36 @@ async def export_deals_csv(db: AsyncSession, account_id: UUID, *, deal_ids: list
         rows = [r for r in rows if r["id"] in id_set]
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["title", "stage", "amount", "currency", "contact", "pipeline", "probability", "source"])
+    writer.writerow(
+        [
+            "title",
+            "stage",
+            "amount",
+            "currency",
+            "contact",
+            "assignee",
+            "pipeline",
+            "probability",
+            "source",
+            "loss_reason",
+            "next_step",
+            "next_step_at",
+        ]
+    )
     for item in rows:
         writer.writerow([
             item["title"],
             item["stage"],
-            item["amount"],
+            item["amount"] if item["amount"] is not None else "",
             item["currency"],
             item["contact_name"] or item["contact_phone"] or "",
+            item.get("assignee_name") or "",
             item["pipeline"],
             item["probability"],
             item["source"] or "",
+            item.get("loss_reason") or "",
+            item.get("next_step") or "",
+            item.get("next_step_at") or "",
         ])
     return buffer.getvalue()
 
@@ -465,17 +719,36 @@ async def export_deals_xlsx(db: AsyncSession, account_id: UUID, *, deal_ids: lis
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "CRM"
-    sheet.append(["title", "stage", "amount", "currency", "contact", "pipeline", "probability", "source"])
+    sheet.append(
+        [
+            "title",
+            "stage",
+            "amount",
+            "currency",
+            "contact",
+            "assignee",
+            "pipeline",
+            "probability",
+            "source",
+            "loss_reason",
+            "next_step",
+            "next_step_at",
+        ]
+    )
     for item in rows:
         sheet.append([
             item["title"],
             item["stage"],
-            item["amount"],
+            item["amount"] if item["amount"] is not None else "",
             item["currency"],
             item["contact_name"] or item["contact_phone"] or "",
+            item.get("assignee_name") or "",
             item["pipeline"],
             item["probability"],
             item["source"] or "",
+            item.get("loss_reason") or "",
+            item.get("next_step") or "",
+            item.get("next_step_at") or "",
         ])
     out = io.BytesIO()
     workbook.save(out)

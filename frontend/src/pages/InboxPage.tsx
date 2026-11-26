@@ -118,7 +118,9 @@ export default function InboxPage() {
   const urlFilter = searchParams.get("filter");
   const urlInboxScope = searchParams.get("inbox_scope");
   const urlNeedsReply = searchParams.get("needs_reply");
+  const urlSlaBreached = searchParams.get("sla_breached");
   const urlOrganizationId = searchParams.get("organization_id");
+  const slaBreachedOnly = urlSlaBreached === "1" || urlSlaBreached === "true";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -351,14 +353,15 @@ export default function InboxPage() {
         || (filter === "waiting" && item.needs_reply)
         || (filter === "mine" && Boolean(item.assigned_membership_id))
         || (filter === "starred" && item.is_starred);
-      return matchesSearch && matchesFilter;
+      const matchesSla = !slaBreachedOnly || Boolean(item.sla_breached_at);
+      return matchesSearch && matchesFilter && matchesSla;
     });
     // Waiting queue: oldest inbound needing a reply first (longest wait).
-    if (filter === "waiting" || needsReplyOnly) {
+    if (filter === "waiting" || needsReplyOnly || slaBreachedOnly) {
       return sortWaitingOldestFirst(rows);
     }
     return rows;
-  }, [channelScopedConversations, filter, search, needsReplyOnly]);
+  }, [channelScopedConversations, filter, search, needsReplyOnly, slaBreachedOnly]);
 
   const waitingConversations = useMemo(
     () =>

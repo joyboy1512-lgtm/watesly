@@ -381,7 +381,63 @@ async def campaigns_report(db: AsyncSession, *, account_id: UUID, days: int = 30
     totals["delivery_rate"] = round(((totals["delivered"] + totals["read"]) / delivery_base) * 100, 1)
     totals["read_rate"] = round((totals["read"] / read_base) * 100, 1)
 
-    return {"period_days": days, "summary": totals, "campaigns": rows}
+    from app.models.deal import Deal
+
+    attributed_sources = ("inbound", "whatsapp", "campaign", "conversation")
+    deals_created = int(
+        (
+            await db.scalar(
+                select(func.count(Deal.id)).where(
+                    Deal.account_id == account_id,
+                    Deal.created_at >= since,
+                    Deal.source.in_(attributed_sources),
+                )
+            )
+        )
+        or 0
+    )
+    won_deals = list(
+        (
+            await db.execute(
+                select(Deal).where(
+                    Deal.account_id == account_id,
+                    Deal.stage == "won",
+                    Deal.updated_at >= since,
+                    Deal.source.in_(attributed_sources),
+                )
+            )
+        ).scalars().all()
+    )
+    attributed_won_value = round(sum(float(d.amount) for d in won_deals if d.amount is not None), 3)
+    totals["replies_proxy"] = totals["read"]  # best available proxy when reply events are not aggregated
+    totals["deals_created"] = deals_created
+    totals["deals_won"] = len(won_deals)
+    totals["attributed_won_value"] = attributed_won_value
+    totals["won_deal_ids"] = [str(d.id) for d in won_deals]
+    totals["funnel"] = {
+        "sent": totals["sent"],
+        "delivered": totals["delivered"],
+        "read": totals["read"],
+        "replies_proxy": totals["replies_proxy"],
+        "deals_created": deals_created,
+        "deals_won": len(won_deals),
+        "attributed_won_value": attributed_won_value,
+        "rates": {
+            "delivery_of_sent": totals["delivery_rate"],
+            "read_of_delivered": totals["read_rate"],
+            "deal_of_read": round((deals_created / max(totals["read"], 1)) * 100, 1),
+            "won_of_deals": round((len(won_deals) / max(deals_created, 1)) * 100, 1),
+        },
+        "attribution_rule": (
+            "تُنسب الصفقة عند source ∈ {inbound, whatsapp, campaign, conversation} وضمن الفترة."
+        ),
+        "drilldown_crm_won": (
+            f"/crm?stage=won&updated_since={since.date().isoformat()}"
+            f"&source=inbound,whatsapp,campaign,conversation"
+        ),
+    }
+
+    return {"period_days": days, "summary": totals, "campaigns": rows, "funnel": totals["funnel"]}
 
 
 async def conversations_report(

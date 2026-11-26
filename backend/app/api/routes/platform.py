@@ -65,6 +65,7 @@ from app.services.crm import (
     delete_deal,
     export_deals_csv,
     export_deals_xlsx,
+    follow_up_counts,
     get_deal,
     list_deal_activities,
     list_deals,
@@ -160,7 +161,7 @@ class DealCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     contact_id: UUID | None = None
     stage: str = "lead"
-    amount: Decimal = Decimal("0")
+    amount: Decimal | None = None
     pipeline: str = "default"
     currency: str = "KWD"
     description: str | None = None
@@ -169,6 +170,9 @@ class DealCreateRequest(BaseModel):
     probability: int = 0
     source: str | None = "manual"
     expected_close_date: datetime | None = None
+    next_step: str | None = None
+    next_step_at: datetime | None = None
+    conversation_id: UUID | None = None
 
 
 class DealUpdateRequest(BaseModel):
@@ -183,10 +187,17 @@ class DealUpdateRequest(BaseModel):
     assigned_membership_id: UUID | None = None
     probability: int | None = None
     expected_close_date: datetime | None = None
+    next_step: str | None = None
+    next_step_at: datetime | None = None
+    loss_reason: str | None = None
+    loss_reason_detail: str | None = None
+    conversation_id: UUID | None = None
 
 
 class DealStageRequest(BaseModel):
     stage: str
+    loss_reason: str | None = None
+    loss_reason_detail: str | None = None
 
 
 class DealActivityRequest(BaseModel):
@@ -197,6 +208,8 @@ class DealActivityRequest(BaseModel):
 class DealBulkStageRequest(BaseModel):
     deal_ids: list[UUID] = Field(min_length=1)
     stage: str
+    loss_reason: str | None = None
+    loss_reason_detail: str | None = None
 
 
 class DealFromConversationRequest(BaseModel):
@@ -476,10 +489,17 @@ async def get_deals(
     contact_id: UUID | None = None,
     organization_id: UUID | None = None,
     assigned_membership_id: UUID | None = None,
+    quick_filter: str | None = None,
+    source: str | None = None,
+    ids: str | None = Query(None, description="Comma-separated deal UUIDs"),
+    updated_since: datetime | None = None,
     limit: int = Query(500, ge=1, le=5000),
     context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    deal_ids = None
+    if ids:
+        deal_ids = [UUID(part.strip()) for part in ids.split(",") if part.strip()]
     return await list_deals(
         db,
         context.account_id,
@@ -490,6 +510,10 @@ async def get_deals(
         contact_id=contact_id,
         organization_id=organization_id,
         assigned_membership_id=assigned_membership_id,
+        quick_filter=quick_filter,
+        source=source,
+        ids=deal_ids,
+        updated_since=updated_since,
         limit=limit,
     )
 
@@ -500,6 +524,20 @@ async def get_crm_stats(
     db: AsyncSession = Depends(get_db),
 ):
     return await crm_stats(db, account_id=context.account_id, membership=context.membership)
+
+
+@router.get("/crm/follow-up-counts")
+async def get_crm_follow_up_counts(
+    organization_id: UUID | None = None,
+    context: AuthContext = Depends(require_permissions(Permission.CONTACTS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await follow_up_counts(
+        db,
+        account_id=context.account_id,
+        membership=context.membership,
+        organization_id=organization_id,
+    )
 
 
 @router.get("/crm/report")
@@ -551,6 +589,8 @@ async def post_bulk_deal_stage(
         account_id=context.account_id,
         deal_ids=payload.deal_ids,
         stage=payload.stage,
+        loss_reason=payload.loss_reason,
+        loss_reason_detail=payload.loss_reason_detail,
     )
     return {"updated": updated}
 
@@ -607,6 +647,9 @@ async def post_deal(
         probability=payload.probability,
         source=payload.source,
         expected_close_date=payload.expected_close_date,
+        next_step=payload.next_step,
+        next_step_at=payload.next_step_at,
+        conversation_id=payload.conversation_id,
     )
     return await get_deal(db, account_id=context.account_id, deal_id=deal.id)
 
@@ -650,10 +693,19 @@ async def patch_deal_stage(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await update_deal_stage(db, account_id=context.account_id, deal_id=deal_id, stage=payload.stage)
-        return await get_deal(db, account_id=context.account_id, deal_id=deal_id)
+        await update_deal_stage(
+            db,
+            account_id=context.account_id,
+            deal_id=deal_id,
+            stage=payload.stage,
+            loss_reason=payload.loss_reason,
+            loss_reason_detail=payload.loss_reason_detail,
+            membership=context.membership,
+        )
+        return await get_deal(db, account_id=context.account_id, deal_id=deal_id, membership=context.membership)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        code = 400 if "INVALID" in str(exc) else 404
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
 
 
 @router.get("/crm/deals/{deal_id}/activities")

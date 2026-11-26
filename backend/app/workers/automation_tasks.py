@@ -450,8 +450,9 @@ async def _execute_run(run_id):
             if not automation:
                 raise ValueError("Automation not found")
 
-            nodes = {node["id"]: node for node in automation.graph.get("nodes", [])}
-            edges = automation.graph.get("edges", [])
+            live_graph = automation.published_graph or automation.graph or {}
+            nodes = {node["id"]: node for node in live_graph.get("nodes", [])}
+            edges = live_graph.get("edges", [])
             outgoing = {node_id: [] for node_id in nodes}
             for edge in edges:
                 outgoing.setdefault(edge["source"], []).append(edge)

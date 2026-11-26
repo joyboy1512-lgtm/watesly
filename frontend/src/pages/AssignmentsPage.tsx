@@ -35,6 +35,20 @@ export default function AssignmentsPage() {
   const [editingTeam, setEditingTeam] = useState<AssignmentTeam | null>(null);
   const [editMembers, setEditMembers] = useState<string[]>([]);
   const [savingTeam, setSavingTeam] = useState(false);
+  const [simChannelId, setSimChannelId] = useState("");
+  const [simTeamId, setSimTeamId] = useState("");
+  const [simText, setSimText] = useState("مرحبا، أريد معرفة السعر");
+  const [simResult, setSimResult] = useState<{
+    outcome: string;
+    reason: string;
+    expected_member_name?: string | null;
+    waiting_conversations?: number;
+    considered_rules?: Array<{ rule_name: string; priority: number; would_win: boolean; skipped: boolean; skip_reason?: string | null }>;
+    candidates?: Array<{ membership_id: string; selected: boolean; reason: string; open_conversations?: number | null }>;
+    absence_behavior?: string;
+    tie_break_rule?: string;
+  } | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const organizations = useQuery({
     queryKey: ["organizations"],
@@ -258,6 +272,28 @@ export default function AssignmentsPage() {
     await client.invalidateQueries({ queryKey: ["assignment-rules"] });
   }
 
+  async function runSimulation() {
+    const orgId = branchFilter || organizationId;
+    if (!orgId) {
+      toastStore.getState().show("اختر الفرع أولاً لاختبار التوزيع.", "error");
+      return;
+    }
+    setSimulating(true);
+    try {
+      const response = await api.post("/assignments/simulate", {
+        organization_id: orgId,
+        channel_id: simChannelId || null,
+        team_id: simTeamId || null,
+        sample_text: simText
+      });
+      setSimResult(response.data);
+    } catch {
+      toastStore.getState().show("تعذر تشغيل محاكاة التوزيع.", "error");
+    } finally {
+      setSimulating(false);
+    }
+  }
+
   async function deleteRuleItem(rule: AssignmentRule) {
     if (!window.confirm(`حذف قاعدة «${rule.name}»؟`)) return;
     await api.delete(`/assignments/rules/${rule.id}`);
@@ -300,10 +336,79 @@ export default function AssignmentsPage() {
       </header>
 
       <section className="admin-stats-row admin-stats-row-brand">
+        <article className="admin-stat-card admin-stat-card-brand"><span>الفرع الحالي</span><strong>{branchFilter ? orgMap.get(branchFilter) ?? "—" : "لم يُختر"}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>بانتظار التعيين</span><strong>{supervisor.isLoading ? "…" : supervisor.data?.waiting_conversations ?? 0}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>فرق التوزيع</span><strong>{stats.teams}</strong></article>
         <article className="admin-stat-card admin-stat-card-brand"><span>قواعد نشطة</span><strong>{stats.rules}</strong></article>
-        <article className="admin-stat-card admin-stat-card-brand"><span>أعضاء الفرق</span><strong>{stats.members}</strong></article>
-        <article className="admin-stat-card admin-stat-card-brand"><span>محادثات مفتوحة</span><strong>{workloadRows.reduce((s, r) => s + r.open_conversations, 0)}</strong></article>
+        <article className="admin-stat-card admin-stat-card-brand"><span>حمل الموظفين</span><strong>{workloadRows.reduce((s, r) => s + r.open_conversations, 0)}</strong></article>
+      </section>
+
+      {!branchFilter && (
+        <p className="hint-text">اختر الفرع أولاً لعرض الفرق والقواعد وحمل الموظفين لهذا الفرع.</p>
+      )}
+      {branchFilter && visibleTeams.length === 0 && (
+        <div className="card assignments-empty-cta">
+          <strong>لا توجد فرق في هذا الفرع</strong>
+          <p className="hint-text">هذا مختلف عن «لم يُختر الفرع» — الفرع محدد لكن بلا فرق بعد.</p>
+          <button type="button" className="whatsapp-button" onClick={() => setOrganizationId(branchFilter)}>
+            إنشاء أول فريق
+          </button>
+        </div>
+      )}
+
+      <section className="card assignments-simulate-card">
+        <h2 className="section-title-sm">اختبر التوزيع</h2>
+        <p className="hint-text">محاكاة فقط — لا تُعيَّن محادثة حقيقية. النتيجة تطابق منطق التوزيع الفعلي عند تطابق الظروف.</p>
+        <div className="assignments-sim-grid">
+          <label className="field-label">
+            <span>القناة</span>
+            <select value={simChannelId} onChange={(e) => setSimChannelId(e.target.value)}>
+              <option value="">أي قناة / عامة</option>
+              {channelsForBranch(channels.data ?? [], branchFilter || organizationId).map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field-label">
+            <span>فريق (اختياري)</span>
+            <select value={simTeamId} onChange={(e) => setSimTeamId(e.target.value)}>
+              <option value="">كل القواعد المطابقة</option>
+              {visibleTeams.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field-label">
+            <span>نص الرسالة التجريبية</span>
+            <input value={simText} onChange={(e) => setSimText(e.target.value)} />
+          </label>
+          <button type="button" className="whatsapp-button" disabled={simulating} onClick={() => void runSimulation()}>
+            {simulating ? "جاري الاختبار…" : "اختبر التوزيع"}
+          </button>
+        </div>
+        {simResult && (
+          <div className="assignments-sim-result">
+            <p><strong>النتيجة:</strong> {simResult.outcome === "assigned" ? "تعيين متوقع" : "طابور انتظار"}</p>
+            <p>{simResult.reason}</p>
+            {simResult.expected_member_name && <p>الموظف المتوقع: <strong>{simResult.expected_member_name}</strong></p>}
+            <p className="hint-text">محادثات بانتظار التعيين الآن: {simResult.waiting_conversations ?? 0}</p>
+            <p className="hint-text">{simResult.tie_break_rule}</p>
+            <p className="hint-text">{simResult.absence_behavior}</p>
+            {(simResult.candidates ?? []).length > 0 && (
+              <ul>
+                {(simResult.candidates ?? []).map((item) => (
+                  <li key={item.membership_id}>
+                    {employeeMap.get(item.membership_id)?.full_name ?? item.membership_id.slice(0, 8)}
+                    {" — "}
+                    {item.reason}
+                    {item.open_conversations != null ? ` (حمل ${item.open_conversations})` : ""}
+                    {item.selected ? " ✓" : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="supervisor-strip" aria-label="ملخص المشرف">

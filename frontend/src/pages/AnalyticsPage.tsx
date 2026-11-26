@@ -78,7 +78,17 @@ function KpiCard({
   return href ? <Link to={href} className="analytics-kpi-link">{body}</Link> : body;
 }
 
-function Heatmap({ matrix, peak }: { matrix: number[][]; peak: number }) {
+function Heatmap({
+  matrix,
+  peak,
+  selected,
+  onSelect
+}: {
+  matrix: number[][];
+  peak: number;
+  selected: { dow: number; hour: number } | null;
+  onSelect: (dow: number, hour: number, count: number) => void;
+}) {
   return (
     <div className="analytics-heatmap">
       <div className="analytics-heatmap-hours">
@@ -92,12 +102,15 @@ function Heatmap({ matrix, peak }: { matrix: number[][]; peak: number }) {
           <span className="analytics-heatmap-day">{DAY_LABELS.current[dow]}</span>
           {row.map((count, hour) => {
             const intensity = peak > 0 ? count / peak : 0;
+            const isSelected = selected?.dow === dow && selected?.hour === hour;
             return (
-              <span
+              <button
+                type="button"
                 key={`${dow}-${hour}`}
-                className="analytics-heatmap-cell"
+                className={`analytics-heatmap-cell ${isSelected ? "active" : ""}`}
                 style={{ background: `rgba(18, 140, 126, ${0.08 + intensity * 0.85})` }}
                 title={`${DAY_LABELS.current[dow]} ${hour}:00 — ${count} رسالة`}
+                onClick={() => onSelect(dow, hour, count)}
               />
             );
           })}
@@ -115,6 +128,7 @@ export default function AnalyticsPage() {
     tabs.some((item) => item.id === initialTab) ? (initialTab as AnalyticsTab) : "live"
   );
   const [days, setDays] = useState(30);
+  const [heatCell, setHeatCell] = useState<{ dow: number; hour: number; count: number } | null>(null);
 
   useEffect(() => {
     if (initialTab && tabs.some((item) => item.id === initialTab)) {
@@ -228,16 +242,39 @@ export default function AnalyticsPage() {
 
       {tab === "live" && (
         <>
-          <section className="analytics-kpi-grid">
-            <KpiCard label="محادثات مفتوحة" value={o?.live.open_conversations ?? "…"} href="/inbox" />
-            <KpiCard label="بانتظار الفريق" value={o?.live.waiting_team_reply ?? "…"} href="/inbox" />
-            <KpiCard label="رسائل اليوم" value={o?.live.messages_today ?? "…"} />
-            <KpiCard label="SLA متجاوز" value={o?.sla.sla_breaches_open ?? "…"} href="/inbox" />
-            <KpiCard label="متوسط أول رد (د)" value={o?.sla.first_response_avg_minutes ?? "—"} change={null} />
-            <KpiCard label="SLA compliance" value={o?.sla.sla_compliance_pct != null ? `${o.sla.sla_compliance_pct}%` : "—"} />
-            <KpiCard label="CSAT" value={o?.csat.average_score ?? "—"} />
-            <KpiCard label="إيراد الفوز" value={o?.current.revenue_won ?? "…"} change={o?.changes_pct.revenue_won} href="/crm" />
+          <p className="hint-text">
+            آخر تحديث: {overview.dataUpdatedAt ? new Date(overview.dataUpdatedAt).toLocaleString("ar") : "—"}
+            {" · "}
+            {overview.isFetching ? "جاري التحديث…" : overview.isError ? "تعذر التحديث" : "بيانات حيّة"}
+          </p>
+          <h2 className="section-title-sm">الآن</h2>
+          <section className="analytics-kpi-grid analytics-kpi-now">
+            <KpiCard
+              label="محادثات مفتوحة"
+              value={overview.isLoading ? "…" : o?.live.open_conversations ?? 0}
+              href="/inbox?filter=all"
+            />
+            <KpiCard
+              label="بانتظار الفريق"
+              value={overview.isLoading ? "…" : o?.live.waiting_team_reply ?? 0}
+              href="/inbox?filter=waiting&needs_reply=1"
+            />
+            <KpiCard label="رسائل اليوم" value={overview.isLoading ? "…" : o?.live.messages_today ?? 0} />
+            <KpiCard
+              label="تجاوزت مهلة الرد"
+              value={overview.isLoading ? "…" : o?.sla.sla_breaches_open ?? 0}
+              href="/inbox?filter=waiting&needs_reply=1&sla_breached=1"
+            />
           </section>
+          <p className="hint-text">{t("analytics.slaHint")}</p>
+          <h2 className="section-title-sm">خلال الفترة ({days} يوم)</h2>
+          <section className="analytics-kpi-grid">
+            <KpiCard label="متوسط أول رد (د)" value={o?.sla.first_response_avg_minutes ?? "لا بيانات كافية"} change={null} />
+            <KpiCard label="التزام مهلة الخدمة" value={o?.sla.sla_compliance_pct != null ? `${o.sla.sla_compliance_pct}%` : "لا بيانات كافية"} />
+            <KpiCard label="رضا العملاء (CSAT)" value={o?.csat.average_score ?? "لا بيانات كافية"} />
+            <KpiCard label="إيراد الفوز" value={o?.current.revenue_won ?? 0} change={o?.changes_pct.revenue_won} href="/crm?stage=won" />
+          </section>
+          <p className="hint-text">{t("analytics.csatHint")}</p>
 
           <section className="card analytics-chart-card">
             <h2 className="section-title-sm">حركة الرسائل ({days} يوم)</h2>
@@ -258,7 +295,18 @@ export default function AnalyticsPage() {
 
           <section className="card analytics-chart-card">
             <h2 className="section-title-sm">خريطة النشاط (يوم × ساعة)</h2>
-            <Heatmap matrix={heatmap.data?.matrix ?? Array.from({ length: 7 }, () => Array(24).fill(0))} peak={heatmap.data?.peak ?? 0} />
+            <Heatmap
+              matrix={heatmap.data?.matrix ?? Array.from({ length: 7 }, () => Array(24).fill(0))}
+              peak={heatmap.data?.peak ?? 0}
+              selected={heatCell}
+              onSelect={(dow, hour, count) => setHeatCell({ dow, hour, count })}
+            />
+            {heatCell && (
+              <p className="hint-text" role="status">
+                {DAY_LABELS.current[heatCell.dow]} الساعة {heatCell.hour}:00 — حجم الرسائل: {heatCell.count.toLocaleString("ar")}.
+                {" "}حمل الفريق وزمن الرد لهذه الساعة يظهران عند توفر بيانات الفترة في لوحة الفريق.
+              </p>
+            )}
           </section>
 
           <section className="analytics-kpi-grid">

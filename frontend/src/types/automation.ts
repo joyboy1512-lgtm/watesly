@@ -26,6 +26,10 @@ export type Automation = {
     nodes: AutomationNode[];
     edges: AutomationEdge[];
   };
+  published_graph?: {
+    nodes: AutomationNode[];
+    edges: AutomationEdge[];
+  } | null;
   version: number;
   created_at: string;
   updated_at: string;

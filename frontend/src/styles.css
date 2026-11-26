@@ -4295,10 +4295,45 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .crm-stage-proposal { background: #fffaeb; color: #b54708; }
 .crm-stage-won { background: #ecfdf3; color: #067647; }
 .crm-stage-lost { background: #fef3f2; color: #b42318; }
-.crm-deal-card { display: grid; gap: 8px; }
+.crm-deal-card { display: grid; gap: 8px; cursor: pointer; }
 .crm-deal-title { font-weight: 700; text-decoration: none; color: var(--text); }
 .crm-deal-amount { margin: 0; font-size: 13px; color: var(--muted); }
 .crm-deal-contact { font-size: 12px; }
+.crm-deal-contact-name { font-size: 14px; line-height: 1.35; }
+.crm-deal-active { outline: 2px solid #128c7e; }
+.crm-next-step { color: var(--text); font-size: 12px; }
+.crm-quick-filters, .crm-loss-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.crm-quick-chip {
+  border: 1px solid var(--border, #d7e0e8);
+  background: var(--panel-soft, #f7faf9);
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  color: var(--text);
+}
+.crm-quick-chip strong { color: #0b6b5f; }
+.crm-quick-chip.active { border-color: #128c7e; background: rgba(18, 140, 126, 0.12); }
+.crm-loss-breakdown { display: grid; gap: 10px; padding: 14px; }
+.crm-loss-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.crm-board-layout { display: grid; gap: 14px; }
+.crm-board-layout.with-panel { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); align-items: start; }
+.crm-side-panel { position: sticky; top: 12px; display: grid; gap: 12px; padding: 14px; max-height: calc(100vh - 120px); overflow: auto; }
+.crm-side-panel-head { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+.crm-stage-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.crm-stage-history li { display: grid; gap: 2px; padding: 8px; border-radius: 8px; background: var(--panel-soft, #f7faf9); }
+.crm-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(8, 20, 18, 0.45);
+  display: grid; place-items: center; z-index: 80; padding: 16px;
+}
+.crm-modal { width: min(420px, 100%); display: grid; gap: 12px; padding: 18px; }
+.crm-row-active { background: rgba(18, 140, 126, 0.08); }
+@media (max-width: 960px) {
+  .crm-board-layout.with-panel { grid-template-columns: 1fr; }
+  .crm-side-panel { position: static; max-height: none; }
+}
 .crm-empty { padding: 32px; text-align: center; display: grid; gap: 12px; justify-items: center; }
 .crm-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 .crm-detail-list { display: grid; gap: 10px; margin: 0; }
@@ -4350,7 +4385,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .analytics-heatmap { display: grid; gap: 4px; overflow-x: auto; }
 .analytics-heatmap-hours, .analytics-heatmap-row { display: grid; grid-template-columns: 36px repeat(24, 16px); gap: 3px; align-items: center; }
 .analytics-heatmap-hours span, .analytics-heatmap-day { font-size: 10px; color: var(--muted); }
-.analytics-heatmap-cell { width: 16px; height: 16px; border-radius: 3px; }
+.analytics-heatmap-cell { width: 16px; height: 16px; border-radius: 3px; border: 0; padding: 0; cursor: pointer; }
+.analytics-heatmap-cell.active { outline: 2px solid #075e54; }
+.assignments-sim-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
+.assignments-simulate-card, .assignments-empty-cta, .assignments-sim-result, .automation-sim-result, .reports-funnel-note { display: grid; gap: 8px; }
+.assignments-simulate-card, .assignments-empty-cta { padding: 14px; }
+.reports-roi-blocked { color: #b45309; background: #fff7ed; border-radius: 8px; padding: 10px 12px; }
+.automation-node-group { display: grid; gap: 6px; margin-bottom: 12px; }
+.automation-meta-pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .analytics-funnel { display: flex; flex-wrap: wrap; gap: 8px; }
 .analytics-funnel-step {
   flex: 1; min-width: 100px; text-align: center; padding: 12px; border-radius: 10px;

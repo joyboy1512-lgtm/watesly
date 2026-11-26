@@ -218,7 +218,9 @@ async def update_automation(
     if graph is not None:
         item.graph = graph.model_dump() if hasattr(graph, "model_dump") else graph
     item.version += 1
-    if item.status == AutomationStatus.ACTIVE and graph is not None:
+    # Keep ACTIVE live on published_graph; draft edits stay in graph until republish.
+    # Status flips to DRAFT only when there is no published snapshot yet.
+    if item.status == AutomationStatus.ACTIVE and graph is not None and not item.published_graph:
         item.status = AutomationStatus.DRAFT
     await db.commit()
     await db.refresh(item)
@@ -240,6 +242,7 @@ async def publish_automation(
     )
     validate_publishable_graph(item.graph)
     item.status = AutomationStatus.ACTIVE
+    item.published_graph = item.graph
     item.version += 1
     await add_outbox_event(db, account_id=account_id, event_type="automation.published", aggregate_type="automation", aggregate_id=str(item.id), payload={"automation_id": str(item.id), "version": item.version})
     await db.commit()
@@ -264,6 +267,187 @@ async def pause_automation(
     await db.commit()
     await db.refresh(item)
     return item
+
+
+def _simulate_condition(config: dict, context: dict) -> bool:
+    field = str(config.get("field") or "trigger.text").strip()
+    if field and not field.startswith("trigger."):
+        if field.startswith("message."):
+            field = f"trigger.{field}"
+        elif field in {
+            "text",
+            "from",
+            "conversation_id",
+            "contact_id",
+            "whatsapp_account_id",
+            "channel_id",
+            "organization_id",
+            "tag_id",
+            "button_id",
+            "button_title",
+        }:
+            field = f"trigger.{field}"
+    actual = context
+    for part in field.split("."):
+        if part:
+            actual = actual.get(part) if isinstance(actual, dict) else None
+    op = config.get("operator", "equals")
+    expected = config.get("value")
+    return {
+        "equals": actual == expected,
+        "not_equals": actual != expected,
+        "contains": str(expected).lower() in str(actual or "").lower(),
+        "starts_with": str(actual or "").lower().startswith(str(expected).lower()),
+        "exists": actual is not None,
+    }.get(op, False)
+
+
+def simulate_automation_graph(*, graph: dict, trigger_payload: dict) -> dict:
+    """Walk the graph without side effects (no WhatsApp, deals, webhooks)."""
+    nodes = {node["id"]: node for node in graph.get("nodes", [])}
+    edges = graph.get("edges", [])
+    outgoing: dict[str, list] = {node_id: [] for node_id in nodes}
+    for edge in edges:
+        outgoing.setdefault(edge["source"], []).append(edge)
+
+    trigger = next((node for node in nodes.values() if node.get("type") == "trigger"), None)
+    if not trigger:
+        raise ValueError("AUTOMATION_REQUIRES_ONE_TRIGGER")
+
+    context: dict = {"trigger": trigger_payload}
+    queue = [trigger["id"]]
+    steps: list[dict] = []
+    visited = 0
+    max_steps = min(max(len(nodes) * 3, 25), 200)
+    would_send: list[str] = []
+    would_create_deal = False
+    would_assign_team = False
+    ai_reply_would_run = False
+
+    while queue and visited < max_steps:
+        node_id = queue.pop(0)
+        node = nodes.get(node_id)
+        if not node:
+            break
+        visited += 1
+        node_type = node.get("type")
+        data = node.get("data") or {}
+        next_edges = list(outgoing.get(node_id, []))
+        output: dict = {}
+
+        if node_type == "condition":
+            result = _simulate_condition(data, context)
+            output = {"result": result, "matched_field": data.get("field"), "operator": data.get("operator")}
+            desired = "true" if result else "false"
+            next_edges = [
+                edge
+                for edge in next_edges
+                if (edge.get("source_handle") or edge.get("label") or "").lower() == desired
+            ]
+        elif node_type == "business_hours":
+            # Simulation assumes within hours unless trigger says otherwise.
+            result = bool((trigger_payload or {}).get("is_within_business_hours", True))
+            output = {"result": result, "assumed": True}
+            desired = "true" if result else "false"
+            next_edges = [
+                edge
+                for edge in next_edges
+                if (edge.get("source_handle") or edge.get("label") or "").lower() == desired
+            ]
+        elif node_type == "delay":
+            seconds = int(data.get("seconds") or 0) + int(data.get("minutes") or 0) * 60
+            output = {"delayed_seconds": seconds, "simulated": True}
+        elif node_type == "stop":
+            next_edges = []
+            output = {"stopped": True}
+        elif node_type == "trigger":
+            output = {"triggered": True}
+        elif node_type in {"send_text", "send_quick_reply", "send_template", "send_media", "send_catalog"}:
+            text = str(data.get("text") or data.get("body") or data.get("caption") or "").strip()
+            if text:
+                would_send.append(text)
+            output = {"would_send": True, "preview": text or None, "side_effects": False}
+        elif node_type == "ai_reply":
+            ai_reply_would_run = True
+            output = {
+                "would_ai_reply": True,
+                "note": "الذكاء الاصطناعي كان سيتولى الرد إذا لم تُنتج الأتمتة رداً مسبقاً",
+                "side_effects": False,
+            }
+        elif node_type == "create_deal":
+            would_create_deal = True
+            output = {"would_create_deal": True, "title": data.get("title"), "side_effects": False}
+        elif node_type == "assign_team":
+            would_assign_team = True
+            output = {"would_assign_team": True, "team_id": data.get("team_id"), "side_effects": False}
+        else:
+            output = {"would_run": True, "side_effects": False}
+
+        steps.append(
+            {
+                "node_id": node_id,
+                "node_type": node_type,
+                "label": data.get("label") or node_type,
+                "output": output,
+            }
+        )
+        context.setdefault("steps", {})[node_id] = output
+        queue.extend(edge["target"] for edge in next_edges)
+
+    conflict_note = None
+    if ai_reply_would_run and would_send:
+        conflict_note = (
+            "الأتمتة سترسل رداً قبل عقد الذكاء؛ في التشغيل الفعلي يصل رد واحد من مسار الأتمتة "
+            "ما لم يُضبط الرد الآلي ليتوقف عند نجاح الأتمتة."
+        )
+    elif ai_reply_would_run:
+        conflict_note = "عقد الرد الذكي كان سيتولى الرسالة؛ تأكد من عدم تفعيل رد آلي موازٍ على نفس القناة."
+
+    return {
+        "dry_run": True,
+        "steps": steps,
+        "would_send": would_send,
+        "proposed_reply": would_send[0] if would_send else None,
+        "would_create_deal": would_create_deal,
+        "would_assign_team": would_assign_team,
+        "ai_reply_would_run": ai_reply_would_run,
+        "conflict_note": conflict_note,
+        "side_effects_blocked": True,
+    }
+
+
+async def simulate_automation(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    automation_id: UUID,
+    trigger_payload: dict,
+    membership=None,
+) -> dict:
+    item = await get_automation(
+        db,
+        account_id=account_id,
+        automation_id=automation_id,
+        membership=membership,
+    )
+    try:
+        validate_publishable_graph(item.graph)
+        validation_ok = True
+        validation_error = None
+    except ValueError as exc:
+        validation_ok = False
+        validation_error = str(exc)
+    result = simulate_automation_graph(graph=item.graph, trigger_payload=trigger_payload)
+    result.update(
+        {
+            "automation_id": str(item.id),
+            "automation_name": item.name,
+            "status": item.status.value if hasattr(item.status, "value") else str(item.status),
+            "validation_ok": validation_ok,
+            "validation_error": validation_error,
+        }
+    )
+    return result
 
 
 async def create_test_run(

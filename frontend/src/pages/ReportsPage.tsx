@@ -85,11 +85,18 @@ type AgentRow = {
 
 const TAB_GROUPS: { label: string; ids: ReportTabId[] }[] = [
   { label: "ملخص", ids: ["executive", "overview"] },
-  { label: "العملاء", ids: ["customers", "compliance", "names", "engagement", "inactivity"] },
-  { label: "التسويق", ids: ["campaigns", "roi"] },
-  { label: "العمليات", ids: ["conversations", "team", "quick-replies", "automations", "whatsapp"] },
-  { label: "المحتوى", ids: ["catalog", "knowledge", "crm", "audit"] }
+  { label: "المبيعات والحملات", ids: ["campaigns", "roi", "crm", "customers", "engagement"] },
+  { label: "خدمة العملاء والفريق", ids: ["conversations", "team", "names", "inactivity", "whatsapp"] },
+  { label: "الجودة والامتثال", ids: ["compliance", "quick-replies", "automations", "catalog", "knowledge", "audit"] }
 ];
+
+const METRIC_DEFS: Record<string, string> = {
+  campaigns: "عدد الحملات المنشأة ضمن الفترة المحددة للفرع/الحساب.",
+  deals_won: "صفقات وصلت لمرحلة الفوز ضمن الفترة، منسوبة بمصدر الحملة/الوارد.",
+  won_value: "مجموع قيم الصفقات المنسوبة التي لها مبلغ مسجّل (القيمة غير المسجّلة تُستثنى).",
+  waiting_team: "محادثات بانتظار رد الفريق وقت القياس.",
+  sla_breaches: "محادثات تجاوزت مهلة الرد المحددة في إعدادات الخدمة."
+};
 
 const CHART_COLORS = ["#128c7e", "#25d366", "#075e54", "#34b7f1", "#f59e0b", "#ef4444"];
 
@@ -124,17 +131,23 @@ function MetricCard({
   label,
   value,
   change,
-  href
+  href,
+  definition,
+  periodLabel
 }: {
   label: string;
   value: string | number;
   change?: number | null;
   href?: string;
+  definition?: string;
+  periodLabel?: string;
 }) {
   const body = (
     <article className="metric-card">
       <span>{label}</span>
       <strong>{value}</strong>
+      {periodLabel && <small className="hint-text">الفترة: {periodLabel}</small>}
+      {definition && <small className="hint-text">{definition}</small>}
       {change != null && (
         <small className={`reports-metric-change ${changeClass(change)}`}>{formatChange(change)} vs السابق</small>
       )}
@@ -523,9 +536,9 @@ export default function ReportsPage() {
               href="/contacts"
             />
             <MetricCard label="Pipeline CRM" value={executive.data?.crm.pipeline_value ?? "…"} href="/crm" />
-            <MetricCard label="فوز (30 يوم)" value={executive.data?.crm.won_value_month ?? "…"} href="/crm" />
-            <MetricCard label="تجاوز SLA" value={executive.data?.overview.sla_breaches ?? "…"} href="/inbox" />
-            <MetricCard label="قيمة ROI" value={executive.data?.roi.won_value ?? "…"} href="/crm" />
+            <MetricCard label="فوز (30 يوم)" value={executive.data?.crm.won_value_month ?? "…"} href="/crm?stage=won" definition={METRIC_DEFS.won_value} periodLabel="30 يوم" />
+            <MetricCard label="تجاوز SLA" value={executive.data?.overview.sla_breaches ?? "…"} href="/inbox?filter=waiting&needs_reply=1&sla_breached=1" definition={METRIC_DEFS.sla_breaches} />
+            <MetricCard label="قيمة الصفقات المنسوبة" value={executive.data?.roi.won_value ?? "…"} href="/crm?stage=won" definition={METRIC_DEFS.won_value} periodLabel={`${days} يوم`} />
             <MetricCard label="CSAT" value={executive.data?.csat.average_score ?? "—"} />
             <MetricCard label="امتثال SLA %" value={executive.data?.sla.sla_compliance_pct ?? "—"} />
           </div>
@@ -655,9 +668,12 @@ export default function ReportsPage() {
       {tab === "campaigns" && (
         <section className="reports-section card">
           <SectionHeader tabDef={currentTab} days={days} />
+          <p className="hint-text">
+            نطاق التصدير: حملات الفترة ({days} يوم) لنفس الحساب/الفرع الظاهر. التسلسل: تسليم → قراءة → صفقة → فوز.
+          </p>
           <div className="stats-grid">
-            <MetricCard label="عدد الحملات" value={campaigns.data?.summary?.campaigns ?? "…"} />
-            <MetricCard label="المستلمين" value={campaigns.data?.summary?.recipients ?? "…"} />
+            <MetricCard label="عدد الحملات" value={campaigns.data?.summary?.campaigns ?? "…"} definition={METRIC_DEFS.campaigns} periodLabel={`${days} يوم`} />
+            <MetricCard label="المستلمين" value={campaigns.data?.summary?.recipients ?? "…"} periodLabel={`${days} يوم`} />
             <MetricCard
               label="تم التسليم"
               value={
@@ -686,7 +702,40 @@ export default function ReportsPage() {
                   : "…"
               }
             />
+            <MetricCard
+              label="صفقات منسوبة"
+              value={campaigns.data?.summary?.deals_created ?? "…"}
+              href="/crm?source=inbound,whatsapp,campaign,conversation"
+              definition="صفقات بمصدر وارد/حملة ضمن الفترة."
+              periodLabel={`${days} يوم`}
+            />
+            <MetricCard
+              label="صفقات رابحة منسوبة"
+              value={campaigns.data?.summary?.deals_won ?? "…"}
+              href={campaigns.data?.funnel?.drilldown_crm_won || campaigns.data?.summary?.funnel?.drilldown_crm_won || "/crm?stage=won"}
+              definition={METRIC_DEFS.deals_won}
+              periodLabel={`${days} يوم`}
+            />
+            <MetricCard
+              label="قيمة الصفقات المنسوبة"
+              value={campaigns.data?.summary?.attributed_won_value ?? "…"}
+              href={campaigns.data?.funnel?.drilldown_crm_won || "/crm?stage=won"}
+              definition={METRIC_DEFS.won_value}
+              periodLabel={`${days} يوم`}
+            />
           </div>
+          {campaigns.data?.funnel && (
+            <div className="reports-funnel-note card">
+              <h3 className="section-title-sm">قواعد النسب والإسناد</h3>
+              <p className="hint-text">{campaigns.data.funnel.attribution_rule}</p>
+              <ul className="hint-text">
+                <li>التسليم من المرسل: {campaigns.data.funnel.rates?.delivery_of_sent ?? "—"}%</li>
+                <li>القراءة من المسلَّم: {campaigns.data.funnel.rates?.read_of_delivered ?? "—"}%</li>
+                <li>صفقة من المقروء: {campaigns.data.funnel.rates?.deal_of_read ?? "—"}%</li>
+                <li>فوز من الصفقات: {campaigns.data.funnel.rates?.won_of_deals ?? "—"}%</li>
+              </ul>
+            </div>
+          )}
           <ReportsBarChart
             data={campaignsChart}
             xKey="metric"
@@ -704,14 +753,52 @@ export default function ReportsPage() {
       {tab === "roi" && (
         <section className="reports-section card">
           <SectionHeader tabDef={currentTab} days={days} />
+          <p className="hint-text">
+            {roi.data?.attribution_rule || "إسناد الصفقة للحملة عبر مصدر الوارد/الحملة ضمن الفترة."}
+          </p>
           <div className="stats-grid">
-            <MetricCard label="حملات" value={roi.data?.summary?.campaigns ?? "…"} />
-            <MetricCard label="صفقات جديدة" value={roi.data?.summary?.deals_created ?? "…"} href="/crm" />
-            <MetricCard label="صفقات رابحة" value={roi.data?.summary?.deals_won ?? "…"} href="/crm" />
-            <MetricCard label="قيمة الفوز" value={roi.data?.summary?.won_value ?? "…"} href="/crm" />
+            <MetricCard label="حملات" value={roi.data?.summary?.campaigns ?? "…"} definition={METRIC_DEFS.campaigns} periodLabel={`${days} يوم`} />
+            <MetricCard
+              label="صفقات جديدة منسوبة"
+              value={roi.data?.summary?.deals_created ?? "…"}
+              href="/crm?source=inbound,whatsapp,campaign,conversation"
+              periodLabel={`${days} يوم`}
+            />
+            <MetricCard
+              label="صفقات رابحة منسوبة"
+              value={roi.data?.summary?.deals_won ?? "…"}
+              href={
+                roi.data?.summary?.won_deal_ids?.length
+                  ? `/crm?stage=won&ids=${roi.data.summary.won_deal_ids.join(",")}`
+                  : roi.data?.summary?.drilldown_crm || "/crm?stage=won"
+              }
+              definition={METRIC_DEFS.deals_won}
+              periodLabel={`${days} يوم`}
+            />
+            <MetricCard
+              label="قيمة الصفقات المنسوبة"
+              value={roi.data?.summary?.attributed_won_value ?? roi.data?.summary?.won_value ?? "…"}
+              href={
+                roi.data?.summary?.won_deal_ids?.length
+                  ? `/crm?stage=won&ids=${roi.data.summary.won_deal_ids.join(",")}`
+                  : "/crm?stage=won"
+              }
+              definition={METRIC_DEFS.won_value}
+              periodLabel={`${days} يوم`}
+            />
           </div>
+          {roi.data?.summary?.roi_blocked_reason && (
+            <p className="reports-roi-blocked" role="status">
+              تعذّر حساب العائد: {roi.data.summary.roi_blocked_reason}
+            </p>
+          )}
+          {(roi.data?.summary?.unrecorded_value_count ?? 0) > 0 && (
+            <p className="hint-text">
+              {roi.data.summary.unrecorded_value_count} صفقة رابحة بلا قيمة مسجّلة — لا تدخل في مجموع القيمة.
+            </p>
+          )}
           <ReportsBarChart data={roiChart} xKey="metric" bars={[{ key: "value", name: "العدد", color: CHART_COLORS[1] }]} />
-          <h3 className="section-title-sm">آخر الصفقات الرابحة</h3>
+          <h3 className="section-title-sm">الصفقات الرابحة المنسوبة</h3>
           <div className="table-card">
             <table>
               <thead>
@@ -722,15 +809,17 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(roi.data?.recent_won ?? []).map((deal: { id: string; title: string; amount: string; currency: string; source: string }) => (
+                {(roi.data?.recent_won ?? []).map((deal: { id: string; title: string; amount: string | null; currency: string; source: string; amount_recorded?: boolean }) => (
                   <tr key={deal.id}>
                     <td>
-                      <Link to="/crm" className="reports-drill-link">
+                      <Link to={`/crm?stage=won&deal=${deal.id}`} className="reports-drill-link">
                         {deal.title}
                       </Link>
                     </td>
                     <td>
-                      {deal.amount} {deal.currency}
+                      {deal.amount == null || deal.amount_recorded === false
+                        ? "غير مسجّلة"
+                        : `${deal.amount} ${deal.currency}`}
                     </td>
                     <td>{deal.source || "—"}</td>
                   </tr>
