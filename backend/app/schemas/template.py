@@ -47,6 +47,24 @@ class AiTemplateGenerateRequest(BaseModel):
     brand_hint: str | None = Field(default=None, max_length=500)
 
 
+class AiTemplateIdeaMessage(BaseModel):
+    role: str = Field(min_length=1, max_length=20)
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class AiTemplateIdeaChatRequest(BaseModel):
+    messages: list[AiTemplateIdeaMessage] = Field(min_length=1, max_length=40)
+    brand_hint: str | None = Field(default=None, max_length=500)
+
+
+class AiTemplateIdeaChatResponse(BaseModel):
+    reply: str
+    topic_summary: str | None = None
+    ready_for_draft: bool = False
+    suggested_category: str = "marketing"
+    suggested_header: str = "NONE"
+
+
 class AiTemplateRefineRequest(BaseModel):
     draft: dict
     instruction: str = Field(min_length=2, max_length=2000)

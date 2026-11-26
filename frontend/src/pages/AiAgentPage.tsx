@@ -167,6 +167,11 @@ const REPLY_CHOICES: Array<{ id: ReplyChoice; title: string; hint: string }> = [
 
 type LabEngine = "local" | "external";
 
+type IdeaChatTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 function phoneLast4(phone?: string | null) {
   const digits = (phone || "").replace(/\D/g, "");
   return digits.slice(-4) || "----";
@@ -310,6 +315,18 @@ export default function AiAgentPage() {
   const [templateBusy, setTemplateBusy] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
   const [templateAlts, setTemplateAlts] = useState<AiTemplateDraft[]>([]);
+  const [ideaChat, setIdeaChat] = useState<IdeaChatTurn[]>([
+    {
+      role: "assistant",
+      content:
+        "مرحباً — صف لي فكرة القالب كما لو كنت تتحدث مع مساعد. مثال: عرض شحن مجاني لعملاء الصابون هذا الأسبوع مع زر زيارة المتجر. عندما تعجبك الفكرة اضغط «اعتماد وإنشاء مسودة»."
+    }
+  ]);
+  const [ideaInput, setIdeaInput] = useState("");
+  const [ideaBusy, setIdeaBusy] = useState(false);
+  const [ideaReady, setIdeaReady] = useState(false);
+  const [ideaSuggestedCategory, setIdeaSuggestedCategory] = useState("marketing");
+  const [ideaSuggestedHeader, setIdeaSuggestedHeader] = useState("NONE");
 
   const whatsappAccounts = useQuery({
     queryKey: ["whatsapp-accounts"],
@@ -545,6 +562,20 @@ export default function AiAgentPage() {
     }
   }
 
+  function resetIdeaChat(seedTopic?: string) {
+    setIdeaChat([
+      {
+        role: "assistant",
+        content:
+          "مرحباً — صف لي فكرة القالب كما لو كنت تتحدث مع مساعد. عندما تعجبك الفكرة اضغط «اعتماد وإنشاء مسودة» لتنزل في إنشاء القالب."
+      }
+    ]);
+    setIdeaInput(seedTopic || "");
+    setIdeaReady(false);
+    setIdeaSuggestedCategory("marketing");
+    setIdeaSuggestedHeader("NONE");
+  }
+
   function openSavedDraft(item: SavedDraft) {
     const draft = emptyTemplateDraft({
       ...item.draft,
@@ -557,7 +588,77 @@ export default function AiAgentPage() {
     setTemplateTopic(item.topic || draft.name || "");
     setTemplateHeaderFile(media);
     setTemplateAlts([]);
+    resetIdeaChat(item.topic || draft.name || "");
     setNewDraftOpen(true);
+  }
+
+  async function sendIdeaChat(text?: string) {
+    const content = (text ?? ideaInput).trim();
+    if (!content || ideaBusy) return;
+    if (!(settings?.llm_enabled && settings?.llm_available)) {
+      toastStore.getState().show("دردشة الفكرة تتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
+      return;
+    }
+    const nextMessages: IdeaChatTurn[] = [...ideaChat, { role: "user", content }];
+    setIdeaChat(nextMessages);
+    setIdeaInput("");
+    setIdeaBusy(true);
+    try {
+      const historyForApi = nextMessages.filter(
+        (turn, index) => !(index === 0 && turn.role === "assistant")
+      );
+      const result = await api.post<{
+        reply: string;
+        topic_summary?: string | null;
+        ready_for_draft?: boolean;
+        suggested_category?: string;
+        suggested_header?: string;
+      }>("/templates/ai/idea-chat", {
+        messages: historyForApi,
+        brand_hint: selectedWa?.verified_name || selectedWa?.channel_name || null
+      });
+      setIdeaChat((current) => [...current, { role: "assistant", content: result.data.reply }]);
+      if (result.data.topic_summary) {
+        setTemplateTopic(result.data.topic_summary);
+      }
+      setIdeaReady(Boolean(result.data.ready_for_draft));
+      if (result.data.suggested_category) {
+        setIdeaSuggestedCategory(result.data.suggested_category);
+      }
+      if (result.data.suggested_header) {
+        setIdeaSuggestedHeader(result.data.suggested_header);
+      }
+    } catch (err) {
+      const detail = apiErrorDetail(err);
+      toastStore.getState().show(
+        detail.includes("LLM") ? "فشل رد المساعد من المزود. أعد المحاولة." : "تعذر إرسال رسالة الفكرة.",
+        "error"
+      );
+      setIdeaChat((current) => current.slice(0, -1));
+      setIdeaInput(content);
+    } finally {
+      setIdeaBusy(false);
+    }
+  }
+
+  async function approveIdeaAndCreateDraft() {
+    const topic =
+      templateTopic.trim() ||
+      [...ideaChat].reverse().find((turn) => turn.role === "user")?.content?.trim() ||
+      "";
+    if (!topic) {
+      toastStore.getState().show("اكتب فكرة في الدردشة أولاً ثم اعتمدها.", "error");
+      return;
+    }
+    setIdeaChat((current) => [
+      ...current,
+      {
+        role: "assistant",
+        content: `تم اعتماد الفكرة. جاري إنشاء المسودة في محرر القالب…\n«${topic}»`
+      }
+    ]);
+    setIdeaReady(true);
+    await generateTemplate(undefined, topic);
   }
 
   function updateDraftButton(index: number, patch: Partial<TemplateButton>) {
@@ -580,25 +681,33 @@ export default function AiAgentPage() {
     return { ...draft, header_media: media };
   }
 
-  async function generateTemplate(angle?: string) {
-    if (!templateTopic.trim()) {
-      toastStore.getState().show("اكتب موضوع القالب.", "error");
+  async function generateTemplate(angle?: string, topicOverride?: string) {
+    const topic = (topicOverride ?? templateTopic).trim();
+    if (!topic) {
+      toastStore.getState().show("اكتب موضوع القالب أو اعتمد فكرة من الدردشة.", "error");
       return;
     }
     if (!(settings?.llm_enabled && settings?.llm_available)) {
       toastStore.getState().show("توليد القوالب يتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
       return;
     }
+    setTemplateTopic(topic);
     setTemplateBusy(true);
     try {
+      const category = ideaSuggestedCategory || templateDraft?.category || "marketing";
       const result = await api.post<AiTemplateDraft>("/templates/ai/generate", {
-        topic: angle ? `${templateTopic.trim()} — زاوية: ${angle}` : templateTopic.trim(),
+        topic: angle ? `${topic} — زاوية: ${angle}` : topic,
         language: templateDraft?.language || "ar",
-        category: templateDraft?.category || "marketing",
+        category,
         brand_hint: selectedWa?.verified_name || selectedWa?.channel_name || null
       });
       const next = emptyTemplateDraft({
         ...result.data,
+        category: result.data.category || category,
+        header_type:
+          result.data.header_type && result.data.header_type !== "NONE"
+            ? result.data.header_type
+            : ideaSuggestedHeader || result.data.header_type || "NONE",
         body_samples: syncBodySamples(result.data.body_text, result.data.body_samples),
         header_media: templateHeaderFile
       });
@@ -612,14 +721,14 @@ export default function AiAgentPage() {
         await api.post("/knowledge/ai/template-drafts", {
           channel_id: channelId,
           whatsapp_account_id: selectedWa?.id,
-          topic: templateTopic.trim() || next.name,
+          topic: topic || next.name,
           draft: withDraftMedia(next, templateHeaderFile),
           status: "draft"
         });
         await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
       }
       toastStore.getState().show(
-        `تم توليد المسودة بالكامل (${(next.buttons || []).length} أزرار). راجع المعاينة وعدّل ثم احفظ.`,
+        `تم إنشاء المسودة من الفكرة المعتمدة (${(next.buttons || []).length} أزرار). راجع المعاينة.`,
         "success"
       );
     } catch (err) {
@@ -1328,6 +1437,7 @@ export default function AiAgentPage() {
                   setTemplateHeaderFile(null);
                   setTemplateTopic("");
                   setTemplateAlts([]);
+                  resetIdeaChat();
                 }}
               >
                 + مسودة جديدة
@@ -1337,10 +1447,10 @@ export default function AiAgentPage() {
 
           <p className={`ai-templates-note ${llmReady ? "is-ready" : "is-blocked"}`}>
             {llmReady
-              ? "التوليد متاح. اكتب الموضوع ثم ولّد المسودة — تظهر النص والأزرار والتذييل والوسائط كاملة مع معاينة واتساب."
+              ? "ناقش فكرة القالب في دردشة المساعد، اعتمدها لتنزل مسودة كاملة في إنشاء القالب، ثم عدّل الوسائط والأزرار وعاين واتساب."
               : llmConfigured
-                ? "شرط توليد القالب: فعّل الذكاء الاصطناعي الخارجي أعلاه. يمكنك مع ذلك كتابة المسودة يدوياً ورفع الوسائط."
-                : "شرط التوليد بالذكاء: أضف مزوداً خارجياً من الإعدادات. الكتابة اليدوية ورفع الوسائط متاحان دائماً."}
+                ? "شرط الدردشة والتوليد: فعّل الذكاء الاصطناعي الخارجي أعلاه. يمكنك مع ذلك كتابة المسودة يدوياً ورفع الوسائط."
+                : "شرط الدردشة والتوليد: أضف مزوداً خارجياً من الإعدادات. الكتابة اليدوية ورفع الوسائط متاحان دائماً."}
           </p>
 
           <div className="ai-template-list">
@@ -1416,13 +1526,81 @@ export default function AiAgentPage() {
                 </button>
               </div>
 
-              <label className="field-label">
-                <span>موضوع القالب (للتوليد)</span>
+              <div className="ai-idea-chat">
+                <div className="ai-idea-chat-head">
+                  <div>
+                    <strong>دردشة الفكرة</strong>
+                    <p className="hint-text" style={{ margin: "4px 0 0" }}>
+                      ناقش الفكرة مع المساعد مثل ChatGPT، ثم اعتمدها لتنزل مسودة في إنشاء القالب.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    onClick={() => resetIdeaChat(templateTopic)}
+                    disabled={ideaBusy || templateBusy}
+                  >
+                    مسح الدردشة
+                  </button>
+                </div>
+                <div className="ai-idea-thread">
+                  {ideaChat.map((turn, index) => (
+                    <article
+                      key={`idea-${index}-${turn.role}`}
+                      className={`ai-idea-bubble is-${turn.role}`}
+                    >
+                      <small>{turn.role === "user" ? "الموظف" : "المساعد"}</small>
+                      <p>{turn.content}</p>
+                    </article>
+                  ))}
+                  {ideaBusy && <p className="hint-text">المساعد يكتب…</p>}
+                </div>
+                <form
+                  className="ai-idea-composer"
+                  onSubmit={(e: FormEvent) => {
+                    e.preventDefault();
+                    void sendIdeaChat();
+                  }}
+                >
+                  <input
+                    value={ideaInput}
+                    onChange={(e) => setIdeaInput(e.target.value)}
+                    placeholder="اكتب فكرتك أو عدّلها… مثال: عرض شحن مجاني لعملاء الصابون"
+                    disabled={ideaBusy || !llmReady}
+                  />
+                  <button
+                    type="submit"
+                    className="whatsapp-button"
+                    disabled={ideaBusy || !llmReady || !ideaInput.trim()}
+                  >
+                    إرسال
+                  </button>
+                </form>
+                <div className="catalog-card-actions" style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="whatsapp-button"
+                    disabled={ideaBusy || templateBusy || !llmReady}
+                    onClick={() => void approveIdeaAndCreateDraft()}
+                  >
+                    {templateBusy ? "جاري إنشاء المسودة…" : "اعتماد الفكرة وإنشاء مسودة"}
+                  </button>
+                  {ideaReady && templateTopic && (
+                    <span className="hint-text">الفكرة جاهزة: {templateTopic.slice(0, 90)}</span>
+                  )}
+                </div>
+              </div>
+
+              <label className="field-label" style={{ marginTop: 14 }}>
+                <span>موضوع القالب المعتمد (للتوليد / التعديل اليدوي)</span>
                 <textarea
                   rows={2}
                   value={templateTopic}
-                  onChange={(e) => setTemplateTopic(e.target.value)}
-                  placeholder="مثال: عرض شحن مجاني على مجموعة الصابون هذا الأسبوع"
+                  onChange={(e) => {
+                    setTemplateTopic(e.target.value);
+                    setIdeaReady(false);
+                  }}
+                  placeholder="يُملأ تلقائياً من الدردشة عند الاعتماد — ويمكنك تعديله يدوياً"
                 />
               </label>
 
@@ -1433,7 +1611,7 @@ export default function AiAgentPage() {
                   disabled={templateBusy || !llmReady}
                   onClick={() => void generateTemplate()}
                 >
-                  {templateBusy ? "جاري التوليد…" : "توليد مسودة"}
+                  {templateBusy ? "جاري التوليد…" : "توليد مسودة من الموضوع"}
                 </button>
                 <button
                   type="button"

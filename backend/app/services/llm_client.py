@@ -55,8 +55,9 @@ def resolve_llm_config(
 
 async def chat_completion(
     *,
-    user_prompt: str,
+    user_prompt: str | None = None,
     system_prompt: str | None = None,
+    messages: list[dict[str, str]] | None = None,
     api_key: str | None = None,
     api_base_url: str | None = None,
     model: str | None = None,
@@ -68,12 +69,26 @@ async def chat_completion(
         return None
 
     resolved_key, base_url, resolved_model = config
+    chat_messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt or "You are a helpful assistant."}
+    ]
+    if messages:
+        for item in messages:
+            role = str(item.get("role") or "").strip().lower()
+            content = str(item.get("content") or "").strip()
+            if role not in {"user", "assistant", "system"} or not content:
+                continue
+            if role == "system":
+                continue
+            chat_messages.append({"role": role, "content": content})
+    elif user_prompt:
+        chat_messages.append({"role": "user", "content": user_prompt})
+    else:
+        return None
+
     payload = {
         "model": resolved_model,
-        "messages": [
-            {"role": "system", "content": system_prompt or "You are a helpful assistant."},
-            {"role": "user", "content": user_prompt},
-        ],
+        "messages": chat_messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }

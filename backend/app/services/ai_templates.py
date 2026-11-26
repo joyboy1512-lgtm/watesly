@@ -123,6 +123,111 @@ async def _llm_kwargs(db: AsyncSession, account_id: UUID) -> dict[str, str | Non
     }
 
 
+IDEA_CHAT_SYSTEM_PROMPT = """أنت مستشار قوالب واتساب للأعمال في الكويت.
+تساعد الموظف بصياغة فكرة قالب رسالة ميتا عبر دردشة قصيرة وواضحة بالعربية.
+هدفك: الوصول لموضوع قالب جاهز للاعتماد ثم توليد مسودة.
+
+قواعد الرد:
+- ردّ بالعربية بأسلوب مختصر ومهني (2–6 جمل أو نقاط قصيرة).
+- اسأل سؤالاً واحداً مفيداً إن كانت الفكرة ناقصة (الجمهور، العرض، الدعوة لاتخاذ إجراء، نبرة الرسالة).
+- عندما تكون الفكرة واضحة بما يكفي لمسودة قالب، ضع في نهاية ردّك كتلة JSON فقط بهذا الشكل:
+
+```json
+{"topic_summary":"...موضوع واضح ومكتمل...","ready_for_draft":true,"suggested_category":"marketing","suggested_header":"IMAGE"}
+```
+
+- إن لم تكن جاهزة بعد: ready_for_draft=false مع topic_summary تقريبي إن وُجد.
+- لا تولّد نص القالب الكامل هنا — فقط طوّر الفكرة حتى يعتمدها الموظف.
+- suggested_category: marketing | utility | authentication
+- suggested_header: NONE | TEXT | IMAGE | VIDEO | DOCUMENT
+"""
+
+
+def _normalize_idea_messages(messages: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    for item in messages or []:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        content = str(item.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        out.append({"role": role, "content": content[:4000]})
+    return out[-20:]
+
+
+def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
+    reply = (raw or "").strip()
+    meta: dict[str, Any] = {
+        "topic_summary": None,
+        "ready_for_draft": False,
+        "suggested_category": "marketing",
+        "suggested_header": "NONE",
+    }
+    match = re.search(r"```json\s*(\{.*?\})\s*```", reply, flags=re.DOTALL | re.IGNORECASE)
+    bare = re.search(r"\{\s*\"topic_summary\".*\}", reply, flags=re.DOTALL)
+    json_blob = match.group(1) if match else (bare.group(0) if bare else None)
+    cut_match = match or bare
+    if json_blob:
+        try:
+            parsed = json.loads(json_blob)
+            if isinstance(parsed, dict):
+                summary = str(parsed.get("topic_summary") or "").strip()
+                meta["topic_summary"] = summary[:2000] or None
+                meta["ready_for_draft"] = bool(parsed.get("ready_for_draft"))
+                category = str(parsed.get("suggested_category") or "marketing").strip().lower()
+                if category not in {"marketing", "utility", "authentication"}:
+                    category = "marketing"
+                meta["suggested_category"] = category
+                header = str(parsed.get("suggested_header") or "NONE").strip().upper()
+                if header not in {"NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT"}:
+                    header = "NONE"
+                meta["suggested_header"] = header
+        except json.JSONDecodeError:
+            pass
+        if cut_match:
+            reply = (reply[: cut_match.start()] + reply[cut_match.end() :]).strip()
+    reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
+    if not reply:
+        reply = "تمام — أكمل لي تفاصيل الفكرة أو اضغط اعتماد لإنشاء المسودة إن كانت واضحة."
+    return {"reply": reply, **meta}
+
+
+async def chat_template_idea(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    messages: list[dict[str, Any]],
+    brand_hint: str | None = None,
+) -> dict[str, Any]:
+    history = _normalize_idea_messages(messages)
+    if not history:
+        raise ValueError("EMPTY_IDEA_CHAT")
+    if history[-1]["role"] != "user":
+        raise ValueError("EMPTY_IDEA_CHAT")
+    llm = await _llm_kwargs(db, account_id)
+    system = IDEA_CHAT_SYSTEM_PROMPT
+    if brand_hint:
+        system = f"{system}\nBrand / business: {brand_hint.strip()[:500]}"
+    try:
+        raw = await chat_completion(
+            messages=history,
+            system_prompt=system,
+            temperature=0.5,
+            max_tokens=900,
+            **llm,
+        )
+    except LLMError as exc:
+        raise ValueError(f"LLM_FAILED:{exc}") from exc
+    if not raw:
+        raise ValueError("EMPTY_AI_RESPONSE")
+    parsed = _parse_idea_chat_payload(raw)
+    if not parsed.get("topic_summary"):
+        # Fall back to last user message as rough topic seed.
+        parsed["topic_summary"] = history[-1]["content"][:2000]
+    return parsed
+
+
 async def generate_template_draft(
     db: AsyncSession,
     *,
