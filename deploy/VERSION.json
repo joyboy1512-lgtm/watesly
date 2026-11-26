@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "aeca049",
-    "git_commit_message": "Template image chat edits from idea dialogue",
+    "git_commit": "d662b42",
+    "git_commit_message": "Full provider chat for AI templates",
     "alembic_head": "0074_ai_welcome_message",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.13",
+    "frontend_version": "0.33.14",
     "live_assets": {
-      "js": "index-DldgBHtm.js",
-      "css": "index-DkykFUoJ.css"
+      "js": "index-a_TMuFZu.js",
+      "css": "index-Ns-QFdfR.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.13",
+    "frontend": "0.33.14",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "aeca049",
-  "notes": "Idea chat supports header image edit dialogue + generate/edit from chat"
+  "commit": "d662b42",
+  "notes": "Template AI chat executes all provider capabilities: draft/refine/image/edit/alternatives"
 }
