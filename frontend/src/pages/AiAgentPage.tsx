@@ -319,7 +319,7 @@ export default function AiAgentPage() {
     {
       role: "assistant",
       content:
-        "مرحباً — صف فكرة القالب أو عدّل صورة الرأس بالدردشة. مثال: «خلي الخلفية بيضاء وركز على المنتج». ارفع صورة مرجعية إن أردت، ثم اعتمد المسودة أو ولّد الصورة."
+        "مرحباً — هذا شات المزود الكامل للقوالب. اطلب مباشرة: إنشاء مسودة، تعديل المسودة، توليد/تعديل صورة، أو 3 بدائل. مثال: «أنشئ مسودة عرض شحن مجاني» أو «عدّل الصورة واجعل الخلفية أفتح»."
     }
   ]);
   const [ideaInput, setIdeaInput] = useState("");
@@ -569,7 +569,7 @@ export default function AiAgentPage() {
       {
         role: "assistant",
         content:
-          "مرحباً — صف فكرة القالب أو تعديلات صورة الرأس. يمكنك رفع صورة مرجعية ثم تقول مثلاً: أضف شعار أو غيّر الخلفية. بعدها اعتمد المسودة أو ولّد الصورة."
+          "مرحباً — شات المزود جاهز لكل قدرات الذكاء: إنشاء مسودة، تعديلها، توليد صورة، تعديل صورة، أو 3 بدائل. اكتب طلبك مباشرة وسأنفّذه."
       }
     ]);
     setIdeaInput(seedTopic || "");
@@ -578,6 +578,37 @@ export default function AiAgentPage() {
     setIdeaImagePrompt("");
     setIdeaSuggestedCategory("marketing");
     setIdeaSuggestedHeader("NONE");
+  }
+
+  function applyChatDraftResult(draft: AiTemplateDraft, topic?: string | null) {
+    const next = emptyTemplateDraft({
+      ...draft,
+      body_samples: syncBodySamples(draft.body_text, draft.body_samples),
+      header_media: templateHeaderFile,
+      image_prompt: draft.image_prompt || ideaImagePrompt || ""
+    });
+    if (templateHeaderFile && (next.header_type === "NONE" || !next.header_type)) {
+      next.header_type = contentTypeToHeaderFormat(templateHeaderFile.content_type) || "IMAGE";
+    }
+    setTemplateDraft(next);
+    if (topic) setTemplateTopic(topic);
+    setNewDraftOpen(true);
+  }
+
+  function applyChatImageResult(image: UploadedFile, prompt?: string | null) {
+    setTemplateHeaderFile(image);
+    if (prompt) setIdeaImagePrompt(prompt);
+    setTemplateDraft((current) =>
+      emptyTemplateDraft({
+        ...(current || {}),
+        header_type: "IMAGE",
+        header_text: "",
+        image_prompt: prompt || current?.image_prompt || ideaImagePrompt || "",
+        header_media: image
+      })
+    );
+    setIdeaReadyForImage(false);
+    setNewDraftOpen(true);
   }
 
   function openSavedDraft(item: SavedDraft) {
@@ -600,7 +631,7 @@ export default function AiAgentPage() {
     const content = (text ?? ideaInput).trim();
     if (!content || ideaBusy) return;
     if (!(settings?.llm_enabled && settings?.llm_available)) {
-      toastStore.getState().show("دردشة الفكرة تتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
+      toastStore.getState().show("الشات يتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
       return;
     }
     const nextMessages: IdeaChatTurn[] = [...ideaChat, { role: "user", content }];
@@ -611,20 +642,48 @@ export default function AiAgentPage() {
       const historyForApi = nextMessages.filter(
         (turn, index) => !(index === 0 && turn.role === "assistant")
       );
+      const draftPayload = templateDraft
+        ? {
+            name: templateDraft.name,
+            language: templateDraft.language,
+            category: templateDraft.category,
+            header_type: templateDraft.header_type,
+            header_text: templateDraft.header_text,
+            body_text: templateDraft.body_text,
+            body_samples: templateDraft.body_samples,
+            footer_text: templateDraft.footer_text,
+            buttons: templateDraft.buttons,
+            image_prompt: templateDraft.image_prompt,
+            notes: templateDraft.notes
+          }
+        : null;
       const result = await api.post<{
         reply: string;
+        action?: string;
         topic_summary?: string | null;
         ready_for_draft?: boolean;
         suggested_category?: string;
         suggested_header?: string;
         image_prompt?: string | null;
         ready_for_image?: boolean;
-      }>("/templates/ai/idea-chat", {
-        messages: historyForApi,
-        brand_hint: selectedWa?.verified_name || selectedWa?.channel_name || null,
-        has_reference_image: Boolean(templateHeaderFile),
-        current_image_prompt: ideaImagePrompt || templateDraft?.image_prompt || null
-      });
+        executed?: boolean;
+        draft?: AiTemplateDraft | null;
+        alternatives?: AiTemplateDraft[];
+        image?: UploadedFile & { prompt?: string };
+      }>(
+        "/templates/ai/idea-chat",
+        {
+          messages: historyForApi,
+          brand_hint: selectedWa?.verified_name || selectedWa?.channel_name || null,
+          has_reference_image: Boolean(templateHeaderFile),
+          current_image_prompt: ideaImagePrompt || templateDraft?.image_prompt || null,
+          current_draft: draftPayload,
+          source_file_id: templateHeaderFile?.id || null,
+          language: templateDraft?.language || "ar",
+          auto_execute: true
+        },
+        { timeout: 120000 }
+      );
       setIdeaChat((current) => [...current, { role: "assistant", content: result.data.reply }]);
       if (result.data.topic_summary) {
         setTemplateTopic(result.data.topic_summary);
@@ -633,15 +692,6 @@ export default function AiAgentPage() {
       setIdeaReadyForImage(Boolean(result.data.ready_for_image));
       if (result.data.image_prompt) {
         setIdeaImagePrompt(result.data.image_prompt);
-        setTemplateDraft((current) =>
-          current
-            ? { ...current, image_prompt: result.data.image_prompt || current.image_prompt, header_type: "IMAGE" }
-            : emptyTemplateDraft({
-                image_prompt: result.data.image_prompt || "",
-                header_type: "IMAGE",
-                header_media: templateHeaderFile
-              })
-        );
       }
       if (result.data.suggested_category) {
         setIdeaSuggestedCategory(result.data.suggested_category);
@@ -649,10 +699,48 @@ export default function AiAgentPage() {
       if (result.data.suggested_header) {
         setIdeaSuggestedHeader(result.data.suggested_header);
       }
+      if (result.data.draft) {
+        applyChatDraftResult(result.data.draft, result.data.topic_summary || templateTopic);
+      }
+      if (result.data.alternatives?.length) {
+        setTemplateAlts(result.data.alternatives.map((item) => emptyTemplateDraft(item)));
+        if (!result.data.draft) {
+          applyChatDraftResult(result.data.alternatives[0], result.data.topic_summary || templateTopic);
+        }
+        if (channelId) {
+          for (const [index, alt] of result.data.alternatives.entries()) {
+            await api.post("/knowledge/ai/template-drafts", {
+              channel_id: channelId,
+              whatsapp_account_id: selectedWa?.id,
+              topic: result.data.topic_summary || templateTopic || alt.name,
+              angle: ["عرض سعر", "ندرة / كمية محدودة", "فائدة المنتج"][index] || `بديل ${index + 1}`,
+              draft: withDraftMedia(emptyTemplateDraft(alt), templateHeaderFile),
+              status: "draft"
+            });
+          }
+          await client.invalidateQueries({ queryKey: ["ai-template-drafts", channelId] });
+        }
+      }
+      if (result.data.image?.public_url) {
+        applyChatImageResult(
+          {
+            id: result.data.image.id,
+            filename: result.data.image.filename,
+            content_type: result.data.image.content_type,
+            size_bytes: result.data.image.size_bytes,
+            object_key: result.data.image.object_key,
+            public_url: result.data.image.public_url
+          },
+          result.data.image.prompt || result.data.image_prompt
+        );
+      }
+      if (result.data.executed) {
+        toastStore.getState().show("تم تنفيذ طلبك من شات المزود.", "success");
+      }
     } catch (err) {
       const detail = apiErrorDetail(err);
       toastStore.getState().show(
-        detail.includes("LLM") ? "فشل رد المساعد من المزود. أعد المحاولة." : "تعذر إرسال رسالة الفكرة.",
+        detail.includes("LLM") ? "فشل رد المساعد من المزود. أعد المحاولة." : "تعذر إرسال رسالة الشات.",
         "error"
       );
       setIdeaChat((current) => current.slice(0, -1));
@@ -1502,10 +1590,10 @@ export default function AiAgentPage() {
 
           <p className={`ai-templates-note ${llmReady ? "is-ready" : "is-blocked"}`}>
             {llmReady
-              ? "ناقش فكرة القالب في دردشة المساعد، اعتمدها لتنزل مسودة كاملة في إنشاء القالب، ثم عدّل الوسائط والأزرار وعاين واتساب."
+              ? "شات المزود ينفّذ مباشرة: إنشاء/تعديل مسودة، توليد/تعديل صورة، و3 بدائل — ثم راجع النتيجة في محرر القالب ومعاينة واتساب."
               : llmConfigured
-                ? "شرط الدردشة والتوليد: فعّل الذكاء الاصطناعي الخارجي أعلاه. يمكنك مع ذلك كتابة المسودة يدوياً ورفع الوسائط."
-                : "شرط الدردشة والتوليد: أضف مزوداً خارجياً من الإعدادات. الكتابة اليدوية ورفع الوسائط متاحان دائماً."}
+                ? "شرط الشات الكامل: فعّل الذكاء الاصطناعي الخارجي أعلاه. الكتابة اليدوية ورفع الوسائط متاحان دائماً."
+                : "شرط الشات الكامل: أضف مزوداً خارجياً من الإعدادات. الكتابة اليدوية ورفع الوسائط متاحان دائماً."}
           </p>
 
           <div className="ai-template-list">
@@ -1584,9 +1672,9 @@ export default function AiAgentPage() {
               <div className="ai-idea-chat">
                 <div className="ai-idea-chat-head">
                   <div>
-                    <strong>دردشة الفكرة والصورة</strong>
+                    <strong>شات المزود الكامل</strong>
                     <p className="hint-text" style={{ margin: "4px 0 0" }}>
-                      ناقش نص القالب أو تعديل صورة الرأس مع المساعد، ثم اعتمد المسودة أو ولّد/عدّل الصورة.
+                      ينفّذ كل قدرات الذكاء الخارجي من هنا: مسودة، تعديل، صورة، بدائل.
                     </p>
                   </div>
                   <button
@@ -1597,6 +1685,25 @@ export default function AiAgentPage() {
                   >
                     مسح الدردشة
                   </button>
+                </div>
+                <div className="ai-idea-capabilities" aria-label="قدرات الشات">
+                  {[
+                    { label: "إنشاء مسودة", text: "أنشئ مسودة لهذا الموضوع: " },
+                    { label: "تعديل المسودة", text: "عدّل المسودة: " },
+                    { label: "توليد صورة", text: "ولّد صورة رأس: " },
+                    { label: "تعديل صورة", text: "عدّل الصورة: " },
+                    { label: "3 بدائل", text: "ولّد 3 بدائل للموضوع: " }
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      className="ai-idea-cap-chip"
+                      disabled={ideaBusy || !llmReady}
+                      onClick={() => setIdeaInput((current) => current || item.text)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
                 <div className="ai-idea-thread">
                   {ideaChat.map((turn, index) => (
@@ -1642,7 +1749,7 @@ export default function AiAgentPage() {
                   <input
                     value={ideaInput}
                     onChange={(e) => setIdeaInput(e.target.value)}
-                    placeholder="مثال: غيّر الخلفية لأخضر فاتح وأبرز المنتج في المنتصف"
+                    placeholder="اكتب أي طلب للمزود… مثال: أنشئ مسودة عرض رمضان مع زر تسوق وعدّل الصورة"
                     disabled={ideaBusy || !llmReady}
                   />
                   <button
@@ -1650,7 +1757,7 @@ export default function AiAgentPage() {
                     className="whatsapp-button"
                     disabled={ideaBusy || !llmReady || !ideaInput.trim()}
                   >
-                    إرسال
+                    تنفيذ
                   </button>
                 </form>
                 {ideaImagePrompt && (

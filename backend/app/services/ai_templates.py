@@ -129,34 +129,40 @@ async def _llm_kwargs(db: AsyncSession, account_id: UUID) -> dict[str, str | Non
     }
 
 
-IDEA_CHAT_SYSTEM_PROMPT = """أنت مستشار قوالب واتساب للأعمال في الكويت.
-تساعد الموظف عبر دردشة قصيرة بالعربية لصياغة:
-1) فكرة نص القالب، و/أو
-2) وصف/تعديل صورة رأس القالب.
+IDEA_CHAT_SYSTEM_PROMPT = """أنت مساعد قوالب واتساب كامل القدرات عبر مزود الذكاء الاصطناعي.
+يمكنك من خلال هذه الدردشة تنفيذ أي مهمة متاحة للمزود:
+- الإجابة والاستشارة (answer)
+- إنشاء مسودة قالب كاملة (create_draft)
+- تعديل المسودة الحالية حسب تعليمات (refine_draft)
+- توليد صورة رأس جديدة (generate_image)
+- تعديل صورة رأس موجودة (edit_image)
+- اقتراح 3 زوايا/بدائل للموضوع (create_alternatives)
 
-قواعد الرد:
-- ردّ بالعربية بأسلوب مختصر ومهني (2–6 جمل أو نقاط قصيرة).
-- إن ناقش الموظف الصورة (ألوان، منتج، خلفية، نص على الصورة، إزالة/إضافة عنصر) ركّز على تحسين وصف الصورة.
-- اسأل سؤالاً واحداً مفيداً إن كانت التفاصيل ناقصة.
-- في نهاية ردّك ضع كتلة JSON فقط بهذا الشكل:
+ردّ بالعربية باختصار ووضوح. في نهاية كل رد ضع JSON فقط:
 
 ```json
 {
-  "topic_summary":"...موضوع القالب إن وُجد...",
-  "ready_for_draft":false,
+  "action":"answer|create_draft|refine_draft|generate_image|edit_image|create_alternatives",
+  "topic_summary":"...موضوع القالب...",
+  "refine_instruction":"...تعليمات تعديل المسودة إن لزم...",
+  "image_prompt":"English visual prompt when image action",
   "suggested_category":"marketing",
   "suggested_header":"IMAGE",
-  "image_prompt":"English visual prompt for WhatsApp header image edits/generation",
-  "ready_for_image":false
+  "ready_for_draft":false,
+  "ready_for_image":false,
+  "execute_now":false
 }
 ```
 
-- ready_for_draft=true فقط عندما نص القالب/الفكرة جاهزة لمسودة.
-- ready_for_image=true عندما وصف الصورة واضح كفاية لتوليد أو تعديل الصورة.
-- image_prompt يجب أن يكون بالإنجليزية وواضحاً وقابلاً للتنفيذ بصرياً.
-- إن رُفعت صورة مرجعية، اعتبر طلبات المستخدم تعديلات عليها واكتب image_prompt ليعكس التعديل.
-- suggested_category: marketing | utility | authentication
-- suggested_header: NONE | TEXT | IMAGE | VIDEO | DOCUMENT
+قواعد اختيار action:
+- إذا طلب المستخدم صراحة إنشاء/توليد مسودة أو قال «اعتمد وأنشئ» → action=create_draft و execute_now=true.
+- إذا طلب تعديل النص/الأزرار/التذييل على مسودة موجودة → refine_draft و execute_now=true مع refine_instruction.
+- إذا طلب توليد صورة جديدة → generate_image و execute_now=true مع image_prompt إنجليزي.
+- إذا طلب تعديل صورة مرفوعة/حالية → edit_image و execute_now=true.
+- إذا طلب 3 بدائل/زوايا → create_alternatives و execute_now=true.
+- إن كانت التفاصيل ناقصة → action=answer و execute_now=false واسأل سؤالاً واحداً.
+- suggested_category: marketing|utility|authentication
+- suggested_header: NONE|TEXT|IMAGE|VIDEO|DOCUMENT
 """
 
 
@@ -170,22 +176,25 @@ def _normalize_idea_messages(messages: list[dict[str, Any]] | None) -> list[dict
         if role not in {"user", "assistant"} or not content:
             continue
         out.append({"role": role, "content": content[:4000]})
-    return out[-20:]
+    return out[-24:]
 
 
 def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
     reply = (raw or "").strip()
     meta: dict[str, Any] = {
+        "action": "answer",
         "topic_summary": None,
+        "refine_instruction": None,
         "ready_for_draft": False,
         "suggested_category": "marketing",
         "suggested_header": "NONE",
         "image_prompt": None,
         "ready_for_image": False,
+        "execute_now": False,
     }
     match = re.search(r"```json\s*(\{.*?\})\s*```", reply, flags=re.DOTALL | re.IGNORECASE)
     bare = re.search(
-        r"\{\s*\"(?:topic_summary|image_prompt|ready_for_draft|ready_for_image)\".*\}",
+        r"\{\s*\"(?:action|topic_summary|image_prompt|ready_for_draft|ready_for_image|execute_now)\".*\}",
         reply,
         flags=re.DOTALL,
     )
@@ -195,10 +204,27 @@ def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
         try:
             parsed = json.loads(json_blob)
             if isinstance(parsed, dict):
+                action = str(parsed.get("action") or "answer").strip().lower()
+                if action not in {
+                    "answer",
+                    "create_draft",
+                    "refine_draft",
+                    "generate_image",
+                    "edit_image",
+                    "create_alternatives",
+                }:
+                    action = "answer"
+                meta["action"] = action
                 summary = str(parsed.get("topic_summary") or "").strip()
                 meta["topic_summary"] = summary[:2000] or None
-                meta["ready_for_draft"] = bool(parsed.get("ready_for_draft"))
-                meta["ready_for_image"] = bool(parsed.get("ready_for_image"))
+                refine = str(parsed.get("refine_instruction") or "").strip()
+                meta["refine_instruction"] = refine[:2000] or None
+                meta["ready_for_draft"] = bool(parsed.get("ready_for_draft")) or action == "create_draft"
+                meta["ready_for_image"] = bool(parsed.get("ready_for_image")) or action in {
+                    "generate_image",
+                    "edit_image",
+                }
+                meta["execute_now"] = bool(parsed.get("execute_now"))
                 image_prompt = str(parsed.get("image_prompt") or "").strip()
                 meta["image_prompt"] = image_prompt[:1200] or None
                 category = str(parsed.get("suggested_category") or "marketing").strip().lower()
@@ -208,7 +234,10 @@ def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
                 header = str(parsed.get("suggested_header") or "NONE").strip().upper()
                 if header not in {"NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT"}:
                     header = "NONE"
-                if meta["image_prompt"] or meta["ready_for_image"]:
+                if meta["image_prompt"] or meta["ready_for_image"] or action in {
+                    "generate_image",
+                    "edit_image",
+                }:
                     header = "IMAGE"
                 meta["suggested_header"] = header
         except json.JSONDecodeError:
@@ -217,10 +246,38 @@ def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
             reply = (reply[: cut_match.start()] + reply[cut_match.end() :]).strip()
     reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
     if not reply:
-        reply = (
-            "تمام — أكمل الفكرة أو وصف تعديل الصورة، ثم اضغط اعتماد المسودة أو توليد الصورة."
-        )
+        reply = "جاهز — يمكنك طلب إنشاء مسودة، تعديلها، توليد صورة، أو تعديل صورة من نفس الدردشة."
     return {"reply": reply, **meta}
+
+
+def _infer_action_from_user_text(text: str, *, has_draft: bool, has_image: bool) -> str | None:
+    lowered = text.lower()
+    arabic = text
+    if any(k in arabic for k in ("3 بدائل", "ثلاث بدائل", "ثلاثة بدائل", "زوايا")) or "alternativ" in lowered:
+        return "create_alternatives"
+    if any(k in arabic for k in ("عدّل الصورة", "عدل الصورة", "تعديل الصورة", "غيّر الصورة", "غير الصورة")):
+        return "edit_image" if has_image else "generate_image"
+    if any(k in arabic for k in ("ولّد صورة", "ولد صورة", "توليد صورة", "اصنع صورة", "أنشئ صورة", "انشئ صورة")):
+        return "generate_image"
+    if has_draft and any(
+        k in arabic for k in ("عدّل المسودة", "عدل المسودة", "عدّل النص", "عدل النص", "حسّن القالب", "حسن القالب", "عدّل الأزرار", "عدل الازرار")
+    ):
+        return "refine_draft"
+    if any(
+        k in arabic
+        for k in (
+            "أنشئ مسودة",
+            "انشئ مسودة",
+            "ولّد مسودة",
+            "ولد مسودة",
+            "توليد مسودة",
+            "اعتمد",
+            "إنشاء مسودة",
+            "انشاء مسودة",
+        )
+    ):
+        return "create_draft"
+    return None
 
 
 async def chat_template_idea(
@@ -231,6 +288,11 @@ async def chat_template_idea(
     brand_hint: str | None = None,
     has_reference_image: bool = False,
     current_image_prompt: str | None = None,
+    current_draft: dict[str, Any] | None = None,
+    source_file_id: UUID | None = None,
+    language: str = "ar",
+    user_id: UUID | None = None,
+    auto_execute: bool = True,
 ) -> dict[str, Any]:
     history = _normalize_idea_messages(messages)
     if not history:
@@ -242,20 +304,35 @@ async def chat_template_idea(
     extras: list[str] = []
     if brand_hint:
         extras.append(f"Brand / business: {brand_hint.strip()[:500]}")
-    if has_reference_image:
+    if has_reference_image or source_file_id:
         extras.append(
-            "A reference header image is already uploaded. Treat user requests as edits to that image."
+            "A reference header image is available. Prefer edit_image when the user asks to change it."
         )
     if current_image_prompt:
         extras.append(f"Current image prompt: {current_image_prompt.strip()[:800]}")
+    if isinstance(current_draft, dict) and current_draft.get("body_text"):
+        extras.append(
+            "Current draft JSON snapshot:\n"
+            + json.dumps(
+                {
+                    "name": current_draft.get("name"),
+                    "category": current_draft.get("category"),
+                    "header_type": current_draft.get("header_type"),
+                    "body_text": str(current_draft.get("body_text") or "")[:500],
+                    "footer_text": current_draft.get("footer_text"),
+                    "buttons": current_draft.get("buttons") or [],
+                },
+                ensure_ascii=False,
+            )
+        )
     if extras:
         system = system + "\n" + "\n".join(extras)
     try:
         raw = await chat_completion(
             messages=history,
             system_prompt=system,
-            temperature=0.5,
-            max_tokens=1000,
+            temperature=0.45,
+            max_tokens=1400,
             **llm,
         )
     except LLMError as exc:
@@ -263,12 +340,122 @@ async def chat_template_idea(
     if not raw:
         raise ValueError("EMPTY_AI_RESPONSE")
     parsed = _parse_idea_chat_payload(raw)
-    if not parsed.get("topic_summary"):
-        # Fall back to last user message as rough topic seed only for non-image-only turns.
-        last = history[-1]["content"]
-        if not parsed.get("image_prompt"):
-            parsed["topic_summary"] = last[:2000]
-    return parsed
+    last_user = history[-1]["content"]
+    if not parsed.get("topic_summary") and parsed.get("action") in {
+        "create_draft",
+        "create_alternatives",
+        "answer",
+    }:
+        parsed["topic_summary"] = last_user[:2000]
+
+    inferred = _infer_action_from_user_text(
+        last_user,
+        has_draft=bool(isinstance(current_draft, dict) and current_draft.get("body_text")),
+        has_image=bool(has_reference_image or source_file_id),
+    )
+    if inferred and (parsed.get("action") == "answer" or parsed.get("execute_now")):
+        parsed["action"] = inferred
+        parsed["execute_now"] = True
+        if inferred in {"generate_image", "edit_image"} and not parsed.get("image_prompt"):
+            parsed["image_prompt"] = (current_image_prompt or last_user)[:1200]
+            parsed["ready_for_image"] = True
+        if inferred == "refine_draft" and not parsed.get("refine_instruction"):
+            parsed["refine_instruction"] = last_user[:2000]
+        if inferred in {"create_draft", "create_alternatives"} and not parsed.get("topic_summary"):
+            parsed["topic_summary"] = last_user[:2000]
+            parsed["ready_for_draft"] = True
+
+    result: dict[str, Any] = {
+        **parsed,
+        "executed": False,
+        "draft": None,
+        "alternatives": [],
+        "image": None,
+        "capabilities": [
+            "answer",
+            "create_draft",
+            "refine_draft",
+            "generate_image",
+            "edit_image",
+            "create_alternatives",
+        ],
+    }
+
+    if not auto_execute or not parsed.get("execute_now"):
+        return result
+
+    action = str(parsed.get("action") or "answer")
+    try:
+        if action == "create_draft":
+            topic = str(parsed.get("topic_summary") or last_user).strip()
+            draft = await generate_template_draft(
+                db,
+                account_id=account_id,
+                topic=topic,
+                language=language or "ar",
+                category=parsed.get("suggested_category"),
+                brand_hint=brand_hint,
+            )
+            if parsed.get("suggested_header") and parsed["suggested_header"] != "NONE":
+                draft["header_type"] = parsed["suggested_header"]
+            if parsed.get("image_prompt"):
+                draft["image_prompt"] = parsed["image_prompt"]
+            result["draft"] = draft
+            result["executed"] = True
+            result["reply"] = f"{parsed['reply']}\n\n✓ تم إنشاء المسودة بالكامل من الشات."
+        elif action == "refine_draft":
+            if not isinstance(current_draft, dict) or not current_draft.get("body_text"):
+                result["reply"] = f"{parsed['reply']}\n\nلا توجد مسودة حالياً لتعديلها — أنشئ مسودة أولاً."
+            else:
+                instruction = str(parsed.get("refine_instruction") or last_user).strip()
+                draft = await refine_template_draft(
+                    db,
+                    account_id=account_id,
+                    draft=current_draft,
+                    instruction=instruction,
+                )
+                result["draft"] = draft
+                result["executed"] = True
+                result["reply"] = f"{parsed['reply']}\n\n✓ تم تعديل المسودة حسب طلبك."
+        elif action == "create_alternatives":
+            topic = str(parsed.get("topic_summary") or last_user).strip()
+            angles = ["عرض سعر", "ندرة / كمية محدودة", "فائدة المنتج"]
+            alts: list[dict[str, Any]] = []
+            for angle in angles:
+                alts.append(
+                    await generate_template_draft(
+                        db,
+                        account_id=account_id,
+                        topic=f"{topic} — زاوية: {angle}",
+                        language=language or "ar",
+                        category=parsed.get("suggested_category"),
+                        brand_hint=brand_hint,
+                    )
+                )
+            result["alternatives"] = alts
+            result["draft"] = alts[0] if alts else None
+            result["executed"] = True
+            result["reply"] = f"{parsed['reply']}\n\n✓ تم توليد 3 بدائل من الشات."
+        elif action in {"generate_image", "edit_image"}:
+            prompt = str(parsed.get("image_prompt") or current_image_prompt or last_user).strip()
+            image = await generate_template_header_image(
+                db,
+                account_id=account_id,
+                prompt=prompt,
+                user_id=user_id,
+                source_file_id=source_file_id if action == "edit_image" else None,
+                edit_mode=action == "edit_image" and bool(source_file_id),
+            )
+            result["image"] = image
+            result["image_prompt"] = prompt
+            result["executed"] = True
+            result["reply"] = (
+                f"{parsed['reply']}\n\n✓ تم {'تعديل' if action == 'edit_image' else 'توليد'} صورة الرأس من الشات."
+            )
+    except ValueError as exc:
+        result["executed"] = False
+        result["reply"] = f"{parsed['reply']}\n\nتعذر التنفيذ: {exc}"
+    return result
 
 
 async def generate_template_draft(

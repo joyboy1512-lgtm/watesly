@@ -13822,6 +13822,28 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .ai-idea-upload {
   margin: 0 12px 8px;
 }
+.ai-idea-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+.ai-idea-cap-chip {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 55%, #fff);
+  color: var(--primary-darker);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ai-idea-cap-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .ai-status-badge {
   display: inline-flex;
   align-items: center;

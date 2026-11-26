@@ -98,6 +98,11 @@ async def ai_template_idea_chat(
             brand_hint=payload.brand_hint,
             has_reference_image=bool(payload.has_reference_image),
             current_image_prompt=payload.current_image_prompt,
+            current_draft=payload.current_draft if isinstance(payload.current_draft, dict) else None,
+            source_file_id=payload.source_file_id,
+            language=payload.language or "ar",
+            user_id=context.user.id,
+            auto_execute=bool(payload.auto_execute),
         )
     except ValueError as exc:
         raise _ai_http_error(exc) from exc
