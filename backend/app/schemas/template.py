@@ -57,16 +57,10 @@ class AiTemplateIdeaChatRequest(BaseModel):
     brand_hint: str | None = Field(default=None, max_length=500)
     has_reference_image: bool = False
     current_image_prompt: str | None = Field(default=None, max_length=1200)
-
-
-class AiTemplateIdeaChatResponse(BaseModel):
-    reply: str
-    topic_summary: str | None = None
-    ready_for_draft: bool = False
-    suggested_category: str = "marketing"
-    suggested_header: str = "NONE"
-    image_prompt: str | None = None
-    ready_for_image: bool = False
+    current_draft: dict | None = None
+    source_file_id: UUID | None = None
+    language: str = Field(default="ar", min_length=2, max_length=20)
+    auto_execute: bool = True
 
 
 class AiTemplateRefineRequest(BaseModel):
@@ -102,3 +96,21 @@ class AiTemplateImageResponse(BaseModel):
     object_key: str
     public_url: str
     prompt: str
+
+
+class AiTemplateIdeaChatResponse(BaseModel):
+    reply: str
+    action: str = "answer"
+    topic_summary: str | None = None
+    refine_instruction: str | None = None
+    ready_for_draft: bool = False
+    suggested_category: str = "marketing"
+    suggested_header: str = "NONE"
+    image_prompt: str | None = None
+    ready_for_image: bool = False
+    execute_now: bool = False
+    executed: bool = False
+    draft: AiTemplateDraftResponse | None = None
+    alternatives: list[AiTemplateDraftResponse] = []
+    image: AiTemplateImageResponse | None = None
+    capabilities: list[str] = []
