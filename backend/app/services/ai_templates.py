@@ -10,7 +10,13 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.knowledge_base import _account_llm_api_key, get_agent_settings
-from app.services.llm_client import LLMError, chat_completion, generate_image_png, llm_available
+from app.services.llm_client import (
+    LLMError,
+    chat_completion,
+    edit_image_png,
+    generate_image_png,
+    llm_available,
+)
 from app.services.meta_template_submit import normalize_template_name
 
 
@@ -124,20 +130,31 @@ async def _llm_kwargs(db: AsyncSession, account_id: UUID) -> dict[str, str | Non
 
 
 IDEA_CHAT_SYSTEM_PROMPT = """أنت مستشار قوالب واتساب للأعمال في الكويت.
-تساعد الموظف بصياغة فكرة قالب رسالة ميتا عبر دردشة قصيرة وواضحة بالعربية.
-هدفك: الوصول لموضوع قالب جاهز للاعتماد ثم توليد مسودة.
+تساعد الموظف عبر دردشة قصيرة بالعربية لصياغة:
+1) فكرة نص القالب، و/أو
+2) وصف/تعديل صورة رأس القالب.
 
 قواعد الرد:
 - ردّ بالعربية بأسلوب مختصر ومهني (2–6 جمل أو نقاط قصيرة).
-- اسأل سؤالاً واحداً مفيداً إن كانت الفكرة ناقصة (الجمهور، العرض، الدعوة لاتخاذ إجراء، نبرة الرسالة).
-- عندما تكون الفكرة واضحة بما يكفي لمسودة قالب، ضع في نهاية ردّك كتلة JSON فقط بهذا الشكل:
+- إن ناقش الموظف الصورة (ألوان، منتج، خلفية، نص على الصورة، إزالة/إضافة عنصر) ركّز على تحسين وصف الصورة.
+- اسأل سؤالاً واحداً مفيداً إن كانت التفاصيل ناقصة.
+- في نهاية ردّك ضع كتلة JSON فقط بهذا الشكل:
 
 ```json
-{"topic_summary":"...موضوع واضح ومكتمل...","ready_for_draft":true,"suggested_category":"marketing","suggested_header":"IMAGE"}
+{
+  "topic_summary":"...موضوع القالب إن وُجد...",
+  "ready_for_draft":false,
+  "suggested_category":"marketing",
+  "suggested_header":"IMAGE",
+  "image_prompt":"English visual prompt for WhatsApp header image edits/generation",
+  "ready_for_image":false
+}
 ```
 
-- إن لم تكن جاهزة بعد: ready_for_draft=false مع topic_summary تقريبي إن وُجد.
-- لا تولّد نص القالب الكامل هنا — فقط طوّر الفكرة حتى يعتمدها الموظف.
+- ready_for_draft=true فقط عندما نص القالب/الفكرة جاهزة لمسودة.
+- ready_for_image=true عندما وصف الصورة واضح كفاية لتوليد أو تعديل الصورة.
+- image_prompt يجب أن يكون بالإنجليزية وواضحاً وقابلاً للتنفيذ بصرياً.
+- إن رُفعت صورة مرجعية، اعتبر طلبات المستخدم تعديلات عليها واكتب image_prompt ليعكس التعديل.
 - suggested_category: marketing | utility | authentication
 - suggested_header: NONE | TEXT | IMAGE | VIDEO | DOCUMENT
 """
@@ -163,9 +180,15 @@ def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
         "ready_for_draft": False,
         "suggested_category": "marketing",
         "suggested_header": "NONE",
+        "image_prompt": None,
+        "ready_for_image": False,
     }
     match = re.search(r"```json\s*(\{.*?\})\s*```", reply, flags=re.DOTALL | re.IGNORECASE)
-    bare = re.search(r"\{\s*\"topic_summary\".*\}", reply, flags=re.DOTALL)
+    bare = re.search(
+        r"\{\s*\"(?:topic_summary|image_prompt|ready_for_draft|ready_for_image)\".*\}",
+        reply,
+        flags=re.DOTALL,
+    )
     json_blob = match.group(1) if match else (bare.group(0) if bare else None)
     cut_match = match or bare
     if json_blob:
@@ -175,6 +198,9 @@ def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
                 summary = str(parsed.get("topic_summary") or "").strip()
                 meta["topic_summary"] = summary[:2000] or None
                 meta["ready_for_draft"] = bool(parsed.get("ready_for_draft"))
+                meta["ready_for_image"] = bool(parsed.get("ready_for_image"))
+                image_prompt = str(parsed.get("image_prompt") or "").strip()
+                meta["image_prompt"] = image_prompt[:1200] or None
                 category = str(parsed.get("suggested_category") or "marketing").strip().lower()
                 if category not in {"marketing", "utility", "authentication"}:
                     category = "marketing"
@@ -182,6 +208,8 @@ def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
                 header = str(parsed.get("suggested_header") or "NONE").strip().upper()
                 if header not in {"NONE", "TEXT", "IMAGE", "VIDEO", "DOCUMENT"}:
                     header = "NONE"
+                if meta["image_prompt"] or meta["ready_for_image"]:
+                    header = "IMAGE"
                 meta["suggested_header"] = header
         except json.JSONDecodeError:
             pass
@@ -189,7 +217,9 @@ def _parse_idea_chat_payload(raw: str) -> dict[str, Any]:
             reply = (reply[: cut_match.start()] + reply[cut_match.end() :]).strip()
     reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
     if not reply:
-        reply = "تمام — أكمل لي تفاصيل الفكرة أو اضغط اعتماد لإنشاء المسودة إن كانت واضحة."
+        reply = (
+            "تمام — أكمل الفكرة أو وصف تعديل الصورة، ثم اضغط اعتماد المسودة أو توليد الصورة."
+        )
     return {"reply": reply, **meta}
 
 
@@ -199,6 +229,8 @@ async def chat_template_idea(
     account_id: UUID,
     messages: list[dict[str, Any]],
     brand_hint: str | None = None,
+    has_reference_image: bool = False,
+    current_image_prompt: str | None = None,
 ) -> dict[str, Any]:
     history = _normalize_idea_messages(messages)
     if not history:
@@ -207,14 +239,23 @@ async def chat_template_idea(
         raise ValueError("EMPTY_IDEA_CHAT")
     llm = await _llm_kwargs(db, account_id)
     system = IDEA_CHAT_SYSTEM_PROMPT
+    extras: list[str] = []
     if brand_hint:
-        system = f"{system}\nBrand / business: {brand_hint.strip()[:500]}"
+        extras.append(f"Brand / business: {brand_hint.strip()[:500]}")
+    if has_reference_image:
+        extras.append(
+            "A reference header image is already uploaded. Treat user requests as edits to that image."
+        )
+    if current_image_prompt:
+        extras.append(f"Current image prompt: {current_image_prompt.strip()[:800]}")
+    if extras:
+        system = system + "\n" + "\n".join(extras)
     try:
         raw = await chat_completion(
             messages=history,
             system_prompt=system,
             temperature=0.5,
-            max_tokens=900,
+            max_tokens=1000,
             **llm,
         )
     except LLMError as exc:
@@ -223,8 +264,10 @@ async def chat_template_idea(
         raise ValueError("EMPTY_AI_RESPONSE")
     parsed = _parse_idea_chat_payload(raw)
     if not parsed.get("topic_summary"):
-        # Fall back to last user message as rough topic seed.
-        parsed["topic_summary"] = history[-1]["content"][:2000]
+        # Fall back to last user message as rough topic seed only for non-image-only turns.
+        last = history[-1]["content"]
+        if not parsed.get("image_prompt"):
+            parsed["topic_summary"] = last[:2000]
     return parsed
 
 
@@ -307,6 +350,8 @@ async def generate_template_header_image(
     account_id: UUID,
     prompt: str,
     user_id: UUID | None = None,
+    source_file_id: UUID | None = None,
+    edit_mode: bool = False,
 ) -> dict[str, Any]:
     from app.models.uploaded_file import UploadedFile
     from app.services.storage import storage
@@ -319,17 +364,37 @@ async def generate_template_header_image(
     if not llm_available(api_key=account_key):
         raise ValueError("LLM_NOT_CONFIGURED")
     image_model = (getattr(settings, "llm_image_model", None) or "").strip() or None
+
+    source_bytes: bytes | None = None
+    if source_file_id:
+        source = await db.get(UploadedFile, source_file_id)
+        if source is None or source.account_id != account_id:
+            raise ValueError("SOURCE_IMAGE_NOT_FOUND")
+        try:
+            source_bytes = storage.download_bytes(source.object_key)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"SOURCE_IMAGE_READ_FAILED:{exc}") from exc
+
     try:
-        png_bytes = await generate_image_png(
-            prompt=prompt_clean,
-            api_key=account_key,
-            api_base_url=settings.llm_api_base_url,
-            model=image_model,
-        )
+        if edit_mode and source_bytes:
+            png_bytes = await edit_image_png(
+                prompt=prompt_clean,
+                image_bytes=source_bytes,
+                api_key=account_key,
+                api_base_url=settings.llm_api_base_url,
+                model=image_model,
+            )
+        else:
+            png_bytes = await generate_image_png(
+                prompt=prompt_clean,
+                api_key=account_key,
+                api_base_url=settings.llm_api_base_url,
+                model=image_model,
+            )
     except LLMError as exc:
         raise ValueError(f"IMAGE_FAILED:{exc}") from exc
 
-    filename = "ai-template-header.png"
+    filename = "ai-template-header-edit.png" if edit_mode else "ai-template-header.png"
     key, public_url = storage.upload_bytes(
         account_id=account_id,
         filename=filename,

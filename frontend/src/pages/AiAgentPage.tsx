@@ -319,12 +319,14 @@ export default function AiAgentPage() {
     {
       role: "assistant",
       content:
-        "مرحباً — صف لي فكرة القالب كما لو كنت تتحدث مع مساعد. مثال: عرض شحن مجاني لعملاء الصابون هذا الأسبوع مع زر زيارة المتجر. عندما تعجبك الفكرة اضغط «اعتماد وإنشاء مسودة»."
+        "مرحباً — صف فكرة القالب أو عدّل صورة الرأس بالدردشة. مثال: «خلي الخلفية بيضاء وركز على المنتج». ارفع صورة مرجعية إن أردت، ثم اعتمد المسودة أو ولّد الصورة."
     }
   ]);
   const [ideaInput, setIdeaInput] = useState("");
   const [ideaBusy, setIdeaBusy] = useState(false);
   const [ideaReady, setIdeaReady] = useState(false);
+  const [ideaReadyForImage, setIdeaReadyForImage] = useState(false);
+  const [ideaImagePrompt, setIdeaImagePrompt] = useState("");
   const [ideaSuggestedCategory, setIdeaSuggestedCategory] = useState("marketing");
   const [ideaSuggestedHeader, setIdeaSuggestedHeader] = useState("NONE");
 
@@ -567,11 +569,13 @@ export default function AiAgentPage() {
       {
         role: "assistant",
         content:
-          "مرحباً — صف لي فكرة القالب كما لو كنت تتحدث مع مساعد. عندما تعجبك الفكرة اضغط «اعتماد وإنشاء مسودة» لتنزل في إنشاء القالب."
+          "مرحباً — صف فكرة القالب أو تعديلات صورة الرأس. يمكنك رفع صورة مرجعية ثم تقول مثلاً: أضف شعار أو غيّر الخلفية. بعدها اعتمد المسودة أو ولّد الصورة."
       }
     ]);
     setIdeaInput(seedTopic || "");
     setIdeaReady(false);
+    setIdeaReadyForImage(false);
+    setIdeaImagePrompt("");
     setIdeaSuggestedCategory("marketing");
     setIdeaSuggestedHeader("NONE");
   }
@@ -613,15 +617,32 @@ export default function AiAgentPage() {
         ready_for_draft?: boolean;
         suggested_category?: string;
         suggested_header?: string;
+        image_prompt?: string | null;
+        ready_for_image?: boolean;
       }>("/templates/ai/idea-chat", {
         messages: historyForApi,
-        brand_hint: selectedWa?.verified_name || selectedWa?.channel_name || null
+        brand_hint: selectedWa?.verified_name || selectedWa?.channel_name || null,
+        has_reference_image: Boolean(templateHeaderFile),
+        current_image_prompt: ideaImagePrompt || templateDraft?.image_prompt || null
       });
       setIdeaChat((current) => [...current, { role: "assistant", content: result.data.reply }]);
       if (result.data.topic_summary) {
         setTemplateTopic(result.data.topic_summary);
       }
       setIdeaReady(Boolean(result.data.ready_for_draft));
+      setIdeaReadyForImage(Boolean(result.data.ready_for_image));
+      if (result.data.image_prompt) {
+        setIdeaImagePrompt(result.data.image_prompt);
+        setTemplateDraft((current) =>
+          current
+            ? { ...current, image_prompt: result.data.image_prompt || current.image_prompt, header_type: "IMAGE" }
+            : emptyTemplateDraft({
+                image_prompt: result.data.image_prompt || "",
+                header_type: "IMAGE",
+                header_media: templateHeaderFile
+              })
+        );
+      }
       if (result.data.suggested_category) {
         setIdeaSuggestedCategory(result.data.suggested_category);
       }
@@ -745,19 +766,28 @@ export default function AiAgentPage() {
     }
   }
 
-  async function generateHeaderImage() {
-    if (!templateDraft) return;
+  async function generateHeaderImage(options?: { fromChat?: boolean; editMode?: boolean }) {
+    const fromChat = Boolean(options?.fromChat);
+    const editMode = Boolean(options?.editMode ?? (fromChat && templateHeaderFile));
+    const prompt =
+      (fromChat ? ideaImagePrompt : "") ||
+      (templateDraft?.image_prompt || "").trim() ||
+      ideaImagePrompt.trim() ||
+      `WhatsApp template header image for: ${templateDraft?.name || templateTopic || "campaign"}. ${(templateDraft?.body_text || "").slice(0, 180)}`;
+    if (!prompt.trim()) {
+      toastStore.getState().show("اكتب وصف الصورة في الدردشة أو في حقل وصف الرأس أولاً.", "error");
+      return;
+    }
     if (!(settings?.llm_enabled && settings?.llm_available)) {
       toastStore.getState().show("توليد الصور يتطلب ذكاءً اصطناعياً خارجياً مفعّلاً.", "error");
       return;
     }
-    const prompt =
-      (templateDraft.image_prompt || "").trim() ||
-      `WhatsApp template header image for: ${templateDraft.name}. ${templateDraft.body_text.slice(0, 180)}`;
     setImageBusy(true);
     try {
       const result = await api.post<UploadedFile & { prompt?: string }>("/templates/ai/image", {
-        prompt
+        prompt,
+        source_file_id: editMode && templateHeaderFile ? templateHeaderFile.id : null,
+        edit_mode: editMode && Boolean(templateHeaderFile)
       });
       const uploaded: UploadedFile = {
         id: result.data.id,
@@ -768,24 +798,38 @@ export default function AiAgentPage() {
         public_url: result.data.public_url
       };
       setTemplateHeaderFile(uploaded);
+      setIdeaImagePrompt(prompt);
+      setIdeaReadyForImage(false);
       setTemplateDraft((current) =>
-        current
-          ? {
-              ...current,
-              header_type: "IMAGE",
-              header_text: "",
-              image_prompt: prompt,
-              header_media: uploaded
-            }
-          : current
+        emptyTemplateDraft({
+          ...(current || {}),
+          header_type: "IMAGE",
+          header_text: "",
+          image_prompt: prompt,
+          header_media: uploaded
+        })
       );
-      toastStore.getState().show("تم توليد صورة الرأس وحفظها في المسودة.", "success");
+      if (fromChat) {
+        setIdeaChat((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content: editMode
+              ? "تم تعديل صورة الرأس حسب طلبك وظهرت في معاينة القالب."
+              : "تم توليد صورة الرأس من وصف الدردشة وظهرت في معاينة القالب."
+          }
+        ]);
+      }
+      toastStore.getState().show(
+        editMode ? "تم تعديل صورة الرأس وحفظها في المسودة." : "تم توليد صورة الرأس وحفظها في المسودة.",
+        "success"
+      );
     } catch (err) {
       const detail = apiErrorDetail(err);
       if (detail.includes("LLM_NOT_CONFIGURED")) {
         toastStore.getState().show("فعّل المزود الخارجي ومفتاح API أولاً لتوليد الصور.", "error");
-      } else if (detail.startsWith("IMAGE_FAILED:")) {
-        toastStore.getState().show("تعذر توليد الصورة من المزود. جرّب نموذجاً آخر أو مفتاحاً يدعم الصور.", "error");
+      } else if (detail.startsWith("IMAGE_FAILED:") || detail.includes("SOURCE_IMAGE")) {
+        toastStore.getState().show("تعذر توليد/تعديل الصورة من المزود. جرّب وصفاً أوضح أو مزوداً يدعم الصور.", "error");
       } else {
         toastStore.getState().show("تعذر توليد صورة الرأس.", "error");
       }
@@ -813,6 +857,17 @@ export default function AiAgentPage() {
         })
       );
       setNewDraftOpen(true);
+      if (format === "IMAGE") {
+        setIdeaSuggestedHeader("IMAGE");
+        setIdeaChat((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content:
+              "تم رفع صورة مرجعية. صف لي التعديل المطلوب (مثال: خلفية أفتح، أضف شريط عرض أعلى الصورة) ثم اضغط «تعديل الصورة من الدردشة»."
+          }
+        ]);
+      }
       toastStore.getState().show(
         format === "DOCUMENT"
           ? "تم رفع ملف PDF واعتماده للمعاينة."
@@ -1529,9 +1584,9 @@ export default function AiAgentPage() {
               <div className="ai-idea-chat">
                 <div className="ai-idea-chat-head">
                   <div>
-                    <strong>دردشة الفكرة</strong>
+                    <strong>دردشة الفكرة والصورة</strong>
                     <p className="hint-text" style={{ margin: "4px 0 0" }}>
-                      ناقش الفكرة مع المساعد مثل ChatGPT، ثم اعتمدها لتنزل مسودة في إنشاء القالب.
+                      ناقش نص القالب أو تعديل صورة الرأس مع المساعد، ثم اعتمد المسودة أو ولّد/عدّل الصورة.
                     </p>
                   </div>
                   <button
@@ -1555,6 +1610,28 @@ export default function AiAgentPage() {
                   ))}
                   {ideaBusy && <p className="hint-text">المساعد يكتب…</p>}
                 </div>
+                {templateHeaderFile && (
+                  <div className="ai-idea-ref-image">
+                    <img src={templateHeaderFile.public_url} alt="" />
+                    <div>
+                      <strong>صورة مرجعية للتعديل</strong>
+                      <p className="hint-text">{templateHeaderFile.filename}</p>
+                    </div>
+                  </div>
+                )}
+                <label className="field-label ai-idea-upload">
+                  <span>رفع صورة مرجعية للتعديل عبر الدردشة</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={headerUploadBusy || ideaBusy}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.target.value = "";
+                      void uploadHeaderMedia(file);
+                    }}
+                  />
+                </label>
                 <form
                   className="ai-idea-composer"
                   onSubmit={(e: FormEvent) => {
@@ -1565,7 +1642,7 @@ export default function AiAgentPage() {
                   <input
                     value={ideaInput}
                     onChange={(e) => setIdeaInput(e.target.value)}
-                    placeholder="اكتب فكرتك أو عدّلها… مثال: عرض شحن مجاني لعملاء الصابون"
+                    placeholder="مثال: غيّر الخلفية لأخضر فاتح وأبرز المنتج في المنتصف"
                     disabled={ideaBusy || !llmReady}
                   />
                   <button
@@ -1576,7 +1653,21 @@ export default function AiAgentPage() {
                     إرسال
                   </button>
                 </form>
-                <div className="catalog-card-actions" style={{ marginTop: 10 }}>
+                {ideaImagePrompt && (
+                  <label className="field-label" style={{ padding: "0 12px 8px" }}>
+                    <span>وصف الصورة من الدردشة</span>
+                    <textarea
+                      rows={2}
+                      value={ideaImagePrompt}
+                      onChange={(e) => {
+                        setIdeaImagePrompt(e.target.value);
+                        setIdeaReadyForImage(false);
+                      }}
+                      dir="ltr"
+                    />
+                  </label>
+                )}
+                <div className="catalog-card-actions" style={{ marginTop: 10, padding: "0 12px 12px" }}>
                   <button
                     type="button"
                     className="whatsapp-button"
@@ -1585,8 +1676,28 @@ export default function AiAgentPage() {
                   >
                     {templateBusy ? "جاري إنشاء المسودة…" : "اعتماد الفكرة وإنشاء مسودة"}
                   </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={ideaBusy || imageBusy || !llmReady || !(ideaImagePrompt || templateDraft?.image_prompt)}
+                    onClick={() =>
+                      void generateHeaderImage({
+                        fromChat: true,
+                        editMode: Boolean(templateHeaderFile)
+                      })
+                    }
+                  >
+                    {imageBusy
+                      ? "جاري الصورة…"
+                      : templateHeaderFile
+                        ? "تعديل الصورة من الدردشة"
+                        : "توليد صورة من الدردشة"}
+                  </button>
                   {ideaReady && templateTopic && (
-                    <span className="hint-text">الفكرة جاهزة: {templateTopic.slice(0, 90)}</span>
+                    <span className="hint-text">الفكرة جاهزة: {templateTopic.slice(0, 80)}</span>
+                  )}
+                  {ideaReadyForImage && (
+                    <span className="hint-text">وصف الصورة جاهز للتوليد/التعديل.</span>
                   )}
                 </div>
               </div>
@@ -1779,10 +1890,20 @@ export default function AiAgentPage() {
                             type="button"
                             className="whatsapp-button"
                             disabled={imageBusy || templateBusy || !llmReady}
-                            onClick={() => void generateHeaderImage()}
+                            onClick={() => void generateHeaderImage({ editMode: false })}
                           >
                             {imageBusy ? "جاري توليد الصورة…" : "توليد صورة الرأس"}
                           </button>
+                          {templateHeaderFile && (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              disabled={imageBusy || templateBusy || !llmReady}
+                              onClick={() => void generateHeaderImage({ editMode: true, fromChat: true })}
+                            >
+                              تعديل الصورة الحالية
+                            </button>
+                          )}
                           {templateHeaderFile && (
                             <button
                               type="button"
