@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-26) — Ops boards drill-down
+
+| Item | Value |
+|------|-------|
+| Commit | `d5c907d` |
+| Alembic | `0075_crm_followup_loss` |
+| Frontend | `0.33.15` |
+| Live assets | `index-ChvYyIKo.js`, `index-vUmBpzio.css` |
+
 ### Production snapshot (2026-11-26) — AI template full provider chat
 
 | Item | Value |
