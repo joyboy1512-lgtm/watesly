@@ -11,6 +11,8 @@ from app.models.whatsapp_template import WhatsAppTemplate
 from app.schemas.template import (
     AiTemplateDraftResponse,
     AiTemplateGenerateRequest,
+    AiTemplateIdeaChatRequest,
+    AiTemplateIdeaChatResponse,
     AiTemplateImageRequest,
     AiTemplateImageResponse,
     AiTemplateRefineRequest,
@@ -19,6 +21,7 @@ from app.schemas.template import (
     TemplateUpdateRequest,
 )
 from app.services.ai_templates import (
+    chat_template_idea,
     generate_template_draft,
     generate_template_header_image,
     refine_template_draft,
@@ -41,7 +44,15 @@ def _ai_http_error(exc: ValueError) -> HTTPException:
         return HTTPException(status_code=400, detail="LLM_NOT_CONFIGURED")
     if code.startswith("LLM_FAILED:") or code.startswith("IMAGE_FAILED:"):
         return HTTPException(status_code=502, detail=code)
-    if code in {"EMPTY_TOPIC", "EMPTY_INSTRUCTION", "EMPTY_IMAGE_PROMPT", "EMPTY_TEMPLATE_BODY", "EMPTY_AI_RESPONSE", "INVALID_AI_JSON"}:
+    if code in {
+        "EMPTY_TOPIC",
+        "EMPTY_INSTRUCTION",
+        "EMPTY_IMAGE_PROMPT",
+        "EMPTY_TEMPLATE_BODY",
+        "EMPTY_AI_RESPONSE",
+        "INVALID_AI_JSON",
+        "EMPTY_IDEA_CHAT",
+    }:
         return HTTPException(status_code=400, detail=code)
     return HTTPException(status_code=400, detail=code)
 
@@ -67,6 +78,23 @@ async def ai_generate_template(
             topic=payload.topic,
             language=payload.language,
             category=payload.category,
+            brand_hint=payload.brand_hint,
+        )
+    except ValueError as exc:
+        raise _ai_http_error(exc) from exc
+
+
+@router.post("/ai/idea-chat", response_model=AiTemplateIdeaChatResponse)
+async def ai_template_idea_chat(
+    payload: AiTemplateIdeaChatRequest,
+    context: AuthContext = Depends(require_permissions(Permission.TEMPLATES_MANAGE, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await chat_template_idea(
+            db,
+            account_id=context.account_id,
+            messages=[item.model_dump() for item in payload.messages],
             brand_hint=payload.brand_hint,
         )
     except ValueError as exc:
