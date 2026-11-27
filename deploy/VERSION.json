@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "3ddc623",
-    "git_commit_message": "Respond customer vs whisper send mode UI",
+    "git_commit": "2e50e45",
+    "git_commit_message": "Compact customer/whisper mode tabs",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.20",
+    "frontend_version": "0.33.21",
     "live_assets": {
-      "js": "index-Cm0nL3p8.js",
-      "css": "index-B8Ug2aXQ.css"
+      "js": "index-Hg_ohNNd.js",
+      "css": "index-5QAtoNtN.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.20",
+    "frontend": "0.33.21",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "3ddc623",
-  "notes": "Distinct customer/whisper mode tabs + live status banner + send button colors"
+  "commit": "2e50e45",
+  "notes": "Compact pill mode tabs; status banner unchanged"
 }
