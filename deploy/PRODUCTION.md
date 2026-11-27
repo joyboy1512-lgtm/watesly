@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-27) — Compact send-mode tabs
+
+| Item | Value |
+|------|-------|
+| Commit | `2e50e45` |
+| Alembic | `0076_conversation_whisper` |
+| Frontend | `0.33.21` |
+| Live assets | `index-Hg_ohNNd.js`, `index-5QAtoNtN.css` |
+
 ### Production snapshot (2026-11-27) — Customer vs whisper send mode UI
 
 | Item | Value |
