@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-28) — Inbox chat translate
+
+| Item | Value |
+|------|-------|
+| Commit | `4328aff` |
+| Alembic | `0076_conversation_whisper` |
+| Frontend | `0.33.27` |
+| Live assets | `index-88_c8A1m.js`, `index-D-GJdJ-F.css` |
+
 ### Production snapshot (2026-11-27) — AI page mobile polish
 
 | Item | Value |

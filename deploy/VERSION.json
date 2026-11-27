@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-11-27",
+  "updated_at": "2026-11-28",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "25b8bce",
-    "git_commit_message": "AI page mobile visual polish",
+    "git_commit": "4328aff",
+    "git_commit_message": "Merge inbox chat translate into production-unified",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.26",
+    "frontend_version": "0.33.27",
     "live_assets": {
-      "js": "index-DaP2iK22.js",
-      "css": "index-CqNl_kxn.css"
+      "js": "index-88_c8A1m.js",
+      "css": "index-D-GJdJ-F.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.26",
+    "frontend": "0.33.27",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "25b8bce",
-  "notes": "AI page mobile-only polish: tabs, panels, cards; desktop unchanged"
+  "commit": "4328aff",
+  "notes": "Staff inbox chat translate: manual EN/FR/UR/HI outbound; inbound Arabic for staff"
 }
