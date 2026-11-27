@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "c2c1028",
-    "git_commit_message": "Customer panel brand green + elevated cards",
+    "git_commit": "4ae5abd",
+    "git_commit_message": "Customer profile card brand green gradient",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.18",
+    "frontend_version": "0.33.19",
     "live_assets": {
-      "js": "index-ArvEvq-N.js",
-      "css": "index-CDXH3Hdq.css"
+      "js": "index-kkbtdFhP.js",
+      "css": "index-D4NRQsK-.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.18",
+    "frontend": "0.33.19",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "c2c1028",
-  "notes": "Customer details drawer uses brand-stat green; profile/action cards elevated white"
+  "commit": "4ae5abd",
+  "notes": "Customer profile card uses brand-stat gradient; white avatar + elevated action buttons"
 }
