@@ -14514,3 +14514,193 @@ button:disabled { cursor: not-allowed; opacity: .55; }
     overflow-x: auto;
   }
 }
+
+/* AI page — mobile visual polish only (desktop unchanged) */
+@media (max-width: 768px) {
+  .ai-ops-page.page {
+    padding: 12px;
+  }
+  .ai-ops-shell {
+    gap: 12px;
+  }
+  .ai-ops-top {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    margin: -4px -4px 0;
+    padding: 8px 4px 10px;
+    background: linear-gradient(180deg, var(--bg) 78%, color-mix(in srgb, var(--bg) 55%, transparent));
+  }
+  .ai-ops-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .ai-ops-title-row h1 {
+    font-size: 1.35rem;
+    text-align: center;
+  }
+  .ai-channel-chip {
+    width: 100%;
+    min-width: 0;
+    margin-inline-start: 0;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+  .ai-channel-label {
+    min-width: 0;
+    padding-inline: 6px;
+    font-size: 0.95rem;
+  }
+  .ai-channel-card {
+    min-width: 0;
+  }
+  .ai-underline-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 0 2px 2px;
+    border-bottom: none;
+  }
+  .ai-underline-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .ai-underline-tabs button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 800;
+    background: #fff;
+    color: var(--primary-darker);
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+    box-shadow: 0 2px 8px rgba(7, 94, 84, 0.1);
+  }
+  .ai-underline-tabs button:hover {
+    background: #fff;
+    color: var(--primary-darker);
+  }
+  .ai-underline-tabs button.is-active {
+    color: #fff;
+    background: var(--brand-stat-gradient);
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(7, 94, 84, 0.22);
+  }
+  .ai-underline-tabs button.is-active::after {
+    display: none;
+  }
+  .ai-panel,
+  .ai-panel-quiet {
+    border: 2px solid var(--primary);
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(7, 94, 84, 0.12);
+    padding: 14px;
+  }
+  .ai-panel-head {
+    margin: 0 0 12px;
+    padding: 0 0 10px;
+    gap: 8px;
+  }
+  .ai-panel-head h2 {
+    font-size: 1.05rem;
+  }
+  .ai-status-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+    border-width: 2px;
+    border-color: var(--primary);
+  }
+  .ai-status-actions {
+    display: grid;
+    gap: 8px;
+  }
+  .ai-status-actions .agent-state-toggle,
+  .ai-status-actions .whatsapp-button,
+  .ai-status-cta {
+    width: 100%;
+    min-height: 42px;
+    justify-content: center;
+  }
+  .ai-mode-radios {
+    gap: 8px;
+  }
+  .ai-mode-radio {
+    border: 2px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+    border-radius: 14px;
+    padding: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(7, 94, 84, 0.08);
+  }
+  .ai-mode-radio.is-active {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary-soft) 55%, #fff);
+    box-shadow: 0 4px 12px rgba(7, 94, 84, 0.14);
+  }
+  .ai-toggle-row {
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+    background: #fff;
+  }
+  .ai-hours-card {
+    border: 2px solid var(--primary);
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .ai-lab-layout {
+    gap: 12px;
+  }
+  .ai-interpret-card,
+  .ai-idea-chat,
+  .ai-add-provider-card {
+    border: 2px solid var(--primary);
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(7, 94, 84, 0.1);
+  }
+  .ai-template-row,
+  .ai-provider-row,
+  .ai-activity-row {
+    border: 2px solid var(--primary);
+    border-radius: 14px;
+    padding: 12px;
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(7, 94, 84, 0.1);
+    gap: 8px;
+  }
+  .ai-provider-btn,
+  .ai-template-row .secondary-button,
+  .ai-template-row .whatsapp-button {
+    min-height: 40px;
+  }
+  .ai-activity-filters {
+    gap: 8px;
+  }
+  .ai-activity-filters select,
+  .ai-activity-filters input,
+  .ai-channel-card select {
+    min-height: 40px;
+  }
+  .ai-accordion {
+    gap: 8px;
+  }
+  .ai-accordion-row,
+  .ai-quality-details {
+    border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+    border-radius: 12px;
+    background: #fff;
+  }
+  .ai-quality-details {
+    padding: 10px 12px;
+  }
+}
