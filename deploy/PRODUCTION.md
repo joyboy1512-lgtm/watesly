@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-27) — Inbox brand green header
+
+| Item | Value |
+|------|-------|
+| Commit | `892d9dd` |
+| Alembic | `0076_conversation_whisper` |
+| Frontend | `0.33.17` |
+| Live assets | `index-C1-a0VQJ.js`, `index-BoH2nsGe.css` |
+
 ### Production snapshot (2026-11-27) — Manager whisper coaching
 
 | Item | Value |
