@@ -100,6 +100,20 @@ async def remove_tag_from_conversation(
     await db.commit()
 
 
+def serialize_note(note: ConversationNote, *, author_name: str | None = None) -> dict:
+    return {
+        "id": note.id,
+        "conversation_id": note.conversation_id,
+        "user_id": note.user_id,
+        "body": note.body,
+        "mentions": note.mentions,
+        "is_internal": bool(note.is_internal),
+        "kind": getattr(note, "kind", None) or "note",
+        "author_name": author_name,
+        "created_at": note.created_at,
+    }
+
+
 async def create_note(
     db: AsyncSession,
     *,
@@ -107,35 +121,50 @@ async def create_note(
     conversation_id: UUID,
     user_id: UUID,
     payload: NoteCreateRequest,
-) -> ConversationNote:
+    author_name: str | None = None,
+) -> dict:
     conversation = await db.get(Conversation, conversation_id)
     if conversation is None or conversation.account_id != account_id:
         raise ValueError("CONVERSATION_NOT_FOUND")
+    kind = (payload.kind or "note").strip().lower()
+    if kind not in {"note", "whisper"}:
+        raise ValueError("INVALID_NOTE_KIND")
     note = ConversationNote(
         conversation_id=conversation_id,
         user_id=user_id,
         body=payload.body,
         mentions=payload.mentions or None,
         is_internal=True,
+        kind=kind,
     )
     db.add(note)
     await db.commit()
     await db.refresh(note)
-    return note
+    return serialize_note(note, author_name=author_name)
 
 
 async def list_notes(
-    db: AsyncSession, account_id: UUID, conversation_id: UUID
-) -> list[ConversationNote]:
+    db: AsyncSession,
+    account_id: UUID,
+    conversation_id: UUID,
+    *,
+    kind: str | None = None,
+) -> list[dict]:
+    from app.models.user import User
+
     conversation = await db.get(Conversation, conversation_id)
     if conversation is None or conversation.account_id != account_id:
         raise ValueError("CONVERSATION_NOT_FOUND")
-    result = await db.execute(
-        select(ConversationNote)
+    stmt = (
+        select(ConversationNote, User.full_name)
+        .outerjoin(User, User.id == ConversationNote.user_id)
         .where(ConversationNote.conversation_id == conversation_id)
         .order_by(ConversationNote.created_at.asc())
     )
-    return list(result.scalars().all())
+    if kind:
+        stmt = stmt.where(ConversationNote.kind == kind)
+    rows = (await db.execute(stmt)).all()
+    return [serialize_note(note, author_name=full_name) for note, full_name in rows]
 
 
 async def list_conversation_tags(

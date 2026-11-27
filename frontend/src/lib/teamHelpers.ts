@@ -119,6 +119,7 @@ export const WHATSAPP_STATUS_LABELS: Record<string, string> = {
 export type PermissionKey =
   | "conversations.view"
   | "conversations.assign"
+  | "conversations.coach"
   | "messages.send"
   | "contacts.view"
   | "contacts.edit"
@@ -160,6 +161,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { key: "conversations.view", label: "عرض المحادثات" },
       { key: "conversations.assign", label: "تعيين المحادثات" },
+      {
+        key: "conversations.coach",
+        label: "إشراف داخل المحادثة (همس للموظف دون ظهوره للعميل)"
+      },
       { key: "messages.send", label: "إرسال الرسائل" }
     ]
   },
@@ -272,6 +277,7 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, ReadonlySet<PermissionKey>
   branch_admin: new Set([
     "conversations.view",
     "conversations.assign",
+    "conversations.coach",
     "messages.send",
     "contacts.view",
     "contacts.edit",
@@ -299,6 +305,7 @@ export const ROLE_PERMISSIONS: Record<MembershipRole, ReadonlySet<PermissionKey>
   manager: new Set([
     "conversations.view",
     "conversations.assign",
+    "conversations.coach",
     "messages.send",
     "contacts.view",
     "contacts.edit",

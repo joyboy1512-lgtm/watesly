@@ -21,7 +21,7 @@ export type ConversationContext = {
     body: string;
     category: string;
   }>;
-  viewers: Array<{ membership_id: string; name: string }>;
+  viewers: Array<{ membership_id: string; name: string; coaching?: boolean }>;
   typing: Array<{ membership_id: string; name: string }>;
   suggested_query: string | null;
 };

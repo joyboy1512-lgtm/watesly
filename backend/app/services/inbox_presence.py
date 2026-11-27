@@ -25,8 +25,15 @@ async def set_conversation_viewing(
     conversation_id: UUID,
     membership_id: UUID,
     user_name: str,
+    coaching: bool = False,
 ) -> None:
-    payload = json.dumps({"membership_id": str(membership_id), "name": user_name})
+    payload = json.dumps(
+        {
+            "membership_id": str(membership_id),
+            "name": user_name,
+            "coaching": bool(coaching),
+        }
+    )
     await redis_client.setex(
         _view_key(account_id, conversation_id, membership_id),
         VIEW_TTL_SECONDS,

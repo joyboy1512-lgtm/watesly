@@ -182,11 +182,12 @@ async def delete_conversation_tag(
 @router.get("/conversations/{conversation_id}/notes", response_model=list[NoteResponse])
 async def get_notes(
     conversation_id: UUID,
+    kind: str | None = Query(None, pattern=r"^(note|whisper)$"),
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await list_notes(db, context.account_id, conversation_id)
+        return await list_notes(db, context.account_id, conversation_id, kind=kind)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Conversation not found") from exc
 
@@ -198,6 +199,11 @@ async def post_note(
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import membership_has_permission
+
+    kind = (payload.kind or "note").strip().lower()
+    if kind == "whisper" and not membership_has_permission(context.membership, Permission.CONVERSATIONS_COACH):
+        raise HTTPException(status_code=403, detail="MISSING_PERMISSION")
     try:
         return await create_note(
             db,
@@ -205,9 +211,33 @@ async def post_note(
             conversation_id=conversation_id,
             user_id=context.user.id,
             payload=payload,
+            author_name=context.user.full_name,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail="Conversation not found") from exc
+        code = 400 if "INVALID" in str(exc) else 404
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.post("/conversations/{conversation_id}/whispers", response_model=NoteResponse)
+async def post_whisper(
+    conversation_id: UUID,
+    payload: NoteCreateRequest,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_COACH, write=True)),
+    db: AsyncSession = Depends(get_db),
+):
+    whisper_payload = payload.model_copy(update={"kind": "whisper"})
+    try:
+        return await create_note(
+            db,
+            account_id=context.account_id,
+            conversation_id=conversation_id,
+            user_id=context.user.id,
+            payload=whisper_payload,
+            author_name=context.user.full_name,
+        )
+    except ValueError as exc:
+        code = 400 if "INVALID" in str(exc) else 404
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
 
 
 @router.get("/quick-replies", response_model=list[QuickReplyResponse])

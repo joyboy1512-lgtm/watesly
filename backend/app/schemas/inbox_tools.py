@@ -26,6 +26,7 @@ class ConversationTagRequest(BaseModel):
 class NoteCreateRequest(BaseModel):
     body: str = Field(min_length=1, max_length=5000)
     mentions: list[str] = Field(default_factory=list)
+    kind: str = Field(default="note", pattern=r"^(note|whisper)$")
 
 
 class NoteResponse(BaseModel):
@@ -35,6 +36,8 @@ class NoteResponse(BaseModel):
     body: str
     mentions: list | None = None
     is_internal: bool = True
+    kind: str = "note"
+    author_name: str | None = None
     created_at: datetime
 
 

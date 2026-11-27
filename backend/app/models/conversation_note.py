@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,3 +19,5 @@ class ConversationNote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     mentions: Mapped[list | None] = mapped_column(JSONB)
     is_internal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # note = sidebar note; whisper = in-chat coaching visible only to staff (never WhatsApp)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="note", server_default="note")
