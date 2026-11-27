@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-27) — Customer vs whisper send mode UI
+
+| Item | Value |
+|------|-------|
+| Commit | `3ddc623` |
+| Alembic | `0076_conversation_whisper` |
+| Frontend | `0.33.20` |
+| Live assets | `index-Cm0nL3p8.js`, `index-B8Ug2aXQ.css` |
+
 ### Production snapshot (2026-11-27) — Customer profile card brand green
 
 | Item | Value |
