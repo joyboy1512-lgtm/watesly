@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-27) — Knowledge mobile card borders
+
+| Item | Value |
+|------|-------|
+| Commit | `a9f4380` |
+| Alembic | `0076_conversation_whisper` |
+| Frontend | `0.33.24` |
+| Live assets | `index-DjEj0LS1.js`, `index-wNfIHfQM.css` |
+
 ### Production snapshot (2026-11-27) — Knowledge mobile cards
 
 | Item | Value |
