@@ -932,6 +932,7 @@ async def post_conversation_view_presence(
     context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import membership_has_permission
     from app.services.inbox_presence import set_conversation_viewing
 
     await _load_conversation_contact(db, account_id=context.account_id, conversation_id=conversation_id)
@@ -940,6 +941,7 @@ async def post_conversation_view_presence(
         conversation_id=conversation_id,
         membership_id=context.membership.id,
         user_name=context.user.full_name,
+        coaching=membership_has_permission(context.membership, Permission.CONVERSATIONS_COACH),
     )
 
 

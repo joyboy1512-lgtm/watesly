@@ -4393,6 +4393,33 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .reports-roi-blocked { color: #b45309; background: #fff7ed; border-radius: 8px; padding: 10px 12px; }
 .automation-node-group { display: grid; gap: 6px; margin-bottom: 12px; }
 .automation-meta-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.inbox-whisper-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 0 10px 8px;
+}
+.message-whisper {
+  align-self: center;
+  max-width: min(92%, 520px);
+  background: #fff8e8;
+  border: 1px dashed #d4a017;
+  color: #3d2e00;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+.message-whisper-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9a6700;
+}
+.chat-composer-bar.whisper-mode {
+  outline: 2px solid rgba(212, 160, 23, 0.45);
+  border-radius: 12px;
+}
 .analytics-funnel { display: flex; flex-wrap: wrap; gap: 8px; }
 .analytics-funnel-step {
   flex: 1; min-width: 100px; text-align: center; padding: 12px; border-radius: 10px;

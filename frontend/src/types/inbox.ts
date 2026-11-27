@@ -10,5 +10,8 @@ export type Note = {
   conversation_id: string;
   user_id: string;
   body: string;
+  kind?: "note" | "whisper";
+  author_name?: string | null;
+  is_internal?: boolean;
   created_at: string;
 };

@@ -6,6 +6,7 @@ from app.models.membership import Membership, MembershipRole
 class Permission(StrEnum):
     CONVERSATIONS_VIEW = "conversations.view"
     CONVERSATIONS_ASSIGN = "conversations.assign"
+    CONVERSATIONS_COACH = "conversations.coach"
     MESSAGES_SEND = "messages.send"
     CONTACTS_VIEW = "contacts.view"
     CONTACTS_EDIT = "contacts.edit"
@@ -37,6 +38,7 @@ class Permission(StrEnum):
 
 _BRANCH_OPS = frozenset({
     Permission.CONVERSATIONS_VIEW, Permission.CONVERSATIONS_ASSIGN,
+    Permission.CONVERSATIONS_COACH,
     Permission.MESSAGES_SEND, Permission.CONTACTS_VIEW, Permission.CONTACTS_EDIT,
     Permission.CHANNELS_VIEW, Permission.TEMPLATES_VIEW, Permission.TEMPLATES_MANAGE,
     Permission.CAMPAIGNS_VIEW, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_APPROVE,

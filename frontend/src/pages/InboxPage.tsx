@@ -47,7 +47,7 @@ import InboxProductPicker from "../components/InboxProductPicker";
 import WhatsAppTextPreview from "../components/WhatsAppTextPreview";
 import type { TemplateComponent } from "../lib/templateMedia";
 import WhatsAppTemplatePreview from "../components/WhatsAppTemplatePreview";
-import InboxMessageBubble from "../components/InboxMessageBubble";
+import InboxMessageBubble, { type WhisperBubble } from "../components/InboxMessageBubble";
 import InboxCloseDialog from "../components/InboxCloseDialog";
 import InboxEmojiPicker from "../components/InboxEmojiPicker";
 import InboxShortcutsMenu from "../components/InboxShortcutsMenu";
@@ -96,6 +96,7 @@ const CHANNEL_TYPE_SHORT: Record<string, string> = {
 export default function InboxPage() {
   const { t } = useTranslation();
   const canViewUsers = useHasPermission("users.view");
+  const canCoach = useHasPermission("conversations.coach");
   const statusLabels: Record<string, string> = useMemo(() => ({
     open: t("inbox.statusOpen"),
     pending: t("inbox.statusPending"),
@@ -182,6 +183,7 @@ export default function InboxPage() {
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [composerMoreOpen, setComposerMoreOpen] = useState(false);
+  const [whisperMode, setWhisperMode] = useState(false);
   const workspaceOrganizationId = useWorkspaceOrganizationId();
   const setWorkspaceOrganizationId = useSetWorkspaceOrganization();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -609,15 +611,44 @@ export default function InboxPage() {
     refetchInterval: 20_000
   });
 
+  const allTagsQuery = useQuery({ queryKey: ["tags"], queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data });
+  const conversationTagsQuery = useQuery({ queryKey: ["conversation-tags", selectedId], enabled: Boolean(selectedId), queryFn: async () => (await api.get<Tag[]>(`/inbox-tools/conversations/${selectedId}/tags`)).data });
+  const notesQuery = useQuery({
+    queryKey: ["conversation-notes", selectedId],
+    enabled: Boolean(selectedId),
+    queryFn: async () => (await api.get<Note[]>(`/inbox-tools/conversations/${selectedId}/notes`)).data,
+    refetchInterval: selectedId ? 12_000 : false
+  });
+
+  const whisperItems = useMemo(() => {
+    return (notesQuery.data ?? [])
+      .filter((note) => (note.kind ?? "note") === "whisper")
+      .map(
+        (note): WhisperBubble => ({
+          id: `whisper-${note.id}`,
+          kind: "whisper",
+          text_body: note.body,
+          author_name: note.author_name,
+          created_at: note.created_at
+        })
+      );
+  }, [notesQuery.data]);
+
   const visibleMessages = useMemo(() => {
-    const rows = messagesQuery.data ?? [];
+    const rows: Array<Message | WhisperBubble> = [...(messagesQuery.data ?? []), ...whisperItems].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
     const term = messageSearch.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((message) => {
-      const haystack = `${message.text_body ?? ""} ${message.media_caption ?? ""} ${message.media_filename ?? ""} ${message.type}`.toLowerCase();
+      if ("kind" in message && message.kind === "whisper") {
+        return `${message.text_body} ${message.author_name ?? ""}`.toLowerCase().includes(term);
+      }
+      const chat = message as Message;
+      const haystack = `${chat.text_body ?? ""} ${chat.media_caption ?? ""} ${chat.media_filename ?? ""} ${chat.type}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [messagesQuery.data, messageSearch]);
+  }, [messagesQuery.data, whisperItems, messageSearch]);
 
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -630,11 +661,13 @@ export default function InboxPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedId]);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messagesQuery.data]);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messagesQuery.data, whisperItems.length]);
 
-  const allTagsQuery = useQuery({ queryKey: ["tags"], queryFn: async () => (await api.get<Tag[]>("/inbox-tools/tags")).data });
-  const conversationTagsQuery = useQuery({ queryKey: ["conversation-tags", selectedId], enabled: Boolean(selectedId), queryFn: async () => (await api.get<Tag[]>(`/inbox-tools/conversations/${selectedId}/tags`)).data });
-  const notesQuery = useQuery({ queryKey: ["conversation-notes", selectedId], enabled: Boolean(selectedId), queryFn: async () => (await api.get<Note[]>(`/inbox-tools/conversations/${selectedId}/notes`)).data });
+  useEffect(() => {
+    if (!canCoach) setWhisperMode(false);
+  }, [canCoach]);
   const employeesQuery = useQuery({
     queryKey: ["employees"],
     enabled: canViewUsers,
@@ -869,6 +902,28 @@ export default function InboxPage() {
   async function handleSend(event?: FormEvent) {
     event?.preventDefault();
     if (!selectedId || !text.trim()) return;
+    if (whisperMode) {
+      if (!canCoach) {
+        toastStore.getState().show("لا تملك صلاحية الإشراف داخل المحادثة.", "error");
+        return;
+      }
+      setSending(true);
+      try {
+        await api.post(`/inbox-tools/conversations/${selectedId}/whispers`, {
+          body: text.trim(),
+          kind: "whisper"
+        });
+        if (selectedId) delete draftsByConversationRef.current[selectedId];
+        setText("");
+        await queryClient.invalidateQueries({ queryKey: ["conversation-notes", selectedId] });
+        toastStore.getState().show("تم إرسال الهمس للموظف فقط.", "success");
+      } catch {
+        toastStore.getState().show("تعذر إرسال الهمس الداخلي.", "error");
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
     if (windowClosed) {
       toastStore.getState().show("انتهت نافذة 24 ساعة — استخدم قالب WhatsApp.", "error");
       return;
@@ -1252,13 +1307,19 @@ export default function InboxPage() {
   const presenceLine = useMemo(() => {
     const typing = inboxContext?.typing ?? [];
     const viewers = inboxContext?.viewers ?? [];
+    const coaches = viewers.filter((item) => item.coaching);
+    const watchers = viewers.filter((item) => !item.coaching);
     if (typing.length) {
       return `${typing.map((item) => item.name).join("، ")} يكتب الآن…`;
     }
-    if (viewers.length) {
-      return `${viewers.map((item) => item.name).join("، ")} يشاهد المحادثة`;
+    const parts: string[] = [];
+    if (coaches.length) {
+      parts.push(`${coaches.map((item) => item.name).join("، ")} يشرف الآن (داخلي — لا يراه العميل)`);
     }
-    return null;
+    if (watchers.length) {
+      parts.push(`${watchers.map((item) => item.name).join("، ")} يشاهد المحادثة`);
+    }
+    return parts.length ? parts.join(" · ") : null;
   }, [inboxContext]);
 
   const filterLabels: Record<InboxFilter, string> = {
@@ -2239,15 +2300,42 @@ export default function InboxPage() {
             }}
           />
           </div>
-          <div className="chat-composer-bar">
+          {canCoach && (
+            <div className="inbox-whisper-toggle" role="group" aria-label="وضع الإرسال">
+              <button
+                type="button"
+                className={`crm-quick-chip${!whisperMode ? " active" : ""}`}
+                onClick={() => setWhisperMode(false)}
+              >
+                للعميل (واتساب)
+              </button>
+              <button
+                type="button"
+                className={`crm-quick-chip${whisperMode ? " active" : ""}`}
+                onClick={() => setWhisperMode(true)}
+              >
+                همس للموظف فقط
+              </button>
+              {whisperMode && (
+                <small className="hint-text">يظهر داخل Respond للموظف والمدير — لا يُرسل إلى واتساب.</small>
+              )}
+            </div>
+          )}
+          <div className={`chat-composer-bar${whisperMode ? " whisper-mode" : ""}`}>
             <label className="composer-icon-button" title="إرفاق ملف">
-              <input type="file" accept="image/*,video/mp4,audio/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAttachment(file); event.currentTarget.value = ""; }} disabled={!selectedId || uploading} />
+              <input type="file" accept="image/*,video/mp4,audio/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAttachment(file); event.currentTarget.value = ""; }} disabled={!selectedId || uploading || whisperMode} />
               <Icon name="paperclip" />
             </label>
             <textarea
               className="composer-textarea"
               rows={2}
-              placeholder={selectedId ? "اكتب رسالة… (/اختصار + Tab، Enter للإرسال)" : "اختر محادثة أولًا"}
+              placeholder={
+                !selectedId
+                  ? "اختر محادثة أولًا"
+                  : whisperMode
+                    ? "اكتب همساً داخلياً للموظف…"
+                    : "اكتب رسالة… (/اختصار + Tab، Enter للإرسال)"
+              }
               value={text}
               onChange={(e) => onComposerChange(e.target.value)}
               onKeyDown={composerKeyDown}
@@ -2255,17 +2343,19 @@ export default function InboxPage() {
               maxLength={4096}
             />
             <div className="composer-send-group">
-              <button className="send-button" type="submit" disabled={!selectedId || sending || !text.trim()} aria-label="إرسال">
+              <button className="send-button" type="submit" disabled={!selectedId || sending || !text.trim()} aria-label={whisperMode ? "إرسال همس" : "إرسال"}>
                 <Icon name="send" />
               </button>
-              <label className="composer-send-close" title="إرسال ثم إغلاق">
-                <input
-                  type="checkbox"
-                  checked={sendAndClose}
-                  onChange={(e) => setSendAndClose(e.target.checked)}
-                />
-                <span>وإغلاق</span>
-              </label>
+              {!whisperMode && (
+                <label className="composer-send-close" title="إرسال ثم إغلاق">
+                  <input
+                    type="checkbox"
+                    checked={sendAndClose}
+                    onChange={(e) => setSendAndClose(e.target.checked)}
+                  />
+                  <span>وإغلاق</span>
+                </label>
+              )}
             </div>
           </div>
           <div className="composer-meta composer-meta-compact">
@@ -2359,7 +2449,7 @@ export default function InboxPage() {
         <InboxTimeline conversationId={selectedId} />
         <div className="customer-section"><h4>الوسوم</h4><div className="tag-list">{(conversationTagsQuery.data ?? []).map((tag) => <button key={tag.id} onClick={() => void removeTag(tag.id)}>{tag.name} ×</button>)}</div><select className="tag-select" defaultValue="" onChange={(e) => { if (e.target.value) void addTag(e.target.value); e.currentTarget.value = ""; }}><option value="">إضافة وسم</option>{(allTagsQuery.data ?? []).filter((tag) => !(conversationTagsQuery.data ?? []).some((item) => item.id === tag.id)).map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}</select></div>
         <div className="customer-section"><h4>تقييم CSAT</h4><p className="hint-text">بعد إغلاق المحادثة — أو يُرسل العميل: تقييم:5</p><div className="inline-actions"><select value={csatScore} onChange={(e) => setCsatScore(e.target.value)}><option value="">—</option><option value="5">5 ممتاز</option><option value="4">4 جيد</option><option value="3">3 متوسط</option><option value="2">2 ضعيف</option><option value="1">1 سيء</option></select><button type="button" className="secondary-button" onClick={() => void submitCsat()} disabled={!csatScore || !selectedId}>حفظ</button></div></div>
-        <div className="customer-section"><h4>ملاحظات داخلية</h4><div className="notes-list">{(notesQuery.data ?? []).map((note) => <article key={note.id}><p>{note.body}</p><small>{new Date(note.created_at).toLocaleString("ar")}</small></article>)}</div><textarea placeholder="أضف ملاحظة للفريق…" value={noteText} onChange={(e) => setNoteText(e.target.value)} /><button className="secondary-action" onClick={() => void saveNote()} disabled={!noteText.trim()}>حفظ الملاحظة</button></div>
+        <div className="customer-section"><h4>ملاحظات داخلية</h4><div className="notes-list">{(notesQuery.data ?? []).filter((note) => (note.kind ?? "note") !== "whisper").map((note) => <article key={note.id}><p>{note.body}</p><small>{new Date(note.created_at).toLocaleString("ar")}</small></article>)}</div><textarea placeholder="أضف ملاحظة للفريق…" value={noteText} onChange={(e) => setNoteText(e.target.value)} /><button className="secondary-action" onClick={() => void saveNote()} disabled={!noteText.trim()}>حفظ الملاحظة</button></div>
       </aside>
       {detailsOpen && <button className="customer-overlay" onClick={() => setDetailsOpen(false)} aria-label="إغلاق التفاصيل" />}
     </main>
