@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-27) — Centered send-mode pills
+
+| Item | Value |
+|------|-------|
+| Commit | `c6ae64a` |
+| Alembic | `0076_conversation_whisper` |
+| Frontend | `0.33.22` |
+| Live assets | `index-Cne-4KFu.js`, `index-T6te6i1d.css` |
+
 ### Production snapshot (2026-11-27) — Compact send-mode tabs
 
 | Item | Value |

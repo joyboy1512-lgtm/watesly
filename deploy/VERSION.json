@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "2e50e45",
-    "git_commit_message": "Compact customer/whisper mode tabs",
+    "git_commit": "c6ae64a",
+    "git_commit_message": "Center send-mode pills and shrink status banner",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.21",
+    "frontend_version": "0.33.22",
     "live_assets": {
-      "js": "index-Hg_ohNNd.js",
-      "css": "index-5QAtoNtN.css"
+      "js": "index-Cne-4KFu.js",
+      "css": "index-T6te6i1d.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.21",
+    "frontend": "0.33.22",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "2e50e45",
-  "notes": "Compact pill mode tabs; status banner unchanged"
+  "commit": "c6ae64a",
+  "notes": "Centered slightly larger mode pills; compact status banner"
 }
