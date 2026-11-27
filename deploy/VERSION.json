@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "892d9dd",
-    "git_commit_message": "Inbox brand green header + elevated filter cards",
+    "git_commit": "c2c1028",
+    "git_commit_message": "Customer panel brand green + elevated cards",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.17",
+    "frontend_version": "0.33.18",
     "live_assets": {
-      "js": "index-C1-a0VQJ.js",
-      "css": "index-BoH2nsGe.css"
+      "js": "index-ArvEvq-N.js",
+      "css": "index-CDXH3Hdq.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.17",
+    "frontend": "0.33.18",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "892d9dd",
-  "notes": "Inbox conversation strip uses brand-stat green; search/channel/filter cards elevated white"
+  "commit": "c2c1028",
+  "notes": "Customer details drawer uses brand-stat green; profile/action cards elevated white"
 }
