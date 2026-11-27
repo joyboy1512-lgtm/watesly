@@ -4812,6 +4812,93 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
   color: #9a6700;
 }
+.inbox-translate-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 8px;
+}
+.inbox-translate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--primary-darker);
+  margin: 0;
+}
+.inbox-translate-bar select {
+  min-height: 32px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--line));
+  background: #fff;
+  padding: 4px 10px;
+  font: inherit;
+  font-weight: 700;
+}
+.inbox-translate-hint {
+  width: 100%;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.inbox-translate-preview {
+  margin: 0 10px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 45%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 55%, #fff);
+  display: grid;
+  gap: 6px;
+}
+.inbox-translate-preview strong {
+  font-size: 11px;
+  color: var(--primary-darker);
+}
+.inbox-translate-preview p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.45;
+}
+.message-translation {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-soft) 70%, #fff);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  display: grid;
+  gap: 4px;
+}
+.message-translation-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--primary-darker);
+}
+.message-translation p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.4;
+}
+.message-translate-btn {
+  margin-inline-start: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--primary-dark);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+}
+.message-translate-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 .chat-composer-bar.customer-mode {
   outline: 2px solid color-mix(in srgb, var(--primary) 35%, transparent);
   outline-offset: 0;

@@ -133,6 +133,57 @@ async def enhance_reply(
     )
 
 
+TRANSLATE_LANG_NAMES: dict[str, str] = {
+    "ar": "Arabic",
+    "en": "English",
+    "fr": "French",
+    "ur": "Urdu",
+    "hi": "Hindi",
+}
+
+
+async def translate_text(
+    *,
+    text: str,
+    target_lang: str,
+    source_lang: str | None = None,
+    api_key: str | None = None,
+    api_base_url: str | None = None,
+    model: str | None = None,
+) -> str | None:
+    """Translate staff/customer chat text via the account LLM."""
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return None
+    target = (target_lang or "").strip().lower()
+    if target not in TRANSLATE_LANG_NAMES:
+        raise LLMError("UNSUPPORTED_TARGET_LANG")
+    source = (source_lang or "").strip().lower() or None
+    if source and source not in TRANSLATE_LANG_NAMES:
+        source = None
+    target_name = TRANSLATE_LANG_NAMES[target]
+    source_name = TRANSLATE_LANG_NAMES.get(source or "", "the source language")
+    system_prompt = (
+        "You are a professional chat translator for customer support. "
+        "Translate the user message accurately and naturally for WhatsApp. "
+        "Keep names, numbers, product codes, URLs, and {{template.variables}} unchanged. "
+        "Return ONLY the translated text with no quotes, labels, or explanation."
+    )
+    if source:
+        user_prompt = f"Translate from {source_name} to {target_name}:\n\n{cleaned}"
+    else:
+        user_prompt = f"Detect the source language and translate to {target_name}:\n\n{cleaned}"
+    return await chat_completion(
+        user_prompt=user_prompt,
+        system_prompt=system_prompt,
+        api_key=api_key,
+        api_base_url=api_base_url,
+        model=model,
+        temperature=0.2,
+        max_tokens=1200,
+    )
+
+
 def _image_bytes_from_response(data: dict) -> bytes | None:
     items = data.get("data") or []
     if not items:
