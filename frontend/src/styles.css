@@ -4239,64 +4239,235 @@ button:disabled { cursor: not-allowed; opacity: .55; }
     width: 100%;
   }
 }
+.knowledge-mobile-only-control {
+  display: none;
+}
 @media (max-width: 768px) {
   .knowledge-page .admin-table-wrap {
     overflow-x: visible;
+    padding: 0 12px 12px;
+  }
+  .knowledge-table-controls {
+    gap: 8px;
+  }
+  .knowledge-mobile-only-control {
+    display: inline-flex;
+  }
+  .knowledge-mobile-select-all {
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary-darker);
+  }
+  .knowledge-mobile-select-all input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary-dark);
   }
   .knowledge-erp-table {
     table-layout: auto;
+    border: none;
+    background: transparent;
+    border-collapse: separate;
+    border-spacing: 0;
   }
   .knowledge-erp-table thead {
     display: none;
   }
+  .knowledge-erp-table tbody {
+    display: grid;
+    gap: 12px;
+  }
   .knowledge-erp-table tbody tr.knowledge-data-row {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 12px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--line);
-    height: auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check title order"
+      "meta meta meta"
+      "body body body"
+      "keywords keywords usage"
+      "actions actions actions";
+    gap: 8px 10px;
+    padding: 14px;
+    height: auto !important;
+    border: none;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(7, 94, 84, 0.12);
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row.knowledge-row-inactive {
+    opacity: 0.88;
+    background: color-mix(in srgb, var(--panel-soft) 70%, #fff);
   }
   .knowledge-erp-table tbody tr.knowledge-data-row td {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    justify-content: center;
+    gap: 3px;
     padding: 0 !important;
     width: auto !important;
     max-width: none !important;
+    height: auto !important;
     text-align: start !important;
-    border: none;
+    border: none !important;
     white-space: normal;
+    background: transparent !important;
+    overflow: visible;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text);
   }
   .knowledge-erp-table tbody tr.knowledge-data-row td::before {
     content: attr(data-label);
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 800;
     color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(1) {
+    grid-area: check;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(1)::before {
+    content: none;
   }
   .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(2) {
-    grid-column: 1 / -1;
+    grid-area: order;
+    align-items: flex-end;
+    font-weight: 800;
+    color: var(--primary-darker);
   }
-  .knowledge-erp-table tbody tr.knowledge-data-row td.knowledge-cell-actions {
-    grid-column: 1 / -1;
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(3) {
+    grid-area: title;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(3)::before {
+    content: none;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(4) {
+    grid-area: meta;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(4)::before {
+    width: 100%;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(4)::after {
+    content: attr(data-category);
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--primary) 14%, #fff);
+    color: var(--primary-darker);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(5) {
+    display: none;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(6) {
+    grid-area: body;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(7) {
+    grid-area: keywords;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(8) {
+    grid-area: usage;
+    align-items: flex-end;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(9) {
+    grid-area: actions;
+  }
+  .knowledge-erp-table tbody tr.knowledge-data-row td:nth-child(9)::before {
+    content: none;
   }
   .knowledge-title-wrap {
     width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
   }
   .knowledge-title-ellipsis {
     white-space: normal;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.35;
+    color: var(--text);
+  }
+  .knowledge-channel-ellipsis,
+  .knowledge-body-ellipsis,
+  .knowledge-keywords-ellipsis {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    max-width: none;
+  }
+  .knowledge-body-ellipsis {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: #243038;
   }
   .knowledge-row-actions {
     flex-wrap: wrap;
     width: 100%;
+    gap: 6px;
+    justify-content: stretch;
+  }
+  .knowledge-row-actions .secondary-button {
+    flex: 1 1 calc(50% - 6px);
+    min-height: 36px;
+    justify-content: center;
   }
   .knowledge-preview-row {
     display: block;
+    margin-top: -4px;
   }
   .knowledge-preview-row td {
     display: block;
     padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .knowledge-preview-panel {
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(7, 94, 84, 0.1);
+  }
+  .knowledge-erp-table .admin-table-empty {
+    border: none;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(7, 94, 84, 0.1);
+    padding: 18px !important;
+  }
+  .knowledge-table-more {
+    border-top: none;
+  }
+  .knowledge-list-card {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+  .knowledge-list-card .admin-table-header,
+  .knowledge-list-card .admin-toolbar,
+  .knowledge-table-controls,
+  .knowledge-bulk-bar {
+    background: #fff;
+  }
+  .knowledge-list-card .admin-table-header {
+    border-radius: 16px 16px 0 0;
+    padding: 14px 16px;
+  }
+  .knowledge-bulk-bar {
+    margin: 0 12px 10px;
+    border-radius: 12px;
+    border: none;
   }
 }
 .inbox-copilot-panel {
