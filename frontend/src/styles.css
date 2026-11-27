@@ -4425,6 +4425,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
     flex: 1 1 calc(50% - 6px);
     min-height: 36px;
     justify-content: center;
+    border: none;
+    background: var(--brand-stat-gradient);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 3px 10px rgba(7, 94, 84, 0.18);
+  }
+  .knowledge-row-actions .secondary-button:hover:not(:disabled) {
+    filter: brightness(1.05);
+  }
+  .knowledge-row-actions .secondary-button.danger-text {
+    background: var(--brand-stat-gradient);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(7, 94, 84, 0.18);
   }
   .knowledge-preview-row {
     display: block;
