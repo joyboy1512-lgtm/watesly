@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "4ae5abd",
-    "git_commit_message": "Customer profile card brand green gradient",
+    "git_commit": "3ddc623",
+    "git_commit_message": "Respond customer vs whisper send mode UI",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.19",
+    "frontend_version": "0.33.20",
     "live_assets": {
-      "js": "index-kkbtdFhP.js",
-      "css": "index-D4NRQsK-.css"
+      "js": "index-Cm0nL3p8.js",
+      "css": "index-B8Ug2aXQ.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.19",
+    "frontend": "0.33.20",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "4ae5abd",
-  "notes": "Customer profile card uses brand-stat gradient; white avatar + elevated action buttons"
+  "commit": "3ddc623",
+  "notes": "Distinct customer/whisper mode tabs + live status banner + send button colors"
 }
