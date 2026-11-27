@@ -1341,8 +1341,10 @@ select, input, textarea {
 }
 
 .conversation-column-top {
-  background: var(--primary-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+  background: var(--brand-stat-gradient);
+  border-bottom: none;
+  box-shadow: var(--brand-stat-shadow);
+  color: #fff;
 }
 
 .customer-panel {
@@ -1359,10 +1361,35 @@ select, input, textarea {
   align-items: center;
   justify-content: space-between;
   padding: 0 18px;
-  border-bottom: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-.conversation-column-header h2 { margin: 2px 0 0; }
+.conversation-column-header h2 {
+  margin: 2px 0 0;
+  color: #fff;
+}
+
+.conversation-column-top .eyebrow {
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.04em;
+}
+
+.conversation-column-top .count-badge {
+  background: #fff;
+  color: var(--primary-darker);
+  box-shadow: 0 3px 10px rgba(7, 94, 84, 0.22);
+}
+
+.conversation-column-top .secondary-button {
+  background: #fff;
+  color: var(--primary-darker);
+  border-color: transparent;
+  box-shadow: 0 3px 10px rgba(7, 94, 84, 0.18);
+}
+
+.conversation-column-top .secondary-button:hover {
+  filter: brightness(1.03);
+}
 
 .chat-header {
   min-height: 88px;
@@ -1401,21 +1428,27 @@ select, input, textarea {
 }
 
 .conversation-search {
-  margin: 14px;
+  margin: 12px 14px;
   display: flex;
   gap: 9px;
   align-items: center;
   background: #fff;
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--line));
-  border-radius: 12px;
-  padding: 0 12px;
+  border: none;
+  border-radius: 14px;
+  padding: 11px 14px;
   color: var(--muted);
+  box-shadow: 0 4px 14px rgba(7, 94, 84, 0.18);
 }
 
 .conversation-search input {
   border: 0;
   background: transparent;
   width: 100%;
+  color: var(--text);
+}
+
+.conversation-search input::placeholder {
+  color: var(--muted);
 }
 
 .filter-pills {
@@ -1442,6 +1475,22 @@ select, input, textarea {
   border-color: transparent;
 }
 
+.conversation-column-top .filter-pills button {
+  border: none;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--primary-darker);
+  box-shadow: 0 2px 8px rgba(7, 94, 84, 0.16);
+}
+
+.conversation-column-top .filter-pills button.active {
+  background: #fff;
+  color: var(--primary-darker);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 1px;
+  box-shadow: 0 4px 12px rgba(7, 94, 84, 0.28);
+  font-weight: 800;
+}
+
 :root[data-theme="dark"] .filter-pills button,
 :root[data-theme="dark"] .inbox-scope-tabs button {
   background: color-mix(in srgb, var(--primary-dark) 35%, var(--panel));
@@ -1453,6 +1502,19 @@ select, input, textarea {
 :root[data-theme="dark"] .inbox-scope-tabs button.active {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: #fff;
+}
+
+:root[data-theme="dark"] .conversation-column-top .filter-pills button,
+:root[data-theme="dark"] .conversation-column-top .inbox-scope-tabs button {
+  background: rgba(255, 255, 255, 0.94);
+  border: none;
+  color: var(--primary-darker);
+}
+
+:root[data-theme="dark"] .conversation-column-top .filter-pills button.active,
+:root[data-theme="dark"] .conversation-column-top .inbox-scope-tabs button.active {
+  background: #fff;
+  color: var(--primary-darker);
 }
 
 .inbox-channel-filter {
@@ -1467,6 +1529,16 @@ select, input, textarea {
   border-radius: 12px;
   padding: 10px 12px;
   font: inherit;
+}
+
+.conversation-column-top .inbox-channel-filter select {
+  border: none;
+  background: #fff;
+  color: var(--primary-darker);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(7, 94, 84, 0.18);
 }
 
 .inbox-channel-badge {
@@ -1497,8 +1569,26 @@ select, input, textarea {
 .inbox-new-conversation-panel {
   display: grid;
   gap: 10px;
-  padding: 0 14px 12px;
-  border-bottom: 1px solid var(--line);
+  margin: 0 14px 12px;
+  padding: 12px;
+  border-bottom: none;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(7, 94, 84, 0.18);
+  color: var(--text);
+}
+
+.conversation-column-top .inbox-custom-inbox-bar select,
+.conversation-column-top .inbox-custom-inbox-create input {
+  border: none;
+  background: #fff;
+  color: var(--primary-darker);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(7, 94, 84, 0.16);
+}
+
+.conversation-column-top .inbox-custom-inbox-bar {
+  padding-bottom: 12px;
 }
 
 .inbox-channel-switcher {
@@ -12053,6 +12143,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: #fff;
   border-color: transparent;
   font-weight: 800;
+}
+.conversation-column-top .inbox-scope-tabs button {
+  border: none;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--primary-darker);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(7, 94, 84, 0.16);
+}
+.conversation-column-top .inbox-scope-tabs button.active {
+  background: #fff;
+  color: var(--primary-darker);
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 1px;
+  box-shadow: 0 4px 12px rgba(7, 94, 84, 0.28);
 }
 .conversation-row .avatar,
 .chat-header .avatar,
