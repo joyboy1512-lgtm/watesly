@@ -4528,12 +4528,76 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .reports-roi-blocked { color: #b45309; background: #fff7ed; border-radius: 8px; padding: 10px 12px; }
 .automation-node-group { display: grid; gap: 6px; margin-bottom: 12px; }
 .automation-meta-pills { display: flex; flex-wrap: wrap; gap: 6px; }
-.inbox-whisper-toggle {
-  display: flex;
-  flex-wrap: wrap;
+.inbox-send-mode {
+  display: grid;
   gap: 8px;
-  align-items: center;
-  padding: 0 10px 8px;
+  padding: 0 10px 10px;
+}
+.inbox-send-mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.inbox-send-mode-tab {
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--primary-darker);
+  box-shadow: 0 2px 8px rgba(7, 94, 84, 0.12);
+  transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+}
+.inbox-send-mode-tab strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+.inbox-send-mode-tab span {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.78;
+}
+.inbox-send-mode-tab--customer {
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.inbox-send-mode-tab--whisper {
+  border-color: color-mix(in srgb, #d4a017 40%, transparent);
+  color: #6b4e00;
+}
+.inbox-send-mode-tab.active {
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(7, 94, 84, 0.22);
+}
+.inbox-send-mode-tab--customer.active {
+  background: var(--brand-stat-gradient);
+  border-color: transparent;
+}
+.inbox-send-mode-tab--whisper.active {
+  background: linear-gradient(135deg, #f5c542 0%, #d4a017 55%, #9a6700 100%);
+  border-color: transparent;
+  box-shadow: 0 6px 16px rgba(154, 103, 0, 0.28);
+}
+.inbox-send-mode-banner {
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+.inbox-send-mode-banner.is-customer {
+  background: color-mix(in srgb, var(--primary) 16%, #fff);
+  color: var(--primary-darker);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.inbox-send-mode-banner.is-whisper {
+  background: #fff4d6;
+  color: #6b4e00;
+  border: 1px dashed #d4a017;
 }
 .message-whisper {
   align-self: center;
@@ -4551,9 +4615,22 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
   color: #9a6700;
 }
+.chat-composer-bar.customer-mode {
+  outline: 2px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  outline-offset: 0;
+}
 .chat-composer-bar.whisper-mode {
-  outline: 2px solid rgba(212, 160, 23, 0.45);
-  border-radius: 12px;
+  outline: 2px solid rgba(212, 160, 23, 0.7);
+  outline-offset: 0;
+  background: #fffdf5;
+  border-color: rgba(212, 160, 23, 0.35);
+}
+.chat-composer-bar .send-button.send-button--customer {
+  background: #00a884;
+}
+.chat-composer-bar .send-button.send-button--whisper {
+  background: linear-gradient(135deg, #f5c542 0%, #d4a017 100%);
+  color: #3d2e00;
 }
 .analytics-funnel { display: flex; flex-wrap: wrap; gap: 8px; }
 .analytics-funnel-step {

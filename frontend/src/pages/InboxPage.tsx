@@ -2301,27 +2301,40 @@ export default function InboxPage() {
           />
           </div>
           {canCoach && (
-            <div className="inbox-whisper-toggle" role="group" aria-label="وضع الإرسال">
-              <button
-                type="button"
-                className={`crm-quick-chip${!whisperMode ? " active" : ""}`}
-                onClick={() => setWhisperMode(false)}
+            <div className="inbox-send-mode" aria-live="polite">
+              <div className="inbox-send-mode-tabs" role="tablist" aria-label="وضع الإرسال">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!whisperMode}
+                  className={`inbox-send-mode-tab inbox-send-mode-tab--customer${!whisperMode ? " active" : ""}`}
+                  onClick={() => setWhisperMode(false)}
+                >
+                  <strong>للعميل</strong>
+                  <span>واتساب ظاهر</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={whisperMode}
+                  className={`inbox-send-mode-tab inbox-send-mode-tab--whisper${whisperMode ? " active" : ""}`}
+                  onClick={() => setWhisperMode(true)}
+                >
+                  <strong>همس موظف</strong>
+                  <span>داخلي فقط</span>
+                </button>
+              </div>
+              <div
+                className={`inbox-send-mode-banner${whisperMode ? " is-whisper" : " is-customer"}`}
+                role="status"
               >
-                للعميل (واتساب)
-              </button>
-              <button
-                type="button"
-                className={`crm-quick-chip${whisperMode ? " active" : ""}`}
-                onClick={() => setWhisperMode(true)}
-              >
-                همس للموظف فقط
-              </button>
-              {whisperMode && (
-                <small className="hint-text">يظهر داخل Respond للموظف والمدير — لا يُرسل إلى واتساب.</small>
-              )}
+                {whisperMode
+                  ? "الحالة الآن: همس داخلي للموظف — لا يُرسل لواتساب ولا يراه العميل"
+                  : "الحالة الآن: رسالة للعميل عبر واتساب"}
+              </div>
             </div>
           )}
-          <div className={`chat-composer-bar${whisperMode ? " whisper-mode" : ""}`}>
+          <div className={`chat-composer-bar${whisperMode ? " whisper-mode" : " customer-mode"}`}>
             <label className="composer-icon-button" title="إرفاق ملف">
               <input type="file" accept="image/*,video/mp4,audio/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAttachment(file); event.currentTarget.value = ""; }} disabled={!selectedId || uploading || whisperMode} />
               <Icon name="paperclip" />
@@ -2343,7 +2356,13 @@ export default function InboxPage() {
               maxLength={4096}
             />
             <div className="composer-send-group">
-              <button className="send-button" type="submit" disabled={!selectedId || sending || !text.trim()} aria-label={whisperMode ? "إرسال همس" : "إرسال"}>
+              <button
+                className={`send-button${whisperMode ? " send-button--whisper" : " send-button--customer"}`}
+                type="submit"
+                disabled={!selectedId || sending || !text.trim()}
+                aria-label={whisperMode ? "إرسال همس داخلي" : "إرسال للعميل"}
+                title={whisperMode ? "إرسال همس داخلي" : "إرسال للعميل"}
+              >
                 <Icon name="send" />
               </button>
               {!whisperMode && (
