@@ -679,3 +679,53 @@ async def delete_composer_list_template(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Template not found") from exc
+
+
+@router.post("/translate")
+async def post_translate_text(
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Translate chat text for staff outbound send or inbound reading."""
+    from app.services.knowledge_base import _account_llm_api_key, get_agent_settings
+    from app.services.llm_client import LLMError, TRANSLATE_LANG_NAMES, llm_available, translate_text
+
+    text = str(payload.get("text") or "").strip()
+    target_lang = str(payload.get("target_lang") or "").strip().lower()
+    source_lang_raw = str(payload.get("source_lang") or "").strip().lower() or None
+    if not text:
+        raise HTTPException(status_code=400, detail="EMPTY_TEXT")
+    if target_lang not in TRANSLATE_LANG_NAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"UNSUPPORTED_TARGET_LANG. Allowed: {', '.join(sorted(TRANSLATE_LANG_NAMES))}",
+        )
+
+    settings = await get_agent_settings(db, account_id=context.account_id)
+    account_key = _account_llm_api_key(settings)
+    if not llm_available(api_key=account_key):
+        raise HTTPException(
+            status_code=400,
+            detail="LLM_UNAVAILABLE — فعّل المزود الخارجي ومفتاح API من صفحة الذكاء الاصطناعي",
+        )
+    try:
+        translated = await translate_text(
+            text=text,
+            target_lang=target_lang,
+            source_lang=source_lang_raw,
+            api_key=account_key,
+            api_base_url=getattr(settings, "llm_api_base_url", None),
+            model=getattr(settings, "llm_model", None),
+        )
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)[:300]) from exc
+    if not translated:
+        raise HTTPException(status_code=502, detail="TRANSLATION_FAILED")
+    return {
+        "text": text,
+        "translated_text": translated,
+        "source_lang": source_lang_raw,
+        "target_lang": target_lang,
+        "target_lang_name": TRANSLATE_LANG_NAMES[target_lang],
+    }

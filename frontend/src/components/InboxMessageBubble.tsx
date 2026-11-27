@@ -15,6 +15,9 @@ type Props = {
   message: Message | WhisperBubble;
   formatTime: (value: string | null) => string;
   highlight?: string;
+  translation?: string;
+  translating?: boolean;
+  onTranslate?: () => void;
 };
 
 const mediaLabels: Record<string, string> = {
@@ -37,7 +40,14 @@ function highlightText(text: string, term: string) {
   );
 }
 
-export default function InboxMessageBubble({ message, formatTime, highlight = "" }: Props) {
+export default function InboxMessageBubble({
+  message,
+  formatTime,
+  highlight = "",
+  translation,
+  translating = false,
+  onTranslate
+}: Props) {
   if ("kind" in message && message.kind === "whisper") {
     return (
       <div className="message message-whisper" role="note" aria-label="همس داخلي">
@@ -56,6 +66,11 @@ export default function InboxMessageBubble({ message, formatTime, highlight = ""
   const caption = chatMessage.media_caption || chatMessage.text_body;
   const isMedia = chatMessage.type !== "text" && chatMessage.type !== "template" && chatMessage.type !== "interactive";
   const isTemplate = chatMessage.type === "template";
+  const canTranslateInbound =
+    chatMessage.direction === "inbound" &&
+    Boolean(onTranslate) &&
+    Boolean((chatMessage.text_body || "").trim()) &&
+    chatMessage.type === "text";
 
   function renderBody() {
     if (isTemplate) {
@@ -125,10 +140,26 @@ export default function InboxMessageBubble({ message, formatTime, highlight = ""
       className={`message ${chatMessage.direction === "outbound" ? "outgoing" : "incoming"}${isTemplate ? " message-template" : ""}`}
     >
       {renderBody()}
+      {translation && (
+        <div className="message-translation" dir="rtl">
+          <span className="message-translation-badge">ترجمة للموظف</span>
+          <p>{translation}</p>
+        </div>
+      )}
       <small>
         {formatTime(chatMessage.created_at)}
         {status && (
           <span className={`message-status message-status-${status.className}`}>{status.label}</span>
+        )}
+        {canTranslateInbound && (
+          <button
+            type="button"
+            className="message-translate-btn"
+            onClick={onTranslate}
+            disabled={translating}
+          >
+            {translating ? "جاري الترجمة…" : translation ? "إعادة الترجمة" : "ترجمة"}
+          </button>
         )}
       </small>
     </div>

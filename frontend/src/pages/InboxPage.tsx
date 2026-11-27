@@ -184,6 +184,12 @@ export default function InboxPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [composerMoreOpen, setComposerMoreOpen] = useState(false);
   const [whisperMode, setWhisperMode] = useState(false);
+  const [translateMode, setTranslateMode] = useState(false);
+  const [translateTargetLang, setTranslateTargetLang] = useState<"en" | "fr" | "ur" | "hi">("en");
+  const [translatedDraft, setTranslatedDraft] = useState("");
+  const [translatingDraft, setTranslatingDraft] = useState(false);
+  const [inboundTranslations, setInboundTranslations] = useState<Record<string, string>>({});
+  const [inboundTranslatingId, setInboundTranslatingId] = useState<string | null>(null);
   const workspaceOrganizationId = useWorkspaceOrganizationId();
   const setWorkspaceOrganizationId = useSetWorkspaceOrganization();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -452,6 +458,8 @@ export default function InboxPage() {
     }
     setSelectedId(conversation.id);
     setText(draftsByConversationRef.current[conversation.id] ?? "");
+    setTranslatedDraft("");
+    setInboundTranslations({});
     setComposerMoreOpen(false);
     const next = new URLSearchParams(searchParams);
     next.set("conversation", conversation.id);
@@ -463,6 +471,8 @@ export default function InboxPage() {
     persistDraftForSelected();
     setSelectedId(null);
     setText("");
+    setTranslatedDraft("");
+    setInboundTranslations({});
     setComposerMoreOpen(false);
     const next = new URLSearchParams(searchParams);
     next.delete("conversation");
@@ -899,6 +909,45 @@ export default function InboxPage() {
     } catch { toastStore.getState().show("تعذر إرسال المرفق.", "error"); }
     finally { setUploading(false); }
   }
+  async function translateComposerDraft() {
+    const source = text.trim();
+    if (!source) {
+      toastStore.getState().show("اكتب النص أولاً ثم اضغط ترجمة.", "error");
+      return;
+    }
+    setTranslatingDraft(true);
+    try {
+      const result = await api.post<{ translated_text: string }>("/inbox-tools/translate", {
+        text: source,
+        source_lang: "ar",
+        target_lang: translateTargetLang
+      });
+      setTranslatedDraft(result.data.translated_text || "");
+      toastStore.getState().show("تمت الترجمة — راجع النص ثم أرسل.", "success");
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error, "تعذر الترجمة. تأكد من تفعيل المزود الخارجي."), "error");
+    } finally {
+      setTranslatingDraft(false);
+    }
+  }
+
+  async function translateInboundMessage(messageId: string, sourceText: string) {
+    const body = sourceText.trim();
+    if (!body) return;
+    setInboundTranslatingId(messageId);
+    try {
+      const result = await api.post<{ translated_text: string }>("/inbox-tools/translate", {
+        text: body,
+        target_lang: "ar"
+      });
+      setInboundTranslations((prev) => ({ ...prev, [messageId]: result.data.translated_text || "" }));
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error, "تعذر ترجمة الرسالة الواردة."), "error");
+    } finally {
+      setInboundTranslatingId(null);
+    }
+  }
+
   async function handleSend(event?: FormEvent) {
     event?.preventDefault();
     if (!selectedId || !text.trim()) return;
@@ -915,6 +964,7 @@ export default function InboxPage() {
         });
         if (selectedId) delete draftsByConversationRef.current[selectedId];
         setText("");
+        setTranslatedDraft("");
         await queryClient.invalidateQueries({ queryKey: ["conversation-notes", selectedId] });
         toastStore.getState().show("تم إرسال الهمس للموظف فقط.", "success");
       } catch {
@@ -931,9 +981,27 @@ export default function InboxPage() {
     const shouldClose = sendAndClose;
     setSending(true);
     try {
-      await api.post(`/conversations/${selectedId}/messages/text`, { text: text.trim() });
+      let outboundText = text.trim();
+      if (translateMode) {
+        if (translatedDraft.trim()) {
+          outboundText = translatedDraft.trim();
+        } else {
+          const result = await api.post<{ translated_text: string }>("/inbox-tools/translate", {
+            text: outboundText,
+            source_lang: "ar",
+            target_lang: translateTargetLang
+          });
+          outboundText = (result.data.translated_text || "").trim();
+          if (!outboundText) {
+            throw new Error("EMPTY_TRANSLATION");
+          }
+          setTranslatedDraft(outboundText);
+        }
+      }
+      await api.post(`/conversations/${selectedId}/messages/text`, { text: outboundText });
       if (selectedId) delete draftsByConversationRef.current[selectedId];
       setText("");
+      setTranslatedDraft("");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedId] }),
         queryClient.invalidateQueries({ queryKey: ["conversations"] })
@@ -942,7 +1010,12 @@ export default function InboxPage() {
         setCloseDialogOpen(true);
       }
     } catch {
-      toastStore.getState().show("تعذر إرسال الرسالة. قد تكون نافذة 24 ساعة منتهية.", "error");
+      toastStore.getState().show(
+        translateMode
+          ? "تعذر الترجمة أو الإرسال. تأكد من المزود الخارجي ونافذة 24 ساعة."
+          : "تعذر إرسال الرسالة. قد تكون نافذة 24 ساعة منتهية.",
+        "error"
+      );
     } finally {
       setSending(false);
     }
@@ -1162,6 +1235,7 @@ export default function InboxPage() {
   }
   function onComposerChange(value: string) {
     setText(value);
+    setTranslatedDraft("");
     if (selectedId) draftsByConversationRef.current[selectedId] = value;
     setSlashHint(matchShortcutAutocomplete(value, quickReplies));
     if (!selectedId || isArchived) return;
@@ -1849,6 +1923,17 @@ export default function InboxPage() {
               message={message}
               formatTime={(value) => value ? formatAppTime(value) : ""}
               highlight={messageSearch.trim()}
+              translation={
+                !("kind" in message) && message.direction === "inbound"
+                  ? inboundTranslations[message.id]
+                  : undefined
+              }
+              translating={inboundTranslatingId === message.id}
+              onTranslate={
+                !("kind" in message) && message.direction === "inbound" && message.text_body
+                  ? () => void translateInboundMessage(message.id, message.text_body || "")
+                  : undefined
+              }
             />
           ))}
           <div ref={messagesEndRef} />
@@ -2318,7 +2403,10 @@ export default function InboxPage() {
                   role="tab"
                   aria-selected={whisperMode}
                   className={`inbox-send-mode-tab inbox-send-mode-tab--whisper${whisperMode ? " active" : ""}`}
-                  onClick={() => setWhisperMode(true)}
+                  onClick={() => {
+                    setWhisperMode(true);
+                    setTranslateMode(false);
+                  }}
                 >
                   <strong>همس موظف</strong>
                   <span>داخلي فقط</span>
@@ -2334,6 +2422,59 @@ export default function InboxPage() {
               </div>
             </div>
           )}
+          {!whisperMode && !isArchived && (
+            <div className="inbox-translate-bar" aria-label="ترجمة الإرسال">
+              <label className="inbox-translate-toggle">
+                <input
+                  type="checkbox"
+                  checked={translateMode}
+                  onChange={(e) => {
+                    setTranslateMode(e.target.checked);
+                    if (!e.target.checked) setTranslatedDraft("");
+                  }}
+                  disabled={!selectedId || sending}
+                />
+                <span>ترجمة قبل الإرسال</span>
+              </label>
+              {translateMode && (
+                <>
+                  <select
+                    value={translateTargetLang}
+                    onChange={(e) => {
+                      setTranslateTargetLang(e.target.value as "en" | "fr" | "ur" | "hi");
+                      setTranslatedDraft("");
+                    }}
+                    aria-label="لغة الترجمة"
+                    disabled={!selectedId || sending || translatingDraft}
+                  >
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                    <option value="ur">اردو</option>
+                    <option value="hi">हिन्दी</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="secondary-button compact"
+                    onClick={() => void translateComposerDraft()}
+                    disabled={!selectedId || !text.trim() || sending || translatingDraft}
+                  >
+                    {translatingDraft ? "جاري الترجمة…" : "ترجم"}
+                  </button>
+                </>
+              )}
+              {translateMode && (
+                <small className="inbox-translate-hint">
+                  عند التفعيل يُرسل النص المترجم فقط — وبدون التفعيل يُرسل النص الأصلي.
+                </small>
+              )}
+            </div>
+          )}
+          {translateMode && !whisperMode && translatedDraft && (
+            <div className="inbox-translate-preview" role="status">
+              <strong>معاينة الإرسال المترجم</strong>
+              <p dir="auto">{translatedDraft}</p>
+            </div>
+          )}
           <div className={`chat-composer-bar${whisperMode ? " whisper-mode" : " customer-mode"}`}>
             <label className="composer-icon-button" title="إرفاق ملف">
               <input type="file" accept="image/*,video/mp4,audio/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAttachment(file); event.currentTarget.value = ""; }} disabled={!selectedId || uploading || whisperMode} />
@@ -2347,7 +2488,9 @@ export default function InboxPage() {
                   ? "اختر محادثة أولًا"
                   : whisperMode
                     ? "اكتب همساً داخلياً للموظف…"
-                    : "اكتب رسالة… (/اختصار + Tab، Enter للإرسال)"
+                    : translateMode
+                      ? "اكتب بالعربية ثم اضغط ترجم…"
+                      : "اكتب رسالة… (/اختصار + Tab، Enter للإرسال)"
               }
               value={text}
               onChange={(e) => onComposerChange(e.target.value)}
