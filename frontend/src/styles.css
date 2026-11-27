@@ -1348,35 +1348,34 @@ select, input, textarea {
 }
 
 .customer-panel {
-  border-inline-start: none;
+  border-inline-start: 1px solid var(--line);
   border-inline-end: 0;
   padding: 16px;
   overflow-y: auto;
-  background: var(--brand-stat-gradient);
-  box-shadow: var(--brand-stat-shadow);
-  color: #fff;
+  background: var(--panel-soft);
 }
 
 .customer-panel .panel-close {
   background: #fff;
   color: var(--primary-darker);
   border: none;
-  box-shadow: 0 3px 10px rgba(7, 94, 84, 0.18);
+  box-shadow: 0 3px 10px rgba(7, 94, 84, 0.16);
 }
 
-.customer-panel .secondary-button {
+.customer-profile .secondary-button {
   background: #fff;
   color: var(--primary-darker);
   border: none;
-  box-shadow: 0 2px 8px rgba(7, 94, 84, 0.16);
+  box-shadow: 0 3px 10px rgba(7, 94, 84, 0.2);
   font-weight: 700;
 }
 
-.customer-panel .secondary-button:hover:not(:disabled) {
+.customer-profile .secondary-button:hover:not(:disabled) {
   filter: brightness(1.03);
+  transform: translateY(-1px);
 }
 
-.customer-panel .secondary-button:disabled {
+.customer-profile .secondary-button:disabled {
   opacity: 0.65;
 }
 
@@ -2058,23 +2057,34 @@ select, input, textarea {
 
 .customer-profile {
   text-align: center;
-  padding: 16px 14px 18px;
-  background: #fff;
+  padding: 18px 14px 16px;
+  background: var(--brand-stat-gradient);
   border: none;
   border-radius: 16px;
   margin-bottom: 12px;
-  box-shadow: 0 4px 14px rgba(7, 94, 84, 0.18);
-  color: var(--text);
+  box-shadow: var(--brand-stat-shadow);
+  color: #fff;
 }
-.customer-profile .avatar { margin: 0 auto 12px; }
-.customer-profile h3 { margin: 0 0 6px; color: var(--text); }
-.customer-profile span { color: var(--muted); }
+.customer-profile .avatar {
+  margin: 0 auto 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--primary-darker);
+  box-shadow: 0 4px 12px rgba(7, 94, 84, 0.22);
+}
+.customer-profile h3 {
+  margin: 0 0 6px;
+  color: #fff;
+  font-weight: 800;
+}
+.customer-profile > span {
+  color: rgba(255, 255, 255, 0.86);
+}
 .customer-select-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 .customer-section {
   border: none;
@@ -2082,7 +2092,7 @@ select, input, textarea {
   border-radius: 14px;
   padding: 16px;
   margin-bottom: 10px;
-  box-shadow: 0 4px 14px rgba(7, 94, 84, 0.18);
+  box-shadow: 0 4px 14px rgba(7, 94, 84, 0.12);
   color: var(--text);
 }
 .customer-section h4 { margin: 0 0 14px; color: var(--text); }
@@ -2897,6 +2907,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .customer-select-actions .secondary-button {
   border-radius: 12px;
   padding: 9px 14px;
+  min-width: 42%;
+  flex: 1 1 auto;
 }
 .conversation-message-search {
   display: flex;
