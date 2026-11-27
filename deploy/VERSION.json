@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "c3af677",
-    "git_commit_message": "Knowledge mobile action buttons brand green",
+    "git_commit": "25b8bce",
+    "git_commit_message": "AI page mobile visual polish",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.25",
+    "frontend_version": "0.33.26",
     "live_assets": {
-      "js": "index-BWQcpKNB.js",
-      "css": "index-Bg5Ab8A3.css"
+      "js": "index-DaP2iK22.js",
+      "css": "index-CqNl_kxn.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.25",
+    "frontend": "0.33.26",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "c3af677",
-  "notes": "Mobile-only brand green action buttons on knowledge cards; desktop unchanged"
+  "commit": "25b8bce",
+  "notes": "AI page mobile-only polish: tabs, panels, cards; desktop unchanged"
 }

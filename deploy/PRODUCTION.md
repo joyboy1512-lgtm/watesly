@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-27) — AI page mobile polish
+
+| Item | Value |
+|------|-------|
+| Commit | `25b8bce` |
+| Alembic | `0076_conversation_whisper` |
+| Frontend | `0.33.26` |
+| Live assets | `index-DaP2iK22.js`, `index-CqNl_kxn.css` |
+
 ### Production snapshot (2026-11-27) — Knowledge mobile green actions
 
 | Item | Value |
