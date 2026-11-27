@@ -1,6 +1,6 @@
 {
   "product": "Watesly",
-  "updated_at": "2026-11-26",
+  "updated_at": "2026-11-27",
   "production": {
     "domain": "watesly.com",
     "api": "https://api.watesly.com",
@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "d5c907d",
-    "git_commit_message": "Ops boards drill-down across CRM/reports/assignments/analytics/automations",
-    "alembic_head": "0075_crm_followup_loss",
+    "git_commit": "1123ddc",
+    "git_commit_message": "Manager whisper coaching in Respond",
+    "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.15",
+    "frontend_version": "0.33.16",
     "live_assets": {
-      "js": "index-ChvYyIKo.js",
-      "css": "index-vUmBpzio.css"
+      "js": "index-btwREZXM.js",
+      "css": "index-eUF-S-3t.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.15",
+    "frontend": "0.33.16",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "d5c907d",
-  "notes": "CRM follow-up filters + loss reasons; reports drill-down; assignment simulate; analytics live Arabic; automation draft dry-run"
+  "commit": "1123ddc",
+  "notes": "conversations.coach permission + in-chat whispers never sent to WhatsApp"
 }
