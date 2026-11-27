@@ -492,6 +492,29 @@ export default function KnowledgePage() {
               ))}
             </select>
           </label>
+          <label className="knowledge-channel-filter-compact knowledge-mobile-only-control">
+            <span>الفئة</span>
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} aria-label="تصفية الفئة">
+              <option value="">كل الفئات</option>
+              {categoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {CATEGORY_LABELS[category] ?? category}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="knowledge-mobile-select-all knowledge-mobile-only-control">
+            <input
+              type="checkbox"
+              checked={allDisplayedSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someDisplayedSelected && !allDisplayedSelected;
+              }}
+              onChange={toggleAllDisplayed}
+              aria-label="تحديد الكل الظاهر"
+            />
+            <span>تحديد الكل الظاهر</span>
+          </label>
         </div>
 
         {selectedCount > 0 && (
@@ -606,7 +629,11 @@ export default function KnowledgePage() {
                           {!item.is_active && <span className="admin-chip admin-chip-muted knowledge-archived-chip">مؤرشف</span>}
                         </div>
                       </td>
-                      <td className="knowledge-cell-channel" data-label="القناة">
+                      <td
+                        className="knowledge-cell-channel"
+                        data-label="القناة / الفئة"
+                        data-category={CATEGORY_LABELS[item.category] ?? item.category}
+                      >
                         <span className="knowledge-channel-ellipsis" title={channelLabel}>
                           {channelLabel}
                         </span>
