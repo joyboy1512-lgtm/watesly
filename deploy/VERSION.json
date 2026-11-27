@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "41e35da",
-    "git_commit_message": "Knowledge rules mobile card layout",
+    "git_commit": "a9f4380",
+    "git_commit_message": "Knowledge mobile cards brand green borders",
     "alembic_head": "0076_conversation_whisper",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.23",
+    "frontend_version": "0.33.24",
     "live_assets": {
-      "js": "index-CnBt9ZtC.js",
-      "css": "index-kLz_qsS4.css"
+      "js": "index-DjEj0LS1.js",
+      "css": "index-wNfIHfQM.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.23",
+    "frontend": "0.33.24",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "41e35da",
-  "notes": "Knowledge rules: mobile card rows; desktop Excel table unchanged"
+  "commit": "a9f4380",
+  "notes": "Mobile-only brand green borders on knowledge rule cards; desktop unchanged"
 }
