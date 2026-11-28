@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "5b2ec7b",
-    "git_commit_message": "Merge wave4 respond parity into production-unified",
+    "git_commit": "fb84605",
+    "git_commit_message": "Merge wave5 inbox ops into production-unified",
     "alembic_head": "0078_conversation_collaborators",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.31",
+    "frontend_version": "0.33.32",
     "live_assets": {
-      "js": "index-DlxQmVtM.js",
+      "js": "index-7rEdvOHh.js",
       "css": "index-D-GJdJ-F.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.31",
+    "frontend": "0.33.32",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "5b2ec7b",
-  "notes": "Wave4: Meta CAPI Purchase + lifecycle automations + campaign CTAs + AI handoff notes; CSS unchanged"
+  "commit": "fb84605",
+  "notes": "Wave5: attachments hub + blocked scope + CSAT display + manual handoff notes; CSS unchanged"
 }
