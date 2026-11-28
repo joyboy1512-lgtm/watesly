@@ -355,6 +355,25 @@ async def update_deal(
                     "contact_id": str(deal.contact_id) if deal.contact_id else None,
                 },
             )
+            try:
+                from app.models.contact import Contact
+                from app.workers.growth_tasks import send_meta_capi_purchase
+
+                phone = None
+                if deal.contact_id:
+                    contact = await db.get(Contact, deal.contact_id)
+                    phone = getattr(contact, "external_address", None) if contact else None
+                amount_val = float(deal.amount) if deal.amount is not None else None
+                send_meta_capi_purchase.delay(
+                    str(account_id),
+                    phone,
+                    amount_val,
+                    deal.currency or "KWD",
+                    deal.title,
+                    str(deal.id),
+                )
+            except Exception:
+                pass
     return deal
 
 

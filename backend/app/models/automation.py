@@ -22,6 +22,7 @@ class AutomationTriggerType(StrEnum):
     CONVERSATION_CLOSED = "conversation_closed"
     TAG_ADDED = "tag_added"
     BUTTON_CLICKED = "button_clicked"
+    LIFECYCLE_CHANGED = "lifecycle_changed"
     WEBHOOK = "webhook"
     MANUAL = "manual"
 

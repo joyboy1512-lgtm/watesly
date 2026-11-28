@@ -18,6 +18,33 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.strip().lower().encode("utf-8")).hexdigest()
 
 
+def meta_capi_env_configured() -> bool:
+    pixel_id = os.getenv("META_CAPI_PIXEL_ID", "").strip()
+    access_token = os.getenv("META_CAPI_ACCESS_TOKEN", "").strip()
+    return bool(pixel_id and access_token)
+
+
+def meta_capi_status(*, flag_enabled: bool) -> dict:
+    configured = meta_capi_env_configured()
+    pixel_id = os.getenv("META_CAPI_PIXEL_ID", "").strip()
+    return {
+        "flag_enabled": bool(flag_enabled),
+        "env_configured": configured,
+        "pixel_id_suffix": pixel_id[-4:] if pixel_id else None,
+        "ready": bool(flag_enabled and configured),
+        "events": ["Lead", "Purchase"],
+        "hint": (
+            "جاهز لإرسال Lead (من إعلان واتساب) و Purchase (عند فوز صفقة)."
+            if flag_enabled and configured
+            else (
+                "فعّل العلم meta_capi ثم اضبط META_CAPI_PIXEL_ID و META_CAPI_ACCESS_TOKEN على الخادم."
+                if not flag_enabled
+                else "العلم مفعّل — عيّن META_CAPI_PIXEL_ID و META_CAPI_ACCESS_TOKEN في بيئة الإنتاج."
+            )
+        ),
+    }
+
+
 async def send_capi_event(
     db,
     *,

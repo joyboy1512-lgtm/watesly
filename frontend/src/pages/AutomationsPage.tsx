@@ -37,7 +37,19 @@ const TRIGGER_OPTIONS = [
   { value: "conversation_closed", label: "عند إغلاق محادثة" },
   { value: "tag_added", label: "عند إضافة وسم" },
   { value: "button_clicked", label: "عند ضغط زر تفاعلي" },
+  { value: "lifecycle_changed", label: "عند تغيير مرحلة Lifecycle" },
   { value: "manual", label: "تشغيل يدوي (تجربة)" }
+] as const;
+
+const LIFECYCLE_TRIGGER_OPTIONS = [
+  { value: "", label: "أي مرحلة" },
+  { value: "lead", label: "lead" },
+  { value: "qualified", label: "qualified" },
+  { value: "proposal", label: "proposal" },
+  { value: "won", label: "won" },
+  { value: "customer", label: "customer" },
+  { value: "lost", label: "lost" },
+  { value: "churned", label: "churned" }
 ] as const;
 
 const TRIGGER_LABELS = Object.fromEntries(TRIGGER_OPTIONS.map((item) => [item.value, item.label]));
@@ -162,6 +174,7 @@ export default function AutomationsPage() {
   const [triggerKeywords, setTriggerKeywords] = useState("");
   const [triggerTagId, setTriggerTagId] = useState("");
   const [triggerButtonId, setTriggerButtonId] = useState("");
+  const [triggerLifecycleStage, setTriggerLifecycleStage] = useState("");
   const [nodes, setNodes] = useState<AutomationNode[]>([]);
   const [edges, setEdges] = useState<AutomationEdge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -275,6 +288,9 @@ export default function AutomationsPage() {
     if (triggerType === "button_clicked" && triggerButtonId.trim()) {
       config.button_id = triggerButtonId.trim();
     }
+    if (triggerType === "lifecycle_changed" && triggerLifecycleStage.trim()) {
+      config.lifecycle_stage = triggerLifecycleStage.trim();
+    }
     return config;
   }
 
@@ -299,6 +315,9 @@ export default function AutomationsPage() {
     setTriggerKeywords(keywords);
     setTriggerTagId(String(item.trigger_config?.tag_id ?? ""));
     setTriggerButtonId(String(item.trigger_config?.button_id ?? ""));
+    setTriggerLifecycleStage(
+      String(item.trigger_config?.lifecycle_stage ?? item.trigger_config?.stage ?? "")
+    );
     setNodes(item.graph.nodes ?? []);
     setEdges(item.graph.edges ?? []);
     setSelectedNodeId(null);
@@ -315,6 +334,9 @@ export default function AutomationsPage() {
     setTriggerKeywords(keywords);
     setTriggerTagId(String(template?.trigger_config?.tag_id ?? ""));
     setTriggerButtonId(String(template?.trigger_config?.button_id ?? ""));
+    setTriggerLifecycleStage(
+      String(template?.trigger_config?.lifecycle_stage ?? template?.trigger_config?.stage ?? "")
+    );
     setNodes(
       template?.graph.nodes ?? [
         {
@@ -619,6 +641,21 @@ export default function AutomationsPage() {
                 onChange={(event) => setTriggerButtonId(event.target.value)}
                 placeholder="send_details"
               />
+            </label>
+          )}
+          {triggerType === "lifecycle_changed" && (
+            <label className="field-label">
+              <span>المرحلة المستهدفة</span>
+              <select
+                value={triggerLifecycleStage}
+                onChange={(event) => setTriggerLifecycleStage(event.target.value)}
+              >
+                {LIFECYCLE_TRIGGER_OPTIONS.map((item) => (
+                  <option key={item.value || "any"} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
           <label className="field-label">

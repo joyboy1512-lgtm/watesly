@@ -118,6 +118,21 @@ export default function DeveloperPage() {
     queryFn: async () => (await api.get<FeatureFlags>("/platform/feature-flags")).data,
     enabled: tab === "power"
   });
+  const metaCapiStatus = useQuery({
+    queryKey: ["meta-capi-status"],
+    queryFn: async () =>
+      (
+        await api.get<{
+          flag_enabled: boolean;
+          env_configured: boolean;
+          ready: boolean;
+          pixel_id_suffix: string | null;
+          events: string[];
+          hint: string;
+        }>("/platform/integrations/meta-capi")
+      ).data,
+    enabled: tab === "power"
+  });
 
   const marketplaceIntegrations = Array.isArray(marketplace.data)
     ? marketplace.data
@@ -368,29 +383,49 @@ export default function DeveloperPage() {
       )}
 
       {tab === "power" && (
-        <section className="card stack-form">
-          <h2>ميزات Watesly المتقدمة</h2>
-          <p className="hint-text">تفعيل/إيقاف الميزات بأمان دون كسر WhatsApp الحالي.</p>
-          {(featureFlags.data ? Object.entries(featureFlags.data) : []).map(([key, enabled]) => (
-            <label key={key} className="field-label checkbox-row">
-              <input
-                type="checkbox"
-                checked={Boolean(enabled)}
-                onChange={async (e) => {
-                  try {
-                    await api.patch("/platform/feature-flags", { flags: { [key]: e.target.checked } });
-                    await client.invalidateQueries({ queryKey: ["feature-flags"] });
-                    toastStore.getState().show("تم تحديث الإعداد.", "success");
-                  } catch {
-                    toastStore.getState().show("تعذر التحديث.", "error");
-                  }
-                }}
-              />
-              <span>{GROWTH_FLAG_LABELS[key] ?? key}</span>
-              <small className="hint-text" dir="ltr">{key}</small>
-            </label>
-          ))}
-        </section>
+        <>
+          <section className="card stack-form">
+            <h2>ميزات Watesly المتقدمة</h2>
+            <p className="hint-text">تفعيل/إيقاف الميزات بأمان دون كسر WhatsApp الحالي.</p>
+            {(featureFlags.data ? Object.entries(featureFlags.data) : []).map(([key, enabled]) => (
+              <label key={key} className="field-label checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={Boolean(enabled)}
+                  onChange={async (e) => {
+                    try {
+                      await api.patch("/platform/feature-flags", { flags: { [key]: e.target.checked } });
+                      await client.invalidateQueries({ queryKey: ["feature-flags"] });
+                      await client.invalidateQueries({ queryKey: ["meta-capi-status"] });
+                      toastStore.getState().show("تم تحديث الإعداد.", "success");
+                    } catch {
+                      toastStore.getState().show("تعذر التحديث.", "error");
+                    }
+                  }}
+                />
+                <span>{GROWTH_FLAG_LABELS[key] ?? key}</span>
+                <small className="hint-text" dir="ltr">{key}</small>
+              </label>
+            ))}
+          </section>
+          <section className="card stack-form">
+            <h2>Meta Conversions API</h2>
+            <p className="hint-text">
+              {metaCapiStatus.data?.hint ?? "جاري التحقق من حالة الربط…"}
+            </p>
+            {metaCapiStatus.data && (
+              <ul className="hint-text">
+                <li>العلم: {metaCapiStatus.data.flag_enabled ? "مفعّل" : "متوقف"}</li>
+                <li>إعداد الخادم: {metaCapiStatus.data.env_configured ? "مكتمل" : "ناقص"}</li>
+                <li>الجاهزية: {metaCapiStatus.data.ready ? "جاهز" : "غير جاهز"}</li>
+                {metaCapiStatus.data.pixel_id_suffix && (
+                  <li dir="ltr">Pixel …{metaCapiStatus.data.pixel_id_suffix}</li>
+                )}
+                <li dir="ltr">Events: {(metaCapiStatus.data.events ?? []).join(", ")}</li>
+              </ul>
+            )}
+          </section>
+        </>
       )}
 
       {tab === "growth" && (

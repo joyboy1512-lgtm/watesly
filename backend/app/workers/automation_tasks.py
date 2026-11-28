@@ -348,6 +348,7 @@ async def _action(db, run, node_type, data, context):
 
     if node_type == "set_lifecycle":
         from app.models.contact import Contact
+        from app.services.automation_triggers import emit_lifecycle_changed
 
         contact_id = _uuid(data, context, "contact_id")
         stage = str(data.get("lifecycle_stage") or data.get("stage") or "lead").strip()[:30]
@@ -356,8 +357,20 @@ async def _action(db, run, node_type, data, context):
         contact = await db.get(Contact, contact_id)
         if contact is None or contact.account_id != run.account_id or contact.deleted_at is not None:
             raise ValueError("Contact not available")
+        previous = contact.lifecycle_stage
         contact.lifecycle_stage = stage or "lead"
-        return {"lifecycle_stage": contact.lifecycle_stage}
+        follow_runs = await emit_lifecycle_changed(
+            db,
+            account_id=run.account_id,
+            contact=contact,
+            previous_stage=previous,
+            new_stage=contact.lifecycle_stage,
+        )
+        if follow_runs:
+            from app.services.automation_triggers import dispatch_automation_runs
+
+            dispatch_automation_runs(follow_runs)
+        return {"lifecycle_stage": contact.lifecycle_stage, "queued_lifecycle_runs": len(follow_runs)}
 
     if node_type == "collect_input":
         from app.services.feature_flags import get_feature_flags
