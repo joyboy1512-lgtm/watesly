@@ -130,6 +130,18 @@ async def get_conversations(
     )
     conversation_ids = [row[0].id for row in rows]
     last_inbound_map = await get_last_inbound_by_conversation(db, conversation_ids)
+    channel_ids = {row[0].channel_id for row in rows}
+    channel_type_by_id: dict = {}
+    if channel_ids:
+        from app.models.channel import Channel
+
+        channel_rows = (
+            await db.execute(select(Channel.id, Channel.type).where(Channel.id.in_(list(channel_ids))))
+        ).all()
+        channel_type_by_id = {
+            channel_id: (channel_type.value if hasattr(channel_type, "value") else str(channel_type))
+            for channel_id, channel_type in channel_rows
+        }
     items = [
         build_conversation_response(
             conversation=conversation,
@@ -137,6 +149,7 @@ async def get_conversations(
             message=message,
             unread=unread,
             last_inbound_at=last_inbound_map.get(conversation.id),
+            channel_type=channel_type_by_id.get(conversation.channel_id),
         )
         for conversation, contact, message, unread in rows
     ]
@@ -328,9 +341,12 @@ async def send_conversation_text(
     from app.models.channel import Channel, ChannelType
     from app.models.whatsapp_account import WhatsAppAccount
     from app.models.instagram_account import InstagramAccount, InstagramAccountStatus
+    from app.models.messenger_account import MessengerAccount, MessengerAccountStatus
     from app.schemas.whatsapp import SendTextMessageRequest
     from app.services.whatsapp import send_text_message
     from app.services.instagram import send_instagram_text_message
+    from app.services.messenger import send_messenger_text_message
+    from app.services.web_chat import send_web_chat_text_message
     from app.services.meta_client import MetaAPIError
 
     channel = await db.get(Channel, conversation.channel_id)
@@ -345,13 +361,15 @@ async def send_conversation_text(
 
     rendered_text = render_template(payload.text, build_contact_context(contact))
 
-    last_inbound = await get_last_inbound_for_conversation(db, conversation_id)
-    window = compute_service_window(last_inbound)
-    if window["requires_template"]:
-        raise HTTPException(
-            status_code=409,
-            detail="SERVICE_WINDOW_CLOSED",
-        )
+    # Web Chat has no Meta 24h template window.
+    if channel_type != ChannelType.WEB_CHAT:
+        last_inbound = await get_last_inbound_for_conversation(db, conversation_id)
+        window = compute_service_window(last_inbound)
+        if window["requires_template"]:
+            raise HTTPException(
+                status_code=409,
+                detail="SERVICE_WINDOW_CLOSED",
+            )
 
     try:
         if channel_type == ChannelType.INSTAGRAM:
@@ -372,6 +390,36 @@ async def send_conversation_text(
                 to=contact.external_address,
                 text=rendered_text,
                 record_mac=True,
+            )
+        elif channel_type == ChannelType.MESSENGER:
+            ms = (
+                await db.execute(
+                    select(MessengerAccount).where(
+                        MessengerAccount.channel_id == conversation.channel_id,
+                        MessengerAccount.status == MessengerAccountStatus.ACTIVE,
+                    )
+                )
+            ).scalar_one_or_none()
+            if ms is None:
+                raise HTTPException(status_code=400, detail="Conversation channel is not connected")
+            message = await send_messenger_text_message(
+                db,
+                account_id=context.account_id,
+                messenger_account_id=ms.id,
+                to=contact.external_address,
+                text=rendered_text,
+                record_mac=True,
+            )
+        elif channel_type == ChannelType.WEB_CHAT:
+            if channel is None:
+                raise HTTPException(status_code=400, detail="Conversation channel is not connected")
+            message = await send_web_chat_text_message(
+                db,
+                account_id=context.account_id,
+                channel=channel,
+                contact=contact,
+                conversation=conversation,
+                text=rendered_text,
             )
         else:
             result = await db.execute(

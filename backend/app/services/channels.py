@@ -4,11 +4,12 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.channel import Channel, ChannelStatus
+from app.models.channel import Channel, ChannelStatus, ChannelType
 from app.models.membership import Membership
 from app.models.organization import Organization
 from app.models.whatsapp_account import WhatsAppAccount, WhatsAppAccountStatus
 from app.schemas.channel import ChannelCreateRequest
+import secrets
 from app.schemas.mac import ChannelUsageBoardItem, ChannelUsageBoardResponse
 from app.services.billing import get_active_subscription
 from app.services.billing_limits import effective_included_mac
@@ -74,12 +75,20 @@ async def create_channel(
         else str(subscription.billing_cycle)
     )
 
+    external_id = payload.external_id
+    status = ChannelStatus.PENDING
+    # Wave 6: Web Chat is usable immediately with a widget token.
+    if payload.type == ChannelType.WEB_CHAT:
+        external_id = external_id or secrets.token_urlsafe(24)
+        status = ChannelStatus.ACTIVE
+
     channel = Channel(
         account_id=account_id,
         organization_id=payload.organization_id,
         type=payload.type,
         name=payload.name,
-        external_id=payload.external_id,
+        external_id=external_id,
+        status=status,
         billing_starts_at=subscription.starts_at,
         billing_ends_at=subscription.ends_at,
         billing_cycle=billing_cycle,

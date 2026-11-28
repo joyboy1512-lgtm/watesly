@@ -1167,7 +1167,6 @@ async def channel_integrations(
     flags = await get_feature_flags(db, account_id=context.account_id)
     from app.services.channel_adapters import ADAPTERS
 
-    messenger_status = "beta" if flags.get("messenger_channel") else "planned"
     return {
         "adapters": sorted(ADAPTERS.keys()),
         "whatsapp": {"status": "active", "note": "WhatsApp Business API — مدمج بالكامل"},
@@ -1177,13 +1176,16 @@ async def channel_integrations(
             "enabled": flags.get("instagram_channel", False),
         },
         "messenger": {
-            "status": messenger_status,
-            "note": "Meta Messenger — جاهز عبر Channel Adapters",
+            "status": "active" if flags.get("messenger_channel") else "planned",
+            "note": "Meta Messenger — ربط صفحة فيسبوك والرد من الوارد",
             "enabled": flags.get("messenger_channel", False),
         },
         "telegram": {"status": "planned", "note": "Bot token — قريباً"},
         "email": {"status": "scaffold", "note": "يمكن إنشاء قناة Email الآن وربط SMTP لاحقاً"},
-        "web_chat": {"status": "scaffold", "note": "يمكن إنشاء قناة Web Chat الآن وربط الودجت لاحقاً"},
+        "web_chat": {
+            "status": "active",
+            "note": "Web Chat — فعّل القناة من صفحة القنوات ثم استخدم مسار الودجت العام",
+        },
         "sms": {"status": "scaffold", "note": "يمكن إنشاء قناة SMS الآن وربط المزود لاحقاً"},
         "voice": {"status": "planned", "note": "Twilio Voice — قريباً"},
     }

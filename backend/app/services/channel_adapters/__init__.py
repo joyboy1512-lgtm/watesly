@@ -81,16 +81,61 @@ class MessengerChannelAdapter(ChannelAdapter):
     channel_type = "messenger"
 
     async def send_text(self, *, to: str, text: str, **kwargs: Any) -> dict:
-        raise NotImplementedError("Messenger adapter requires Meta channel setup")
+        from app.services.meta_instagram import MetaInstagramClient
+
+        client: MetaInstagramClient = kwargs["client"]
+        return await client.send_text(to=to, text=text)
 
     async def parse_inbound_webhook(self, payload: dict) -> list[dict]:
-        return []
+        events: list[dict] = []
+        for entry in payload.get("entry", []) or []:
+            if not isinstance(entry, dict):
+                continue
+            for item in entry.get("messaging") or []:
+                if not isinstance(item, dict):
+                    continue
+                message = item.get("message") or {}
+                if message.get("is_echo"):
+                    continue
+                events.append(
+                    {
+                        "channel_type": "messenger",
+                        "page_id": entry.get("id"),
+                        "sender_id": (item.get("sender") or {}).get("id"),
+                        "message": message,
+                    }
+                )
+        return events
+
+
+class WebChatChannelAdapter(ChannelAdapter):
+    channel_type = "web_chat"
+
+    async def send_text(self, *, to: str, text: str, **kwargs: Any) -> dict:
+        return {"status": "stored", "to": to, "text": text, "source": "web_chat"}
+
+    async def parse_inbound_webhook(self, payload: dict) -> list[dict]:
+        if not isinstance(payload, dict):
+            return []
+        text = str(payload.get("text") or "").strip()
+        visitor_id = str(payload.get("visitor_id") or "").strip()
+        if not text or not visitor_id:
+            return []
+        return [
+            {
+                "channel_type": "web_chat",
+                "visitor_id": visitor_id,
+                "text": text,
+                "display_name": payload.get("display_name"),
+            }
+        ]
 
 
 ADAPTERS: dict[str, ChannelAdapter] = {
     "whatsapp": WhatsAppChannelAdapter(),
     "instagram": InstagramChannelAdapter(),
     "messenger": MessengerChannelAdapter(),
+    "web_chat": WebChatChannelAdapter(),
 }
 
 

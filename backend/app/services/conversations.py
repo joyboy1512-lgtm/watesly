@@ -61,6 +61,7 @@ def build_conversation_response(
     message: Message | None,
     unread: int,
     last_inbound_at: datetime | None,
+    channel_type: str | None = None,
 ) -> ConversationResponse:
     window = compute_service_window(last_inbound_at)
     now = datetime.now(UTC)
@@ -88,6 +89,7 @@ def build_conversation_response(
         id=conversation.id,
         organization_id=conversation.organization_id,
         channel_id=conversation.channel_id,
+        channel_type=channel_type,
         contact_id=conversation.contact_id,
         assigned_membership_id=conversation.assigned_membership_id,
         collaborator_membership_ids=[

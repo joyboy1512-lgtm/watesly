@@ -70,13 +70,14 @@ from app.models.ai_activity_event import AiActivityEvent
 from app.models.ai_template_draft import AiTemplateDraft
 from app.models.tracked_link import TrackedLink, LinkClick
 from app.models.conversation_rating import ConversationRating
+from app.models.messenger_account import MessengerAccount
 
 __all__ = [
     "Account", "Organization", "User", "Membership", "OrganizationMembership",
     "Invitation", "InvitationOrganization", "InvitationChannelAccess",
     "MembershipChannelAccess", "MonthlyActiveContact",
     "RefreshSession", "Plan", "Subscription",
-    "Channel", "WhatsAppAccount", "InstagramAccount", "WebhookEvent", "Message", "Contact", "Conversation",
+    "Channel", "WhatsAppAccount", "InstagramAccount", "MessengerAccount", "WebhookEvent", "Message", "Contact", "Conversation",
     "ConversationEvent", "Tag", "ConversationTag", "ConversationNote", "QuickReply",
     "WhatsAppTemplate", "Campaign", "CampaignRecipient", "UploadedFile", "Notification",
     "Team", "TeamMember", "AssignmentRule",
