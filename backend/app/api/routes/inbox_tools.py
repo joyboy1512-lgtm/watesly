@@ -729,3 +729,49 @@ async def post_translate_text(
         "target_lang": target_lang,
         "target_lang_name": TRANSLATE_LANG_NAMES[target_lang],
     }
+
+
+@router.post("/rewrite")
+async def post_rewrite_text(
+    payload: dict,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rewrite composer draft with a fixed AI prompt (tone / grammar / simplify)."""
+    from app.services.knowledge_base import _account_llm_api_key, get_agent_settings
+    from app.services.llm_client import LLMError, REWRITE_PROMPTS, llm_available, rewrite_text
+
+    text = str(payload.get("text") or "").strip()
+    prompt_key = str(payload.get("prompt_key") or "").strip().lower()
+    if not text:
+        raise HTTPException(status_code=400, detail="EMPTY_TEXT")
+    if prompt_key not in REWRITE_PROMPTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"UNSUPPORTED_REWRITE_PROMPT. Allowed: {', '.join(sorted(REWRITE_PROMPTS))}",
+        )
+
+    settings = await get_agent_settings(db, account_id=context.account_id)
+    account_key = _account_llm_api_key(settings)
+    if not llm_available(api_key=account_key):
+        raise HTTPException(
+            status_code=400,
+            detail="LLM_UNAVAILABLE — فعّل المزود الخارجي ومفتاح API من صفحة الذكاء الاصطناعي",
+        )
+    try:
+        rewritten = await rewrite_text(
+            text=text,
+            prompt_key=prompt_key,
+            api_key=account_key,
+            api_base_url=getattr(settings, "llm_api_base_url", None),
+            model=getattr(settings, "llm_model", None),
+        )
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)[:300]) from exc
+    if not rewritten:
+        raise HTTPException(status_code=502, detail="REWRITE_FAILED")
+    return {
+        "text": text,
+        "rewritten_text": rewritten,
+        "prompt_key": prompt_key,
+    }

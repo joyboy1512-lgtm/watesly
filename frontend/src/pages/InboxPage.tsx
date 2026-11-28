@@ -195,6 +195,8 @@ export default function InboxPage() {
   const [translateTargetLang, setTranslateTargetLang] = useState<"en" | "fr" | "ur" | "hi">("en");
   const [translatedDraft, setTranslatedDraft] = useState("");
   const [translatingDraft, setTranslatingDraft] = useState(false);
+  const [rewritePromptKey, setRewritePromptKey] = useState("");
+  const [rewritingDraft, setRewritingDraft] = useState(false);
   const [inboundTranslations, setInboundTranslations] = useState<Record<string, string>>({});
   const [inboundTranslatingId, setInboundTranslatingId] = useState<string | null>(null);
   const workspaceOrganizationId = useWorkspaceOrganizationId();
@@ -705,6 +707,16 @@ export default function InboxPage() {
     queryFn: async () => (await api.get("/team/employees")).data
   });
   const selectedConversation = useMemo(() => conversations.find((item) => item.id === selectedId) ?? null, [conversations, selectedId]);
+  const contactDetailQuery = useQuery({
+    queryKey: ["inbox-contact", selectedConversation?.contact_id],
+    enabled: Boolean(selectedConversation?.contact_id),
+    queryFn: async () =>
+      (
+        await api.get<{ id: string; lifecycle_stage?: string }>(
+          `/contacts/${selectedConversation!.contact_id}`
+        )
+      ).data
+  });
   const agentSettingsQuery = useQuery({
     queryKey: ["knowledge-agent-settings", selectedConversation?.channel_id || "account"],
     queryFn: async () => {
@@ -930,6 +942,34 @@ export default function InboxPage() {
     } catch { toastStore.getState().show("تعذر إرسال المرفق.", "error"); }
     finally { setUploading(false); }
   }
+  async function applyComposerRewrite(promptKey: string) {
+    const source = text.trim();
+    if (!source) {
+      toastStore.getState().show("اكتب النص أولاً ثم اختر تحسين الصياغة.", "error");
+      return;
+    }
+    setRewritePromptKey(promptKey);
+    setRewritingDraft(true);
+    try {
+      const result = await api.post<{ rewritten_text: string }>("/inbox-tools/rewrite", {
+        text: source,
+        prompt_key: promptKey
+      });
+      const rewritten = (result.data.rewritten_text || "").trim();
+      if (!rewritten) {
+        toastStore.getState().show("تعذر تحسين النص.", "error");
+        return;
+      }
+      onComposerChange(rewritten);
+      toastStore.getState().show("تم تحسين صياغة الرسالة.", "success");
+    } catch (error) {
+      toastStore.getState().show(formatApiError(error, "تعذر تحسين الصياغة. تأكد من المزود الخارجي."), "error");
+    } finally {
+      setRewritingDraft(false);
+      setRewritePromptKey("");
+    }
+  }
+
   async function translateComposerDraft() {
     const source = text.trim();
     if (!source) {
@@ -2491,7 +2531,7 @@ export default function InboxPage() {
             </div>
           )}
           {!whisperMode && !isArchived && (
-            <div className="inbox-translate-bar" aria-label="ترجمة الإرسال">
+            <div className="inbox-translate-bar" aria-label="ترجمة وتحسين الإرسال">
               <label className="inbox-translate-toggle">
                 <input
                   type="checkbox"
@@ -2524,12 +2564,30 @@ export default function InboxPage() {
                     type="button"
                     className="secondary-button compact"
                     onClick={() => void translateComposerDraft()}
-                    disabled={!selectedId || !text.trim() || sending || translatingDraft}
+                    disabled={!selectedId || !text.trim() || sending || translatingDraft || rewritingDraft}
                   >
                     {translatingDraft ? "جاري الترجمة…" : "ترجم"}
                   </button>
                 </>
               )}
+              <select
+                value=""
+                aria-label="تحسين صياغة الرسالة"
+                disabled={!selectedId || !text.trim() || sending || translatingDraft || rewritingDraft}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  if (key) void applyComposerRewrite(key);
+                  e.currentTarget.value = "";
+                }}
+              >
+                <option value="">{rewritingDraft ? "جاري التحسين…" : "تحسين الصياغة"}</option>
+                <option value="tone_professional">نبرة رسمية</option>
+                <option value="tone_friendly">نبرة ودّية</option>
+                <option value="tone_empathetic">نبرة متعاطفة</option>
+                <option value="tone_straightforward">مختصر ومباشر</option>
+                <option value="grammar">تصحيح إملائي</option>
+                <option value="simplify">تبسيط اللغة</option>
+              </select>
               {translateMode && (
                 <small className="inbox-translate-hint">
                   عند التفعيل يُرسل النص المترجم فقط — وبدون التفعيل يُرسل النص الأصلي.
@@ -2675,7 +2733,7 @@ export default function InboxPage() {
             </button>
           </div>
         )}
-        <div className="customer-section"><h4>إدارة المحادثة</h4><label className="control-label"><span>الموظف المسؤول</span><select value={selectedConversation?.assigned_membership_id ?? ""} onChange={(e) => void updateConversation({ assigned_membership_id: e.target.value || null })}><option value="">غير معيّنة</option>{(employeesQuery.data ?? []).map((item: { membership_id: string; full_name: string; role: string }) => <option key={item.membership_id} value={item.membership_id}>{item.full_name} · {item.role}</option>)}</select></label><label className="control-label"><span>الحالة</span><select value={selectedConversation?.status ?? "open"} onChange={(e) => void updateConversation({ status: e.target.value })}><option value="open">مفتوحة</option><option value="pending">قيد الانتظار</option><option value="closed">مغلقة</option><option value="spam">مزعجة</option></select></label><label className="control-label"><span>الأولوية</span><select value={selectedConversation?.priority ?? "normal"} onChange={(e) => void updateConversation({ priority: e.target.value })}><option value="low">منخفضة</option><option value="normal">عادية</option><option value="high">مرتفعة</option><option value="urgent">عاجلة</option></select></label></div>
+        <div className="customer-section"><h4>إدارة المحادثة</h4><label className="control-label"><span>الموظف المسؤول</span><select value={selectedConversation?.assigned_membership_id ?? ""} onChange={(e) => void updateConversation({ assigned_membership_id: e.target.value || null })}><option value="">غير معيّنة</option>{(employeesQuery.data ?? []).map((item: { membership_id: string; full_name: string; role: string }) => <option key={item.membership_id} value={item.membership_id}>{item.full_name} · {item.role}</option>)}</select></label><label className="control-label"><span>مرحلة Lifecycle</span><select value={contactDetailQuery.data?.lifecycle_stage ?? "lead"} disabled={!selectedConversation?.contact_id || isArchived || contactDetailQuery.isLoading} onChange={(e) => { const contactId = selectedConversation?.contact_id; if (!contactId) return; void api.patch(`/contacts/${contactId}`, { lifecycle_stage: e.target.value }).then(() => queryClient.invalidateQueries({ queryKey: ["inbox-contact", contactId] })).then(() => toastStore.getState().show("تم تحديث مرحلة العميل.", "success")).catch(() => toastStore.getState().show("تعذر تحديث المرحلة.", "error")); }}><option value="lead">استفسار جديد</option><option value="qualified">اكتملت البيانات</option><option value="proposal">أُرسل العرض</option><option value="won">تم الحجز</option><option value="customer">عميل</option><option value="lost">خسارة</option><option value="churned">متوقف</option></select></label><label className="control-label"><span>الحالة</span><select value={selectedConversation?.status ?? "open"} onChange={(e) => void updateConversation({ status: e.target.value })}><option value="open">مفتوحة</option><option value="pending">قيد الانتظار</option><option value="closed">مغلقة</option><option value="spam">مزعجة</option></select></label><label className="control-label"><span>الأولوية</span><select value={selectedConversation?.priority ?? "normal"} onChange={(e) => void updateConversation({ priority: e.target.value })}><option value="low">منخفضة</option><option value="normal">عادية</option><option value="high">مرتفعة</option><option value="urgent">عاجلة</option></select></label></div>
         <InboxCustomFieldsPanel contactId={selectedConversation?.contact_id ?? null} disabled={isArchived} />
         <InboxMergeSuggestions contactId={selectedConversation?.contact_id ?? null} disabled={isArchived} />
         <InboxTimeline conversationId={selectedId} />
