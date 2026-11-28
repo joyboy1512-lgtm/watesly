@@ -43,6 +43,21 @@ export type AgentSettings = {
   outside_hours_message?: string | null;
   welcome_message_enabled?: boolean;
   welcome_message?: string | null;
+  skills_json?: {
+    assign_to_human?: boolean;
+    update_lifecycle?: boolean;
+    close_conversation?: boolean;
+    http_request?: boolean;
+    actions?: Array<{
+      name?: string;
+      when?: string;
+      method?: string;
+      url?: string;
+      headers?: Record<string, string>;
+      body_template?: string;
+      required_fields?: string[];
+    }>;
+  };
   within_business_hours?: boolean;
   account_agent_enabled?: boolean;
   channel_id?: string | null;

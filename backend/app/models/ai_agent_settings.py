@@ -41,3 +41,4 @@ class AiAgentSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     welcome_message: Mapped[str | None] = mapped_column(Text)
+    skills_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")

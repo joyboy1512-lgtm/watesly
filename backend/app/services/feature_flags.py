@@ -28,6 +28,7 @@ DEFAULT_FLAGS = {
     "collect_input_forms": False,
     "ai_lead_agent": False,
     "ai_support_agent": False,
+    "ai_agent_skills": False,
     # Phase C — ecommerce
     "shopify_integration": False,
     "woocommerce_integration": False,
@@ -58,6 +59,7 @@ FLAG_LABELS_AR: dict[str, str] = {
     "collect_input_forms": "المرحلة B — جمع بيانات (Forms)",
     "ai_lead_agent": "المرحلة B — AI Lead Agent",
     "ai_support_agent": "المرحلة B — AI Support Agent",
+    "ai_agent_skills": "مهارات وكيل الذكاء الاصطناعي",
     "shopify_integration": "المرحلة C — Shopify",
     "woocommerce_integration": "المرحلة C — WooCommerce",
     "order_templates": "المرحلة C — قوالب رسائل الطلبات",
