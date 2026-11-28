@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-28) — Inbox attachments strip
+
+| Item | Value |
+|------|-------|
+| Commit | `792739b` |
+| Alembic | `0078_conversation_collaborators` |
+| Frontend | `0.33.33` |
+| Live assets | `index-BCp5FLb-.js`, `index-CymK3SO2.css` |
+
 ### Production snapshot (2026-11-28) — Wave5 inbox ops
 
 | Item | Value |
