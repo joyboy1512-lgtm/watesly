@@ -139,6 +139,54 @@ function headerFormatFromDraft(headerType: string | undefined): TemplateHeaderFo
 
 type ReplyChoice = "staff" | "suggest" | "auto";
 
+type HttpSkillAction = {
+  name: string;
+  when: string;
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body_template?: string;
+  required_fields: string[];
+};
+
+type SkillsJson = {
+  assign_to_human: boolean;
+  update_lifecycle: boolean;
+  close_conversation: boolean;
+  http_request: boolean;
+  actions: HttpSkillAction[];
+};
+
+function normalizeSkills(raw: AgentSettings["skills_json"] | null | undefined): SkillsJson {
+  const actionsRaw = Array.isArray(raw?.actions) ? raw.actions : [];
+  const actions: HttpSkillAction[] = actionsRaw.slice(0, 3).map((item) => ({
+    name: String(item?.name || "http_action"),
+    when: String(item?.when || ""),
+    method: String(item?.method || "POST").toUpperCase(),
+    url: String(item?.url || ""),
+    headers: item?.headers && typeof item.headers === "object" ? item.headers : {},
+    body_template: String(item?.body_template || ""),
+    required_fields: Array.isArray(item?.required_fields)
+      ? item.required_fields.map((field) => String(field)).filter(Boolean)
+      : []
+  }));
+  return {
+    assign_to_human: Boolean(raw?.assign_to_human),
+    update_lifecycle: Boolean(raw?.update_lifecycle),
+    close_conversation: Boolean(raw?.close_conversation),
+    http_request: Boolean(raw?.http_request),
+    actions
+  };
+}
+
+const EMPTY_HTTP_ACTION: HttpSkillAction = {
+  name: "",
+  when: "",
+  method: "POST",
+  url: "",
+  required_fields: []
+};
+
 const TABS: Array<{ id: PageTab; label: string }> = [
   { id: "ops", label: "التشغيل" },
   { id: "lab", label: "التجربة" },
@@ -391,6 +439,12 @@ export default function AiAgentPage() {
     }
   });
 
+  const featureFlagsQuery = useQuery({
+    queryKey: ["feature-flags"],
+    queryFn: async () => (await api.get<Record<string, boolean>>("/platform/feature-flags")).data
+  });
+  const skillsFlagOn = Boolean(featureFlagsQuery.data?.ai_agent_skills);
+
   useEffect(() => {
     if (!settings || hoursDirty) return;
     setHoursDraft(normalizeBusinessHours(settings.business_hours_json));
@@ -449,6 +503,29 @@ export default function AiAgentPage() {
     if (!llmApiKeyDraft.trim()) return;
     const ok = await saveSettings({ llm_api_key: llmApiKeyDraft.trim() });
     if (ok) setLlmApiKeyDraft("");
+  }
+
+  async function saveSkills(patch: Partial<SkillsJson>) {
+    const current = normalizeSkills(settings?.skills_json);
+    return saveSettings({ skills_json: { ...current, ...patch } });
+  }
+
+  async function saveHttpAction(action: HttpSkillAction) {
+    const current = normalizeSkills(settings?.skills_json);
+    const cleaned: HttpSkillAction = {
+      name: action.name.trim() || "http_action",
+      when: action.when.trim(),
+      method: (action.method || "POST").toUpperCase(),
+      url: action.url.trim(),
+      headers: action.headers || {},
+      body_template: action.body_template || "",
+      required_fields: action.required_fields
+    };
+    if (!cleaned.url) {
+      toastStore.getState().show("رابط طلب HTTP مطلوب.", "error");
+      return false;
+    }
+    return saveSkills({ actions: [cleaned], http_request: true });
   }
 
   async function applyReplyChoice(choice: ReplyChoice) {
@@ -1153,6 +1230,9 @@ export default function AiAgentPage() {
 
   const outsideHoursOn = Boolean(settings?.auto_reply_outside_hours);
   const welcomeOn = Boolean(settings?.welcome_message_enabled);
+  const skills = normalizeSkills(settings?.skills_json);
+  const httpActionDraft = skills.actions[0] ?? EMPTY_HTTP_ACTION;
+  const skillsControlsDisabled = !skillsFlagOn || !serviceRepliesOk;
   const subscription = subscriptionQuery.data;
   const formatSubDate = (value?: string | null) => {
     if (!value) return "—";
@@ -1406,6 +1486,176 @@ export default function AiAgentPage() {
                   </div>
                 </>
               )}
+            </div>
+
+            <div className="ai-section">
+              <h3>مهارات الوكيل</h3>
+              {!skillsFlagOn && (
+                <p className="hint-text" style={{ marginTop: 0 }}>
+                  فعّل العلم ai_agent_skills من أدوات الحساب
+                </p>
+              )}
+              <div className="ai-source-toggles">
+                <div className="ai-toggle-row">
+                  <div>
+                    <strong>تعيين لموظف</strong>
+                    <p>يسمح للوكيل بتحويل المحادثة إلى موظف بشري.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`agent-state-toggle ${skills.assign_to_human ? "is-on" : "is-off"}`}
+                    disabled={skillsControlsDisabled}
+                    onClick={() =>
+                      void saveSkills({ assign_to_human: !skills.assign_to_human })
+                    }
+                  >
+                    {skills.assign_to_human ? "مفعّل" : "متوقف"}
+                  </button>
+                </div>
+
+                <div className="ai-toggle-row">
+                  <div>
+                    <strong>تحديث مرحلة Lifecycle</strong>
+                    <p>يسمح بتحديث مرحلة دورة حياة جهة الاتصال من المحادثة.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`agent-state-toggle ${skills.update_lifecycle ? "is-on" : "is-off"}`}
+                    disabled={skillsControlsDisabled}
+                    onClick={() =>
+                      void saveSkills({ update_lifecycle: !skills.update_lifecycle })
+                    }
+                  >
+                    {skills.update_lifecycle ? "مفعّل" : "متوقف"}
+                  </button>
+                </div>
+
+                <div className="ai-toggle-row">
+                  <div>
+                    <strong>إغلاق المحادثة</strong>
+                    <p>يسمح للوكيل بإغلاق المحادثة عند اكتمال الطلب.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`agent-state-toggle ${skills.close_conversation ? "is-on" : "is-off"}`}
+                    disabled={skillsControlsDisabled}
+                    onClick={() =>
+                      void saveSkills({ close_conversation: !skills.close_conversation })
+                    }
+                  >
+                    {skills.close_conversation ? "مفعّل" : "متوقف"}
+                  </button>
+                </div>
+
+                <div className="ai-toggle-row">
+                  <div>
+                    <strong>طلب HTTP</strong>
+                    <p>يرسل طلباً خارجياً عند تحقق شرط المهارة (حتى 3 إجراءات).</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`agent-state-toggle ${skills.http_request ? "is-on" : "is-off"}`}
+                    disabled={skillsControlsDisabled}
+                    onClick={() => void saveSkills({ http_request: !skills.http_request })}
+                  >
+                    {skills.http_request ? "مفعّل" : "متوقف"}
+                  </button>
+                </div>
+
+                {skills.http_request && (
+                  <div className="ai-advanced-stack">
+                    <div className="knowledge-fields-row">
+                      <label className="field-label">
+                        <span>اسم الإجراء</span>
+                        <input
+                          key={`http-name-${httpActionDraft.name}-${httpActionDraft.url}`}
+                          defaultValue={httpActionDraft.name}
+                          disabled={skillsControlsDisabled}
+                          placeholder="create_lead"
+                          onBlur={(e) => {
+                            const next = {
+                              ...httpActionDraft,
+                              name: e.target.value.trim() || "http_action"
+                            };
+                            if (next.url.trim()) void saveHttpAction(next);
+                          }}
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>الطريقة</span>
+                        <select
+                          value={httpActionDraft.method || "POST"}
+                          disabled={skillsControlsDisabled}
+                          onChange={(e) => {
+                            const next = { ...httpActionDraft, method: e.target.value };
+                            if (next.url.trim()) void saveHttpAction(next);
+                            else void saveSkills({ actions: [next], http_request: true });
+                          }}
+                        >
+                          <option value="GET">GET</option>
+                          <option value="POST">POST</option>
+                          <option value="PUT">PUT</option>
+                          <option value="PATCH">PATCH</option>
+                          <option value="DELETE">DELETE</option>
+                        </select>
+                      </label>
+                    </div>
+                    <label className="field-label">
+                      <span>متى يُنفَّذ</span>
+                      <input
+                        key={`http-when-${httpActionDraft.when}`}
+                        defaultValue={httpActionDraft.when}
+                        disabled={skillsControlsDisabled}
+                        placeholder="عند اكتمال جمع بيانات العميل"
+                        onBlur={(e) => {
+                          const next = { ...httpActionDraft, when: e.target.value.trim() };
+                          if (next.url.trim()) void saveHttpAction(next);
+                        }}
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>الرابط</span>
+                      <input
+                        key={`http-url-${httpActionDraft.url}`}
+                        defaultValue={httpActionDraft.url}
+                        disabled={skillsControlsDisabled}
+                        placeholder="https://example.com/hooks/lead"
+                        onBlur={(e) => {
+                          const next = { ...httpActionDraft, url: e.target.value.trim() };
+                          if (next.url) void saveHttpAction(next);
+                        }}
+                      />
+                    </label>
+                    <label className="field-label">
+                      <span>الحقول المطلوبة (مفصولة بفاصلة)</span>
+                      <input
+                        key={`http-fields-${httpActionDraft.required_fields.join(",")}`}
+                        defaultValue={httpActionDraft.required_fields.join(", ")}
+                        disabled={skillsControlsDisabled}
+                        placeholder="name, phone, email"
+                        onBlur={(e) => {
+                          const fields = e.target.value
+                            .split(/[,،]+/)
+                            .map((item) => item.trim())
+                            .filter(Boolean);
+                          const next = { ...httpActionDraft, required_fields: fields };
+                          if (next.url.trim()) void saveHttpAction(next);
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={skillsControlsDisabled || !httpActionDraft.url.trim()}
+                      onClick={() => {
+                        void saveSkills({ actions: [], http_request: true });
+                      }}
+                    >
+                      مسح إجراء HTTP
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 

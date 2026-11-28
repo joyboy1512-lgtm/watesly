@@ -74,6 +74,7 @@ class AgentSettingsUpdate(BaseModel):
     llm_image_model: str | None = None
     escalation_keywords: list[str] | None = None
     clarify_max_rounds: int | None = Field(default=None, ge=1, le=10)
+    skills_json: dict | None = None
 
 
 def _agent_settings_payload(item) -> dict:
@@ -252,7 +253,7 @@ async def patch_settings(
             "clarify_max_rounds",
         }
     }
-    # LLM credentials stay account-level
+    # LLM credentials and skills stay account-level
     for key in (
         "llm_api_key",
         "clear_llm_api_key",
@@ -260,6 +261,7 @@ async def patch_settings(
         "llm_model",
         "llm_image_model",
         "llm_system_prompt",
+        "skills_json",
     ):
         if key in data:
             await update_agent_settings(db, context.account_id, **{key: data[key]})

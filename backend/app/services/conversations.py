@@ -200,6 +200,8 @@ async def list_conversations(
 
         member_ids = await team_membership_ids(db, account_id=account_id, membership=membership)
         query = query.where(Conversation.assigned_membership_id.in_(list(member_ids)))
+    elif scope == "unassigned":
+        query = query.where(Conversation.assigned_membership_id.is_(None))
     if custom_inbox_id is not None:
         from app.models.channel import Channel
         from app.models.conversation_tag import ConversationTag

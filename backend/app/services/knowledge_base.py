@@ -27,6 +27,7 @@ from app.services.internal_ai import (
     expand_query_terms,
     rank_articles,
 )
+from app.services.ai_agent_skills import normalize_skills_json
 from app.services.llm_client import enhance_reply, llm_available
 
 
@@ -67,6 +68,7 @@ def serialize_agent_settings(item: AiAgentSettings) -> dict:
         "outside_hours_message": item.outside_hours_message,
         "welcome_message_enabled": bool(getattr(item, "welcome_message_enabled", False)),
         "welcome_message": getattr(item, "welcome_message", None),
+        "skills_json": normalize_skills_json(getattr(item, "skills_json", None) or {}),
         "llm_api_base_url": item.llm_api_base_url,
         "llm_model": item.llm_model,
         "llm_image_model": getattr(item, "llm_image_model", None),
@@ -103,6 +105,9 @@ async def update_agent_settings(db: AsyncSession, account_id: UUID, **fields) ->
 
     if fields.pop("clear_llm_api_key", False):
         item.llm_api_key_encrypted = None
+
+    if "skills_json" in fields:
+        fields["skills_json"] = normalize_skills_json(fields.get("skills_json"))
 
     for key, value in fields.items():
         if key == "llm_api_key_encrypted":
