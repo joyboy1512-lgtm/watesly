@@ -14,7 +14,7 @@ DEFAULT_FLAGS = {
     "sla_monitoring": True,
     "privacy_mask_agents": True,
     "instagram_channel": True,
-    "messenger_channel": False,
+    "messenger_channel": True,
     "marketplace_installs": True,
     "http_automation_requests": True,
     # Phase A — growth (Meta-safe: off by default except read-only dashboard)

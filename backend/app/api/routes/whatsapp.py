@@ -153,12 +153,17 @@ async def receive_webhook(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
-    # Shared Meta app callback: Instagram DMs may arrive on the WhatsApp webhook URL.
+    # Shared Meta app callback: Instagram / Messenger may arrive on the WhatsApp webhook URL.
     if isinstance(payload, dict) and payload.get("object") == "instagram":
         from app.services.instagram import process_instagram_webhook
 
         result = await process_instagram_webhook(db, payload)
         return {"status": "accepted", "channel": "instagram", **{k: str(v) for k, v in result.items()}}
+    if isinstance(payload, dict) and payload.get("object") == "page":
+        from app.services.messenger import process_messenger_webhook
+
+        result = await process_messenger_webhook(db, payload)
+        return {"status": "accepted", "channel": "messenger", **{k: str(v) for k, v in result.items()}}
 
     from app.services.webhook_ingress import persist_whatsapp_webhook
     from app.workers.webhook_tasks import process_whatsapp_webhook

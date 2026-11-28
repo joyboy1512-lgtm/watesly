@@ -300,7 +300,12 @@ export default function InboxPage() {
   });
   const channelsQuery = useQuery({
     queryKey: ["channels"],
-    queryFn: async () => (await api.get<Array<{ id: string; name: string; type: string }>>("/channels")).data
+    queryFn: async () =>
+      (
+        await api.get<Array<{ id: string; name: string; type: string; status?: string; external_id?: string | null }>>(
+          "/channels"
+        )
+      ).data
   });
   const whatsappAccountsQuery = useQuery({
     queryKey: ["whatsapp-accounts"],
@@ -315,10 +320,20 @@ export default function InboxPage() {
         >("/instagram/accounts")
       ).data
   });
+  const messengerAccountsQuery = useQuery({
+    queryKey: ["messenger-accounts"],
+    queryFn: async () =>
+      (
+        await api.get<
+          Array<{ id: string; channel_id: string; channel_name?: string | null; page_name?: string | null; status: string }>
+        >("/messenger/accounts")
+      ).data
+  });
   const conversations = conversationsQuery.data ?? [];
   const channelOptions = useMemo<ChannelOption[]>(() => {
     const waByChannel = new Map((whatsappAccountsQuery.data ?? []).map((item) => [item.channel_id, item]));
     const igByChannel = new Map((instagramAccountsQuery.data ?? []).map((item) => [item.channel_id, item]));
+    const msByChannel = new Map((messengerAccountsQuery.data ?? []).map((item) => [item.channel_id, item]));
     return (channelsQuery.data ?? []).map((item) => {
       if (item.type === "instagram") {
         const account = igByChannel.get(item.id);
@@ -327,7 +342,7 @@ export default function InboxPage() {
           name: account?.channel_name ?? item.name,
           phone: account?.username ? `@${account.username}` : account?.page_name ?? null,
           type: item.type,
-          messagingReady: true
+          messagingReady: account?.status === "active" || item.status === "active"
         };
       }
       if (item.type === "whatsapp") {
@@ -340,15 +355,34 @@ export default function InboxPage() {
           messagingReady: true
         };
       }
+      if (item.type === "messenger") {
+        const account = msByChannel.get(item.id);
+        return {
+          id: item.id,
+          name: account?.channel_name ?? item.name,
+          phone: account?.page_name ?? null,
+          type: item.type,
+          messagingReady: account?.status === "active" || item.status === "active"
+        };
+      }
+      if (item.type === "web_chat") {
+        return {
+          id: item.id,
+          name: item.name,
+          phone: item.external_id ? `token …${item.external_id.slice(-4)}` : null,
+          type: item.type,
+          messagingReady: item.status === "active" || Boolean(item.external_id)
+        };
+      }
       return {
         id: item.id,
         name: item.name,
         phone: null,
         type: item.type,
-        messagingReady: item.type === "whatsapp" || item.type === "instagram"
+        messagingReady: false
       };
     });
-  }, [channelsQuery.data, whatsappAccountsQuery.data, instagramAccountsQuery.data]);
+  }, [channelsQuery.data, whatsappAccountsQuery.data, instagramAccountsQuery.data, messengerAccountsQuery.data]);
   const whatsappChannelOptions = useMemo(
     () =>
       (channelsQuery.data ?? [])
@@ -1771,8 +1805,13 @@ export default function InboxPage() {
                       <strong>{item.contact_name || item.contact_address}</strong>
                       <time>{item.last_message_at ? formatAppTime(item.last_message_at) : ""}</time>
                     </div>
-                    {channelOptions.length > 1 && !channelFilter && (
-                      <small className="inbox-channel-badge">{channelLabelById.get(item.channel_id) ?? "WhatsApp"}</small>
+                    {(channelOptions.length > 1 || item.channel_type) && (
+                      <small className="inbox-channel-badge">
+                        {CHANNEL_TYPE_SHORT[item.channel_type ?? channelOptions.find((row) => row.id === item.channel_id)?.type ?? "whatsapp"] ?? "WA"}
+                        {!channelFilter && channelLabelById.get(item.channel_id)
+                          ? ` · ${channelLabelById.get(item.channel_id)}`
+                          : ""}
+                      </small>
                     )}
                     <div className="conversation-preview">
                       <span>{item.last_message_text || "رسالة غير نصية"}</span>

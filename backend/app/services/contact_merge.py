@@ -4,9 +4,19 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.channel import Channel
 from app.models.contact import Contact
 from app.models.conversation import Conversation
 from app.models.custom_field import CustomFieldValue
+
+
+def _digits_only(value: str | None) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _looks_like_phone(value: str | None) -> bool:
+    digits = _digits_only(value)
+    return 8 <= len(digits) <= 15
 
 
 async def suggest_contact_merges_for_contact(
@@ -21,26 +31,45 @@ async def suggest_contact_merges_for_contact(
 
     address = (contact.external_address or "").strip()
     email = (contact.email or "").strip().lower() or None
+    phone_digits = _digits_only(address) if _looks_like_phone(address) else ""
     if not address and not email:
         return []
 
-    query = select(Contact).where(
-        Contact.account_id == account_id,
-        Contact.deleted_at.is_(None),
-        Contact.id != contact_id,
+    query = (
+        select(Contact, Channel.type)
+        .outerjoin(Channel, Channel.id == Contact.channel_id)
+        .where(
+            Contact.account_id == account_id,
+            Contact.deleted_at.is_(None),
+            Contact.id != contact_id,
+        )
     )
-    rows = list((await db.execute(query)).scalars().all())
+    rows = list((await db.execute(query)).all())
     suggestions: list[dict] = []
-    for row in rows:
+    for row, channel_type in rows:
         same_phone = bool(address) and row.external_address == address
+        same_phone_normalized = False
+        if phone_digits and _looks_like_phone(row.external_address):
+            other_digits = _digits_only(row.external_address)
+            same_phone_normalized = other_digits == phone_digits or (
+                len(other_digits) >= 8
+                and len(phone_digits) >= 8
+                and (other_digits.endswith(phone_digits[-8:]) or phone_digits.endswith(other_digits[-8:]))
+            )
         same_email = bool(email) and (row.email or "").strip().lower() == email
-        if not same_phone and not same_email:
+        same_org = row.organization_id == contact.organization_id
+        if not same_phone and not same_phone_normalized and not same_email:
+            continue
+        # Prefer cross-channel / same-org matches for Wave 6 identity unify.
+        if not same_org and not same_email:
             continue
         reasons = []
-        if same_phone:
+        if same_phone or same_phone_normalized:
             reasons.append("same_phone")
         if same_email:
             reasons.append("same_email")
+        if channel_type and str(row.channel_id) != str(contact.channel_id):
+            reasons.append("cross_channel")
         suggestions.append(
             {
                 "contact_id": str(row.id),
@@ -48,6 +77,7 @@ async def suggest_contact_merges_for_contact(
                 "external_address": row.external_address,
                 "email": row.email,
                 "channel_id": str(row.channel_id),
+                "channel_type": str(channel_type) if channel_type else None,
                 "organization_id": str(row.organization_id),
                 "reasons": reasons,
             }

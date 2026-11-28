@@ -76,20 +76,20 @@ export const CHANNEL_TYPE_HINTS: Record<string, string> = {
   whatsapp: "القناة الرئيسية للمحادثات والحملات عبر WhatsApp Business API.",
   telegram: "استقبال وإرسال رسائل Telegram للدعم.",
   instagram: "ردود رسائل Instagram Direct من صندوق الوارد.",
-  messenger: "إدارة محادثات Facebook Messenger.",
+  messenger: "اربط صفحة فيسبوك ثم استقبل/أرسل من الوارد.",
   email: "يمكن إنشاء القناة الآن وربط SMTP/IMAP لاحقاً.",
   sms: "يمكن إنشاء القناة الآن وربط مزود SMS لاحقاً.",
-  web_chat: "يمكن إنشاء القناة الآن وربط ودجت الموقع لاحقاً."
+  web_chat: "تُفعَّل فوراً برمز ودجت — أرسل POST إلى /api/v1/web-chat/{token}/messages."
 };
 
 export const CHANNEL_CAPABILITIES: Record<string, string[]> = {
   whatsapp: ["صندوق الوارد", "حملات جماعية", "قوالب Meta", "أتمتة", "CRM", "MAC"],
   telegram: ["صندوق الوارد", "ردود فورية"],
   instagram: ["صندوق الوارد", "Direct"],
-  messenger: ["صندوق الوارد", "ردود"],
+  messenger: ["صندوق الوارد", "ردود", "Webhook"],
   email: ["صندوق الوارد", "متابعة", "Scaffold"],
   sms: ["تنبيهات", "Scaffold"],
-  web_chat: ["صندوق الوارد", "Scaffold"]
+  web_chat: ["صندوق الوارد", "ودجت", "ردود"]
 };
 
 export const CHANNEL_STATUS_LABELS: Record<string, string> = {

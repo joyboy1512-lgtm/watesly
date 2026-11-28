@@ -30,6 +30,7 @@ class ConversationResponse(BaseModel):
     id: UUID
     organization_id: UUID
     channel_id: UUID
+    channel_type: str | None = None
     contact_id: UUID
     assigned_membership_id: UUID | None
     collaborator_membership_ids: list[UUID] = Field(default_factory=list)
