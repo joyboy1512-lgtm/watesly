@@ -141,6 +141,15 @@ TRANSLATE_LANG_NAMES: dict[str, str] = {
     "hi": "Hindi",
 }
 
+REWRITE_PROMPTS: dict[str, str] = {
+    "tone_professional": "Rewrite the message in a professional, formal customer-support tone.",
+    "tone_friendly": "Rewrite the message in a warm, friendly customer-support tone.",
+    "tone_empathetic": "Rewrite the message with an empathetic, understanding tone.",
+    "tone_straightforward": "Rewrite the message to be short, direct, and to the point.",
+    "grammar": "Fix spelling, grammar, and punctuation. Keep the meaning and language the same.",
+    "simplify": "Simplify the language so it is clearer and easier to understand. Keep the same language.",
+}
+
 
 async def translate_text(
     *,
@@ -180,6 +189,39 @@ async def translate_text(
         api_base_url=api_base_url,
         model=model,
         temperature=0.2,
+        max_tokens=1200,
+    )
+
+
+async def rewrite_text(
+    *,
+    text: str,
+    prompt_key: str,
+    api_key: str | None = None,
+    api_base_url: str | None = None,
+    model: str | None = None,
+) -> str | None:
+    """Rewrite staff composer text with a fixed AI prompt (tone/grammar/simplify)."""
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return None
+    key = (prompt_key or "").strip().lower()
+    instruction = REWRITE_PROMPTS.get(key)
+    if not instruction:
+        raise LLMError("UNSUPPORTED_REWRITE_PROMPT")
+    system_prompt = (
+        "You rewrite WhatsApp customer-support messages. "
+        f"{instruction} "
+        "Keep names, numbers, product codes, URLs, and {{template.variables}} unchanged. "
+        "Return ONLY the rewritten message with no quotes, labels, or explanation."
+    )
+    return await chat_completion(
+        user_prompt=cleaned,
+        system_prompt=system_prompt,
+        api_key=api_key,
+        api_base_url=api_base_url,
+        model=model,
+        temperature=0.3,
         max_tokens=1200,
     )
 
