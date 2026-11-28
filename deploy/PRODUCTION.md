@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-28) — Wave1 respond parity
+
+| Item | Value |
+|------|-------|
+| Commit | `119affe` |
+| Alembic | `0077_ai_agent_skills` |
+| Frontend | `0.33.28` |
+| Live assets | `index-BgA6d5VP.js`, `index-D-GJdJ-F.css` |
+
 ### Production snapshot (2026-11-28) — Inbox chat translate
 
 | Item | Value |
