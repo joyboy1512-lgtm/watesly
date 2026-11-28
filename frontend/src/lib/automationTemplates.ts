@@ -160,12 +160,12 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     id: "offer-follow-up",
     name: "متابعة عرض لم يُحجز",
     description:
-      "بعد إرسال العرض: انتظر ثم أرسل قالب متابعة. اختر قالب واتساب المعتمد وعدّل مدة الانتظار (افتراضي 24 ساعة). شغّل يدوياً أو اربطها لاحقاً بوسم/مرحلة.",
-    trigger_type: "manual",
-    trigger_config: {},
+      "عند انتقال العميل لمرحلة proposal: انتظر 24 ساعة ثم أرسل قالب متابعة. عند won/lost/customer تتوقف المتابعات المفتوحة تلقائياً. اختر قالب واتساب المعتمد.",
+    trigger_type: "lifecycle_changed",
+    trigger_config: { lifecycle_stage: "proposal" },
     graph: {
       nodes: [
-        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "بعد إرسال العرض" } },
+        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "مرحلة: أُرسل العرض" } },
         {
           id: "delay-1",
           type: "delay",
@@ -214,6 +214,109 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
       edges: [
         { id: "edge-1", source: "trigger-1", target: "send-1", label: "next" },
         { id: "edge-2", source: "send-1", target: "assign-1", label: "next" }
+      ]
+    }
+  },
+  {
+    id: "campaign-cta-interested",
+    name: "حملة — مهتم",
+    description:
+      "زر interested: رد ترحيبي + تعيين فريق المبيعات + مرحلة qualified. طابق button_id مع زر القالب.",
+    trigger_type: "button_clicked",
+    trigger_config: { button_id: "interested" },
+    graph: {
+      nodes: [
+        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "زر: مهتم" } },
+        {
+          id: "send-1",
+          type: "send_text",
+          position: { x: 300, y: 100 },
+          data: {
+            label: "رد الاهتمام",
+            text: "رائع! شكراً لاهتمامك. سيتواصل معك فريق المبيعات خلال دقائق لإكمال التفاصيل."
+          }
+        },
+        {
+          id: "life-1",
+          type: "set_lifecycle",
+          position: { x: 520, y: 60 },
+          data: { label: "مرحلة مؤهّل", lifecycle_stage: "qualified" }
+        },
+        {
+          id: "assign-1",
+          type: "assign_team",
+          position: { x: 520, y: 200 },
+          data: { label: "تعيين المبيعات", team_id: "" }
+        }
+      ],
+      edges: [
+        { id: "edge-1", source: "trigger-1", target: "send-1", label: "next" },
+        { id: "edge-2", source: "send-1", target: "life-1", label: "next" },
+        { id: "edge-3", source: "life-1", target: "assign-1", label: "next" }
+      ]
+    }
+  },
+  {
+    id: "campaign-cta-human",
+    name: "حملة — أبي موظف",
+    description:
+      "زر talk_to_agent: رد قصير ثم تحويل لفريق بشري. عدّل button_id والفريق حسب قالبك.",
+    trigger_type: "button_clicked",
+    trigger_config: { button_id: "talk_to_agent" },
+    graph: {
+      nodes: [
+        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "زر: أبي موظف" } },
+        {
+          id: "send-1",
+          type: "send_text",
+          position: { x: 300, y: 160 },
+          data: {
+            label: "رد التحويل",
+            text: "حاضر، سأحوّلك الآن لأحد زملائنا للمتابعة معك مباشرة."
+          }
+        },
+        {
+          id: "assign-1",
+          type: "assign_team",
+          position: { x: 520, y: 160 },
+          data: { label: "تحويل لموظف", team_id: "" }
+        }
+      ],
+      edges: [
+        { id: "edge-1", source: "trigger-1", target: "send-1", label: "next" },
+        { id: "edge-2", source: "send-1", target: "assign-1", label: "next" }
+      ]
+    }
+  },
+  {
+    id: "campaign-cta-stop",
+    name: "حملة — إيقاف / لا أريد",
+    description:
+      "زر stop: تأكيد الإيقاف + نقل Lifecycle إلى lost. طابق button_id مع زر الإلغاء في القالب.",
+    trigger_type: "button_clicked",
+    trigger_config: { button_id: "stop" },
+    graph: {
+      nodes: [
+        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "زر: إيقاف" } },
+        {
+          id: "send-1",
+          type: "send_text",
+          position: { x: 300, y: 100 },
+          data: {
+            label: "تأكيد الإيقاف",
+            text: "تم، لن نرسل عروضاً ترويجية إضافية. يمكنك مراسلتنا في أي وقت عند الحاجة."
+          }
+        },
+        {
+          id: "life-1",
+          type: "set_lifecycle",
+          position: { x: 520, y: 100 },
+          data: { label: "مرحلة lost", lifecycle_stage: "lost" }
+        }
+      ],
+      edges: [
+        { id: "edge-1", source: "trigger-1", target: "send-1", label: "next" },
+        { id: "edge-2", source: "send-1", target: "life-1", label: "next" }
       ]
     }
   },

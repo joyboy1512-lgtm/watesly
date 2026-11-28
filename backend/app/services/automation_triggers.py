@@ -66,7 +66,79 @@ def _matches_trigger_config(automation: Automation, payload: dict) -> bool:
     if config_button_id and str(config_button_id) != str(button_id or ""):
         return False
 
+    config_lifecycle = config.get("lifecycle_stage") or config.get("stage")
+    if config_lifecycle:
+        payload_lifecycle = payload.get("lifecycle_stage") or payload.get("stage")
+        if str(config_lifecycle).strip().lower() != str(payload_lifecycle or "").strip().lower():
+            return False
+
     return True
+
+
+_TERMINAL_LIFECYCLE = frozenset({"won", "lost", "churned", "customer"})
+
+
+async def stop_open_runs_for_contact(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact_id: UUID,
+) -> int:
+    """Stop queued/waiting automation runs tied to a contact (e.g. after won/lost)."""
+    contact_key = str(contact_id)
+    # Only queued/waiting — never interrupt a run that is actively executing.
+    result = await db.execute(
+        select(AutomationRun).where(
+            AutomationRun.account_id == account_id,
+            AutomationRun.status.in_(
+                [
+                    AutomationRunStatus.QUEUED,
+                    AutomationRunStatus.WAITING,
+                ]
+            ),
+        )
+    )
+    stopped = 0
+    for run in result.scalars().all():
+        payload = run.trigger_payload if isinstance(run.trigger_payload, dict) else {}
+        context = run.context if isinstance(run.context, dict) else {}
+        if str(payload.get("contact_id") or "") != contact_key and str(context.get("contact_id") or "") != contact_key:
+            continue
+        run.status = AutomationRunStatus.STOPPED
+        run.error_message = "stopped_by_lifecycle"
+        run.finished_at = datetime.now(UTC)
+        stopped += 1
+    return stopped
+
+
+async def emit_lifecycle_changed(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    contact: Contact,
+    previous_stage: str | None,
+    new_stage: str,
+) -> list[UUID]:
+    """Queue lifecycle_changed automations; stop open follow-ups on terminal stages."""
+    if previous_stage is not None and str(previous_stage) == str(new_stage):
+        return []
+    payload = {
+        "organization_id": str(contact.organization_id),
+        "channel_id": str(contact.channel_id),
+        "contact_id": str(contact.id),
+        "lifecycle_stage": new_stage,
+        "previous_lifecycle_stage": previous_stage,
+        "from": contact.external_address,
+    }
+    run_ids = await queue_automation_runs(
+        db,
+        account_id=account_id,
+        trigger_type=AutomationTriggerType.LIFECYCLE_CHANGED,
+        trigger_payload=payload,
+    )
+    if new_stage.strip().lower() in _TERMINAL_LIFECYCLE:
+        await stop_open_runs_for_contact(db, account_id=account_id, contact_id=contact.id)
+    return run_ids
 
 
 async def queue_automation_runs(

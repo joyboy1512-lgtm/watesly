@@ -99,11 +99,28 @@ async def update_contact(
         contact.region = cleaned[:120] if cleaned else None
     if marketing_opt_in is not None:
         contact.marketing_opt_in = marketing_opt_in
+    previous_lifecycle = contact.lifecycle_stage
+    lifecycle_run_ids: list = []
     if lifecycle_stage is not None:
-        contact.lifecycle_stage = lifecycle_stage.strip()[:30] or "lead"
+        new_stage = lifecycle_stage.strip()[:30] or "lead"
+        contact.lifecycle_stage = new_stage
+        if new_stage != previous_lifecycle:
+            from app.services.automation_triggers import emit_lifecycle_changed
+
+            lifecycle_run_ids = await emit_lifecycle_changed(
+                db,
+                account_id=account_id,
+                contact=contact,
+                previous_stage=previous_lifecycle,
+                new_stage=new_stage,
+            )
     contact.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(contact)
+    if lifecycle_run_ids:
+        from app.services.automation_triggers import dispatch_automation_runs
+
+        dispatch_automation_runs(lifecycle_run_ids)
     return contact
 
 

@@ -16,6 +16,7 @@ export const GROWTH_FLAG_LABELS: Record<string, string> = {
   collect_input_forms: "المرحلة B — جمع بيانات (Forms)",
   ai_lead_agent: "المرحلة B — AI Lead Agent",
   ai_support_agent: "المرحلة B — AI Support Agent",
+  ai_agent_skills: "مهارات وكيل الذكاء الاصطناعي",
   shopify_integration: "المرحلة C — Shopify",
   woocommerce_integration: "المرحلة C — WooCommerce",
   order_templates: "المرحلة C — قوالب رسائل الطلبات",
