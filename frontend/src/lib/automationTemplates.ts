@@ -155,5 +155,34 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
       ],
       edges: [{ id: "edge-1", source: "trigger-1", target: "tpl-1", label: "next" }]
     }
+  },
+  {
+    id: "offer-follow-up",
+    name: "متابعة عرض لم يُحجز",
+    description:
+      "بعد إرسال العرض: انتظر ثم أرسل قالب متابعة. اختر قالب واتساب المعتمد وعدّل مدة الانتظار (افتراضي 24 ساعة). شغّل يدوياً أو اربطها لاحقاً بوسم/مرحلة.",
+    trigger_type: "manual",
+    trigger_config: {},
+    graph: {
+      nodes: [
+        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "بعد إرسال العرض" } },
+        {
+          id: "delay-1",
+          type: "delay",
+          position: { x: 300, y: 160 },
+          data: { label: "انتظار 24 ساعة", seconds: 0, minutes: 1440 }
+        },
+        {
+          id: "tpl-1",
+          type: "send_template",
+          position: { x: 520, y: 160 },
+          data: { label: "قالب متابعة العرض", template_id: "" }
+        }
+      ],
+      edges: [
+        { id: "edge-1", source: "trigger-1", target: "delay-1", label: "next" },
+        { id: "edge-2", source: "delay-1", target: "tpl-1", label: "next" }
+      ]
+    }
   }
 ];

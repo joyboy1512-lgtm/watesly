@@ -63,7 +63,7 @@ import Icon from "../components/Icon";
 import { useSetWorkspaceOrganization, useWorkspaceOrganizationId } from "../hooks/useWorkspace";
 
 type InboxFilter = "engaged" | "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
-type InboxScope = "all" | "mine" | "team" | "custom";
+type InboxScope = "all" | "mine" | "team" | "unassigned" | "custom";
 type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
 type ChannelOption = { id: string; name: string; phone: string | null; type: string; messagingReady: boolean };
 type WhatsAppAccountRow = { id: string; channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
@@ -160,7 +160,12 @@ export default function InboxPage() {
   const [startingConversation, setStartingConversation] = useState(false);
   const [switchingChannelId, setSwitchingChannelId] = useState<string | null>(null);
   const [inboxScope, setInboxScope] = useState<InboxScope>(() => {
-    if (urlInboxScope === "mine" || urlInboxScope === "team" || urlInboxScope === "custom") {
+    if (
+      urlInboxScope === "mine" ||
+      urlInboxScope === "team" ||
+      urlInboxScope === "unassigned" ||
+      urlInboxScope === "custom"
+    ) {
       return urlInboxScope;
     }
     return "all";
@@ -230,7 +235,9 @@ export default function InboxPage() {
       if (needsReplyOnly) params.needs_reply = true;
       if (channelFilter) params.channel_id = channelFilter;
       if (workspaceOrganizationId) params.organization_id = workspaceOrganizationId;
-      if (inboxScope === "mine" || inboxScope === "team") params.inbox_scope = inboxScope;
+      if (inboxScope === "mine" || inboxScope === "team" || inboxScope === "unassigned") {
+        params.inbox_scope = inboxScope;
+      }
       if (inboxScope === "custom" && customInboxId) params.custom_inbox_id = customInboxId;
       return (
         await api.get<Conversation[]>("/conversations", {
@@ -252,7 +259,13 @@ export default function InboxPage() {
   }, [urlFilter, filter]);
 
   useEffect(() => {
-    if (urlInboxScope === "mine" || urlInboxScope === "team" || urlInboxScope === "custom" || urlInboxScope === "all") {
+    if (
+      urlInboxScope === "mine" ||
+      urlInboxScope === "team" ||
+      urlInboxScope === "unassigned" ||
+      urlInboxScope === "custom" ||
+      urlInboxScope === "all"
+    ) {
       const nextScope = urlInboxScope === "all" ? "all" : urlInboxScope;
       if (nextScope !== inboxScope) setInboxScope(nextScope);
     }
@@ -1485,6 +1498,7 @@ export default function InboxPage() {
               ["all", "الكل"],
               ["mine", "لي"],
               ["team", "الفريق"],
+              ["unassigned", "غير معيّنة"],
               ["custom", "مخصص"]
             ] as const).map(([value, label]) => (
               <button
