@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "2d5dc5f",
-    "git_commit_message": "Merge wave2 respond parity into production-unified",
+    "git_commit": "6fafc26",
+    "git_commit_message": "Merge wave3 respond parity into production-unified",
     "alembic_head": "0078_conversation_collaborators",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.29",
+    "frontend_version": "0.33.30",
     "live_assets": {
-      "js": "index-CW3FCHW-.js",
+      "js": "index-DHDd6TlF.js",
       "css": "index-D-GJdJ-F.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.29",
+    "frontend": "0.33.30",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "2d5dc5f",
-  "notes": "Wave2: collaborators, close summarize, AI skills runtime, campaign CTA + CSAT templates; CSS unchanged"
+  "commit": "6fafc26",
+  "notes": "Wave3: composer AI prompts + inbox lifecycle stage; CSS unchanged"
 }
