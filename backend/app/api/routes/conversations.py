@@ -102,7 +102,7 @@ async def get_conversations(
     channel_id: UUID | None = Query(None),
     organization_id: UUID | None = Query(None),
     inbox_scope: str | None = Query(
-        None, description="all | mine | team | unassigned | collaborations"
+        None, description="all | mine | team | unassigned | collaborations | blocked"
     ),
     custom_inbox_id: UUID | None = Query(None),
     needs_reply: bool | None = Query(
@@ -799,6 +799,33 @@ async def send_conversation_list_message(
         {"type": "message.sent", "conversation_id": str(conversation_id), "message_id": str(message.id)},
     )
     return {"id": str(message.id), "conversation_id": str(message.conversation_id), "status": message.status}
+
+
+@router.get("/{conversation_id}/csat")
+async def get_conversation_csat(
+    conversation_id: UUID,
+    context: AuthContext = Depends(require_permissions(Permission.CONVERSATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.csat import get_conversation_rating
+
+    try:
+        rating = await get_conversation_rating(
+            db,
+            account_id=context.account_id,
+            conversation_id=conversation_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Conversation not found") from exc
+    if rating is None:
+        return {"score": None, "comment": None, "source": None, "updated_at": None}
+    return {
+        "id": str(rating.id),
+        "score": rating.score,
+        "comment": rating.comment,
+        "source": rating.source,
+        "updated_at": rating.updated_at.isoformat() if rating.updated_at else None,
+    }
 
 
 @router.post("/{conversation_id}/csat")

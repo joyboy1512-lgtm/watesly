@@ -48,6 +48,21 @@ async def submit_conversation_rating(
     return rating
 
 
+async def get_conversation_rating(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    conversation_id: UUID,
+) -> ConversationRating | None:
+    conversation = await db.get(Conversation, conversation_id)
+    if conversation is None or conversation.account_id != account_id:
+        raise ValueError("CONVERSATION_NOT_FOUND")
+    result = await db.execute(
+        select(ConversationRating).where(ConversationRating.conversation_id == conversation_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def csat_metrics(db: AsyncSession, *, account_id: UUID, days: int = 30) -> dict:
     from datetime import UTC, datetime, timedelta
 
