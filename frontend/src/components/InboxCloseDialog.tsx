@@ -6,7 +6,9 @@ type Props = {
   onReasonChange: (value: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  onSummarize?: () => void;
   busy?: boolean;
+  summarizing?: boolean;
 };
 
 const REASONS = ["تم الحل", "لا رد من العميل", "مكرر", "spam", "محوّل لفريق آخر", "أخرى"];
@@ -19,7 +21,9 @@ export default function InboxCloseDialog({
   onReasonChange,
   onCancel,
   onConfirm,
-  busy
+  onSummarize,
+  busy,
+  summarizing
 }: Props) {
   if (!open) return null;
   return (
@@ -51,10 +55,20 @@ export default function InboxCloseDialog({
           />
         </label>
         <div className="admin-actions">
-          <button type="button" className="whatsapp-button" onClick={onConfirm} disabled={busy}>
+          {onSummarize && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onSummarize}
+              disabled={busy || summarizing}
+            >
+              {summarizing ? "جاري التلخيص…" : "تلخيص بالذكاء"}
+            </button>
+          )}
+          <button type="button" className="whatsapp-button" onClick={onConfirm} disabled={busy || summarizing}>
             {busy ? "جاري الإغلاق…" : "إغلاق وإرسال للأرشيف"}
           </button>
-          <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>
+          <button type="button" className="secondary-button" onClick={onCancel} disabled={busy || summarizing}>
             إلغاء
           </button>
         </div>

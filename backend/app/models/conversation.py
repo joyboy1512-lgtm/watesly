@@ -3,7 +3,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -46,6 +46,9 @@ class Conversation(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     assigned_membership_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("memberships.id", ondelete="SET NULL"), index=True
+    )
+    collaborator_membership_ids: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
     )
     status: Mapped[ConversationStatus] = mapped_column(
         String(20), nullable=False, default=ConversationStatus.OPEN

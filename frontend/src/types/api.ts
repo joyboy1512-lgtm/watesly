@@ -4,6 +4,7 @@ export type Conversation = {
   channel_id: string;
   contact_id: string;
   assigned_membership_id: string | null;
+  collaborator_membership_ids?: string[];
   status: "open" | "pending" | "closed" | "spam";
   priority: "low" | "normal" | "high" | "urgent";
   last_message_at: string | null;

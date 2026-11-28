@@ -8,6 +8,7 @@ from app.models.conversation import ConversationPriority, ConversationStatus
 
 class ConversationUpdateRequest(BaseModel):
     assigned_membership_id: UUID | None = None
+    collaborator_membership_ids: list[UUID] | None = None
     status: ConversationStatus | None = None
     priority: ConversationPriority | None = None
     is_starred: bool | None = None
@@ -31,6 +32,7 @@ class ConversationResponse(BaseModel):
     channel_id: UUID
     contact_id: UUID
     assigned_membership_id: UUID | None
+    collaborator_membership_ids: list[UUID] = Field(default_factory=list)
     status: ConversationStatus
     priority: ConversationPriority
     last_message_at: datetime | None

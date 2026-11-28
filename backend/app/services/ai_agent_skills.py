@@ -281,3 +281,99 @@ async def execute_http_skill_action(
         "truncated": truncated,
         "headers": dict(list(response.headers.items())[:30]),
     }
+
+
+_CLOSE_HINTS = (
+    "تم الحل",
+    "خلاص",
+    "شكرا تم",
+    "مع السلامة",
+    "bye",
+    "thanks that's all",
+    "resolved",
+)
+
+
+async def apply_inbound_skills(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    conversation,
+    contact,
+    agent_settings: dict[str, Any],
+    inbound_text: str,
+    escalated: bool,
+    auto_sent: bool,
+) -> dict[str, Any]:
+    """Apply enabled agent skills after an inbound AI turn (flag-gated)."""
+    flags = await get_feature_flags(db, account_id=account_id)
+    if not flags.get("ai_agent_skills"):
+        return {"skipped": True, "reason": "flag_off"}
+
+    skills = normalize_skills_json(agent_settings.get("skills_json"))
+    results: dict[str, Any] = {"applied": []}
+    text = (inbound_text or "").strip()
+    text_l = text.lower()
+
+    if escalated and skills.get("assign_to_human") and getattr(conversation, "assigned_membership_id", None) is None:
+        from app.services.assignments import auto_assign_conversation
+
+        member = await auto_assign_conversation(db, conversation=conversation)
+        if member is not None:
+            results["applied"].append({"skill": "assign_to_human", "membership_id": str(member.id)})
+
+    if escalated and skills.get("update_lifecycle") and contact is not None:
+        current = str(getattr(contact, "lifecycle_stage", "") or "").strip().lower()
+        if current in {"", "lead", "new", "prospect"}:
+            contact.lifecycle_stage = "qualified"
+            results["applied"].append({"skill": "update_lifecycle", "lifecycle_stage": "qualified"})
+
+    if skills.get("close_conversation") and auto_sent and any(hint in text_l for hint in _CLOSE_HINTS):
+        from datetime import UTC, datetime
+
+        from app.models.conversation import ConversationStatus
+
+        conversation.status = ConversationStatus.CLOSED
+        conversation.closed_at = datetime.now(UTC)
+        conversation.archived_at = datetime.now(UTC)
+        results["applied"].append({"skill": "close_conversation"})
+
+    if skills.get("http_request") and (auto_sent or escalated):
+        for action in skills.get("actions") or []:
+            when = str(action.get("when") or "").strip().lower()
+            if not when or when not in text_l:
+                continue
+            required = action.get("required_fields") or []
+            collected = {
+                "text": text,
+                "contact_id": str(getattr(contact, "id", "") or ""),
+                "conversation_id": str(getattr(conversation, "id", "") or ""),
+                "phone": str(getattr(contact, "external_address", "") or ""),
+            }
+            missing = [field for field in required if not str(collected.get(field) or "").strip()]
+            if missing:
+                results.setdefault("http_skipped", []).append(
+                    {"name": action.get("name"), "missing": missing}
+                )
+                continue
+            try:
+                http_result = await execute_http_skill_action(
+                    db,
+                    account_id=account_id,
+                    action=action,
+                    collected=collected,
+                )
+                results["applied"].append(
+                    {
+                        "skill": "http_request",
+                        "name": action.get("name"),
+                        "status_code": http_result.get("status_code"),
+                        "ok": http_result.get("ok"),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 — skill must not break inbound
+                results.setdefault("http_errors", []).append(
+                    {"name": action.get("name"), "error": str(exc)[:200]}
+                )
+
+    return results

@@ -34,6 +34,7 @@ const TRIGGER_OPTIONS = [
   { value: "message_received", label: "عند وصول رسالة" },
   { value: "conversation_created", label: "عند محادثة جديدة" },
   { value: "conversation_assigned", label: "عند تحويل محادثة" },
+  { value: "conversation_closed", label: "عند إغلاق محادثة" },
   { value: "tag_added", label: "عند إضافة وسم" },
   { value: "button_clicked", label: "عند ضغط زر تفاعلي" },
   { value: "manual", label: "تشغيل يدوي (تجربة)" }
@@ -160,6 +161,7 @@ export default function AutomationsPage() {
   const [triggerType, setTriggerType] = useState("message_received");
   const [triggerKeywords, setTriggerKeywords] = useState("");
   const [triggerTagId, setTriggerTagId] = useState("");
+  const [triggerButtonId, setTriggerButtonId] = useState("");
   const [nodes, setNodes] = useState<AutomationNode[]>([]);
   const [edges, setEdges] = useState<AutomationEdge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -270,6 +272,9 @@ export default function AutomationsPage() {
     if (triggerType === "tag_added" && triggerTagId) {
       config.tag_id = triggerTagId;
     }
+    if (triggerType === "button_clicked" && triggerButtonId.trim()) {
+      config.button_id = triggerButtonId.trim();
+    }
     return config;
   }
 
@@ -293,6 +298,7 @@ export default function AutomationsPage() {
       : "";
     setTriggerKeywords(keywords);
     setTriggerTagId(String(item.trigger_config?.tag_id ?? ""));
+    setTriggerButtonId(String(item.trigger_config?.button_id ?? ""));
     setNodes(item.graph.nodes ?? []);
     setEdges(item.graph.edges ?? []);
     setSelectedNodeId(null);
@@ -308,6 +314,7 @@ export default function AutomationsPage() {
       : "";
     setTriggerKeywords(keywords);
     setTriggerTagId(String(template?.trigger_config?.tag_id ?? ""));
+    setTriggerButtonId(String(template?.trigger_config?.button_id ?? ""));
     setNodes(
       template?.graph.nodes ?? [
         {
@@ -602,6 +609,16 @@ export default function AutomationsPage() {
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
+            </label>
+          )}
+          {triggerType === "button_clicked" && (
+            <label className="field-label">
+              <span>معرّف الزر (button_id)</span>
+              <input
+                value={triggerButtonId}
+                onChange={(event) => setTriggerButtonId(event.target.value)}
+                placeholder="send_details"
+              />
             </label>
           )}
           <label className="field-label">

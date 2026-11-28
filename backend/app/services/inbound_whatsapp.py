@@ -568,6 +568,7 @@ async def process_inbound_side_effects(
                 or (auto_reply_outside_hours and not within_hours)
             )
             ai_result: dict = {}
+            escalated_now = False
             if need_ai:
                 from app.services.catalog_dialogue import load_catalog_dialogue, save_catalog_dialogue
 
@@ -714,6 +715,37 @@ async def process_inbound_side_effects(
                         engine=ai_result.get("engine"),
                     )
                 except ValueError:
+                    pass
+
+            if agent_live and (auto_sent or escalated_now):
+                try:
+                    from app.services.ai_agent_skills import apply_inbound_skills
+
+                    skill_result = await apply_inbound_skills(
+                        db,
+                        account_id=whatsapp_account.account_id,
+                        conversation=conversation,
+                        contact=contact,
+                        agent_settings=agent_settings,
+                        inbound_text=text_body,
+                        escalated=escalated_now,
+                        auto_sent=auto_sent,
+                    )
+                    if skill_result.get("applied"):
+                        await db.commit()
+                        await log_ai_activity(
+                            db,
+                            account_id=whatsapp_account.account_id,
+                            channel_id=whatsapp_account.channel_id,
+                            conversation_id=conversation.id,
+                            source="live",
+                            outcome="skill",
+                            reason_code="ai_agent_skills",
+                            reason_text="تم تطبيق مهارات الوكيل",
+                            query_text=text_body,
+                            suggestion=str(skill_result.get("applied"))[:500],
+                        )
+                except Exception:
                     pass
 
             # Welcome / outside-hours can run from their own toggles while account AI is on,
