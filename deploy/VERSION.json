@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "119affe",
-    "git_commit_message": "Merge wave1 respond parity into production-unified",
-    "alembic_head": "0077_ai_agent_skills",
+    "git_commit": "2d5dc5f",
+    "git_commit_message": "Merge wave2 respond parity into production-unified",
+    "alembic_head": "0078_conversation_collaborators",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.28",
+    "frontend_version": "0.33.29",
     "live_assets": {
-      "js": "index-BgA6d5VP.js",
+      "js": "index-CW3FCHW-.js",
       "css": "index-D-GJdJ-F.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.28",
+    "frontend": "0.33.29",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "119affe",
-  "notes": "Wave1: inbox unassigned scope, AI skills (flagged), offer follow-up automation template; CSS unchanged"
+  "commit": "2d5dc5f",
+  "notes": "Wave2: collaborators, close summarize, AI skills runtime, campaign CTA + CSAT templates; CSS unchanged"
 }
