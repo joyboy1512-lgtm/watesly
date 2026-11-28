@@ -212,6 +212,11 @@ async def list_conversations(
         query = query.where(Conversation.assigned_membership_id.in_(list(member_ids)))
     elif scope == "unassigned":
         query = query.where(Conversation.assigned_membership_id.is_(None))
+    elif scope == "blocked":
+        query = query.where(Conversation.status == ConversationStatus.SPAM)
+    if scope != "blocked":
+        # Keep spam out of normal inbox scopes; use blocked tab to review them.
+        query = query.where(Conversation.status != ConversationStatus.SPAM)
     if custom_inbox_id is not None:
         from app.models.channel import Channel
         from app.models.conversation_tag import ConversationTag
@@ -304,6 +309,53 @@ async def list_messages(
     return list(result.scalars().all())
 
 
+async def _membership_display_name(db: AsyncSession, membership_id: UUID | None) -> str:
+    if membership_id is None:
+        return "غير معيّن"
+    from app.models.user import User
+
+    membership = await db.get(Membership, membership_id)
+    if membership is None:
+        return "موظف"
+    user = await db.get(User, membership.user_id)
+    return (user.full_name if user and user.full_name else None) or "موظف"
+
+
+async def _write_manual_handoff_note(
+    db: AsyncSession,
+    *,
+    conversation: Conversation,
+    actor_user_id: UUID,
+    previous_membership_id: UUID | None,
+    next_membership: Membership,
+) -> None:
+    """Internal note when a human reassigns the conversation (Wave 5)."""
+    from app.models.user import User
+
+    actor = await db.get(User, actor_user_id)
+    actor_name = (actor.full_name if actor and actor.full_name else None) or "موظف"
+    previous_name = await _membership_display_name(db, previous_membership_id)
+    next_user = await db.get(User, next_membership.user_id)
+    next_name = (next_user.full_name if next_user and next_user.full_name else None) or "موظف"
+    body = (
+        "[تسليم بين الموظفين]\n"
+        f"حوّل: {actor_name}\n"
+        f"من: {previous_name}\n"
+        f"إلى: {next_name}\n"
+        "يرجى مراجعة آخر رسائل العميل قبل الرد."
+    )
+    db.add(
+        ConversationNote(
+            conversation_id=conversation.id,
+            user_id=actor_user_id,
+            body=body[:4000],
+            mentions=None,
+            is_internal=True,
+            kind="note",
+        )
+    )
+
+
 async def update_conversation(
     db: AsyncSession,
     *,
@@ -322,6 +374,8 @@ async def update_conversation(
         membership = await db.get(Membership, payload.assigned_membership_id)
         if membership is None or membership.account_id != account_id:
             raise ValueError("INVALID_ASSIGNEE")
+        previous_assignee_id = conversation.assigned_membership_id
+        assignee_changed = previous_assignee_id != payload.assigned_membership_id
         changes["assigned_membership_id"] = str(payload.assigned_membership_id)
         conversation.assigned_membership_id = payload.assigned_membership_id
 
@@ -351,6 +405,14 @@ async def update_conversation(
             trigger_type=AutomationTriggerType.CONVERSATION_ASSIGNED,
             trigger_payload=trigger_payload,
         )
+        if assignee_changed:
+            await _write_manual_handoff_note(
+                db,
+                conversation=conversation,
+                actor_user_id=actor_user_id,
+                previous_membership_id=previous_assignee_id,
+                next_membership=membership,
+            )
 
     if payload.status is not None:
         changes["status"] = payload.status.value
