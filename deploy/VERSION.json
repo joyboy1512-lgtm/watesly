@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "fb84605",
-    "git_commit_message": "Merge wave5 inbox ops into production-unified",
+    "git_commit": "792739b",
+    "git_commit_message": "Merge inbox attachments visual strip",
     "alembic_head": "0078_conversation_collaborators",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.32",
+    "frontend_version": "0.33.33",
     "live_assets": {
-      "js": "index-7rEdvOHh.js",
-      "css": "index-D-GJdJ-F.css"
+      "js": "index-BCp5FLb-.js",
+      "css": "index-CymK3SO2.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.32",
+    "frontend": "0.33.33",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "fb84605",
-  "notes": "Wave5: attachments hub + blocked scope + CSAT display + manual handoff notes; CSS unchanged"
+  "commit": "792739b",
+  "notes": "Inbox attachments: WhatsApp-like horizontal thumbnail strip in customer panel"
 }
