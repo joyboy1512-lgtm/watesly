@@ -2,6 +2,7 @@ export type Conversation = {
   id: string;
   organization_id: string;
   channel_id: string;
+  channel_type?: string | null;
   contact_id: string;
   assigned_membership_id: string | null;
   collaborator_membership_ids?: string[];

@@ -129,6 +129,13 @@ export default function ChannelsPage() {
         navigate(`/whatsapp-connect?channel=${response.data.id}`);
       } else if (type === "instagram") {
         navigate(`/instagram-connect?channel=${response.data.id}`);
+      } else if (type === "messenger") {
+        navigate(`/messenger-connect?channel=${response.data.id}`);
+      } else if (type === "web_chat") {
+        toastStore.getState().show(
+          `تم تفعيل Web Chat. رمز الودجت: ${response.data.external_id ?? "—"}`,
+          "success"
+        );
       }
     } catch (error) {
       const detail = formatApiError(error);
@@ -491,6 +498,28 @@ export default function ChannelsPage() {
                         <Link to={`/instagram-connect?channel=${item.channel_id}`} className="secondary-button">
                           ربط IG
                         </Link>
+                      )}
+                      {item.channel_type === "messenger" && canManage && (
+                        <Link to={`/messenger-connect?channel=${item.channel_id}`} className="secondary-button">
+                          ربط MSG
+                        </Link>
+                      )}
+                      {item.channel_type === "web_chat" && canManage && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            void api
+                              .post<{ widget_token: string }>(`/web-chat/channels/${item.channel_id}/activate`)
+                              .then((res) => {
+                                toastStore.getState().show(`رمز الودجت: ${res.data.widget_token}`, "success");
+                                return client.invalidateQueries({ queryKey: ["channels-usage-board"] });
+                              })
+                              .catch((error) => toastStore.getState().show(formatApiError(error), "error"));
+                          }}
+                        >
+                          رمز الودجت
+                        </button>
                       )}
                       <Link to="/inbox" className="secondary-button">الوارد</Link>
                       {canManage && (

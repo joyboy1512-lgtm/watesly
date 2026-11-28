@@ -31,6 +31,8 @@ from app.api.routes.templates import router as templates_router
 from app.api.routes.uploads import router as uploads_router
 from app.api.routes.whatsapp import router as whatsapp_router
 from app.api.routes.instagram import router as instagram_router
+from app.api.routes.messenger import router as messenger_router
+from app.api.routes.web_chat import router as web_chat_router
 from app.api.routes.growth_webhooks import router as growth_webhooks_router
 
 api_router = APIRouter()
@@ -56,6 +58,8 @@ api_router.include_router(conversations_router, prefix="/conversations", tags=["
 api_router.include_router(inbox_tools_router, prefix="/inbox-tools", tags=["inbox-tools"])
 api_router.include_router(whatsapp_router, prefix="/whatsapp", tags=["whatsapp"])
 api_router.include_router(instagram_router, prefix="/instagram", tags=["instagram"])
+api_router.include_router(messenger_router, prefix="/messenger", tags=["messenger"])
+api_router.include_router(web_chat_router, prefix="/web-chat", tags=["web-chat"])
 api_router.include_router(realtime_router, prefix="/realtime", tags=["realtime"])
 api_router.include_router(reports_router, prefix="/reports", tags=["reports"])
 api_router.include_router(knowledge_router, prefix="/knowledge", tags=["knowledge"])
