@@ -8,26 +8,26 @@
     "server_host": "64.226.69.159",
     "app_path": "/opt/watesly",
     "git_branch": "cursor/production-unified-813f",
-    "git_commit": "792739b",
-    "git_commit_message": "Merge inbox attachments visual strip",
-    "alembic_head": "0078_conversation_collaborators",
+    "git_commit": "d12d620",
+    "git_commit_message": "Merge wave6 channels into production-unified",
+    "alembic_head": "0079_messenger_accounts",
     "backend_version": "0.28.0",
-    "frontend_version": "0.33.33",
+    "frontend_version": "0.33.34",
     "live_assets": {
-      "js": "index-BCp5FLb-.js",
+      "js": "index-CbFTouS0.js",
       "css": "index-CymK3SO2.css"
     },
     "server_backup": "/opt/watesly/backups/20261125-163029"
   },
   "versions": {
     "backend": "0.28.0",
-    "frontend": "0.33.33",
+    "frontend": "0.33.34",
     "platform_label": "v0.28"
   },
   "sources": {
     "backend": "backend/app/core/config.py → app_version",
     "frontend": "frontend/package.json → version"
   },
-  "commit": "792739b",
-  "notes": "Inbox attachments: WhatsApp-like horizontal thumbnail strip in customer panel"
+  "commit": "d12d620",
+  "notes": "Wave 6: live Messenger, usable Web Chat, cross-channel merge, inbox channel badges"
 }
