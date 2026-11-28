@@ -1196,6 +1196,17 @@ async def get_feature_flags_metadata(
     return feature_flags_metadata()
 
 
+@router.get("/integrations/meta-capi")
+async def meta_capi_integration_status(
+    context: AuthContext = Depends(require_permissions(Permission.OPERATIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.meta_capi import meta_capi_status
+
+    flags = await get_feature_flags(db, account_id=context.account_id)
+    return meta_capi_status(flag_enabled=bool(flags.get("meta_capi")))
+
+
 @router.get("/growth/ctwa-dashboard")
 async def growth_ctwa_dashboard(
     days: int = Query(30, ge=1, le=365),

@@ -294,6 +294,119 @@ _CLOSE_HINTS = (
 )
 
 
+async def _resolve_note_author_user_id(db: AsyncSession, conversation) -> UUID | None:
+    from sqlalchemy import select
+
+    from app.models.membership import Membership, MembershipRole, MembershipStatus
+
+    assigned_id = getattr(conversation, "assigned_membership_id", None)
+    if assigned_id:
+        member = await db.get(Membership, assigned_id)
+        if member is not None:
+            return member.user_id
+
+    row = await db.execute(
+        select(Membership)
+        .where(
+            Membership.account_id == conversation.account_id,
+            Membership.status == MembershipStatus.ACTIVE,
+            Membership.role.in_([MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.MANAGER]),
+        )
+        .order_by(Membership.created_at.asc())
+        .limit(1)
+    )
+    fallback = row.scalar_one_or_none()
+    return fallback.user_id if fallback is not None else None
+
+
+async def build_handoff_summary_note(
+    db: AsyncSession,
+    *,
+    conversation,
+    contact,
+    inbound_text: str,
+) -> str | None:
+    """Build an internal handoff note from recent conversation context."""
+    from sqlalchemy import select
+
+    from app.models.message import Message, MessageDirection
+
+    lifecycle = str(getattr(contact, "lifecycle_stage", "") or "lead") if contact is not None else "lead"
+    contact_name = (
+        str(getattr(contact, "display_name", None) or getattr(contact, "external_address", "") or "عميل")
+        if contact is not None
+        else "عميل"
+    )
+    result = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation.id)
+        .order_by(Message.created_at.desc())
+        .limit(12)
+    )
+    recent = list(reversed(result.scalars().all()))
+    inbound_lines: list[str] = []
+    outbound_lines: list[str] = []
+    for msg in recent:
+        body = (msg.text_body or "").strip()
+        if not body:
+            continue
+        snippet = body.replace("\n", " ")[:160]
+        if msg.direction == MessageDirection.INBOUND:
+            inbound_lines.append(f"• {snippet}")
+        else:
+            outbound_lines.append(f"• {snippet}")
+
+    trigger = (inbound_text or "").strip().replace("\n", " ")[:200]
+    parts = [
+        "[تسليم من المساعد الذكي]",
+        f"العميل: {contact_name}",
+        f"المرحلة: {lifecycle}",
+    ]
+    if trigger:
+        parts.append(f"رسالة التحويل: {trigger}")
+    if inbound_lines:
+        parts.append("آخر رسائل العميل:")
+        parts.extend(inbound_lines[-4:])
+    if outbound_lines:
+        parts.append("آخر ردود المساعد/الفريق:")
+        parts.extend(outbound_lines[-4:])
+    body = "\n".join(parts).strip()
+    return body[:4000] if body else None
+
+
+async def write_handoff_summary(
+    db: AsyncSession,
+    *,
+    conversation,
+    contact,
+    inbound_text: str,
+) -> dict[str, Any] | None:
+    from app.models.conversation_note import ConversationNote
+
+    author_id = await _resolve_note_author_user_id(db, conversation)
+    if author_id is None:
+        return None
+    body = await build_handoff_summary_note(
+        db,
+        conversation=conversation,
+        contact=contact,
+        inbound_text=inbound_text,
+    )
+    if not body:
+        return None
+    note = ConversationNote(
+        conversation_id=conversation.id,
+        user_id=author_id,
+        body=body,
+        mentions=None,
+        is_internal=True,
+        kind="note",
+    )
+    db.add(note)
+    await db.flush()
+    return {"skill": "handoff_summary", "note_id": str(note.id)}
+
+
 async def apply_inbound_skills(
     db: AsyncSession,
     *,
@@ -306,21 +419,39 @@ async def apply_inbound_skills(
     auto_sent: bool,
 ) -> dict[str, Any]:
     """Apply enabled agent skills after an inbound AI turn (flag-gated)."""
-    flags = await get_feature_flags(db, account_id=account_id)
-    if not flags.get("ai_agent_skills"):
-        return {"skipped": True, "reason": "flag_off"}
-
-    skills = normalize_skills_json(agent_settings.get("skills_json"))
     results: dict[str, Any] = {"applied": []}
     text = (inbound_text or "").strip()
     text_l = text.lower()
+    flags = await get_feature_flags(db, account_id=account_id)
+    skills_on = bool(flags.get("ai_agent_skills"))
+    skills = normalize_skills_json(agent_settings.get("skills_json")) if skills_on else dict(DEFAULT_SKILLS)
 
-    if escalated and skills.get("assign_to_human") and getattr(conversation, "assigned_membership_id", None) is None:
+    # Assign before handoff note so the note author prefers the assignee.
+    if escalated and skills_on and skills.get("assign_to_human") and getattr(conversation, "assigned_membership_id", None) is None:
         from app.services.assignments import auto_assign_conversation
 
         member = await auto_assign_conversation(db, conversation=conversation)
         if member is not None:
             results["applied"].append({"skill": "assign_to_human", "membership_id": str(member.id)})
+
+    # Handoff summary runs on escalate even when skills flag is off (Wave 4).
+    if escalated:
+        try:
+            handoff = await write_handoff_summary(
+                db,
+                conversation=conversation,
+                contact=contact,
+                inbound_text=text,
+            )
+            if handoff:
+                results["applied"].append(handoff)
+        except Exception as exc:  # noqa: BLE001 — never break inbound
+            results.setdefault("handoff_errors", []).append(str(exc)[:200])
+
+    if not skills_on:
+        if results["applied"]:
+            return results
+        return {"skipped": True, "reason": "flag_off"}
 
     if escalated and skills.get("update_lifecycle") and contact is not None:
         current = str(getattr(contact, "lifecycle_stage", "") or "").strip().lower()
