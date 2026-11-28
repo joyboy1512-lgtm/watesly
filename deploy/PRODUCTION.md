@@ -16,6 +16,15 @@ Deploy from **`cursor/production-unified-813f`** — this branch merges:
 
 **Canonical version file:** `deploy/VERSION.json`
 
+### Production snapshot (2026-11-28) — Wave6 channels
+
+| Item | Value |
+|------|-------|
+| Commit | `d12d620` |
+| Alembic | `0079_messenger_accounts` |
+| Frontend | `0.33.34` |
+| Live assets | `index-CbFTouS0.js`, `index-CymK3SO2.css` |
+
 ### Production snapshot (2026-11-28) — Inbox attachments strip
 
 | Item | Value |
