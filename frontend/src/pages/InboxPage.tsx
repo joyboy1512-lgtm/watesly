@@ -2770,7 +2770,7 @@ export default function InboxPage() {
           {conversationAttachments.length === 0 ? (
             <p className="hint-text">لا مرفقات في هذه المحادثة بعد.</p>
           ) : (
-            <div className="notes-list">
+            <div className="inbox-attachments-strip" role="list" aria-label="مرفقات المحادثة">
               {conversationAttachments.map((item) => {
                 const label =
                   item.type === "image"
@@ -2782,17 +2782,30 @@ export default function InboxPage() {
                         : "ملف";
                 const title = item.media_filename || item.media_caption || item.text_body || label;
                 return (
-                  <article key={item.id}>
-                    <p>
-                      <a href={item.media_url ?? "#"} target="_blank" rel="noreferrer">
-                        {label}: {title}
-                      </a>
-                    </p>
-                    <small>
-                      {item.direction === "inbound" ? "وارد" : "صادر"} ·{" "}
-                      {new Date(item.created_at).toLocaleString("ar")}
-                    </small>
-                  </article>
+                  <a
+                    key={item.id}
+                    className={`inbox-attachment-tile is-${item.type}`}
+                    href={item.media_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    role="listitem"
+                    title={`${label} · ${item.direction === "inbound" ? "وارد" : "صادر"}`}
+                  >
+                    {item.type === "image" && item.media_url ? (
+                      <img src={item.media_url} alt={title} loading="lazy" />
+                    ) : item.type === "video" && item.media_url ? (
+                      <video src={item.media_url} muted preload="metadata" playsInline />
+                    ) : (
+                      <span className="inbox-attachment-fallback">
+                        {item.type === "audio" ? "♪" : "📄"}
+                        <small>{title}</small>
+                      </span>
+                    )}
+                    <span className="inbox-attachment-meta">
+                      {label}
+                      <small>{item.direction === "inbound" ? "وارد" : "صادر"}</small>
+                    </span>
+                  </a>
                 );
               })}
             </div>
