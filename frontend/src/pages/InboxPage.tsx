@@ -63,7 +63,7 @@ import Icon from "../components/Icon";
 import { useSetWorkspaceOrganization, useWorkspaceOrganizationId } from "../hooks/useWorkspace";
 
 type InboxFilter = "engaged" | "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
-type InboxScope = "all" | "mine" | "team" | "unassigned" | "collaborations" | "custom";
+type InboxScope = "all" | "mine" | "team" | "unassigned" | "collaborations" | "blocked" | "custom";
 type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
 type ChannelOption = { id: string; name: string; phone: string | null; type: string; messagingReady: boolean };
 type WhatsAppAccountRow = { id: string; channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
@@ -165,6 +165,7 @@ export default function InboxPage() {
       urlInboxScope === "team" ||
       urlInboxScope === "unassigned" ||
       urlInboxScope === "collaborations" ||
+      urlInboxScope === "blocked" ||
       urlInboxScope === "custom"
     ) {
       return urlInboxScope;
@@ -243,7 +244,8 @@ export default function InboxPage() {
         inboxScope === "mine" ||
         inboxScope === "team" ||
         inboxScope === "unassigned" ||
-        inboxScope === "collaborations"
+        inboxScope === "collaborations" ||
+        inboxScope === "blocked"
       ) {
         params.inbox_scope = inboxScope;
       }
@@ -273,6 +275,7 @@ export default function InboxPage() {
       urlInboxScope === "team" ||
       urlInboxScope === "unassigned" ||
       urlInboxScope === "collaborations" ||
+      urlInboxScope === "blocked" ||
       urlInboxScope === "custom" ||
       urlInboxScope === "all"
     ) {
@@ -717,6 +720,25 @@ export default function InboxPage() {
         )
       ).data
   });
+  const csatQuery = useQuery({
+    queryKey: ["conversation-csat", selectedId],
+    enabled: Boolean(selectedId),
+    queryFn: async () =>
+      (
+        await api.get<{
+          score: number | null;
+          comment: string | null;
+          source: string | null;
+          updated_at: string | null;
+        }>(`/conversations/${selectedId}/csat`)
+      ).data
+  });
+  const conversationAttachments = useMemo(() => {
+    const mediaTypes = new Set(["image", "video", "audio", "document"]);
+    return (messagesQuery.data ?? []).filter(
+      (item) => mediaTypes.has(item.type) && Boolean(item.media_url)
+    );
+  }, [messagesQuery.data]);
   const agentSettingsQuery = useQuery({
     queryKey: ["knowledge-agent-settings", selectedConversation?.channel_id || "account"],
     queryFn: async () => {
@@ -908,6 +930,9 @@ export default function InboxPage() {
     try {
       await api.patch(`/conversations/${selectedId}`, payload);
       await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      if ("assigned_membership_id" in payload) {
+        await queryClient.invalidateQueries({ queryKey: ["conversation-notes", selectedId] });
+      }
       toastStore.getState().show("تم تحديث المحادثة.", "success");
     } catch { toastStore.getState().show("تعذر تحديث المحادثة.", "error"); }
   }
@@ -1149,6 +1174,7 @@ export default function InboxPage() {
     try {
       await api.post(`/conversations/${selectedId}/csat`, { score: Number(csatScore) });
       setCsatScore("");
+      await queryClient.invalidateQueries({ queryKey: ["conversation-csat", selectedId] });
       toastStore.getState().show("تم حفظ تقييم CSAT.", "success");
     } catch {
       toastStore.getState().show("تعذر حفظ التقييم.", "error");
@@ -1569,6 +1595,7 @@ export default function InboxPage() {
               ["team", "الفريق"],
               ["unassigned", "غير معيّنة"],
               ["collaborations", "مساعدات"],
+              ["blocked", "محظورة"],
               ["custom", "مخصص"]
             ] as const).map(([value, label]) => (
               <button
@@ -2738,7 +2765,62 @@ export default function InboxPage() {
         <InboxMergeSuggestions contactId={selectedConversation?.contact_id ?? null} disabled={isArchived} />
         <InboxTimeline conversationId={selectedId} />
         <div className="customer-section"><h4>الوسوم</h4><div className="tag-list">{(conversationTagsQuery.data ?? []).map((tag) => <button key={tag.id} onClick={() => void removeTag(tag.id)}>{tag.name} ×</button>)}</div><select className="tag-select" defaultValue="" onChange={(e) => { if (e.target.value) void addTag(e.target.value); e.currentTarget.value = ""; }}><option value="">إضافة وسم</option>{(allTagsQuery.data ?? []).filter((tag) => !(conversationTagsQuery.data ?? []).some((item) => item.id === tag.id)).map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}</select></div>
-        <div className="customer-section"><h4>تقييم CSAT</h4><p className="hint-text">بعد إغلاق المحادثة — أو يُرسل العميل: تقييم:5</p><div className="inline-actions"><select value={csatScore} onChange={(e) => setCsatScore(e.target.value)}><option value="">—</option><option value="5">5 ممتاز</option><option value="4">4 جيد</option><option value="3">3 متوسط</option><option value="2">2 ضعيف</option><option value="1">1 سيء</option></select><button type="button" className="secondary-button" onClick={() => void submitCsat()} disabled={!csatScore || !selectedId}>حفظ</button></div></div>
+        <div className="customer-section">
+          <h4>المرفقات</h4>
+          {conversationAttachments.length === 0 ? (
+            <p className="hint-text">لا مرفقات في هذه المحادثة بعد.</p>
+          ) : (
+            <div className="notes-list">
+              {conversationAttachments.map((item) => {
+                const label =
+                  item.type === "image"
+                    ? "صورة"
+                    : item.type === "video"
+                      ? "فيديو"
+                      : item.type === "audio"
+                        ? "صوت"
+                        : "ملف";
+                const title = item.media_filename || item.media_caption || item.text_body || label;
+                return (
+                  <article key={item.id}>
+                    <p>
+                      <a href={item.media_url ?? "#"} target="_blank" rel="noreferrer">
+                        {label}: {title}
+                      </a>
+                    </p>
+                    <small>
+                      {item.direction === "inbound" ? "وارد" : "صادر"} ·{" "}
+                      {new Date(item.created_at).toLocaleString("ar")}
+                    </small>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="customer-section">
+          <h4>تقييم CSAT</h4>
+          {csatQuery.data?.score != null ? (
+            <p className="hint-text">
+              آخر تقييم: <strong>{csatQuery.data.score}/5</strong>
+              {csatQuery.data.comment ? ` — ${csatQuery.data.comment}` : ""}
+              {csatQuery.data.source ? ` · المصدر: ${csatQuery.data.source}` : ""}
+            </p>
+          ) : (
+            <p className="hint-text">لا تقييم محفوظ بعد. بعد إغلاق المحادثة — أو يُرسل العميل: تقييم:5</p>
+          )}
+          <div className="inline-actions">
+            <select value={csatScore} onChange={(e) => setCsatScore(e.target.value)}>
+              <option value="">—</option>
+              <option value="5">5 ممتاز</option>
+              <option value="4">4 جيد</option>
+              <option value="3">3 متوسط</option>
+              <option value="2">2 ضعيف</option>
+              <option value="1">1 سيء</option>
+            </select>
+            <button type="button" className="secondary-button" onClick={() => void submitCsat()} disabled={!csatScore || !selectedId}>حفظ</button>
+          </div>
+        </div>
         <div className="customer-section"><h4>ملاحظات داخلية</h4><div className="notes-list">{(notesQuery.data ?? []).filter((note) => (note.kind ?? "note") !== "whisper").map((note) => <article key={note.id}><p>{note.body}</p><small>{new Date(note.created_at).toLocaleString("ar")}</small></article>)}</div><textarea placeholder="أضف ملاحظة للفريق…" value={noteText} onChange={(e) => setNoteText(e.target.value)} /><button className="secondary-action" onClick={() => void saveNote()} disabled={!noteText.trim()}>حفظ الملاحظة</button></div>
       </aside>
       {detailsOpen && <button className="customer-overlay" onClick={() => setDetailsOpen(false)} aria-label="إغلاق التفاصيل" />}
