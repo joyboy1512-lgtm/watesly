@@ -37,5 +37,9 @@ def test_csat_get_endpoint_and_panel() -> None:
 
 def test_attachments_hub_in_customer_panel() -> None:
     page = read("../frontend/src/pages/InboxPage.tsx")
+    styles = read("../frontend/src/styles.css")
     assert "conversationAttachments" in page
     assert "<h4>المرفقات</h4>" in page
+    assert "inbox-attachments-strip" in page
+    assert "inbox-attachment-tile" in page
+    assert ".inbox-attachments-strip" in styles
