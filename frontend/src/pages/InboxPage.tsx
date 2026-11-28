@@ -63,7 +63,7 @@ import Icon from "../components/Icon";
 import { useSetWorkspaceOrganization, useWorkspaceOrganizationId } from "../hooks/useWorkspace";
 
 type InboxFilter = "engaged" | "all" | "unread" | "waiting" | "mine" | "starred" | "archived" | "snoozed";
-type InboxScope = "all" | "mine" | "team" | "unassigned" | "custom";
+type InboxScope = "all" | "mine" | "team" | "unassigned" | "collaborations" | "custom";
 type TemplateOption = { id: string; name: string; status: string; body_text: string | null; components: TemplateComponent[] | null; whatsapp_account_id: string };
 type ChannelOption = { id: string; name: string; phone: string | null; type: string; messagingReady: boolean };
 type WhatsAppAccountRow = { id: string; channel_id: string; channel_name?: string | null; display_phone_number?: string | null };
@@ -164,6 +164,7 @@ export default function InboxPage() {
       urlInboxScope === "mine" ||
       urlInboxScope === "team" ||
       urlInboxScope === "unassigned" ||
+      urlInboxScope === "collaborations" ||
       urlInboxScope === "custom"
     ) {
       return urlInboxScope;
@@ -175,6 +176,7 @@ export default function InboxPage() {
   const [closeNote, setCloseNote] = useState("");
   const [closeReason, setCloseReason] = useState("");
   const [closingBusy, setClosingBusy] = useState(false);
+  const [closingSummarizing, setClosingSummarizing] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
@@ -235,7 +237,12 @@ export default function InboxPage() {
       if (needsReplyOnly) params.needs_reply = true;
       if (channelFilter) params.channel_id = channelFilter;
       if (workspaceOrganizationId) params.organization_id = workspaceOrganizationId;
-      if (inboxScope === "mine" || inboxScope === "team" || inboxScope === "unassigned") {
+      if (
+        inboxScope === "mine" ||
+        inboxScope === "team" ||
+        inboxScope === "unassigned" ||
+        inboxScope === "collaborations"
+      ) {
         params.inbox_scope = inboxScope;
       }
       if (inboxScope === "custom" && customInboxId) params.custom_inbox_id = customInboxId;
@@ -263,6 +270,7 @@ export default function InboxPage() {
       urlInboxScope === "mine" ||
       urlInboxScope === "team" ||
       urlInboxScope === "unassigned" ||
+      urlInboxScope === "collaborations" ||
       urlInboxScope === "custom" ||
       urlInboxScope === "all"
     ) {
@@ -1123,6 +1131,27 @@ export default function InboxPage() {
     setFilter("engaged");
     toastStore.getState().show("تم استرجاع المحادثة.", "success");
   }
+  async function summarizeClosingNote() {
+    if (!selectedId) return;
+    setClosingSummarizing(true);
+    try {
+      const result = await api.post<{ summary?: string }>("/knowledge/copilot", {
+        conversation_id: selectedId
+      });
+      const summary = String(result.data.summary || "").trim();
+      if (!summary) {
+        toastStore.getState().show("لم يُرجع التلخيص نصاً.", "error");
+        return;
+      }
+      setCloseNote(summary.slice(0, 1000));
+      toastStore.getState().show("تم توليد ملخص الإغلاق.", "success");
+    } catch {
+      toastStore.getState().show("تعذر تلخيص المحادثة.", "error");
+    } finally {
+      setClosingSummarizing(false);
+    }
+  }
+
   async function confirmCloseConversation() {
     setClosingBusy(true);
     try {
@@ -1499,6 +1528,7 @@ export default function InboxPage() {
               ["mine", "لي"],
               ["team", "الفريق"],
               ["unassigned", "غير معيّنة"],
+              ["collaborations", "مساعدات"],
               ["custom", "مخصص"]
             ] as const).map(([value, label]) => (
               <button
@@ -1815,6 +1845,30 @@ export default function InboxPage() {
                       {item.full_name} · {item.role}
                     </button>
                   ))}
+                  <button type="button" disabled>
+                    مساعدون (بدون نقل التعيين)
+                  </button>
+                  {(employeesQuery.data ?? []).map((item: { membership_id: string; full_name: string; role: string }) => {
+                    const current = selectedConversation?.collaborator_membership_ids ?? [];
+                    const isHelper = current.includes(item.membership_id);
+                    return (
+                      <button
+                        key={`helper-${item.membership_id}`}
+                        type="button"
+                        onClick={() => {
+                          const next = isHelper
+                            ? current.filter((id) => id !== item.membership_id)
+                            : [...current, item.membership_id];
+                          void updateConversation({ collaborator_membership_ids: next }).then(() =>
+                            setHeaderAssignOpen(false)
+                          );
+                        }}
+                      >
+                        {isHelper ? "✓ " : "+ "}
+                        {item.full_name} · مساعد
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2548,7 +2602,9 @@ export default function InboxPage() {
           onReasonChange={setCloseReason}
           onCancel={() => setCloseDialogOpen(false)}
           onConfirm={() => void confirmCloseConversation()}
+          onSummarize={() => void summarizeClosingNote()}
           busy={closingBusy}
+          summarizing={closingSummarizing}
         />
       </section>
 

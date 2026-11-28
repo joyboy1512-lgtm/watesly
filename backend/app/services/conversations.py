@@ -90,6 +90,11 @@ def build_conversation_response(
         channel_id=conversation.channel_id,
         contact_id=conversation.contact_id,
         assigned_membership_id=conversation.assigned_membership_id,
+        collaborator_membership_ids=[
+            UUID(str(item))
+            for item in (getattr(conversation, "collaborator_membership_ids", None) or [])
+            if str(item).strip()
+        ],
         status=conversation.status,
         priority=conversation.priority,
         last_message_at=conversation.last_message_at,
@@ -195,6 +200,11 @@ async def list_conversations(
     scope = (inbox_scope or "").strip().lower()
     if scope == "mine":
         query = query.where(Conversation.assigned_membership_id == membership.id)
+    elif scope == "collaborations":
+        query = query.where(
+            Conversation.collaborator_membership_ids.contains([str(membership.id)]),
+            Conversation.assigned_membership_id.is_distinct_from(membership.id),
+        )
     elif scope == "team":
         from app.services.conversation_timeline import team_membership_ids
 
@@ -241,8 +251,11 @@ async def list_conversations(
         from app.services.conversation_attention import waiting_reply_predicates
 
         query = query.where(*waiting_reply_predicates(now=now))
-    if _limited_to_assigned_conversations(membership) and scope not in {"mine", "team"}:
-        query = query.where(Conversation.assigned_membership_id == membership.id)
+    if _limited_to_assigned_conversations(membership) and scope not in {"mine", "team", "collaborations"}:
+        query = query.where(
+            (Conversation.assigned_membership_id == membership.id)
+            | Conversation.collaborator_membership_ids.contains([str(membership.id)])
+        )
     # Waiting queue: oldest inbound needing a reply first; otherwise newest activity.
     if needs_reply is True:
         query = query.order_by(Conversation.last_message_at.asc().nulls_last())
@@ -266,7 +279,15 @@ async def list_messages(
     if conversation is None or conversation.account_id != account_id or conversation.deleted_at is not None:
         raise ValueError("CONVERSATION_NOT_FOUND")
     if _limited_to_assigned_conversations(membership):
-        if conversation.assigned_membership_id != membership.id:
+        collab_ids = {
+            str(item)
+            for item in (getattr(conversation, "collaborator_membership_ids", None) or [])
+            if str(item).strip()
+        }
+        if (
+            conversation.assigned_membership_id != membership.id
+            and str(membership.id) not in collab_ids
+        ):
             raise ValueError("CONVERSATION_FORBIDDEN")
     await ensure_conversation_channel_access(
         db,
@@ -355,6 +376,37 @@ async def update_conversation(
         conversation.archived_at = datetime.now(UTC) if payload.archived else None
         changes["archived"] = payload.archived
 
+    if "collaborator_membership_ids" in payload.model_fields_set:
+        raw_ids = payload.collaborator_membership_ids or []
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        previous = {
+            str(item)
+            for item in (getattr(conversation, "collaborator_membership_ids", None) or [])
+            if str(item).strip()
+        }
+        for item in raw_ids[:20]:
+            mid = str(item)
+            if mid in seen:
+                continue
+            member = await db.get(Membership, item)
+            if member is None or member.account_id != account_id:
+                raise ValueError("INVALID_COLLABORATOR")
+            seen.add(mid)
+            cleaned.append(mid)
+            if mid not in previous:
+                await create_notification(
+                    db,
+                    account_id=account_id,
+                    user_id=member.user_id,
+                    type="conversation_collaborator",
+                    title="أُضفتَ مساعداً على محادثة",
+                    body="يمكنك متابعة المحادثة والمساعدة دون أن تكون المسؤول المعيّن.",
+                    data={"conversation_id": str(conversation.id)},
+                )
+        conversation.collaborator_membership_ids = cleaned
+        changes["collaborator_membership_ids"] = cleaned
+
     closing_note = payload.closing_note
     closing_reason = payload.closing_reason
     if closing_note:
@@ -412,6 +464,27 @@ async def update_conversation(
             )
         )
 
+    if payload.archived is True:
+        from app.models.automation import AutomationTriggerType
+        from app.services.automation_triggers import (
+            build_conversation_trigger_payload,
+            queue_automation_runs,
+        )
+
+        closed_payload = await build_conversation_trigger_payload(
+            db,
+            conversation,
+            closing_reason=closing_reason,
+            source="user",
+        )
+        closed_runs = await queue_automation_runs(
+            db,
+            account_id=account_id,
+            trigger_type=AutomationTriggerType.CONVERSATION_CLOSED,
+            trigger_payload=closed_payload,
+        )
+        automation_run_ids = list(automation_run_ids) + list(closed_runs)
+
     await db.commit()
     await db.refresh(conversation)
     if automation_run_ids:
@@ -432,7 +505,15 @@ async def get_conversation_for_send(
     if conversation is None or conversation.account_id != account_id or conversation.deleted_at is not None:
         raise ValueError("CONVERSATION_NOT_FOUND")
     if _limited_to_assigned_conversations(membership):
-        if conversation.assigned_membership_id != membership.id:
+        collab_ids = {
+            str(item)
+            for item in (getattr(conversation, "collaborator_membership_ids", None) or [])
+            if str(item).strip()
+        }
+        if (
+            conversation.assigned_membership_id != membership.id
+            and str(membership.id) not in collab_ids
+        ):
             raise ValueError("CONVERSATION_FORBIDDEN")
     await ensure_conversation_channel_access(
         db,

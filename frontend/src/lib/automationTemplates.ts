@@ -184,5 +184,60 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
         { id: "edge-2", source: "delay-1", target: "tpl-1", label: "next" }
       ]
     }
+  },
+  {
+    id: "campaign-cta-route",
+    name: "توجيه رد حملة (زر)",
+    description:
+      "عند ضغط زر في رسالة حملة: يرد نصاً موجزاً ثم يعيّن فريقاً/موظفاً. عدّل button_id ليطابق زر القالب، واختر الفريق في عقدة التعيين.",
+    trigger_type: "button_clicked",
+    trigger_config: { button_id: "send_details" },
+    graph: {
+      nodes: [
+        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "ضغط زر الحملة" } },
+        {
+          id: "send-1",
+          type: "send_text",
+          position: { x: 300, y: 100 },
+          data: {
+            label: "رد أولي",
+            text: "شكراً لاهتمامك بالعرض! سيكمل معك فريق المبيعات التفاصيل الآن."
+          }
+        },
+        {
+          id: "assign-1",
+          type: "assign_team",
+          position: { x: 520, y: 100 },
+          data: { label: "تعيين فريق المبيعات", team_id: "" }
+        }
+      ],
+      edges: [
+        { id: "edge-1", source: "trigger-1", target: "send-1", label: "next" },
+        { id: "edge-2", source: "send-1", target: "assign-1", label: "next" }
+      ]
+    }
+  },
+  {
+    id: "csat-after-close",
+    name: "تقييم بعد إغلاق المحادثة",
+    description:
+      "عند إغلاق المحادثة يُرسل سؤال تقييم (1–5). رد العميل الرقمي يُحفظ تلقائياً عبر مسار CSAT الحالي.",
+    trigger_type: "conversation_closed",
+    trigger_config: {},
+    graph: {
+      nodes: [
+        { id: "trigger-1", type: "trigger", position: { x: 80, y: 160 }, data: { label: "إغلاق محادثة" } },
+        {
+          id: "send-1",
+          type: "send_text",
+          position: { x: 300, y: 160 },
+          data: {
+            label: "سؤال التقييم",
+            text: "من 1 إلى 5، كيف تقيّم مساعدتنا اليوم؟ أرسل الرقم فقط."
+          }
+        }
+      ],
+      edges: [{ id: "edge-1", source: "trigger-1", target: "send-1", label: "next" }]
+    }
   }
 ];

@@ -101,7 +101,9 @@ async def get_conversations(
     ),
     channel_id: UUID | None = Query(None),
     organization_id: UUID | None = Query(None),
-    inbox_scope: str | None = Query(None, description="all | mine | team | unassigned"),
+    inbox_scope: str | None = Query(
+        None, description="all | mine | team | unassigned | collaborations"
+    ),
     custom_inbox_id: UUID | None = Query(None),
     needs_reply: bool | None = Query(
         None,
